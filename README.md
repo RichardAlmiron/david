@@ -1,4 +1,4 @@
-# Noelux™ — Plataforma E-Commerce COD (Pago Contra Entrega) + Kernel Autopiloto `deepseek-harness` + Motor Multi-WhatsApp, Voz Deepgram Aura-2, Meta Ads Pipeboard y Cerebro Exclusivo `GLM-5.3` (OpenRouter)
+# Noelux™ — Plataforma E-Commerce COD (Pago Contra Entrega) + Kernel Autopiloto `deepseek-harness` + Motor Multi-WhatsApp, Voz Deepgram Aura-2, AutoAds (Cerebro Maestro IA + Meta Ads Directo) y Modelo Exclusivo `GLM-5.3` (OpenRouter)
 
 Aplicación full-stack desarrollada en **React 19 + TypeScript + Vite 6 + Tailwind CSS v4 + Baileys Multi-Device + Deepgram Aura-2 (TTS OGG/Opus Nativo) + Deepgram Nova-3 (STT) + Kernel Oficial `deepseek-ai/deepseek-harness` (Cordis) & OpenRouter `z-ai/glm-5.3` (GLM-5.3 Exclusivo)** con sincronización universal en tiempo real sobre **Supabase** e interfaz administrativa **100% Negro Puro estilo App Móvil Android / Vercel**.
 
@@ -29,8 +29,12 @@ Diseñada desde cero como una aplicación nativa Android con estética monocrom�
 2. **Módulo 2 — Autopilot Studio IA (`creador` — `ProductTemplateBuilderStudio.tsx`)**:
    - Motor **100% Autopiloto de 1 Clic** impulsado por el **Kernel Oficial `deepseek-ai/deepseek-harness` (`src/utils/deepseekHarnessKernel.ts`)** y **`z-ai/glm-5.3`**.
    - 4 plugins activos (`theme-architect`, `cod-pricing-engine`, `physical-truth-shield`, `whatsapp-brain-trainer`), 5 comandos slash (`/autopilot`, `/luxury`, `/flash`, `/pack2-gift`, `/audit`), 33 plantillas diferenciadas y botón `Undo` reversible.
-3. **Módulo 3 — Creador de Anuncios en Piloto Automático (`pipeboard` — `PipeboardAdsManagerView.tsx`)**:
-   - Interfaz 100% Negro Puro con guía paso a paso integrada, 4 fórmulas psicológicas (`/flash-sale`, `/anti-scam`, `/duo-pack`, `/viral-demo`), generación en 1 clic de **3 imágenes (`1:1 Feed #1`, `1:1 Feed #2`, `9:16 Story`) + 1 Video Comercial Animado (`9:16`)** con **`GLM-5.3`** y publicación automática en Meta Ads vía `pipeboard-co/meta-ads-mcp`.
+3. **Módulo 3 — AutoAds: Cerebro Maestro IA + Meta Ads Directo (`autoads` — `AutoAdsView.tsx`)**:
+   - Plataforma de publicidad con **Cerebro Maestro IA** entrenado con `GLM-5.3` que investiga competencia, genera **6 creativos genuinamente diversos** (3 Feed 1:1 + 1 Story 9:16 + 2 Reels 9:16) con copy completo en español paraguayo.
+   - **6 arquetipos creativos Andrómeda**: `hero-transform`, `raw-ugc`, `objection-killer`, `hook-reel`, `social-proof-surge`, `flash-scarcity`.
+   - **Conexión dual**: Meta Ads Directo (cuenta propia del usuario vía OAuth Graph API v21.0) + Pipeboard MCP (para suscriptores).
+   - Flujo 100% autopiloto: seleccionar producto → brain se entrena auto → clic en "Lanzar Piloto Automático" → campaña publicada en Meta Ads.
+   - Documentación completa: [`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md).
 4. **Módulo 4 — Conexiones WhatsApp QR (`whatsapp`)**:
    - Centro multi-línea ilimitado por Código QR o Código de 8 dígitos con respaldo GZIP automático en Supabase (`WAAUTH-*`) resistente a redespliegues en Railway.
 5. **Módulo 5 — Voz Neuronal Deepgram Aura-2 (`deepgram`)**:
@@ -46,3 +50,4 @@ Diseñada desde cero como una aplicación nativa Android con estética monocrom�
 - 🏗️ **[`ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md`](./ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md)**: Especificación algorítmica del Kernel Oficial `deepseek-ai/deepseek-harness` (Cordis), Estudio Autopiloto 1-Clic, modelo exclusivo `GLM-5.3`, Meta CAPI, Pipeboard Ads Autopilot e interfaz móvil Android 100% negro puro.
 - 🎙️ **[`ARQUITECTURA_WHATSAPP_IA_VOZ.md`](./ARQUITECTURA_WHATSAPP_IA_VOZ.md)**: Documentación técnica del motor WhatsApp de 5 pasos, voz Deepgram Aura-2 OGG/Opus, STT Deepgram Nova-3, pronunciación telefónica `4-3-3`, cerebro `GLM-5.3` y aislamiento de Railway.
 - 📲 **[`ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md`](./ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md)**: Especificación de Reportes Ejecutivos Directos al WhatsApp del Vendedor, Panel de Confirmados, Logística Universal y tombstones `DEL-ORD-*` en Supabase.
+- 🎯 **[`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md)**: Guía paso a paso completa para configurar Meta Ads (Facebook Login, Marketing API, permisos, variables de entorno Railway, conexión OAuth y pruebas del flujo AutoAds).

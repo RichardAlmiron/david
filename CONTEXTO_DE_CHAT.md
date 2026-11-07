@@ -397,6 +397,54 @@ Para la especificación algorítmica profunda del motor de WhatsApp, voz neurona
 
 ---
 
+### Fase 41: AutoAds — Cerebro Maestro IA + Meta Ads Directo + Piloto Automático de Publicidad
+
+- **Solicitud del Usuario**:
+  - Transformar el módulo "Pipeboard · Meta Ads" en **"AutoAds"** — plataforma de publicidad con Cerebro Maestro IA que investiga la competencia, entrena un brain profile, genera 6 creativos diversos y publica todo en Meta Ads de forma 100% autopiloto.
+  - Implementar conexión directa con la cuenta personal de Meta Ads del usuario (sin depender solo de Pipeboard), con flujo OAuth completo.
+  - Renombrar el menú de "Pipeboard · Meta Ads" a "AutoAds" con badge "Cerebro IA".
+
+- **Trabajo Realizado**:
+  - **Motor del Cerebro Maestro (`src/utils/autoAdsBrainEngine.ts` ~1020 líneas)**:
+    - Sistema de entrenamiento IA con `GLM-5.3` que genera: Brain Profile con avatares, ángulos de venta, targeting, fórmula COD LATAM, matriz avatar-ángulo
+    - 6 arquetipos creativos de Andrómeda: `hero-transform`, `raw-ugc`, `objection-killer`, `hook-reel`, `social-proof-surge`, `flash-scarcity`
+    - Generación de 6 creativos genuinamente diversos (3 Feed 1:1 + 1 Story 9:16 + 2 Reels 9:16) con copy, CTA, y escenas de video
+    - Función `createDefaultBrainProfile()` con 3 avatares por defecto + 6 briefs creativos con copy completo en guaraní paraguayo
+
+  - **Vista AutoAds (`src/components/AutoAdsView.tsx` ~1335 líneas)**:
+    - UI completa de 6 secciones: Barra superior, Drawer de configuración dual, Centro de control, Terminal, Visor de creativos (6 tabs), Campañas publicadas
+    - Sistema dual de conexión: "🔗 Meta Ads Directo" (cuenta propia del usuario con OAuth) + "🔌 Pipeboard" (para suscriptores)
+    - Flujo OAuth con popup de Facebook que auto-cierra y notifica vía postMessage
+    - Selección de cuenta publicitaria y página de Facebook desde dropdowns
+    - Animación de entrenamiento cerebral en 3 fases con barra de progreso
+
+  - **4 Endpoints Backend Meta Ads Directo (`vite.config.ts`)**:
+    - `GET /api/meta/auth-url` — Genera URL OAuth de Facebook con permisos ads_management, ads_read, pages_show_list, pages_read_engagement, business_management
+    - `GET /api/meta/callback` — Intercambia código OAuth por token de larga duración (~60 días), guarda en store_config.json y .env
+    - `GET /api/meta/status` — Valida token, retorna cuentas publicitarias y páginas del Graph API
+    - `POST /api/meta/publish-direct` — Crea campaña → ad set → sube imágenes → crea creativos → crea anuncios vía Meta Graph API v21.0
+
+  - **Normalización de respuestas GLM-5.3** en endpoint `/api/autoads/brain-train`:
+    - `painPoints`: Si es string, split a array
+    - `angles`: Si no es array de objetos, crear defaults
+    - `targeting.peakHours`: Si es array de strings "19:00-22:00", extraer números
+    - `creativeBriefs.videoScenes`: Si no es array apropiado, set undefined (fallback en engine)
+
+  - **Limpieza**: Eliminado `PipeboardAdsManagerView.tsx` (reemplazado por AutoAdsView). Actualizado `AdminView.tsx` con import y referencia a AutoAdsView.
+
+  - **Configuración Meta App**:
+    - App: LandingCOD (ID: 1465256781554439)
+    - Dominio: landingcod.com
+    - Variables de entorno: META_APP_ID, META_APP_SECRET guardadas en .env y store_config.json
+    - Documentación de configuración: `GUIA_CONFIGURACION_META_ADS.md`
+
+  - **Git y Despliegue**:
+    - Commit `815965e`: "feat: AutoAds con Cerebro Maestro IA + Meta Ads Directo" (121 archivos, 41,620 inserciones)
+    - Push exitoso a `https://github.com/RichardAlmiron/david.git` branch `main`
+    - Railway auto-deploy desde GitHub
+
+---
+
 ## 2. Mapa Actualizado de Archivos del Proyecto
 
 ```text
@@ -406,7 +454,7 @@ Para la especificación algorítmica profunda del motor de WhatsApp, voz neurona
 ├── vite.config.ts                                              # Servidor Dual-Port Railway (8080/3000) + API REST (/api/pedidos, /api/whatsapp/*, /api/builder/*, /api/pipeboard/*, /api/meta-capi/*)
 ├── railway.json                                                # Configuración de despliegue en Railway con Nixpacks y healthcheck
 ├── nixpacks.toml                                               # Definición de fases de compilación con Node 20
-├── CONTEXTO_DE_CHAT.md                                         # Bitácora histórica completa de todas las fases del chat (Fases 1 a 40)
+├── CONTEXTO_DE_CHAT.md                                         # Bitácora histórica completa de todas las fases del chat (Fases 1 a 41)
 ├── ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md     # Documentación del Constructor Autopiloto, DeepSeek Harness Kernel, GLM-5.3, Meta CAPI y Pipeboard Ads
 ├── ARQUITECTURA_WHATSAPP_IA_VOZ.md                             # Documentación del motor WhatsApp, Deepgram Aura-2 OGG/Opus, Deepgram Nova-3 STT, GLM-5.3 y Supabase
 ├── ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md       # Documentación de Reportes Ejecutivos al WhatsApp del Vendedor, Panel Confirmados y Tombstones DEL-ORD-*
@@ -436,6 +484,7 @@ Para la especificación algorítmica profunda del motor de WhatsApp, voz neurona
     │   ├── orderConfirmation.test.ts                           # Suite de 19 pruebas unitarias (Confirmación, Teléfonos 4-3-3, Meta CAPI, Pipeboard y DeepSeek Harness)
     │   ├── deepseekHarnessKernel.ts                            # Kernel oficial Cordis (deepseek-ai/deepseek-harness) con 4 plugins, comandos slash y undo reversible
     │   ├── metaPixelEngine.ts                                  # Motor de 12 eventos Full-Funnel Meta Pixel + First-Party CAPI Anti-Bloqueo Apple iOS
+    │   ├── autoAdsBrainEngine.ts                              # Motor del Cerebro Maestro IA: entrenamiento GLM-5.3, 6 arquetipos Andrómeda, generación de creativos
     │   └── pipeboardEngine.ts                                  # Motor de creativos 1:1, 9:16, video animado de 4 escenas y publicación MCP en Meta Ads con GLM-5.3
     ├── context/
     │   └── StoreContext.tsx                                    # Estado global y sincronización multi-dispositivo en Supabase (ORD-*, DEL-ORD-*, CFG-*)
@@ -443,7 +492,7 @@ Para la especificación algorítmica profunda del motor de WhatsApp, voz neurona
     │   ├── AdminSectionGuide.tsx                               # Guía interactiva paso a paso desplegable en modo oscuro Vercel para todas las secciones del Admin
     │   ├── ProductTemplateBuilderStudio.tsx                    # Estudio Autopiloto 1-Clic con Kernel DeepSeek Harness + GLM-5.3 y vista previa móvil en vivo
     │   ├── ProductTemplateBuilderModal.tsx                     # Contenedor modal del Estudio Autopiloto
-    │   ├── PipeboardAdsManagerView.tsx                         # Creador de Anuncios en Piloto Automático Meta Ads 100% Negro Puro (Vercel Dark)
+    │   ├── AutoAdsView.tsx                                    # AutoAds — Cerebro Maestro IA + Meta Ads Directo + Piloto Automático de Publicidad (reemplaza PipeboardAdsManagerView)
     │   ├── ProductConfirmedOrdersPanel.tsx                     # Panel exclusivo de pedidos confirmados (#1, #2...), comparativa IA y Logística Universal en modo oscuro
     │   ├── ProductSellerAgentPanel.tsx                         # Configuración del WhatsApp del vendedor para reportes ejecutivos en modo oscuro
     │   ├── Navbar.tsx                                          # Navegación pública de la tienda
@@ -471,7 +520,7 @@ Para la especificación algorítmica profunda del motor de WhatsApp, voz neurona
 2. **Interfaz Administrativa 100% Negro Puro Nativa Android / Vercel (`#000000` / `#0d0d0f`)**:
    - Ninguna pantalla, tarjeta ni modal del Panel Administrativo (`#admin`) puede tener fondos blancos (`bg-white`) ni cremas (`#f3efe6`).
    - Todas las 6 secciones del menú deben incluir su guía interactiva `AdminSectionGuide`, explicaciones en cada tarjeta y botones adaptados a pantallas móviles (`390px`) sin desbordes de texto.
-3. **Arquitectura 100% Autopiloto con `deepseek-ai/deepseek-harness` (`src/utils/deepseekHarnessKernel.ts`)**:
+3. **Arquitectura 100% Autopiloto con `deepseek-ai/deepseek-harness` (`src/utils/deepseekHarnessKernel.ts`) y AutoAds (Cerebro Maestro IA + Meta Ads Directo)**:
    - Tanto el **Creador de Páginas IA** como el **Creador de Anuncios Pipeboard Meta Ads** funcionan en modo **Piloto Automático de 1 Clic**, sin formularios largos ni cuestionarios manuales.
 4. **Voz Neuronal Deepgram Aura-2 (OGG/Opus PTT) + Transcripción Deepgram Nova-3/Nova-2 + Teléfonos `4 - 3 - 3`**:
    - Todo audio entrante se transcribe con **Deepgram Nova-3 (`model=nova-3&language=es`)** (con respaldo automático en `nova-2`) y se responde con notas de voz nativas OGG/Opus sintetizadas con **Deepgram Aura-2** (`Estrella`, `Celeste`, `Sirio`, `Néstor`).
@@ -479,4 +528,8 @@ Para la especificación algorítmica profunda del motor de WhatsApp, voz neurona
 5. **Cero Números de WhatsApp por Defecto (`resolveProductSellerWa`) y Sincronización `DEL-ORD-*` en Supabase**:
    - Cada producto utiliza exclusivamente su `waVendedor` y su `waNotificacionesVendedor` guardados en `CFG-<id>`.
    - Toda eliminación de pedidos emite tombstones permanentes `DEL-ORD-<reservaid>` y purga cualquier residuo de conversación en memoria y base de datos.
+6. **Arquitectura Dual de Meta Ads (Directo + Pipeboard) con AutoAds**:
+   - El módulo **AutoAds** soporta dos modos de conexión: **Meta Ads Directo** (cuenta propia del usuario vía OAuth Graph API v21.0) y **Pipeboard MCP** (para suscriptores de Pipeboard).
+   - El Cerebro Maestro IA entrena automáticamente al seleccionar un producto, generando 6 creativos genuinamente diversos con copy en español paraguayo.
+   - Documentación completa de configuración en [`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md).
 
