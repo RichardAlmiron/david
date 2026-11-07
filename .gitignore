@@ -1,0 +1,25 @@
+# Dependencias y compilación
+node_modules/
+dist/
+bun.lock
+.playwright-cli/
+.aistudio/
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+
+# Archivos temporales e historial de chat
+proyector-naviluz-contra-entrega-en-paraguay.json
+conversacion-completa.md
+.wa_auth_session/
+wa_chats.json
+admin_sessions.json
+.DS_Store
+Thumbs.db
+
+# Configuración local con tokens sensibles
+store_config.json
+deleted_orders.json
+pedidos.json

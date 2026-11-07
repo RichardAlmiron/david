@@ -1,0 +1,67 @@
+{
+  "sellerPhonesByProduct": {},
+  "messagesByProduct": {
+    "prod-noelux-01": [
+      {
+        "id": "selmsg-1793918590748-dhpb",
+        "productId": "prod-noelux-01",
+        "sellerPhone": "",
+        "sender": "agent",
+        "senderName": "🤖 Agente de Noelux™ Proyector Navideño 12 Diseños",
+        "text": "📋 *REPORTE DE TU AGENTE · NOELUX™ PROYECTOR NAVIDEÑO 12 DISEÑOS*\n\nHola jefe, acabo de confirmar todos los datos del pedido de *Carlos Benítez* (Asunción). Te comparto el estado actualizado de tu producto:\n\n📊 *RESUMEN ACTUAL:*\n• ✅ *Pedidos Confirmados:* 0\n• ⏳ *Pedidos en Curso (por confirmar):* 1\n• 🚚 *Enviados / Concretados:* 0 enviados (0 cobrados)\n\n━━━━━━━━━━━━━━━━━━━━\n⏳ *EN CURSO DE CONFIRMACIÓN (1):*\n• *#1* Carlos Benítez (Asunción) — _Confirmando con el cliente (Paso 4/5)_\n\n💬 _Podés consultarme por acá en cualquier momento cuántos pedidos siguen en curso o cuáles ya están confirmados._",
+        "timestamp": "2026-11-05T22:43:10.748Z",
+        "alertColor": "green",
+        "orderId": "TEST-1793918569537",
+        "sentViaWhatsApp": false
+      },
+      {
+        "id": "selmsg-1793924407496-h4fb",
+        "productId": "prod-noelux-01",
+        "sellerPhone": "",
+        "sender": "agent",
+        "senderName": "🤖 Agente de Noelux™ Proyector Navideño 12 Diseños",
+        "text": "📋 *REPORTE DE TU AGENTE · NOELUX™ PROYECTOR NAVIDEÑO 12 DISEÑOS*\n\nHola jefe, acabo de confirmar todos los datos del pedido de *María González* (Asunción). Te comparto el estado actualizado de tu producto:\n\n📊 *RESUMEN ACTUAL:*\n• ✅ *Pedidos Confirmados:* 1\n• ⏳ *Pedidos en Curso (por confirmar):* 2\n• 🚚 *Enviados / Concretados:* 1 enviados (0 cobrados)\n\n━━━━━━━━━━━━━━━━━━━━\n✅ *LISTA DE CONFIRMADOS (1):*\n\n*#1 · Carlos Benítez* (595986260211)\n📍 Asunción, Central — Avda. Mariscal López 1234\n🏠 Ref: Casa blanca con portón negro al lado de la farmacia San Roque.\n🛍️ Pack: 1 un. (Gs. 189.000) · _📦 Listo para enviar_\n\n━━━━━━━━━━━━━━━━━━━━\n⏳ *EN CURSO DE CONFIRMACIÓN (2):*\n• *#1* María González (Asunción) — _Confirmando con el cliente (Paso 4/5)_\n• *#2* Carlos Benítez (Asunción) — _Confirmando con el cliente (Paso 2/5)_\n\n💬 _Podés consultarme por acá en cualquier momento cuántos pedidos siguen en curso o cuáles ya están confirmados._",
+        "timestamp": "2026-11-06T00:20:07.496Z",
+        "alertColor": "green",
+        "orderId": "TEST-1793924391627",
+        "sentViaWhatsApp": false
+      },
+      {
+        "id": "selmsg-1793924607835-wxqq",
+        "productId": "prod-noelux-01",
+        "sellerPhone": "",
+        "sender": "agent",
+        "senderName": "🤖 Agente de Noelux™ Proyector Navideño 12 Diseños",
+        "text": "📋 *REPORTE DE TU AGENTE · NOELUX™ PROYECTOR NAVIDEÑO 12 DISEÑOS*\n\nHola jefe, acabo de confirmar todos los datos del pedido de *María González* (Asunción). Te comparto el estado actualizado de tu producto:\n\n📊 *RESUMEN ACTUAL:*\n• ✅ *Pedidos Confirmados:* 2\n• ⏳ *Pedidos en Curso (por confirmar):* 2\n• 🚚 *Enviados / Concretados:* 2 enviados (0 cobrados)\n\n━━━━━━━━━━━━━━━━━━━━\n✅ *LISTA DE CONFIRMADOS (2):*\n\n*#1 · María González* (595986260211)\n📍 Asunción, Central — Avda. Mariscal López 1234\n🏠 Ref: Casa blanca con portón negro al lado de la farmacia San Roque\n🛍️ Pack: 1 un. (Gs. 189.000) · _📦 Listo para enviar_\n\n*#2 · Carlos Benítez* (595986260211)\n📍 Asunción, Central — Avda. Mariscal López 1234\n🏠 Ref: Casa blanca con portón negro al lado de la farmacia San Roque.\n🛍️ Pack: 1 un. (Gs. 189.000) · _📦 Listo para enviar_\n\n━━━━━━━━━━━━━━━━━━━━\n⏳ *EN CURSO DE CONFIRMACIÓN (2):*\n• *#1* María González (Asunción) — _Confirmando con el cliente (Paso 4/5)_\n• *#2* Carlos Benítez (Asunción) — _Confirmando con el cliente (Paso 2/5)_\n\n💬 _Podés consultarme por acá en cualquier momento cuántos pedidos siguen en curso o cuáles ya están confirmados._",
+        "timestamp": "2026-11-06T00:23:27.835Z",
+        "alertColor": "green",
+        "orderId": "TEST-1793924591247",
+        "sentViaWhatsApp": false
+      },
+      {
+        "id": "selmsg-1793927965202-6oji",
+        "productId": "prod-noelux-01",
+        "sellerPhone": "",
+        "sender": "agent",
+        "senderName": "🤖 Agente de Noelux™ Proyector Navideño 12 Diseños",
+        "text": "📋 *REPORTE DE TU AGENTE · NOELUX™ PROYECTOR NAVIDEÑO 12 DISEÑOS*\n\nHola jefe, acabo de confirmar todos los datos del pedido de *María González* (Asunción). Te comparto el estado actualizado de tu producto:\n\n📊 *RESUMEN ACTUAL:*\n• ✅ *Pedidos Confirmados:* 3\n• ⏳ *Pedidos en Curso (por confirmar):* 2\n• 🚚 *Enviados / Concretados:* 3 enviados (0 cobrados)\n\n━━━━━━━━━━━━━━━━━━━━\n✅ *LISTA DE CONFIRMADOS (3):*\n\n*#1 · María González* (595986260211)\n📍 Asunción, Central — Avda. Mariscal López 1234\n🏠 Ref: Casa blanca con portón negro al lado de la farmacia San Roque\n🛍️ Pack: 1 un. (Gs. 189.000) · _📦 Listo para enviar_\n\n*#2 · María González* (595986260211)\n📍 Asunción, Central — Avda. Mariscal López 1234\n🏠 Ref: Casa blanca con portón negro al lado de la farmacia San Roque\n🛍️ Pack: 1 un. (Gs. 189.000) · _📦 Listo para enviar_\n\n*#3 · Carlos Benítez* (595986260211)\n📍 Asunción, Central — Avda. Mariscal López 1234\n🏠 Ref: Casa blanca con portón negro al lado de la farmacia San Roque.\n🛍️ Pack: 1 un. (Gs. 189.000) · _📦 Listo para enviar_\n\n━━━━━━━━━━━━━━━━━━━━\n⏳ *EN CURSO DE CONFIRMACIÓN (2):*\n• *#1* María González (Asunción) — _Confirmando con el cliente (Paso 4/5)_\n• *#2* Carlos Benítez (Asunción) — _Confirmando con el cliente (Paso 2/5)_\n\n💬 _Podés consultarme por acá en cualquier momento cuántos pedidos siguen en curso o cuáles ya están confirmados._",
+        "timestamp": "2026-11-06T01:19:25.202Z",
+        "alertColor": "green",
+        "orderId": "TEST-1793927951125",
+        "sentViaWhatsApp": false
+      },
+      {
+        "id": "selmsg-1793928043271-d70l",
+        "productId": "prod-noelux-01",
+        "sellerPhone": "",
+        "sender": "agent",
+        "senderName": "🤖 Agente de Noelux™ Proyector Navideño 12 Diseños",
+        "text": "📋 *REPORTE DE TU AGENTE · NOELUX™ PROYECTOR NAVIDEÑO 12 DISEÑOS*\n\nHola jefe, acabo de confirmar todos los datos del pedido de *María González* (Asunción). Te comparto el estado actualizado de tu producto:\n\n📊 *RESUMEN ACTUAL:*\n• ✅ *Pedidos Confirmados:* 3\n• ⏳ *Pedidos en Curso (por confirmar):* 2\n• 🚚 *Enviados / Concretados:* 3 enviados (0 cobrados)\n\n━━━━━━━━━━━━━━━━━━━━\n✅ *LISTA DE CONFIRMADOS (3):*\n\n*#1 · María González* (595986260211)\n📍 Asunción, Central — Avda. Mariscal López 1234\n🏠 Ref: Casa blanca con portón negro al lado de la farmacia San Roque\n🛍️ Pack: 1 un. (Gs. 189.000) · _📦 Listo para enviar_\n\n*#2 · María González* (595986260211)\n📍 Asunción, Central — Avda. Mariscal López 1234\n🏠 Ref: Casa blanca con portón negro al lado de la farmacia San Roque\n🛍️ Pack: 1 un. (Gs. 189.000) · _📦 Listo para enviar_\n\n*#3 · Carlos Benítez* (595986260211)\n📍 Asunción, Central — Avda. Mariscal López 1234\n🏠 Ref: Casa blanca con portón negro al lado de la farmacia San Roque.\n🛍️ Pack: 1 un. (Gs. 189.000) · _📦 Listo para enviar_\n\n━━━━━━━━━━━━━━━━━━━━\n⏳ *EN CURSO DE CONFIRMACIÓN (2):*\n• *#1* María González (Asunción) — _Confirmando con el cliente (Paso 4/5)_\n• *#2* Carlos Benítez (Asunción) — _Confirmando con el cliente (Paso 2/5)_\n\n💬 _Podés consultarme por acá en cualquier momento cuántos pedidos siguen en curso o cuáles ya están confirmados._",
+        "timestamp": "2026-11-06T01:20:43.271Z",
+        "alertColor": "green",
+        "orderId": "TEST-1793928030136",
+        "sentViaWhatsApp": false
+      }
+    ]
+  }
+}

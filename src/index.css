@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Larger, bold mobile-app root font size so all text is effortless to read on phones and desktops */
+    font-size: clamp(16.5px, 0.3vw + 15.5px, 20px);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overflow-x: clip;
+  }
+
+  body {
+    overflow-x: clip;
+    background-color: #f3f1eb;
+    color: #141413;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  img,
+  video,
+  canvas {
+    display: block;
+    max-width: 100%;
+    image-rendering: auto;
+  }
+}
+
+/* Native Mobile-App Container System:
+   - Mobile (< 640px): 100% width with tight 10px side padding so App Cards feel edge-to-edge
+   - Tablet / Desktop: centered app feed & split-sheet architecture
+*/
+.app-container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(0.6rem, 2.5vw, 2.5rem);
+  padding-right: clamp(0.6rem, 2.5vw, 2.5rem);
+  max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  .app-container {
+    max-width: 940px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-container {
+    max-width: min(95vw, 1320px);
+  }
+}
+
+@media (min-width: 1440px) {
+  .app-container {
+    max-width: min(93vw, 1520px);
+  }
+}
+
+@media (min-width: 1920px) {
+  .app-container {
+    max-width: min(90vw, 1740px);
+  }
+}
+
+/* Hide scrollbars on horizontal pill selectors while keeping touch scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Spectacular Floating "Pedir Ahora" Animations (Compositor-friendly transform & opacity) */
+@keyframes ctaSpectacularVibe {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+  }
+  12% {
+    transform: translate3d(0, -5px, 0) scale(1.035) rotate(-1.2deg);
+  }
+  24% {
+    transform: translate3d(0, -5px, 0) scale(1.04) rotate(1.2deg);
+  }
+  36% {
+    transform: translate3d(-3px, -4px, 0) scale(1.035) rotate(-1deg);
+  }
+  48% {
+    transform: translate3d(3px, -4px, 0) scale(1.035) rotate(1deg);
+  }
+  60% {
+    transform: translate3d(-2px, -2px, 0) scale(1.02) rotate(-0.5deg);
+  }
+  75% {
+    transform: translate3d(0, -1px, 0) scale(1.01) rotate(0deg);
+  }
+}
+
+@keyframes ctaShimmerSweep {
+  0% {
+    transform: translateX(-140%) skewX(-20deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.85;
+  }
+  60% {
+    transform: translateX(220%) skewX(-20deg);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(240%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+@keyframes ctaGentleFloat {
+  0%, 100% {
+    transform: translate3d(0, 0px, 0);
+  }
+  50% {
+    transform: translate3d(0, -3px, 0);
+  }
+}
+
+@keyframes ctaPulseRing {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.65;
+  }
+  70% {
+    transform: scale(1.05, 1.22);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.06, 1.25);
+    opacity: 0;
+  }
+}
+
+.animate-cta-spectacular {
+  animation: ctaSpectacularVibe 0.95s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-cta-float {
+  animation: ctaGentleFloat 3.2s ease-in-out infinite;
+}
+
+.animate-cta-shimmer {
+  animation: ctaShimmerSweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-cta-ring {
+  animation: ctaPulseRing 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
