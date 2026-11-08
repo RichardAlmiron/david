@@ -159,6 +159,16 @@ function readKeyFromEnvFile(keyName: string): string {
   return '';
 }
 
+function getOpenRouterReferer(req?: any): string {
+  if (!req || !req.headers) return 'https://landingcod.com';
+  const rawHost = req.headers['x-forwarded-host'] || req.headers.host || '';
+  const host = Array.isArray(rawHost) ? rawHost[0] : String(rawHost).split(',')[0].trim();
+  if (!host) return 'https://landingcod.com';
+  const rawProto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
+  const proto = Array.isArray(rawProto) ? rawProto[0] : String(rawProto).split(',')[0].trim();
+  return `${proto}://${host}`;
+}
+
 function getSessionsFilePath() {
   return path.resolve(__dirname, 'admin_sessions.json');
 }
@@ -1680,7 +1690,7 @@ function registerApiServerMiddlewares(server: any) {
                       headers: {
                         'Authorization': `Bearer ${effectiveKey}`,
                         'Content-Type': 'application/json',
-                        'HTTP-Referer': 'https://railway.app',
+                        'HTTP-Referer': getOpenRouterReferer(req),
                         'X-Title': 'DeepSeek Harness COD Paraguayo'
                       },
                       body: JSON.stringify({
@@ -2270,7 +2280,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                     headers: {
                       Authorization: `Bearer ${openRouterKey}`,
                       'Content-Type': 'application/json',
-                      'HTTP-Referer': 'http://localhost:3000',
+                      'HTTP-Referer': getOpenRouterReferer(req),
                       'X-Title': 'AutoAds Supreme Brain'
                     },
                     body: JSON.stringify({
@@ -2492,7 +2502,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                         headers: {
                           Authorization: `Bearer ${openRouterKey}`,
                           'Content-Type': 'application/json',
-                          'HTTP-Referer': 'http://localhost:3000',
+                          'HTTP-Referer': getOpenRouterReferer(req),
                           'X-Title': 'AutoAds MiniMax Video Reel Engine'
                         },
                         body: JSON.stringify({
@@ -2522,11 +2532,12 @@ Devolvé SOLO un JSON válido con esta estructura:
                     } catch {}
                   }
 
-                  // Candidatos de generación de imagen en OpenRouter
+                  // Candidatos de generación de imagen en OpenRouter (Estricto GPT Image 2.6)
                   const candidateImageModels = [
-                    'google/gemini-3.1-flash-image',
-                    'google/gemini-2.5-flash-image',
-                    'google/gemini-3.1-flash-lite-image'
+                    configuredImageModel || 'openai/gpt-image-2.6',
+                    'openai/gpt-image-2.6',
+                    'openai/gpt-image-2.6-sunburst',
+                    'openai/gpt-image-2.6-flare'
                   ];
 
                   for (const imgModel of candidateImageModels) {
@@ -2536,7 +2547,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                         headers: {
                           Authorization: `Bearer ${openRouterKey}`,
                           'Content-Type': 'application/json',
-                          'HTTP-Referer': 'http://localhost:3000',
+                          'HTTP-Referer': getOpenRouterReferer(req),
                           'X-Title': 'AutoAds GPT Imagen 2.6 Generator'
                         },
                         body: JSON.stringify({
@@ -2702,7 +2713,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                     headers: {
                       Authorization: `Bearer ${openRouterKey}`,
                       'Content-Type': 'application/json',
-                      'HTTP-Referer': 'http://localhost:3000',
+                      'HTTP-Referer': getOpenRouterReferer(req),
                       'X-Title': 'AutoAds Universal Congruent Ad + Image Regenerator'
                     },
                     body: JSON.stringify({
@@ -2800,7 +2811,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                       headers: {
                         Authorization: `Bearer ${openRouterKey}`,
                         'Content-Type': 'application/json',
-                        'HTTP-Referer': 'http://localhost:3000',
+                        'HTTP-Referer': getOpenRouterReferer(req),
                         'X-Title': 'AutoAds MiniMax Video Reel Engine'
                       },
                       body: JSON.stringify({
@@ -2839,9 +2850,9 @@ Devolvé SOLO un JSON válido con esta estructura:
                     fs.mkdirSync(aiAdsDir, { recursive: true });
                   }
                   const candidateImageModels = [
-                    'google/gemini-3.1-flash-image',
-                    'google/gemini-2.5-flash-image',
-                    'google/gemini-3.1-flash-lite-image'
+                    'openai/gpt-image-2.6',
+                    'openai/gpt-image-2.6-sunburst',
+                    'openai/gpt-image-2.6-flare'
                   ];
                   for (const imgModel of candidateImageModels) {
                     try {
@@ -2850,7 +2861,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                         headers: {
                           Authorization: `Bearer ${openRouterKey}`,
                           'Content-Type': 'application/json',
-                          'HTTP-Referer': 'http://localhost:3000',
+                          'HTTP-Referer': getOpenRouterReferer(req),
                           'X-Title': 'AutoAds GPT Imagen 2.6 Single Ad Regenerator'
                         },
                         body: JSON.stringify({
@@ -3929,7 +3940,7 @@ setTimeout(()=>window.close(),5000);
                       headers: {
                         Authorization: `Bearer ${openRouterKey}`,
                         'Content-Type': 'application/json',
-                        'HTTP-Referer': 'http://localhost:3000',
+                        'HTTP-Referer': getOpenRouterReferer(req),
                         'X-Title': 'Pipeboard Meta Ads Automation'
                       },
                       body: JSON.stringify({

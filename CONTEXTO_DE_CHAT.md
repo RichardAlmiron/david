@@ -584,5 +584,18 @@ Exigencias expresas:
 3. **Creador Exclusivo de Video Reels**: **`minimax/minimax-m3.1-flash`** (MiniMax M3.1 Flash) es el modelo oficial investigado e integrado para la creación y dirección de reels animados de video.
 4. **Agente de Desarrollo Web**: **`z-ai/glm-5.3`** (GLM 5.3) permanece asignado exclusivamente al constructor de landing pages (`ProductTemplateBuilderStudio.tsx` y `/api/builder/coding-agent`).
 
+---
+
+## 6. Fase 44 — Corrección de Modelo GPT Image 2.6 en Servidor y Header Dinámico `HTTP-Referer` de Producción
+
+1. **Purga de Candidatos Secundarios de Imagen (Gemini / Nano Banana)**:
+   - Se eliminaron las entradas `google/gemini-3.1-flash-image` (Nano Banana) de las listas de modelos candidatos en `/api/autoads/generate-ad-images` y `/api/pipeboard/generate-creatives` en `vite.config.ts`.
+   - Las solicitudes a OpenRouter están bloqueadas exclusivamente al modelo **`openai/gpt-image-2.6`** (GPT Image 2.6).
+2. **Header Dinámico `HTTP-Referer` de Producción (`getOpenRouterReferer`)**:
+   - Se reemplazaron todas las ocurrencias harcodeadas de `'HTTP-Referer': 'http://localhost:3000'` por la función evaluadora `getOpenRouterReferer(req)`.
+   - La función extrae los encabezados `x-forwarded-proto`, `host` y `x-forwarded-host` de la solicitud entrante.
+   - En producción, OpenRouter registrará la URL real del dominio (p. ej. `https://landingcod.com`) en lugar de `localhost:3000`.
+
+
 
 
