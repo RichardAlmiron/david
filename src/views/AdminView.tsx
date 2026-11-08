@@ -2169,32 +2169,7 @@ export const AdminView: React.FC = () => {
           {/* INTERFAZ AUTOADS: PLATAFORMA DE ANUNCIOS CON CEREBRO IA   */}
           {/* ======================================================== */}
           {activeMenu === 'pipeboard' && (
-            <div className="space-y-4 sm:space-y-5 max-w-7xl mx-auto">
-              <AdminSectionGuide
-                id="autoads"
-                title="AutoAds — Plataforma de Anuncios con Cerebro Maestro"
-                subtitle="Investigá la competencia, entrená el cerebro IA y publicá campañas ganadoras en Meta Ads con 1 clic"
-                badge="Guía AutoAds"
-                steps={[
-                  {
-                    icon: '🧠',
-                    title: 'Paso 1: Seleccioná tu Producto',
-                    description: 'Elegí la página de producto que querés promocionar. El Cerebro Maestro analiza todo automáticamente: imágenes, precios, descripción y competencia.'
-                  },
-                  {
-                    icon: '🔬',
-                    title: 'Paso 2: Entrenamiento del Cerebro',
-                    description: 'El Cerebro investiga la Ad Library de Meta, aprende de ads ganadores, define avatares y ángulos diversos optimizados para Andrómeda.'
-                  },
-                  {
-                    icon: '🚀',
-                    title: 'Paso 3: Piloto Automático',
-                    description: 'Con el cerebro entrenado, genera 6 creativos genuinamente diversos + copys por avatar y publica todo directo en tu Meta Ads.'
-                  }
-                ]}
-                proTip="El algoritmo Andrómeda de Meta premia la DIVERSIDAD conceptual. AutoAds genera creativos con ángulos, avatares y hooks genuinamente diferentes para alimentar al algoritmo correctamente."
-              />
-
+            <div className="max-w-7xl mx-auto">
               <AutoAdsView
                 productPages={productPages}
                 onOpenLiveProductPage={prod => {

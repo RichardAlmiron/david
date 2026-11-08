@@ -683,4 +683,61 @@ test('DeepSeek Harness (deepseek-ai/deepseek-harness) Cordis Kernel applies reve
   assert.equal(channelResult.updatedDraft.vozAgente, 'aura-2-luna-es');
 });
 
+import {
+  extractAllProductImages,
+  createDefaultBrainProfile,
+  buildCreativeAssetsFromBrain,
+  regenerateSingleCreativeAssetFromBrain
+} from './autoAdsBrainEngine';
+
+test('AutoAds Supreme Brain extracts all product gallery images, rotates them across 6 diverse creatives, and regenerates individual ads on demand', () => {
+  const productWithGallery: ProductPage = {
+    id: 'prod-autoads-test',
+    slug: 'taladro-percutor-pro',
+    nombre: 'Taladro Percutor 21V Industrial',
+    descripcion: 'Taladro inalámbrico con 2 baterías de litio y maletín completo',
+    imagen: '/assets/real/galeria-1.jpg',
+    precios: { 1: 249000, 2: 449000, 3: 649000 },
+    precioNormal: 349000,
+    wa: '0973532550',
+    activo: true,
+    creadoEn: '2026-11-08T00:00:00Z',
+    freeShipping: true,
+    landingContent: {
+      galleryItems: [
+        { src: '/assets/real/galeria-1.jpg', label: 'Vista frontal' },
+        { src: '/assets/real/galeria-2.jpg', label: 'Baterías de litio' },
+        { src: '/assets/real/galeria-3.jpg', label: 'Maletín completo' }
+      ],
+      benefitCards: [
+        { title: 'Motor Brushless', desc: 'Sin escobillas', img: '/assets/real/galeria-4.jpg' }
+      ]
+    } as any
+  };
+
+  const allImages = extractAllProductImages(productWithGallery, ['https://example.com/scraped-photo.jpg']);
+  assert.equal(allImages.length, 9);
+  assert.equal(allImages[0], 'https://example.com/scraped-photo.jpg');
+  assert.equal(allImages[1], '/assets/real/galeria-1.jpg');
+
+  const brain = createDefaultBrainProfile(productWithGallery);
+  const assets = buildCreativeAssetsFromBrain(productWithGallery, brain);
+  assert.equal(assets.length, 6);
+  // Each creative has a distinct high-impact SVG data URL using different photos/themes
+  assert.notEqual(assets[0].imageDataUrl, assets[1].imageDataUrl);
+  assert.notEqual(assets[1].imageDataUrl, assets[2].imageDataUrl);
+
+  // Single ad regeneration produces a new angle, headline, primary text, and cycles the photo
+  const regeneratedAd0 = regenerateSingleCreativeAssetFromBrain(
+    productWithGallery,
+    brain,
+    0,
+    1
+  );
+  assert.notEqual(regeneratedAd0.headline, assets[0].headline);
+  assert.notEqual(regeneratedAd0.primaryText, assets[0].primaryText);
+  assert.notEqual(regeneratedAd0.imageDataUrl, assets[0].imageDataUrl);
+});
+
+
 
