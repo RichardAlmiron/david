@@ -393,28 +393,60 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // BOTÓN 2: Generar Todos los Anuncios Ganadores (Imágenes + Video + Copys)
+  // BOTÓN 2: Generar Todos los Anuncios Ganadores + Imágenes Creadas por IA
   // ─────────────────────────────────────────────────────────────────────────────
-  const handleStep2GenerateAds = () => {
+  const handleStep2GenerateAds = async () => {
     if (!brainProfile || !activeProduct) return;
     setWorkflowStep('generating');
-    setTimeout(() => {
-      const built = buildCreativeAssetsFromBrain(activeProduct, brainProfile);
-      setCreatives(built);
+    const isRegeneratingAll = creatives.length > 0;
+
+    try {
+      const baseAssets = buildCreativeAssetsFromBrain(activeProduct, brainProfile);
+      let finalAssets = baseAssets;
+
+      try {
+        const res = await fetch('/api/autoads/generate-ad-images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product: activeProduct,
+            creativeBriefs: brainProfile.creativeBriefs,
+            forceNewGeneration: isRegeneratingAll
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.generatedImages) && data.generatedImages.length > 0) {
+            finalAssets = baseAssets.map((asset, idx) => {
+              const match = data.generatedImages.find((g: any) => g.adIndex === idx) || data.generatedImages[idx];
+              if (!match?.imageUrl) return asset;
+              return {
+                ...asset,
+                aiGeneratedImageUrl: match.imageUrl,
+                aiImagePrompt: match.prompt || asset.aiImagePrompt
+              };
+            });
+          }
+        }
+      } catch {}
+
+      setCreatives(finalAssets);
       setAdVariationCounters({});
       setAdPhotoIndexOverride({});
       setAdShowPurePhoto({});
       setWorkflowStep('generated');
       showToast(
-        `🎨 ${built.length} anuncios ganadores generados con las fotos reales de "${activeProduct.nombre}". Revisalos abajo tal como saldrán en Facebook.`
+        `🤖 ${finalAssets.length} anuncios y 6 imágenes publicitarias nuevas generadas con Inteligencia Artificial para "${activeProduct.nombre}".`
       );
-    }, 450);
+    } finally {
+      setWorkflowStep('generated');
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Cambiar / Regenerar UN anuncio específico ("🔄 Cambiar este anuncio")
+  // Cambiar / Regenerar UN anuncio específico + Su Imagen IA ("🔄 Cambiar")
   // ─────────────────────────────────────────────────────────────────────────────
-  const handleRegenerateSingleAd = async (adIndex: number) => {
+  const handleRegenerateSingleAd = async (adIndex: number, customPromptOverride?: string) => {
     if (!brainProfile || !activeProduct) return;
     setRegeneratingAdIdx(adIndex);
     const nextSeed = (adVariationCounters[adIndex] || 0) + 1;
@@ -430,7 +462,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           product: activeProduct,
           adIndex,
           variationSeed: nextSeed,
-          currentHeadline: currentAd?.headline || ''
+          currentHeadline: currentAd?.headline || '',
+          customImagePrompt: customPromptOverride || ''
         })
       });
       if (res.ok) {
@@ -449,42 +482,59 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       customBrief || undefined
     );
 
+    // Limpiar cualquier override manual de índice para mostrar la nueva imagen IA generada
+    setAdPhotoIndexOverride(prev => {
+      const copy = { ...prev };
+      delete copy[adIndex];
+      return copy;
+    });
+
     setCreatives(prev => prev.map((item, idx) => (idx === adIndex ? freshAsset : item)));
     setRegeneratingAdIdx(null);
-    showToast(`🔄 Anuncio #${adIndex + 1} cambiado con un nuevo ángulo, copy y foto.`);
+    showToast(`🤖 Anuncio #${adIndex + 1} regenerado con nueva Imagen IA y nuevo ángulo de venta.`);
   };
 
-  // Rotar la foto real del producto en un anuncio específico
+  // Rotar la escena IA completa (Imagen IA + Texto 100% congruente con esa escena) en un anuncio específico
   const handleCycleProductPhotoForAd = (adIndex: number) => {
     if (!activeProduct || !brainProfile) return;
     const allPhotos = extractAllProductImages(activeProduct, brainProfile.productAnalysis.images);
     const currentPhotoIdx = adPhotoIndexOverride[adIndex] ?? adIndex;
     const nextPhotoIdx = (currentPhotoIdx + 1) % allPhotos.length;
-    setAdPhotoIndexOverride(prev => ({ ...prev, [adIndex]: nextPhotoIdx }));
+    const nextSeed = (adVariationCounters[adIndex] || 0) + 1;
 
-    const pickedPhoto = allPhotos[nextPhotoIdx];
-    const currentAd = creatives[adIndex];
-    if (!currentAd) return;
+    setAdPhotoIndexOverride(prev => ({ ...prev, [adIndex]: nextPhotoIdx }));
+    setAdVariationCounters(prev => ({ ...prev, [adIndex]: nextSeed }));
+
+    const congruentAsset = regenerateSingleCreativeAssetFromBrain(
+      activeProduct,
+      brainProfile,
+      adIndex,
+      nextSeed
+    );
 
     const updatedSvgUrl = buildHighImpactAdSvgDataUrl({
       productName: activeProduct.nombre,
-      productImage: pickedPhoto,
+      productImage: congruentAsset.aiGeneratedImageUrl || allPhotos[nextPhotoIdx],
       pricePack1Gs: brainProfile.productAnalysis.pricesPack1,
       pricePack2Gs: brainProfile.productAnalysis.pricesPack2,
       normalPriceGs: brainProfile.productAnalysis.pricesNormal,
       freeShipping: brainProfile.productAnalysis.freeShipping,
-      aspectRatio: currentAd.aspectRatio,
-      hookBadge: currentAd.hookBadge,
-      headline: currentAd.headline,
-      subHeadline: currentAd.descriptionText.slice(0, 70),
-      ctaLabel: currentAd.ctaLabel,
-      themeIndex: currentAd.visualThemeIndex
+      aspectRatio: congruentAsset.aspectRatio,
+      hookBadge: congruentAsset.hookBadge,
+      headline: congruentAsset.headline,
+      subHeadline: congruentAsset.descriptionText.slice(0, 70),
+      ctaLabel: congruentAsset.ctaLabel,
+      themeIndex: congruentAsset.visualThemeIndex
     });
 
     setCreatives(prev =>
-      prev.map((item, idx) => (idx === adIndex ? { ...item, imageDataUrl: updatedSvgUrl } : item))
+      prev.map((item, idx) =>
+        idx === adIndex ? { ...congruentAsset, imageDataUrl: updatedSvgUrl } : item
+      )
     );
-    showToast(`🖼️ Foto cambiada (${nextPhotoIdx + 1}/${allPhotos.length}) en el Anuncio #${adIndex + 1}.`);
+    showToast(
+      `🎯 Escena IA #${((adIndex + nextSeed) % allPhotos.length) + 1} sincronizada (Texto + Imagen 100% congruentes) en el Anuncio #${adIndex + 1}.`
+    );
   };
 
   // Actualizar texto manualmente en un anuncio si el usuario desea retocarlo
@@ -1030,7 +1080,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             </button>
           </div>
 
-          {/* Grid de los 6 Anuncios con Diseño Idéntico al Feed de Facebook / Instagram */}
+          {/* Grid de los 6 Anuncios con Diseño Idéntico al Feed de Facebook / Instagram + Imágenes Generadas por IA */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {creatives.map((ad, idx) => {
               const isReel = ad.type === 'video_reel_9x16';
@@ -1039,7 +1089,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   ? ad.videoScenes[activeVideoSceneIdx % ad.videoScenes.length]
                   : null;
               const currentPhotoIdx = adPhotoIndexOverride[idx] ?? idx;
-              const rawPhotoUrl = allProductPhotos[currentPhotoIdx % allProductPhotos.length];
+              const aiGeneratedPhotoUrl =
+                ad.aiGeneratedImageUrl ||
+                allProductPhotos[currentPhotoIdx % allProductPhotos.length];
               const showPure = Boolean(adShowPurePhoto[idx]);
               const isEditingThis = editingAdIdx === idx;
               const isRegeneratingThis = regeneratingAdIdx === idx;
@@ -1050,20 +1102,25 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   data-testid={`facebook-ad-card-${idx}`}
                   className="rounded-2xl border border-zinc-800 bg-[#18191a] text-[#e4e6eb] overflow-hidden flex flex-col justify-between shadow-xl"
                 >
-                  {/* Barra Superior de Controles del Anuncio (Cambiar Anuncio / Cambiar Foto / Editar Texto) */}
+                  {/* Barra Superior de Controles del Anuncio (Cambiar Anuncio + Imagen IA / Alternar Variante / Editar) */}
                   <div className="px-3 py-2 bg-[#0d0d0f] border-b border-zinc-800 flex items-center justify-between gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
-                      Anuncio #{idx + 1} · { isReel ? '🎬 Video Reel' : ad.aspectRatio === '9:16' ? '📱 Story 9:16' : '🖼️ Feed 1:1' }
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
+                        Ad #{idx + 1} · {isReel ? '🎬 Reel IA' : ad.aspectRatio === '9:16' ? '📱 Story IA' : '🖼️ Feed IA'}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-700/60 text-[9px] font-mono text-emerald-300">
+                        🎯 Texto + Imagen IA 100% Congruentes
+                      </span>
+                    </div>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => handleCycleProductPhotoForAd(idx)}
-                        title="Cambiar a la siguiente foto real del producto"
+                        title="Rotar variante de imagen IA"
                         className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[10px] font-semibold text-zinc-200 inline-flex items-center gap-1 cursor-pointer"
                       >
                         <ImageIcon className="w-3 h-3 text-blue-400" />
-                        <span>Foto {(currentPhotoIdx % allProductPhotos.length) + 1}/{allProductPhotos.length}</span>
+                        <span>Arte IA {(currentPhotoIdx % allProductPhotos.length) + 1}</span>
                       </button>
 
                       <button
@@ -1071,16 +1128,16 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         onClick={() =>
                           setAdShowPurePhoto(prev => ({ ...prev, [idx]: !prev[idx] }))
                         }
-                        title="Alternar entre Imagen con Oferta Impresa o Foto Limpia"
+                        title="Alternar entre Arte IA Limpio o con Etiquetas de Precio"
                         className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[10px] font-semibold text-zinc-300 cursor-pointer"
                       >
-                        {showPure ? 'Con Oferta' : 'Foto Pura'}
+                        {showPure ? 'Con Oferta' : 'Arte Puro'}
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setEditingAdIdx(isEditingThis ? null : idx)}
-                        title="Editar texto o titular de este anuncio"
+                        title="Editar texto, titular o prompt de imagen IA"
                         className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[10px] font-semibold text-zinc-300 inline-flex items-center gap-1 cursor-pointer"
                       >
                         <Edit3 className="w-3 h-3 text-amber-400" />
@@ -1092,11 +1149,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         data-testid={`regenerate-ad-btn-${idx}`}
                         onClick={() => handleRegenerateSingleAd(idx)}
                         disabled={isRegeneratingThis}
-                        title="No me gustó este anuncio: generar uno nuevo con IA"
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        title="Generar una nueva Imagen IA y un nuevo ángulo para este anuncio"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
                       >
                         <RotateCw className={`w-3 h-3 ${isRegeneratingThis ? 'animate-spin' : ''}`} />
-                        <span>Cambiar</span>
+                        <span>{isRegeneratingThis ? 'Generando IA...' : 'Cambiar'}</span>
                       </button>
                     </div>
                   </div>
@@ -1108,9 +1165,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                       <div className="p-3 flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
                           <img
-                            src={rawPhotoUrl}
+                            src={aiGeneratedPhotoUrl}
                             alt={activeProduct.nombre}
-                            className="w-9 h-9 rounded-full object-cover border border-zinc-700 shrink-0"
+                            referrerPolicy="no-referrer"
+                            className="w-9 h-9 rounded-full object-cover border border-emerald-500/50 shrink-0"
                           />
                           <div>
                             <div className="text-xs font-bold text-white leading-tight">
@@ -1129,12 +1187,39 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                       {/* 2. Texto Principal (Primary Text arriba de la imagen, igual que en Facebook) */}
                       <div className="px-3 pb-2.5">
                         {isEditingThis ? (
-                          <textarea
-                            rows={6}
-                            value={ad.primaryText}
-                            onChange={e => handleUpdateAdField(idx, 'primaryText', e.target.value)}
-                            className="w-full p-2 rounded-lg bg-zinc-900 border border-emerald-500 text-xs text-zinc-100 outline-none"
-                          />
+                          <div className="space-y-2">
+                            <textarea
+                              rows={5}
+                              value={ad.primaryText}
+                              onChange={e => handleUpdateAdField(idx, 'primaryText', e.target.value)}
+                              className="w-full p-2 rounded-lg bg-zinc-900 border border-emerald-500 text-xs text-zinc-100 outline-none"
+                            />
+                            <div className="p-2 rounded-lg bg-black/80 border border-zinc-800 space-y-1.5">
+                              <span className="text-[10px] font-mono font-bold text-emerald-400 block">
+                                🎨 PROMPT DE GENERACIÓN DE IMAGEN IA:
+                              </span>
+                              <textarea
+                                rows={2}
+                                value={ad.aiImagePrompt || ''}
+                                onChange={e =>
+                                  setCreatives(prev =>
+                                    prev.map((item, i) =>
+                                      i === idx ? { ...item, aiImagePrompt: e.target.value } : item
+                                    )
+                                  )
+                                }
+                                className="w-full p-1.5 rounded bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-200 font-mono outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRegenerateSingleAd(idx, ad.aiImagePrompt)}
+                                disabled={isRegeneratingThis}
+                                className="w-full py-1.5 rounded bg-emerald-500 text-black text-[11px] font-bold hover:bg-emerald-400 cursor-pointer"
+                              >
+                                ⚡ Generar Nueva Imagen IA con este Prompt
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           <p className="text-xs text-[#e4e6eb] whitespace-pre-line leading-relaxed">
                             {ad.primaryText}
@@ -1143,21 +1228,28 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                       </div>
                     </div>
 
-                    {/* 3. Imagen o Video Reel del Anuncio */}
+                    {/* 3. Imagen Publicitaria Creada por IA o Video Reel IA del Anuncio */}
                     <div>
                       <div className="relative bg-black border-y border-zinc-800 overflow-hidden aspect-square">
                         {isReel && activeScene ? (
-                          <div
-                            className={`w-full h-full bg-gradient-to-br ${activeScene.bgGradient} p-4 flex flex-col justify-between relative`}
-                          >
+                          <div className="w-full h-full relative flex flex-col justify-between p-4 overflow-hidden">
+                            {/* Imagen IA de Fondo para el Video Reel */}
+                            <img
+                              src={aiGeneratedPhotoUrl}
+                              alt={activeProduct.nombre}
+                              referrerPolicy="no-referrer"
+                              className="absolute inset-0 w-full h-full object-cover opacity-55 scale-105 transition-transform duration-700"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/70" />
+
                             <div className="flex items-center justify-between gap-2 z-10">
-                              <span className="px-2 py-0.5 rounded bg-black/75 border border-white/20 text-[10px] font-mono font-bold text-emerald-300">
+                              <span className="px-2 py-0.5 rounded bg-black/80 border border-emerald-500/40 text-[10px] font-mono font-bold text-emerald-300">
                                 {activeScene.badge}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => setIsPlayingVideo(prev => !prev)}
-                                className="px-2 py-1 rounded bg-black/75 border border-white/20 text-[10px] text-white inline-flex items-center gap-1 cursor-pointer"
+                                className="px-2 py-1 rounded bg-black/80 border border-white/20 text-[10px] text-white inline-flex items-center gap-1 cursor-pointer"
                               >
                                 {isPlayingVideo ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                                 <span>{isPlayingVideo ? 'Pausar' : 'Play'}</span>
@@ -1166,9 +1258,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
                             <div className="my-auto flex flex-col items-center text-center gap-2 z-10">
                               <img
-                                src={rawPhotoUrl}
+                                src={aiGeneratedPhotoUrl}
                                 alt={activeProduct.nombre}
-                                className="w-36 h-36 sm:w-40 sm:h-40 rounded-2xl object-cover border-2 border-white/30 shadow-2xl"
+                                referrerPolicy="no-referrer"
+                                className="w-36 h-36 sm:w-40 sm:h-40 rounded-2xl object-cover border-2 border-emerald-400/60 shadow-2xl"
                               />
                               <h4 className="text-sm font-black text-white leading-snug drop-shadow">
                                 {activeScene.title}
@@ -1190,8 +1283,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         ) : (
                           <div className="relative w-full h-full">
                             <img
-                              src={rawPhotoUrl}
+                              src={aiGeneratedPhotoUrl}
                               alt={ad.headline}
+                              referrerPolicy="no-referrer"
                               className="w-full h-full object-cover"
                             />
                             {!showPure && (

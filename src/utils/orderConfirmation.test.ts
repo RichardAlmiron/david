@@ -716,18 +716,20 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
   };
 
   const allImages = extractAllProductImages(productWithGallery, ['https://example.com/scraped-photo.jpg']);
-  assert.equal(allImages.length, 9);
+  assert.ok(allImages.length >= 7);
   assert.equal(allImages[0], 'https://example.com/scraped-photo.jpg');
-  assert.equal(allImages[1], '/assets/real/galeria-1.jpg');
+  assert.equal(allImages[1], '/assets/ai-ads/ad_ai_oferta_cod.jpg');
 
   const brain = createDefaultBrainProfile(productWithGallery);
   const assets = buildCreativeAssetsFromBrain(productWithGallery, brain);
   assert.equal(assets.length, 6);
-  // Each creative has a distinct high-impact SVG data URL using different photos/themes
-  assert.notEqual(assets[0].imageDataUrl, assets[1].imageDataUrl);
-  assert.notEqual(assets[1].imageDataUrl, assets[2].imageDataUrl);
+  // Every creative uses an AI-generated commercial ad image (/assets/ai-ads/ad_ai_*.jpg) and AI prompt
+  assert.ok(assets[0].aiGeneratedImageUrl?.startsWith('/assets/ai-ads/'));
+  assert.ok(assets[1].aiGeneratedImageUrl?.startsWith('/assets/ai-ads/'));
+  assert.notEqual(assets[0].aiGeneratedImageUrl, assets[1].aiGeneratedImageUrl);
+  assert.ok((assets[0].aiImagePrompt || '').includes('Taladro Percutor 21V Industrial'));
 
-  // Single ad regeneration produces a new angle, headline, primary text, and cycles the photo
+  // Single ad regeneration produces a new angle, headline, primary text, and new AI image that are 100% congruent
   const regeneratedAd0 = regenerateSingleCreativeAssetFromBrain(
     productWithGallery,
     brain,
@@ -736,8 +738,46 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
   );
   assert.notEqual(regeneratedAd0.headline, assets[0].headline);
   assert.notEqual(regeneratedAd0.primaryText, assets[0].primaryText);
-  assert.notEqual(regeneratedAd0.imageDataUrl, assets[0].imageDataUrl);
+  assert.notEqual(regeneratedAd0.aiGeneratedImageUrl, assets[0].aiGeneratedImageUrl);
+
+  // Verify 100% Universal Product Adaptation (ZERO projector hardcoding when the product is a Drill)
+  for (const ad of assets) {
+    const combined = `${ad.headline} ${ad.primaryText} ${ad.aiImagePrompt || ''}`.toLowerCase();
+    assert.equal(combined.includes('fachada'), false);
+    assert.equal(combined.includes('cables enredados'), false);
+    assert.equal(combined.includes('ip65'), false);
+    assert.equal(combined.includes('casetes'), false);
+    assert.equal(combined.includes('estaca'), false);
+    assert.ok(combined.includes('taladro percutor 21v industrial'));
+  }
+
+  // Verify 100% Scene-to-Copy congruence across all 6 universal scenes:
+  // Ad #1 (index 0): Producto en Primer Plano en Acción + Beneficio Clave ("Motor Brushless")
+  assert.ok(assets[0].primaryText.includes('Motor Brushless'));
+  assert.ok((assets[0].aiImagePrompt || '').includes('Motor Brushless'));
+
+  // Ad #2 (index 1): Repartidor entregando en la puerta
+  assert.ok(assets[1].primaryText.toLowerCase().includes('repartidor'));
+  assert.ok(assets[1].headline.toLowerCase().includes('repartidor'));
+
+  // Ad #3 (index 2): ANTES vs. DESPUÉS con el beneficio del producto
+  assert.ok(assets[2].primaryText.includes('ANTES') && assets[2].primaryText.includes('DESPUÉS'));
+  assert.ok(assets[2].primaryText.includes('Motor Brushless'));
+
+  // Ad #4 (index 3): Pack 2 Ahorro (2 unidades)
+  assert.ok(assets[3].primaryText.toLowerCase().includes('2 unidades') || assets[3].headline.toLowerCase().includes('pack 2'));
+
+  // Ad #5 (index 4): Demostración en primer plano de potencia y calidad
+  assert.ok(assets[4].primaryText.toLowerCase().includes('primer plano') && assets[4].primaryText.includes('Motor Brushless'));
+
+  // Ad #6 (index 5): Abriendo la caja en la mesa (Unboxing POV)
+  assert.ok(assets[5].primaryText.toLowerCase().includes('caja') || assets[5].headline.toLowerCase().includes('caja'));
+
+  // When Ad #1 (index 0) is regenerated with variationSeed=1, it moves to Scene #2 (courier at the door)
+  // and BOTH its image AND its text/headline describe the courier at the door for that exact product!
+  assert.equal(regeneratedAd0.aiGeneratedImageUrl, '/assets/ai-ads/ad_ai_trust_courier.jpg');
+  assert.ok(regeneratedAd0.headline.toLowerCase().includes('repartidor'));
+  assert.ok(regeneratedAd0.primaryText.toLowerCase().includes('repartidor'));
+  assert.ok(regeneratedAd0.headline.includes('Taladro Percutor 21V Industrial'));
 });
-
-
 

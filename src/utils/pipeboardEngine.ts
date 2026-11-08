@@ -43,6 +43,8 @@ export interface GeneratedAdCreativeAsset {
   ctaLabel: string;
   visualThemeIndex: number;
   imageDataUrl: string; // High-impact rendered SVG/Canvas Data URL for instant preview & upload_ad_image
+  aiGeneratedImageUrl?: string; // Real AI-generated advertising photograph URL / Data URL
+  aiImagePrompt?: string; // Exact prompt used by the AI Image Generator to create this ad visual
   videoScenes?: Array<{
     durationSec: number;
     badge: string;

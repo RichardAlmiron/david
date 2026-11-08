@@ -122,6 +122,8 @@ export interface AutoAdsCreativeBrief {
   ctaType: 'SHOP_NOW' | 'ORDER_NOW' | 'LEARN_MORE';
   ctaLabel: string;
   themeIndex: number;
+  aiImagePrompt?: string;
+  aiGeneratedImageUrl?: string;
   videoScenes?: Array<{
     durationSec: number;
     badge: string;
@@ -330,91 +332,118 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
     }
   ];
 
-  // Briefs creativos por defecto basados en los 6 arquetipos Andrómeda
+  const desc =
+    product.descripcion ||
+    'Calidad superior y rendimiento comprobado para facilitar tu día a día';
+  const mainBenefit =
+    product.landingContent?.benefitCards?.[0]?.title ||
+    product.agentBrain?.usageSummarySpoken ||
+    desc;
+  const techSpecs = product.physicalTruth?.materialMain
+    ? `${product.physicalTruth.materialMain}${
+        product.physicalTruth.powerSourceLabel ? ` · ${product.physicalTruth.powerSourceLabel}` : ''
+      }`
+    : product.agentBrain?.technicalSpecsSpoken || desc;
+  const boxItems =
+    product.physicalTruth?.boxContents ||
+    product.agentBrain?.boxContentsSpoken ||
+    `1x ${nombre} original + accesorios completos de fábrica en caja sellada`;
+
+  // Briefs creativos 100% UNIVERSALES (se adaptan a CUALQUIER producto) y 100% CONGRUENTES (Texto ↔ Imagen IA)
   const defaultBriefs: AutoAdsCreativeBrief[] = [
     {
       index: 0,
       type: 'feed_1x1',
       format: '1:1',
-      archetypeName: 'Oferta Directa COD',
+      archetypeName: 'Oferta Directa COD · Producto en Acción',
       avatarTarget: 'avatar-a',
       angleType: 'offer',
-      hook3s: `🔥 ${nombre} Original a ${formatGs(p1)}`,
-      hookBadge: '🔥 OFERTA ENVÍO GRATIS',
-      headline: `${nombre} — Pagás al Recibir`,
-      primaryText: `🔥 ¡${nombre} ORIGINAL a precio de locura!\n\n✅ 1 Unidad: ${formatGs(p1)}\n✅ Pack 2 (MÁS VENDIDO): ${formatGs(p2)}\n❌ Precio normal: ${formatGs(pNormal)}\n\n🚚 Envío GRATIS a todo Paraguay\n💰 Pagás recién cuando el repartidor llega a tu casa\n📱 Confirmamos por WhatsApp antes de enviar\n\n👇 Tocá "Pedir" y completá tu nombre y celular`,
-      descriptionText: `${nombre} original con envío gratis y pago contra entrega`,
+      hook3s: `✨ Mirá por qué ${nombre} es el favorito hoy en todo Paraguay`,
+      hookBadge: '🔥 OFERTA HOY · PAGO AL RECIBIR',
+      headline: `${nombre} — Calidad Real y Pagás Recién al Recibir`,
+      primaryText: `✨ Mirá en la imagen el ${nombre} en primer plano mostrando todo su potencial (${desc}):\n\n✅ Beneficio clave: ${mainBenefit}\n✅ 1 Unidad Completa: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades (MÁS ELEGIDO): ${formatGs(p2)}\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay' : 'Entrega rápida a domicilio en todo Paraguay'}\n💵 Pagás recién cuando el repartidor llega a tu puerta\n📱 Confirmamos tu pedido por WhatsApp antes de enviar\n\n👇 Tocá "Pedir Contra Entrega" y reservá el tuyo hoy`,
+      descriptionText: `${nombre} original · ${freeShipping ? 'Envío gratis y pago al recibir' : 'Pago contra entrega en puerta'}`,
       ctaType: 'ORDER_NOW',
       ctaLabel: 'PEDIR CONTRA ENTREGA',
-      themeIndex: 0
+      themeIndex: 0,
+      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_oferta_cod.jpg',
+      aiImagePrompt: buildAiAdImagePromptForBrief(product, 0, 0)
     },
     {
       index: 1,
       type: 'feed_1x1',
       format: '1:1',
-      archetypeName: 'Trust / Cero Riesgo',
+      archetypeName: 'Trust / Repartidor en tu Puerta',
       avatarTarget: 'avatar-b',
       angleType: 'trust',
-      hook3s: '¿Miedo a que te estafen por internet?',
-      hookBadge: '✅ VERIFICÁ ANTES DE PAGAR',
-      headline: `Cero Riesgo — Verificá tu ${nombre} al Recibirlo`,
-      primaryText: `¿Ya te estafaron comprando online? 😤\n\nCon nosotros es DIFERENTE:\n\n✅ Verificás el producto ANTES de pagar\n✅ Si no te gusta, lo devolvés al repartidor\n✅ Garantía escrita de 30 días\n✅ Atención por WhatsApp REAL (no bot)\n\n${nombre} por solo ${formatGs(p1)}\nPack 2: ${formatGs(p2)} (ahorrás más)\n\n📱 Escribinos al WhatsApp si tenés dudas`,
-      descriptionText: 'Verificá antes de pagar — Garantía de 30 días',
+      hook3s: '🤝 El repartidor te entrega en tu puerta y recién ahí abonás',
+      hookBadge: '✅ PAGÁS AL REPARTIDOR EN PUERTA',
+      headline: `El Repartidor Entrega tu ${nombre} en Puerta y Ahí Pagás`,
+      primaryText: `🤝 Tal como ves en la imagen: nuestro repartidor llega hasta la puerta de tu casa, recibís tu ${nombre} en tus manos, lo verificás y recién ahí abonás en efectivo o QR.\n\n✅ Cero pagos adelantados ni tarjetas en internet\n✅ Revisás tu pedido en puerta con total tranquilidad\n✅ Garantía real y atención directa por WhatsApp\n\n💰 1 Unidad: ${formatGs(p1)} | Pack 2 Ahorro: ${formatGs(p2)}\n🚚 ${freeShipping ? 'Envío GRATIS hasta tu casa o trabajo' : 'Entrega directa hasta tu casa o trabajo'}`,
+      descriptionText: 'Entrega en mano en todo Paraguay — Abonás en efectivo o QR al recibir',
       ctaType: 'SHOP_NOW',
       ctaLabel: 'VER GARANTÍA Y COMPRAR',
-      themeIndex: 1
+      themeIndex: 1,
+      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_trust_courier.jpg',
+      aiImagePrompt: buildAiAdImagePromptForBrief(product, 1, 0)
     },
     {
       index: 2,
       type: 'feed_1x1',
       format: '1:1',
-      archetypeName: 'Problema → Solución',
+      archetypeName: 'Problema vs. Solución (Antes / Después)',
       avatarTarget: 'avatar-c',
       angleType: 'transformation',
-      hook3s: '¿Seguís usando eso viejo que ya no sirve?',
-      hookBadge: '💡 LA SOLUCIÓN QUE ESPERABAS',
-      headline: `Cambiá tu Vida con ${nombre}`,
-      primaryText: `¿Cuántas veces ya te pasó que usás algo viejo y no funciona como debería? 😩\n\nEl ${nombre} es la solución que miles de paraguayos ya descubrieron:\n\n✨ Calidad premium que se nota desde el primer uso\n✨ Diseño moderno y duradero\n✨ Resultado visible desde el día 1\n\n💰 Solo ${formatGs(p1)} (1 unidad)\n🔥 Pack 2: ${formatGs(p2)} — ¡Llevá para vos y regalá!\n\n🚚 Envío GRATIS · 💵 Pagás al recibir`,
-      descriptionText: `La solución definitiva — ${nombre} con envío gratis`,
+      hook3s: `❌ ANTES: Complicaciones y pérdida de tiempo vs. ✅ DESPUÉS: ${nombre}`,
+      hookBadge: '💡 ANTES VS. DESPUÉS COMPROBADO',
+      headline: `Dejá de Renegar — Mirá el Cambio Real con ${nombre}`,
+      primaryText: `Mirá la diferencia real entre el ANTES y el DESPUÉS en la imagen:\n\n❌ ANTES (Izquierda): Renegando, perdiendo tiempo y gastando de más con alternativas que no dan resultado.\n✅ DESPUÉS (Derecha): Con tu ${nombre} (${desc}) obtenés resultados inmediatos desde el primer uso: ${mainBenefit}.\n\n💰 1 Unidad: ${formatGs(p1)}\n🔥 Pack 2 Unidades: ${formatGs(p2)} (Ahorro Especial)\n🚚 ${freeShipping ? 'Envío GRATIS' : 'Entrega rápida'} · 💵 Pagás recién al recibir`,
+      descriptionText: `Transformación real con ${nombre} — Pago contra entrega`,
       ctaType: 'ORDER_NOW',
       ctaLabel: 'QUIERO LA SOLUCIÓN',
-      themeIndex: 2
+      themeIndex: 2,
+      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_problema_solucion.jpg',
+      aiImagePrompt: buildAiAdImagePromptForBrief(product, 2, 0)
     },
     {
       index: 3,
       type: 'story_9x16',
       format: '9:16',
-      archetypeName: 'Pack Familiar Ahorro',
+      archetypeName: 'Pack Dúo Ahorro (2 Unidades)',
       avatarTarget: 'avatar-a',
       angleType: 'urgency',
-      hook3s: '⚡ ÚLTIMAS UNIDADES en stock — Pack 2 con mega descuento',
-      hookBadge: '⚡ PACK 2 MEGA AHORRO',
-      headline: `Pack 2 ${nombre} — Llevá y Regalá`,
-      primaryText: `⚡ ¡OFERTA RELÁMPAGO!\n\n78% de nuestros clientes eligen el Pack 2:\n\n📦 Pack 2 Unidades: ${formatGs(p2)}\n(Te ahorrás ${formatGs(p1 * 2 - p2)} vs comprar por separado)\n\nIdeal para:\n🎁 Regalar a tu mamá/hermana/amiga\n🏠 Tener uno en el trabajo y otro en casa\n\n⏰ Stock limitado — Cuando se acabe, se acaba\n🚚 Envío GRATIS\n💵 Pagás al recibir\n\n👇 No pierdas esta oportunidad`,
-      descriptionText: `Pack 2 ${nombre} con mega descuento — Llevá y regalá`,
+      hook3s: `⚡ Pack Dúo (2 Unidades de ${nombre}) con descuento especial`,
+      hookBadge: '⚡ PACK DÚO 2 UNIDADES EN OFERTA',
+      headline: `Pack 2 ${nombre} — Llevá 2 Unidades con Ahorro Directo`,
+      primaryText: `⚡ Mirá en la imagen el Pack Dúo (2 Unidades completas de ${nombre}) que la mayoría de los clientes en Paraguay está pidiendo hoy:\n\n📦 Pack 2 Unidades: ${formatGs(p2)}\n(Te ahorrás ${formatGs(Math.max(0, p1 * 2 - p2))} llevando las 2 unidades juntas)\n\n🎁 Ideal para dejar uno en casa y regalar o compartir el segundo con tu familia.\n🚚 ${freeShipping ? 'Envío GRATIS a domicilio' : 'Envío a domicilio'} · 💵 Pagás recién al recibir`,
+      descriptionText: `Pack Dúo 2x ${nombre} con ahorro directo en puerta`,
       ctaType: 'ORDER_NOW',
-      ctaLabel: 'QUIERO MI PACK HOY',
-      themeIndex: 3
+      ctaLabel: 'QUIERO MI PACK 2 HOY',
+      themeIndex: 3,
+      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_pack_familiar.jpg',
+      aiImagePrompt: buildAiAdImagePromptForBrief(product, 3, 0)
     },
     {
       index: 4,
       type: 'reel_9x16',
       format: '9:16',
-      archetypeName: 'Demostración de Impacto',
+      archetypeName: 'Demostración de Potencia y Calidad en Vivo',
       avatarTarget: 'avatar-b',
       angleType: 'social_proof',
-      hook3s: `¿Ya viste lo que todos están comprando en Paraguay?`,
-      hookBadge: '🎬 MIRÁ ESTO',
-      headline: `${nombre} — Lo Más Vendido del Momento`,
-      primaryText: `👀 ¿Todavía no tenés el tuyo?\n\nEl ${nombre} es lo más vendido este mes en Paraguay.\n\n✅ ${formatGs(p1)} — 1 unidad\n✅ ${formatGs(p2)} — Pack 2 (MÁS VENDIDO)\n🚚 Envío GRATIS\n💵 Pagás al recibir\n\n👇 Tocá el botón antes de que se agote`,
-      descriptionText: `Lo más vendido — ${nombre} con envío gratis`,
+      hook3s: `🔥 Mirá de cerca la calidad y rendimiento real de ${nombre}`,
+      hookBadge: '🔥 DEMOSTRACIÓN DE CALIDAD REAL',
+      headline: `${nombre} en Acción — Calidad y Rendimiento Superior`,
+      primaryText: `🔥 Mirá en la imagen de primer plano el ${nombre} funcionando a máxima capacidad:\n\n🛠️ Construcción y detalles: ${techSpecs}\n✨ Resultado comprobado: ${mainBenefit}\n✅ 1 Unidad: ${formatGs(p1)} | Pack 2x: ${formatGs(p2)}\n🚚 ${freeShipping ? 'Envío GRATIS' : 'Entrega en puerta'} · 💵 Pagás al recibir en tu casa`,
+      descriptionText: `Demostración real de ${nombre} — Calidad verificada`,
       ctaType: 'SHOP_NOW',
       ctaLabel: 'COMPRAR AHORA',
       themeIndex: 0,
+      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_demo_impacto.jpg',
+      aiImagePrompt: buildAiAdImagePromptForBrief(product, 4, 0),
       videoScenes: [
-        { durationSec: 3, badge: 'ESCENA 1 · HOOK (0-3s)', title: `¿Ya viste el nuevo ${nombre}?`, subtitle: 'Lo que todos están comprando en Paraguay', priceTag: 'Hoy con Descuento Especial', bgGradient: 'from-[#041a12] via-[#0b3d2e] to-[#041a12]' },
-        { durationSec: 3, badge: 'ESCENA 2 · DEMO (3-6s)', title: 'Calidad Premium Verificada', subtitle: 'Calidad verificada antes de salir a reparto', priceTag: freeShipping ? '🚚 ENVÍO GRATIS A DOMICILIO' : '🚚 ENTREGA RÁPIDA', bgGradient: 'from-[#0f172a] via-[#1e3a8a] to-[#0f172a]' },
-        { durationSec: 3, badge: 'ESCENA 3 · OFERTA (6-9s)', title: `1 Unidad: ${formatGs(p1)}`, subtitle: `🔥 Pack 2: ${formatGs(p2)}`, priceTag: `Antes: ${formatGs(pNormal)}`, bgGradient: 'from-[#3b0764] via-[#581c87] to-[#1e1b4b]' },
+        { durationSec: 3, badge: 'ESCENA 1 · DEMO EN VIVO (0-3s)', title: `🔥 Mirá el ${nombre} en acción`, subtitle: mainBenefit.slice(0, 65), priceTag: '⚡ CALIDAD COMPROBADA', bgGradient: 'from-[#041a12] via-[#0b3d2e] to-[#041a12]' },
+        { durationSec: 3, badge: 'ESCENA 2 · DETALLES TÉCNICOS (3-6s)', title: 'Materiales y Rendimiento de Primera', subtitle: techSpecs.slice(0, 65), priceTag: freeShipping ? '🚚 ENVÍO GRATIS A DOMICILIO' : '🚚 ENTREGA RÁPIDA', bgGradient: 'from-[#0f172a] via-[#1e3a8a] to-[#0f172a]' },
+        { durationSec: 3, badge: 'ESCENA 3 · OFERTA COD (6-9s)', title: `1 Unidad: ${formatGs(p1)}`, subtitle: `🔥 Pack Dúo 2x: ${formatGs(p2)}`, priceTag: `Antes: ${formatGs(pNormal)}`, bgGradient: 'from-[#3b0764] via-[#581c87] to-[#1e1b4b]' },
         { durationSec: 3, badge: 'ESCENA 4 · CTA FINAL (9-12s)', title: 'Pagás Recién al Recibir en tu Casa', subtitle: 'Tocá el botón y reservá en 30 segundos', priceTag: '✅ EFECTIVO O QR AL RECIBIR', bgGradient: 'from-[#064e3b] via-[#15803d] to-[#041a12]' }
       ]
     },
@@ -422,21 +451,23 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       index: 5,
       type: 'reel_9x16',
       format: '9:16',
-      archetypeName: 'Unboxing ¿Es Estafa?',
+      archetypeName: 'Unboxing Real · Qué Trae la Caja',
       avatarTarget: 'avatar-c',
       angleType: 'unboxing',
-      hook3s: 'Compré esto por internet y mirá lo que me llegó...',
-      hookBadge: '😱 ¿ES ESTAFA?',
-      headline: `¿${nombre} por Internet? Mirá mi Experiencia`,
-      primaryText: `😱 Compré esto por internet... ¿será estafa?\n\nLes cuento mi experiencia:\n📦 Llegó en 3 días a mi casa\n👀 Lo revisé ANTES de pagar (sí, pagás al recibir)\n✅ ¡Es REAL! Calidad excelente\n\n${nombre} por solo ${formatGs(p1)}\nPack 2: ${formatGs(p2)}\n\n🚚 Envío gratis\n💵 Pagás contra entrega\n🔒 Garantía de 30 días\n\nSi tenés dudas, escribinos al WhatsApp 👇`,
-      descriptionText: '¿Es estafa? Mi experiencia real comprando por internet',
+      hook3s: `📦 Abriendo la caja de ${nombre}: mirá todo lo que incluye`,
+      hookBadge: '📦 UNBOXING REAL · CAJA COMPLETA',
+      headline: `Abriendo la Caja de ${nombre} — Mirá Todo lo que Incluye`,
+      primaryText: `📦 Mirá en la imagen exactamente lo que recibís cuando abrís la caja de tu ${nombre} sobre la mesa de tu casa:\n\n✔️ Incluye: ${boxItems}\n✔️ Producto revisado y embalado con protección de fábrica\n✔️ Garantía real y respaldo directo por WhatsApp\n\n💰 1 Unidad: ${formatGs(p1)} | Pack 2x: ${formatGs(p2)}\n🚚 ${freeShipping ? 'Envío GRATIS' : 'Entrega a domicilio'} · 💵 Revisás tu caja antes de pagar`,
+      descriptionText: 'Caja completa con todos sus accesorios — Pago contra entrega',
       ctaType: 'LEARN_MORE',
-      ctaLabel: 'VER SI ES REAL',
+      ctaLabel: 'PEDIR KIT COMPLETO',
       themeIndex: 1,
+      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_unboxing_real.jpg',
+      aiImagePrompt: buildAiAdImagePromptForBrief(product, 5, 0),
       videoScenes: [
-        { durationSec: 3, badge: 'ESCENA 1 · GANCHO DUDA (0-3s)', title: 'Compré esto por internet...', subtitle: '¿Será que me estafaron? 🤔', priceTag: '🤔 ¿Vale la pena?', bgGradient: 'from-[#1f0808] via-[#7f1d1d] to-[#450a0a]' },
-        { durationSec: 3, badge: 'ESCENA 2 · APERTURA (3-6s)', title: 'Abriendo el paquete en vivo...', subtitle: 'Llegó bien empaquetado, veamos qué trae', priceTag: '📦 LLEGÓ EN 3 DÍAS', bgGradient: 'from-[#0f172a] via-[#1e3a8a] to-[#0f172a]' },
-        { durationSec: 3, badge: 'ESCENA 3 · REVELACIÓN (6-9s)', title: `¡Es REAL! ${nombre} original`, subtitle: `Calidad excelente por solo ${formatGs(p1)}`, priceTag: `Antes: ${formatGs(pNormal)}`, bgGradient: 'from-[#3b0764] via-[#581c87] to-[#1e1b4b]' },
+        { durationSec: 3, badge: 'ESCENA 1 · UNBOXING EN MESA (0-3s)', title: `📦 Abriendo la caja de ${nombre}...`, subtitle: 'Mirá en primera persona todo lo que trae el pedido oficial', priceTag: '👀 VERIFICÁS AL RECIBIR', bgGradient: 'from-[#1f0808] via-[#7f1d1d] to-[#450a0a]' },
+        { durationSec: 3, badge: 'ESCENA 2 · CONTENIDO DE CAJA (3-6s)', title: boxItems.slice(0, 52), subtitle: 'Todo protegido y listo para usar desde el primer minuto', priceTag: '📦 CAJA 100% COMPLETA', bgGradient: 'from-[#0f172a] via-[#1e3a8a] to-[#0f172a]' },
+        { durationSec: 3, badge: 'ESCENA 3 · OFERTA HOY (6-9s)', title: `Llevá el tuyo por ${formatGs(p1)}`, subtitle: `O el Pack Dúo 2x por ${formatGs(p2)}`, priceTag: `Antes: ${formatGs(pNormal)}`, bgGradient: 'from-[#3b0764] via-[#581c87] to-[#1e1b4b]' },
         { durationSec: 3, badge: 'ESCENA 4 · CTA FINAL (9-12s)', title: 'Pagás Recién al Recibir en tu Casa', subtitle: 'Tocá el botón y reservá en 30 segundos', priceTag: '✅ EFECTIVO O QR AL RECIBIR', bgGradient: 'from-[#064e3b] via-[#15803d] to-[#041a12]' }
       ]
     }
@@ -889,37 +920,77 @@ REGLAS FINALES PARA LA RESPUESTA:
 // ────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Extrae todas las imágenes reales disponibles de un producto (imagen principal,
- * galería de 8 fotos, tarjetas de beneficios e imágenes escrapeadas de URL externa).
+ * Las 6 imágenes publicitarias generadas por IA para los 6 arquetipos Andrómeda
+ * (NUNCA fotos crudas extraídas de la página de aterrizaje).
+ */
+export const AI_GENERATED_AD_ARCHETYPE_IMAGES: string[] = [
+  '/assets/ai-ads/ad_ai_oferta_cod.jpg',
+  '/assets/ai-ads/ad_ai_trust_courier.jpg',
+  '/assets/ai-ads/ad_ai_problema_solucion.jpg',
+  '/assets/ai-ads/ad_ai_pack_familiar.jpg',
+  '/assets/ai-ads/ad_ai_demo_impacto.jpg',
+  '/assets/ai-ads/ad_ai_unboxing_real.jpg'
+];
+
+/**
+ * Construye el prompt publicitario de Generación de Imagen IA específico para cada arquetipo Andrómeda.
+ */
+export function buildAiAdImagePromptForBrief(
+  product: ProductPage,
+  briefIndex: number,
+  variationSeed = 0
+): string {
+  const name = product?.nombre || 'Producto Premium';
+  const desc = (product?.descripcion || '').slice(0, 110);
+  const mainBenefit =
+    product?.landingContent?.benefitCards?.[0]?.title ||
+    product?.agentBrain?.usageSummarySpoken ||
+    desc;
+  const techSpecs = product?.physicalTruth?.materialMain
+    ? `${product.physicalTruth.materialMain}${
+        product.physicalTruth.powerSourceLabel ? `, ${product.physicalTruth.powerSourceLabel}` : ''
+      }`
+    : product?.agentBrain?.technicalSpecsSpoken || desc;
+  const boxItems =
+    product?.physicalTruth?.boxContents ||
+    product?.agentBrain?.boxContentsSpoken ||
+    `${name} and all original factory accessories`;
+
+  const styles = [
+    '8k ultra-detailed commercial Meta Ads studio photography, dramatic lighting, high CTR advertising visual',
+    'photorealistic Latin American lifestyle commercial advertisement, warm golden hour lighting, Sony A7R V 85mm lens',
+    'cinematic high-contrast direct-response e-commerce ad creative, crisp commercial lighting, ultra sharp focus'
+  ];
+  const styleSuffix = styles[variationSeed % styles.length];
+
+  const promptsByArchetype = [
+    `Commercial Facebook Ad Hero Poster for "${name}" (${desc}): product showcased in dramatic foreground in real-world action demonstrating its main benefit (${mainBenefit}), luxury e-commerce advertisement composition, ${styleSuffix}`,
+    `Authentic UGC Cash-on-Delivery Trust Ad in Paraguay for "${name}": friendly delivery courier in uniform handing the "${name}" package at the front door of a modern house to a smiling buyer inspecting it before paying cash in Guaraníes, ${styleSuffix}`,
+    `Split-screen BEFORE vs AFTER commercial advertisement for "${name}" (${desc}): left side shows the frustrating everyday problem before having "${name}"; right side shows the instant transformation and solution using "${name}" (${mainBenefit}), high-CTR visual hook, ${styleSuffix}`,
+    `Vertical 9:16 Instagram Story Bundle Promotion Ad: two identical units of "${name}" (Pack 2x Savings Bundle) displayed side by side on a sleek modern podium with warm lifestyle background, ${styleSuffix}`,
+    `Vertical 9:16 Reels Macro Action Demonstration Ad for "${name}" (${techSpecs}): close-up dynamic macro shot of "${name}" operating at peak performance showing its build quality and materials, ${styleSuffix}`,
+    `Vertical 9:16 First-Person POV Unboxing Ad for "${name}": hands opening a newly delivered shipping box on a wooden home table revealing the authentic "${name}" and its included contents (${boxItems}) neatly arranged, ${styleSuffix}`
+  ];
+
+  return promptsByArchetype[briefIndex % promptsByArchetype.length];
+}
+
+/**
+ * Extrae las imágenes creativas generadas por IA (nunca limitándose a las fotos estáticas de la página).
  */
 export function extractAllProductImages(
   product: ProductPage,
   extraImages?: string[]
 ): string[] {
-  const isNoeluxDefault =
-    product?.id === 'prod-noelux-01' ||
-    String(product?.imagen || '').includes('/assets/real/galeria-');
-
   const candidates: string[] = [
     ...(Array.isArray(extraImages) ? extraImages : []),
+    ...AI_GENERATED_AD_ARCHETYPE_IMAGES,
     product?.imagen || '',
     ...(Array.isArray(product?.landingContent?.galleryItems)
       ? product.landingContent!.galleryItems.map(g => g?.src || '')
       : []),
     ...(Array.isArray(product?.landingContent?.benefitCards)
       ? product.landingContent!.benefitCards.map(b => b?.img || '')
-      : []),
-    ...(isNoeluxDefault
-      ? [
-          '/assets/real/galeria-1.jpg',
-          '/assets/real/galeria-2.jpg',
-          '/assets/real/galeria-3.jpg',
-          '/assets/real/galeria-4.jpg',
-          '/assets/real/galeria-5.jpg',
-          '/assets/real/galeria-6.jpg',
-          '/assets/real/galeria-7.jpg',
-          '/assets/real/galeria-8.jpg'
-        ]
       : [])
   ];
   const unique: string[] = [];
@@ -929,16 +1000,12 @@ export function extractAllProductImages(
       unique.push(clean);
     }
   }
-  if (unique.length === 0) {
-    unique.push('/assets/real/galeria-1.jpg');
-  }
-  return unique;
+  return unique.length > 0 ? unique : [...AI_GENERATED_AD_ARCHETYPE_IMAGES];
 }
 
 /**
  * Toma el perfil del cerebro entrenado y genera 6 GeneratedAdCreativeAsset listos para
- * previsualizar como anuncios reales de Facebook/Instagram y publicar en Meta Ads.
- * Cada creativo utiliza una foto real distinta de la galería del producto.
+ * previsualizar como anuncios reales de Facebook/Instagram con IMÁGENES CREADAS POR IA.
  */
 export function buildCreativeAssetsFromBrain(
   product: ProductPage,
@@ -948,9 +1015,7 @@ export function buildCreativeAssetsFromBrain(
   const p2 = brain.productAnalysis.pricesPack2;
   const pNormal = brain.productAnalysis.pricesNormal;
   const freeShipping = brain.productAnalysis.freeShipping;
-  const allImages = extractAllProductImages(product, brain.productAnalysis.images);
 
-  // Si no hay briefs, devolver array vacío
   if (!brain.creativeBriefs || brain.creativeBriefs.length === 0) {
     return [];
   }
@@ -962,20 +1027,22 @@ export function buildCreativeAssetsFromBrain(
   };
 
   const formatLabelMapping: Record<AutoAdsCreativeBrief['type'], string> = {
-    'feed_1x1': 'Imagen Feed 1:1 (1080×1080)',
-    'story_9x16': 'Story Vertical 9:16 (1080×1920)',
-    'reel_9x16': 'Video Reel 9:16 (4 Escenas)'
+    'feed_1x1': 'Imagen IA Feed 1:1 (1080×1080)',
+    'story_9x16': 'Imagen IA Story 9:16 (1080×1920)',
+    'reel_9x16': 'Video Reel IA 9:16 (4 Escenas)'
   };
 
   return brain.creativeBriefs.map((brief, idx) => {
     const aspectRatio = brief.format;
     const themeIdx = (brief.themeIndex ?? idx) % CREATIVE_COLOR_THEMES.length;
-    const imgForThisAd = allImages[idx % allImages.length];
+    const aiImagePrompt = brief.aiImagePrompt || buildAiAdImagePromptForBrief(product, idx, 0);
+    const aiGeneratedImageUrl =
+      brief.aiGeneratedImageUrl ||
+      AI_GENERATED_AD_ARCHETYPE_IMAGES[idx % AI_GENERATED_AD_ARCHETYPE_IMAGES.length];
 
-    // Generar el SVG de alta resolución usando la foto real correspondiente del producto
     const imageDataUrl = buildHighImpactAdSvgDataUrl({
       productName: product.nombre,
-      productImage: imgForThisAd,
+      productImage: aiGeneratedImageUrl,
       pricePack1Gs: p1,
       pricePack2Gs: p2,
       normalPriceGs: pNormal,
@@ -991,7 +1058,7 @@ export function buildCreativeAssetsFromBrain(
     const asset: GeneratedAdCreativeAsset = {
       id: `autoads-${brief.index}-${product.id}-${Date.now()}-${idx}`,
       type: typeMapping[brief.type] || 'image_feed_1x1',
-      formatLabel: `${formatLabelMapping[brief.type] || 'Imagen Feed 1:1'} · ${brief.archetypeName}`,
+      formatLabel: `${formatLabelMapping[brief.type] || 'Imagen IA Feed 1:1'} · ${brief.archetypeName}`,
       aspectRatio,
       angleTitle: `Ángulo #${brief.index + 1} · ${brief.archetypeName} (${brief.angleType})`,
       hookBadge: brief.hookBadge,
@@ -1001,7 +1068,9 @@ export function buildCreativeAssetsFromBrain(
       ctaType: brief.ctaType,
       ctaLabel: brief.ctaLabel,
       visualThemeIndex: themeIdx,
-      imageDataUrl
+      imageDataUrl,
+      aiGeneratedImageUrl,
+      aiImagePrompt
     };
 
     if (brief.videoScenes && brief.videoScenes.length > 0) {
@@ -1069,7 +1138,7 @@ export function buildCreativeAssetsFromBrain(
 
 /**
  * Regenera UN SOLO anuncio específico (cuando el usuario hace clic en "Cambiar este anuncio")
- * rotando la foto real del producto, el tema visual y aplicando un nuevo ángulo/copy.
+ * garantizando 100% CONGRUENCIA entre la nueva Imagen IA y el nuevo Texto/Titular.
  */
 export function regenerateSingleCreativeAssetFromBrain(
   product: ProductPage,
@@ -1078,51 +1147,42 @@ export function regenerateSingleCreativeAssetFromBrain(
   variationSeed: number,
   customBriefOverride?: Partial<AutoAdsCreativeBrief>
 ): GeneratedAdCreativeAsset {
-  const allImages = extractAllProductImages(product, brain.productAnalysis.images);
   const p1 = brain.productAnalysis.pricesPack1;
   const p2 = brain.productAnalysis.pricesPack2;
   const pNormal = brain.productAnalysis.pricesNormal;
   const freeShipping = brain.productAnalysis.freeShipping;
+  const defaultFullBrain = createDefaultBrainProfile(product);
   const baseBrief =
     brain.creativeBriefs[briefIndex] ||
     brain.creativeBriefs[0] ||
-    createDefaultBrainProfile(product).creativeBriefs[0];
+    defaultFullBrain.creativeBriefs[0];
 
-  const alternativeAngles = [
-    {
-      hookBadge: '🔥 OFERTA HOY · PAGÁS AL RECIBIR',
-      headline: `${product.nombre} — Revisás en tu Puerta Antes de Pagar`,
-      primaryText: `🛑 ¿Cansado de promesas que no cumplen?\n\nCon el nuevo ${product.nombre} tenés RESULTADO REAL desde el primer día y CERO RIESGO:\n\n✅ 1 Unidad Promo: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Familiar (Ahorro Máximo): ${formatGs(p2)}\n🚚 ${freeShipping ? 'Envío 100% GRATIS a todo Paraguay' : 'Entrega rápida en la puerta de tu casa'}\n💵 No ponés tarjeta: abonás en efectivo o QR recién cuando el repartidor te entrega en mano.\n\n👇 Tocá "Pedir Ahora" y asegurá tu stock hoy mismo.`,
-      descriptionText: 'Garantía escrita · Revisás antes de abonar en puerta'
-    },
-    {
-      hookBadge: '⚡ SE AGOTA EL LOTE EN PARAGUAY',
-      headline: `Por Qué Todos Están Eligiendo ${product.nombre}`,
-      primaryText: `⚡ El secreto que más de 1.400 hogares en Asunción, Central y CDE ya están usando.\n\n✨ ${product.descripcion || `${product.nombre} de alta durabilidad listo para usar.`}\n\n📦 Llevá 1 por ${formatGs(p1)} o aprovechá el Pack 2 a ${formatGs(p2)}.\n🔒 Cero adelantos: confirmamos tu ubicación por WhatsApp y pagás al recibir.\n\n👇 Tocá el botón de abajo antes de que se agote esta partida.`,
-      descriptionText: `${freeShipping ? 'Envío Gratis Hoy' : 'Entrega Express'} · Pago Contra Entrega`
-    },
-    {
-      hookBadge: '✅ GARANTÍA REAL · CERO RIESGO',
-      headline: `${product.nombre} Original — Envío Directo a tu Casa`,
-      primaryText: `¿Buscabas un ${product.nombre} que realmente dure años?\n\nMiralo funcionar desde el minuto uno:\n✔️ Materiales reforzados de primera calidad\n✔️ Listo para usar sin instalaciones complicadas\n✔️ Atención personalizada por WhatsApp\n\n💰 Precio especial hoy: ${formatGs(p1)} | Pack 2x: ${formatGs(p2)}\n🚚 Recibilo en tu casa o trabajo y pagá recién al tenerlo en tus manos.`,
-      descriptionText: 'Calidad verificada en depósito antes de enviar'
-    }
-  ];
+  // Seleccionamos el paquete escénico congruente para que la Imagen IA y el Copy SIEMPRE hablen de la misma escena
+  const congruentSceneIdx = (briefIndex + variationSeed) % defaultFullBrain.creativeBriefs.length;
+  const congruentSceneBrief = defaultFullBrain.creativeBriefs[congruentSceneIdx];
 
-  const pickedAlt = alternativeAngles[variationSeed % alternativeAngles.length];
   const mergedBrief: AutoAdsCreativeBrief = {
     ...baseBrief,
-    ...pickedAlt,
+    hookBadge: congruentSceneBrief.hookBadge,
+    headline: `${congruentSceneBrief.headline} (V#${variationSeed})`,
+    primaryText: congruentSceneBrief.primaryText,
+    descriptionText: congruentSceneBrief.descriptionText,
     ...(customBriefOverride || {}),
     themeIndex: (baseBrief.themeIndex + variationSeed) % CREATIVE_COLOR_THEMES.length
   };
 
-  const nextImage = allImages[(briefIndex + variationSeed) % allImages.length];
+  const aiImagePrompt =
+    customBriefOverride?.aiImagePrompt ||
+    buildAiAdImagePromptForBrief(product, congruentSceneIdx, variationSeed);
+  const aiGeneratedImageUrl =
+    customBriefOverride?.aiGeneratedImageUrl ||
+    AI_GENERATED_AD_ARCHETYPE_IMAGES[congruentSceneIdx % AI_GENERATED_AD_ARCHETYPE_IMAGES.length];
+
   const themeIdx = mergedBrief.themeIndex % CREATIVE_COLOR_THEMES.length;
 
   const imageDataUrl = buildHighImpactAdSvgDataUrl({
     productName: product.nombre,
-    productImage: nextImage,
+    productImage: aiGeneratedImageUrl,
     pricePack1Gs: p1,
     pricePack2Gs: p2,
     normalPriceGs: pNormal,
@@ -1142,17 +1202,17 @@ export function regenerateSingleCreativeAssetFromBrain(
   };
 
   const formatLabelMapping: Record<AutoAdsCreativeBrief['type'], string> = {
-    'feed_1x1': 'Imagen Feed 1:1 (1080×1080)',
-    'story_9x16': 'Story Vertical 9:16 (1080×1920)',
-    'reel_9x16': 'Video Reel 9:16 (4 Escenas)'
+    'feed_1x1': 'Imagen IA Feed 1:1 (1080×1080)',
+    'story_9x16': 'Imagen IA Story 9:16 (1080×1920)',
+    'reel_9x16': 'Video Reel IA 9:16 (4 Escenas)'
   };
 
   return {
     id: `autoads-${briefIndex}-${product.id}-v${variationSeed}-${Date.now()}`,
     type: typeMapping[mergedBrief.type] || 'image_feed_1x1',
-    formatLabel: `${formatLabelMapping[mergedBrief.type] || 'Imagen Feed 1:1'} · ${mergedBrief.archetypeName} (Variante #${variationSeed + 1})`,
+    formatLabel: `${formatLabelMapping[mergedBrief.type] || 'Imagen IA Feed 1:1'} · ${mergedBrief.archetypeName} (Variante IA #${variationSeed + 1})`,
     aspectRatio: mergedBrief.format,
-    angleTitle: `Ángulo #${briefIndex + 1} · ${mergedBrief.archetypeName} (Variante #${variationSeed + 1})`,
+    angleTitle: `Ángulo #${briefIndex + 1} · ${mergedBrief.archetypeName} (Variante IA #${variationSeed + 1})`,
     hookBadge: mergedBrief.hookBadge,
     headline: mergedBrief.headline,
     primaryText: mergedBrief.primaryText,
@@ -1161,7 +1221,10 @@ export function regenerateSingleCreativeAssetFromBrain(
     ctaLabel: mergedBrief.ctaLabel,
     visualThemeIndex: themeIdx,
     imageDataUrl,
+    aiGeneratedImageUrl,
+    aiImagePrompt,
     videoScenes: mergedBrief.videoScenes || baseBrief.videoScenes
   };
 }
+
 
