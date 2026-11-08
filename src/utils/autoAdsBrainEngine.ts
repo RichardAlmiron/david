@@ -376,7 +376,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       ctaType: 'ORDER_NOW',
       ctaLabel: 'PEDIR CONTRA ENTREGA',
       themeIndex: 0,
-      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_oferta_cod.jpg',
+      aiGeneratedImageUrl: '',
       aiImagePrompt: buildAiAdImagePromptForBrief(product, 0, 0)
     },
     {
@@ -394,7 +394,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       ctaType: 'SHOP_NOW',
       ctaLabel: 'VER GARANTÍA Y COMPRAR',
       themeIndex: 1,
-      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_trust_courier.jpg',
+      aiGeneratedImageUrl: '',
       aiImagePrompt: buildAiAdImagePromptForBrief(product, 1, 0)
     },
     {
@@ -412,7 +412,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       ctaType: 'ORDER_NOW',
       ctaLabel: 'QUIERO LA SOLUCIÓN',
       themeIndex: 2,
-      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_problema_solucion.jpg',
+      aiGeneratedImageUrl: '',
       aiImagePrompt: buildAiAdImagePromptForBrief(product, 2, 0)
     },
     {
@@ -430,7 +430,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       ctaType: 'ORDER_NOW',
       ctaLabel: 'QUIERO MI PACK 2 HOY',
       themeIndex: 3,
-      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_pack_familiar.jpg',
+      aiGeneratedImageUrl: '',
       aiImagePrompt: buildAiAdImagePromptForBrief(product, 3, 0)
     },
     {
@@ -448,7 +448,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       ctaType: 'SHOP_NOW',
       ctaLabel: 'COMPRAR AHORA',
       themeIndex: 0,
-      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_demo_impacto.jpg',
+      aiGeneratedImageUrl: '',
       aiImagePrompt: buildAiAdImagePromptForBrief(product, 4, 0),
       videoScenes: [
         { durationSec: 3, badge: 'ESCENA 1 · DEMO EN VIVO (0-3s)', title: `🔥 Mirá el ${nombre} en acción`, subtitle: mainBenefit.slice(0, 65), priceTag: '⚡ CALIDAD COMPROBADA', bgGradient: 'from-[#041a12] via-[#0b3d2e] to-[#041a12]' },
@@ -472,7 +472,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       ctaType: 'LEARN_MORE',
       ctaLabel: 'PEDIR KIT COMPLETO',
       themeIndex: 1,
-      aiGeneratedImageUrl: '/assets/ai-ads/ad_ai_unboxing_real.jpg',
+      aiGeneratedImageUrl: '',
       aiImagePrompt: buildAiAdImagePromptForBrief(product, 5, 0),
       videoScenes: [
         { durationSec: 3, badge: 'ESCENA 1 · UNBOXING EN MESA (0-3s)', title: `📦 Abriendo la caja de ${nombre}...`, subtitle: 'Mirá en primera persona todo lo que trae el pedido oficial', priceTag: '👀 VERIFICÁS AL RECIBIR', bgGradient: 'from-[#1f0808] via-[#7f1d1d] to-[#450a0a]' },
@@ -930,17 +930,9 @@ REGLAS FINALES PARA LA RESPUESTA:
 // ────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Las 6 imágenes publicitarias generadas por IA para los 6 arquetipos Andrómeda
- * (NUNCA fotos crudas extraídas de la página de aterrizaje).
+ * Array de imágenes de respaldo (vía vacía, cero imágenes pre-cargadas de prueba).
  */
-export const AI_GENERATED_AD_ARCHETYPE_IMAGES: string[] = [
-  '/assets/ai-ads/ad_ai_oferta_cod.jpg',
-  '/assets/ai-ads/ad_ai_trust_courier.jpg',
-  '/assets/ai-ads/ad_ai_problema_solucion.jpg',
-  '/assets/ai-ads/ad_ai_pack_familiar.jpg',
-  '/assets/ai-ads/ad_ai_demo_impacto.jpg',
-  '/assets/ai-ads/ad_ai_unboxing_real.jpg'
-];
+export const AI_GENERATED_AD_ARCHETYPE_IMAGES: string[] = [];
 
 /**
  * Construye el prompt publicitario de Generación de Imagen IA específico para cada arquetipo Andrómeda.
@@ -986,7 +978,7 @@ export function buildAiAdImagePromptForBrief(
 }
 
 /**
- * Extrae las imágenes creativas generadas por IA (nunca limitándose a las fotos estáticas de la página).
+ * Extrae las imágenes reales del producto para la landing o como base si no hay imagen IA generada aún.
  */
 export function extractAllProductImages(
   product: ProductPage,
@@ -994,7 +986,6 @@ export function extractAllProductImages(
 ): string[] {
   const candidates: string[] = [
     ...(Array.isArray(extraImages) ? extraImages : []),
-    ...AI_GENERATED_AD_ARCHETYPE_IMAGES,
     product?.imagen || '',
     ...(Array.isArray(product?.landingContent?.galleryItems)
       ? product.landingContent!.galleryItems.map(g => g?.src || '')
@@ -1010,7 +1001,7 @@ export function extractAllProductImages(
       unique.push(clean);
     }
   }
-  return unique.length > 0 ? unique : [...AI_GENERATED_AD_ARCHETYPE_IMAGES];
+  return unique.length > 0 ? unique : [product?.imagen || ''];
 }
 
 /**
@@ -1046,13 +1037,12 @@ export function buildCreativeAssetsFromBrain(
     const aspectRatio = brief.format;
     const themeIdx = (brief.themeIndex ?? idx) % CREATIVE_COLOR_THEMES.length;
     const aiImagePrompt = brief.aiImagePrompt || buildAiAdImagePromptForBrief(product, idx, 0);
-    const aiGeneratedImageUrl =
-      brief.aiGeneratedImageUrl ||
-      AI_GENERATED_AD_ARCHETYPE_IMAGES[idx % AI_GENERATED_AD_ARCHETYPE_IMAGES.length];
+    const aiGeneratedImageUrl = brief.aiGeneratedImageUrl || '';
+    const productImage = aiGeneratedImageUrl || product.imagen || '';
 
     const imageDataUrl = buildHighImpactAdSvgDataUrl({
       productName: product.nombre,
-      productImage: aiGeneratedImageUrl,
+      productImage,
       pricePack1Gs: p1,
       pricePack2Gs: p2,
       normalPriceGs: pNormal,
@@ -1184,15 +1174,14 @@ export function regenerateSingleCreativeAssetFromBrain(
   const aiImagePrompt =
     customBriefOverride?.aiImagePrompt ||
     buildAiAdImagePromptForBrief(product, congruentSceneIdx, variationSeed);
-  const aiGeneratedImageUrl =
-    customBriefOverride?.aiGeneratedImageUrl ||
-    AI_GENERATED_AD_ARCHETYPE_IMAGES[congruentSceneIdx % AI_GENERATED_AD_ARCHETYPE_IMAGES.length];
+  const aiGeneratedImageUrl = customBriefOverride?.aiGeneratedImageUrl || '';
+  const productImage = aiGeneratedImageUrl || product.imagen || '';
 
   const themeIdx = mergedBrief.themeIndex % CREATIVE_COLOR_THEMES.length;
 
   const imageDataUrl = buildHighImpactAdSvgDataUrl({
     productName: product.nombre,
-    productImage: aiGeneratedImageUrl,
+    productImage,
     pricePack1Gs: p1,
     pricePack2Gs: p2,
     normalPriceGs: pNormal,

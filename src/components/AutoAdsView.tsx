@@ -1218,15 +1218,23 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
                     {/* 3. Creativo Visual Limpio (Cero capas de texto rotando encima de la imagen, tal cual se publica en Facebook Ads) */}
                     <div>
-                      <div className="relative bg-black border-y border-zinc-800 overflow-hidden aspect-square">
-                        <img
-                          src={aiGeneratedPhotoUrl}
-                          alt={ad.headline}
-                          referrerPolicy="no-referrer"
-                          className={`w-full h-full object-cover transition-opacity duration-300 ${
-                            isRegeneratingThis ? 'opacity-30' : 'opacity-100'
-                          }`}
-                        />
+                      <div className="relative bg-zinc-950 border-y border-zinc-800 overflow-hidden aspect-square flex items-center justify-center">
+                        {aiGeneratedPhotoUrl ? (
+                          <img
+                            src={aiGeneratedPhotoUrl}
+                            alt={ad.headline}
+                            referrerPolicy="no-referrer"
+                            className={`w-full h-full object-cover transition-opacity duration-300 ${
+                              isRegeneratingThis ? 'opacity-30' : 'opacity-100'
+                            }`}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-zinc-500 bg-zinc-950">
+                            <Sparkles className="w-8 h-8 mb-2 text-emerald-400/80 animate-pulse" />
+                            <span className="text-xs font-mono text-zinc-300 font-bold">Generando Creativo en OpenRouter</span>
+                            <span className="text-[10px] text-zinc-500 mt-1">GPT Imagen 2.6 ({AUTOADS_IMAGE_MODEL})</span>
+                          </div>
+                        )}
                         {isRegeneratingThis && (
                           <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-2 p-4 text-center">
                             <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />

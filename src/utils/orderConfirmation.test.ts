@@ -716,29 +716,28 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
   };
 
   const allImages = extractAllProductImages(productWithGallery, ['https://example.com/scraped-photo.jpg']);
-  assert.ok(allImages.length >= 7);
+  assert.ok(allImages.length >= 4);
   assert.equal(allImages[0], 'https://example.com/scraped-photo.jpg');
-  assert.equal(allImages[1], '/assets/ai-ads/ad_ai_oferta_cod.jpg');
+  assert.equal(allImages[1], '/assets/real/galeria-1.jpg');
 
   const brain = createDefaultBrainProfile(productWithGallery);
   const assets = buildCreativeAssetsFromBrain(productWithGallery, brain);
   assert.equal(assets.length, 6);
-  // Every creative uses an AI-generated commercial ad image (/assets/ai-ads/ad_ai_*.jpg) and AI prompt
-  assert.ok(assets[0].aiGeneratedImageUrl?.startsWith('/assets/ai-ads/'));
-  assert.ok(assets[1].aiGeneratedImageUrl?.startsWith('/assets/ai-ads/'));
-  assert.notEqual(assets[0].aiGeneratedImageUrl, assets[1].aiGeneratedImageUrl);
+  // Zero pre-baked images in default state (all dynamic from OpenRouter)
+  assert.equal(assets[0].aiGeneratedImageUrl, '');
   assert.ok((assets[0].aiImagePrompt || '').includes('Taladro Percutor 21V Industrial'));
 
-  // Single ad regeneration produces a new angle, headline, primary text, and new AI image that are 100% congruent
+  // Single ad regeneration produces a new angle, headline, primary text, and new AI prompt that are 100% congruent
   const regeneratedAd0 = regenerateSingleCreativeAssetFromBrain(
     productWithGallery,
     brain,
     0,
-    1
+    1,
+    { aiGeneratedImageUrl: '/assets/ai-ads/gpt_imagen_regen_test.png' }
   );
   assert.notEqual(regeneratedAd0.headline, assets[0].headline);
   assert.notEqual(regeneratedAd0.primaryText, assets[0].primaryText);
-  assert.notEqual(regeneratedAd0.aiGeneratedImageUrl, assets[0].aiGeneratedImageUrl);
+  assert.equal(regeneratedAd0.aiGeneratedImageUrl, '/assets/ai-ads/gpt_imagen_regen_test.png');
 
   // Verify 100% Universal Product Adaptation (ZERO projector hardcoding when the product is a Drill)
   for (const ad of assets) {
@@ -775,7 +774,6 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
 
   // When Ad #1 (index 0) is regenerated with variationSeed=1, it moves to Scene #2 (courier at the door)
   // and BOTH its image AND its text/headline describe the courier at the door for that exact product!
-  assert.equal(regeneratedAd0.aiGeneratedImageUrl, '/assets/ai-ads/ad_ai_trust_courier.jpg');
   assert.ok(regeneratedAd0.headline.toLowerCase().includes('repartidor'));
   assert.ok(regeneratedAd0.primaryText.toLowerCase().includes('repartidor'));
   assert.ok(regeneratedAd0.headline.includes('Taladro Percutor 21V Industrial'));

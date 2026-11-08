@@ -2416,22 +2416,11 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                           }
                         }
 
-                        const congruentStaticImages = [
-                          '/assets/ai-ads/ad_ai_oferta_cod.jpg',
-                          '/assets/ai-ads/ad_ai_trust_courier.jpg',
-                          '/assets/ai-ads/ad_ai_problema_solucion.jpg',
-                          '/assets/ai-ads/ad_ai_pack_familiar.jpg',
-                          '/assets/ai-ads/ad_ai_demo_impacto.jpg',
-                          '/assets/ai-ads/ad_ai_unboxing_real.jpg'
-                        ];
-
                         if (Array.isArray(brainProfile?.creativeBriefs)) {
                           brainProfile.creativeBriefs = brainProfile.creativeBriefs.map((brief: any, bIdx: number) => ({
                             ...brief,
                             themeIndex: brief.themeIndex ?? bIdx % 4,
-                            aiGeneratedImageUrl:
-                              brief.aiGeneratedImageUrl ||
-                              congruentStaticImages[bIdx % congruentStaticImages.length],
+                            aiGeneratedImageUrl: brief.aiGeneratedImageUrl || '',
                             videoScenes: Array.isArray(brief.videoScenes) && brief.videoScenes.length > 0 && typeof brief.videoScenes[0] === 'object'
                               ? brief.videoScenes.map((s: any) => ({
                                   durationSec: s.durationSec || 3,
@@ -2508,20 +2497,11 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                 const configuredVideoModel =
                   readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL') || 'minimax/minimax-m3.1-flash';
 
-                const staticAiArchetypes = [
-                  '/assets/ai-ads/ad_ai_oferta_cod.jpg',
-                  '/assets/ai-ads/ad_ai_trust_courier.jpg',
-                  '/assets/ai-ads/ad_ai_problema_solucion.jpg',
-                  '/assets/ai-ads/ad_ai_pack_familiar.jpg',
-                  '/assets/ai-ads/ad_ai_demo_impacto.jpg',
-                  '/assets/ai-ads/ad_ai_unboxing_real.jpg'
-                ];
-
                 const universalArchetypePrompts = [
                   inputBriefs[0]?.aiImagePrompt ||
-                    `High-converting commercial Facebook Ad photograph for "${prodName}" (${prodDesc}): product showcased in dramatic foreground in real-world action demonstrating its main benefit (${mainBenefit}), 8k ultra detailed, no text overlays, no smartphones`,
+                    `High-converting commercial Facebook Ad photograph for "${prodName}" (${prodDesc}): product showcased in dramatic foreground in real-world action demonstrating its main benefit (${mainBenefit}), 8k ultra detailed, no text overlays`,
                   inputBriefs[1]?.aiImagePrompt ||
-                    `Authentic UGC Cash-on-Delivery lifestyle advertisement in Paraguay: friendly delivery courier in polo shirt handing a medium-sized cardboard appliance box of "${prodName}" at the front door of a modern house to a smiling buyer holding Guaraníes banknotes, warm golden hour lighting, 8k photorealistic, no smartphones, no phone boxes`,
+                    `Authentic UGC Cash-on-Delivery lifestyle advertisement in Paraguay: friendly delivery courier in polo shirt handing the authentic package of "${prodName}" (${prodDesc}) at the front door of a modern house to a smiling buyer holding Guaraníes banknotes, package clearly showcasing "${prodName}", warm golden hour lighting, 8k photorealistic, no text overlays`,
                   inputBriefs[2]?.aiImagePrompt ||
                     `Split-screen BEFORE and AFTER commercial Meta Ad for "${prodName}" (${prodDesc}): left side shows the frustrating everyday problem before having "${prodName}"; right side shows the instant transformation and solution using "${prodName}" (${mainBenefit}), clean 8k commercial photography, no text overlays`,
                   inputBriefs[3]?.aiImagePrompt ||
@@ -2537,7 +2517,7 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                   fs.mkdirSync(aiAdsDir, { recursive: true });
                 }
 
-                // Helper que invoca OpenRouter (GPT Imagen 2.6 + MiniMax para Reels)
+                // Helper que invoca OpenRouter (GPT Imagen 2.6 / GPT-5 Image / Gemini Image + MiniMax para Reels)
                 const generateOneCreativeViaOpenRouter = async (promptText: string, idx: number) => {
                   const isReel = idx >= 4;
                   let finalPrompt = promptText;
@@ -2580,11 +2560,13 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                     } catch {}
                   }
 
-                  // Candidatos de generación de imagen en OpenRouter (empezando por GPT Imagen 2.6)
+                  // Candidatos de generación de imagen en OpenRouter
                   const candidateImageModels = [
-                    configuredImageModel,
+                    'openai/gpt-5-image',
+                    'google/gemini-2.5-flash-image',
                     'openai/gpt-5.4-image-2',
-                    'google/gemini-3.1-flash-image'
+                    'google/gemini-3.1-flash-image',
+                    configuredImageModel
                   ];
 
                   for (const imgModel of candidateImageModels) {
@@ -2636,7 +2618,7 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
 
                   return {
                     adIndex: idx,
-                    imageUrl: staticAiArchetypes[idx % staticAiArchetypes.length],
+                    imageUrl: product.imagen || '',
                     prompt: finalPrompt,
                     imageModel: 'GPT Imagen 2.6 (OpenRouter)',
                     videoModel: isReel ? 'MiniMax Video (OpenRouter)' : undefined
@@ -2711,24 +2693,14 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                 const p2 = Number(product.precios?.[2] || 349000);
                 const freeShipping = product.freeShipping !== false;
 
-                const staticAiArchetypes = [
-                  '/assets/ai-ads/ad_ai_oferta_cod.jpg',
-                  '/assets/ai-ads/ad_ai_trust_courier.jpg',
-                  '/assets/ai-ads/ad_ai_problema_solucion.jpg',
-                  '/assets/ai-ads/ad_ai_pack_familiar.jpg',
-                  '/assets/ai-ads/ad_ai_demo_impacto.jpg',
-                  '/assets/ai-ads/ad_ai_unboxing_real.jpg'
-                ];
-
-                const congruentSceneIndex = (adIndex + variationSeed) % staticAiArchetypes.length;
                 const sceneContexts = [
                   {
                     sceneName: `Producto "${prodName}" en Primer Plano en Acción Real (Oferta Directa COD)`,
-                    enPrompt: `High-converting commercial Facebook Ad photograph of "${prodName}" (${prodDesc}) in the foreground in real-world action demonstrating its main benefit (${mainBenefit}), 8k photorealistic, no text overlays, no smartphones`
+                    enPrompt: `High-converting commercial Facebook Ad photograph of "${prodName}" (${prodDesc}) in the foreground in real-world action demonstrating its main benefit (${mainBenefit}), 8k photorealistic, no text overlays`
                   },
                   {
                     sceneName: `Repartidor Entregando "${prodName}" en Puerta con Pago al Recibir`,
-                    enPrompt: `Authentic Cash-on-Delivery lifestyle Meta Ad in Paraguay: friendly delivery courier handing a medium cardboard box of "${prodName}" at the front door to a smiling homeowner paying cash in Guaraníes upon delivery, 8k photorealistic, no smartphones, no phone boxes`
+                    enPrompt: `Authentic Cash-on-Delivery lifestyle Meta Ad in Paraguay: friendly delivery courier handing the authentic package of "${prodName}" (${prodDesc}) at the front door to a smiling homeowner paying cash in Guaraníes upon delivery, package clearly showcasing "${prodName}", 8k photorealistic, no text overlays`
                   },
                   {
                     sceneName: `Comparativa Dividida ANTES (Problema sin "${prodName}") vs. DESPUÉS (Solución con "${prodName}")`,
@@ -2747,6 +2719,8 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                     enPrompt: `Vertical 9:16 first-person POV hands unboxing the "${prodName}" shipping box on a wooden home table revealing "${prodName}" and its included contents (${boxItems}) neatly arranged, 8k photorealistic, no text overlays`
                   }
                 ];
+
+                const congruentSceneIndex = (adIndex + variationSeed) % sceneContexts.length;
                 const targetScene = sceneContexts[congruentSceneIndex];
 
                 let customBrief: any = null;
@@ -2837,18 +2811,20 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                   } catch {}
                 }
 
-                let newGeneratedImageUrl = staticAiArchetypes[congruentSceneIndex];
+                let newGeneratedImageUrl = '';
 
-                // Siempre generar la nueva imagen en vivo vía OpenRouter (GPT Imagen 2.6 -> fallback OpenRouter Image)
+                // Siempre generar la nueva imagen en vivo vía OpenRouter (GPT Imagen 2.6 / GPT-5 Image / Gemini Image)
                 if (openRouterKey) {
                   const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
                   if (!fs.existsSync(aiAdsDir)) {
                     fs.mkdirSync(aiAdsDir, { recursive: true });
                   }
                   const candidateImageModels = [
-                    configuredImageModel,
+                    'openai/gpt-5-image',
+                    'google/gemini-2.5-flash-image',
                     'openai/gpt-5.4-image-2',
-                    'google/gemini-3.1-flash-image'
+                    'google/gemini-3.1-flash-image',
+                    configuredImageModel
                   ];
                   for (const imgModel of candidateImageModels) {
                     try {
@@ -2890,6 +2866,10 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                       }
                     } catch {}
                   }
+                }
+
+                if (!newGeneratedImageUrl) {
+                  newGeneratedImageUrl = product.imagen || '';
                 }
 
                 customBrief = {
