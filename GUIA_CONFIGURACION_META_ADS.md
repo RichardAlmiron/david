@@ -648,6 +648,8 @@ Para pasar la app a Modo Activo (Live), necesitás completar los siguientes paso
 | 10 | **Los anuncios no se entregan** | Verificá en [Meta Ads Manager](https://adsmanager.facebook.com) si los anuncios están en estado "En revisión", "Rechazados" o si la cuenta publicitaria tiene problemas de facturación. |
 | 11 | **"GraphMethodException: Unsupported post request"** | Verificá que la versión de la API esté correcta (v21.0) y que los parámetros enviados al endpoint sean válidos según la documentación de Meta. |
 | 12 | **El entrenamiento IA falla** | Verificá que la variable `OPENROUTER_API_KEY` esté configurada correctamente en Railway y que tu cuenta de OpenRouter tenga créditos disponibles. |
+| 13 | **"Error en OpenRouter / Trabajo Pausado"** | Si la API Key vence, carece de saldo o se interrumpe la red, la app despliega el pop-up modal `ApiErrorModal` mostrando el error exacto y pausando el trabajo. No se generan textos ficticios ni fallbacks estáticos. |
+| 14 | **"Logs de OpenRouter muestran localhost:3000"** | El servidor resuelve el encabezado `HTTP-Referer` en tiempo real (`getOpenRouterReferer`), registrando la URL exacta de producción (`https://landingcod.com`) en las métricas de OpenRouter. |
 
 > [!TIP]
 > 💡 **Consejo general de depuración:** Abrí la **Consola del navegador** (F12 → Console) y los **Logs de Railway** para obtener mensajes de error detallados. La mayoría de los errores incluyen un código y mensaje descriptivo de Meta Graph API.
