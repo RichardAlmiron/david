@@ -32,9 +32,22 @@ import { buildHighImpactAdSvgDataUrl } from './pipeboardEngine';
 // ────────────────────────────────────────────────────────────────────────────────
 
 /** Modelos oficiales vía OpenRouter para el sistema AutoAds */
-export const AUTOADS_LLM_MODEL = 'openai/gpt-4o-mini';
-export const AUTOADS_IMAGE_MODEL = 'openai/gpt-image-2.6';
-export const AUTOADS_VIDEO_MODEL = 'minimax/minimax-m3.1-flash';
+export const AUTOADS_LLM_MODEL = 'z-ai/glm-5.3';
+export const AUTOADS_IMAGE_MODEL = 'openai/gpt-5-image-mini';
+export const AUTOADS_VIDEO_MODEL = 'google/gemini-omni-1.2-flash';
+
+export const AUTOADS_IMAGE_MODEL_CANDIDATES = [
+  'openai/gpt-5-image-mini',
+  'openai/gpt-5-image',
+  'openai/gpt-5.4-image-2',
+  'google/gemini-3.1-flash-image',
+  'google/gemini-2.5-flash-image'
+] as const;
+
+export const AUTOADS_VIDEO_MODEL_CANDIDATES = [
+  'google/gemini-omni-1.2-flash',
+  'google/gemini-omni-1.1-flash'
+] as const;
 
 // Paleta de colores para creativos (misma que pipeboardEngine)
 const CREATIVE_COLOR_THEMES = [
@@ -807,7 +820,8 @@ El JSON debe tener esta estructura exacta:
       "descriptionText": "Línea corta de descripción bajo el titular (max 70 chars)",
       "ctaType": "ORDER_NOW",
       "ctaLabel": "PEDIR CONTRA ENTREGA",
-      "themeIndex": 0
+      "themeIndex": 0,
+      "aiImagePrompt": "Commercial Facebook Ad Hero Poster for ${product.nombre} in real-world action demonstrating its main benefit, 8k photorealistic, zero text overlays"
     },
     {
       "index": 1,
@@ -817,13 +831,14 @@ El JSON debe tener esta estructura exacta:
       "avatarTarget": "avatar-b",
       "angleType": "trust",
       "hook3s": "...",
-      "hookBadge": "...",
+      "hookBadge": "✅ PAGÁS AL REPARTIDOR EN PUERTA",
       "headline": "...",
       "primaryText": "...",
       "descriptionText": "...",
       "ctaType": "SHOP_NOW",
       "ctaLabel": "VER GARANTÍA Y COMPRAR",
-      "themeIndex": 1
+      "themeIndex": 1,
+      "aiImagePrompt": "Authentic Cash-on-Delivery lifestyle ad in Paraguay: friendly delivery courier handing the ${product.nombre} package at the front door to a smiling homeowner paying cash in Guaraníes, 8k, zero text overlays"
     },
     {
       "index": 2,
@@ -833,13 +848,14 @@ El JSON debe tener esta estructura exacta:
       "avatarTarget": "avatar-c",
       "angleType": "transformation",
       "hook3s": "...",
-      "hookBadge": "...",
+      "hookBadge": "💡 ANTES VS. DESPUÉS COMPROBADO",
       "headline": "...",
       "primaryText": "...",
       "descriptionText": "...",
       "ctaType": "ORDER_NOW",
       "ctaLabel": "QUIERO LA SOLUCIÓN",
-      "themeIndex": 2
+      "themeIndex": 2,
+      "aiImagePrompt": "Split-screen BEFORE vs AFTER commercial Meta Ad for ${product.nombre}: left side frustrating problem before, right side instant solution and transformation with ${product.nombre}, 8k, zero text overlays"
     },
     {
       "index": 3,
@@ -849,13 +865,14 @@ El JSON debe tener esta estructura exacta:
       "avatarTarget": "avatar-a",
       "angleType": "urgency",
       "hook3s": "...",
-      "hookBadge": "...",
+      "hookBadge": "⚡ PACK DÚO 2 UNIDADES EN OFERTA",
       "headline": "...",
       "primaryText": "...",
       "descriptionText": "...",
       "ctaType": "ORDER_NOW",
       "ctaLabel": "QUIERO MI PACK HOY",
-      "themeIndex": 3
+      "themeIndex": 3,
+      "aiImagePrompt": "Vertical 9:16 Instagram Story bundle promotion ad: two identical units of ${product.nombre} displayed side by side on a sleek modern podium with warm lifestyle background, 8k, zero text overlays"
     },
     {
       "index": 4,
@@ -865,20 +882,21 @@ El JSON debe tener esta estructura exacta:
       "avatarTarget": "avatar-b",
       "angleType": "social_proof",
       "hook3s": "...",
-      "hookBadge": "...",
+      "hookBadge": "🔥 DEMOSTRACIÓN DE CALIDAD REAL",
       "headline": "...",
       "primaryText": "...",
       "descriptionText": "...",
       "ctaType": "SHOP_NOW",
       "ctaLabel": "COMPRAR AHORA",
       "themeIndex": 0,
+      "aiImagePrompt": "Vertical 9:16 Reels macro action shot of ${product.nombre} operating at peak performance showing build quality and materials, 8k commercial photography, zero text overlays",
       "videoScenes": [
         {
           "durationSec": 3,
           "badge": "ESCENA 1 · HOOK (0-3s)",
-          "title": "Título de la escena",
+          "title": "🔥 Título impactante de la escena",
           "subtitle": "Subtítulo descriptivo",
-          "priceTag": "Etiqueta de precio o beneficio",
+          "priceTag": "⚡ CALIDAD COMPROBADA",
           "bgGradient": "from-[#041a12] via-[#0b3d2e] to-[#041a12]"
         }
       ]
@@ -891,20 +909,21 @@ El JSON debe tener esta estructura exacta:
       "avatarTarget": "avatar-c",
       "angleType": "unboxing",
       "hook3s": "...",
-      "hookBadge": "...",
+      "hookBadge": "📦 UNBOXING REAL · CAJA COMPLETA",
       "headline": "...",
       "primaryText": "...",
       "descriptionText": "...",
       "ctaType": "LEARN_MORE",
       "ctaLabel": "VER SI ES REAL",
       "themeIndex": 1,
+      "aiImagePrompt": "Vertical 9:16 first-person POV hands unboxing the ${product.nombre} box on a wooden home table revealing the authentic product and all included accessories neatly arranged, 8k, zero text overlays",
       "videoScenes": [
         {
           "durationSec": 3,
           "badge": "ESCENA 1 · GANCHO (0-3s)",
-          "title": "...",
+          "title": "📦 Abriendo la caja...",
           "subtitle": "...",
-          "priceTag": "...",
+          "priceTag": "👀 VERIFICÁS AL RECIBIR",
           "bgGradient": "from-[#1f0808] via-[#7f1d1d] to-[#450a0a]"
         }
       ]
@@ -912,16 +931,20 @@ El JSON debe tener esta estructura exacta:
   ]
 }
 
-REGLAS FINALES PARA LA RESPUESTA:
-1. Los 3 avatares deben ser personas REALES de Paraguay con nombres locales.
+REGLAS FINALES OBLIGATORIAS PARA LA POTENCIA DEL COPY Y RESPUESTA:
+1. Los 3 avatares deben ser personas REALES de Paraguay con nombres locales (Asunción, Luque, Ciudad del Este, San Lorenzo, Encarnación).
 2. Los 6 creativeBriefs DEBEN seguir los 6 arquetipos en ORDEN (índice 0-5).
-3. Cada primaryText debe ser COMPLETO y LISTO PARA PUBLICAR (no abreviado).
-4. Los precios SIEMPRE en formato "Gs. XXX.XXX" usando los datos del producto.
-5. Los videoScenes son obligatorios SOLO para los índices 4 y 5 (reels), con 4 escenas cada uno.
-6. Cada hook3s debe ser DISTINTO y dirigido a un avatar diferente cuando sea posible.
-7. El hookBadge es para la imagen del anuncio — max 34 caracteres, en MAYÚSCULAS.
-8. Los bgGradient de videoScenes deben usar los colores de la paleta proporcionada.
-9. NO incluyas markdown, NO incluyas comentarios JS, solo JSON puro válido.
+3. PROHIBIDO GENERAR TEXTOS PLANOS O SIN EMOJIS: Cada "primaryText" DEBE ser una obra maestra de Direct-Response Copywriting (nivel Eugene Schwartz, Alex Hormozi y Sabri Suby) de 6 a 9 líneas bien estructuradas con saltos de línea (\\n) e iconos/emojis estratégicos en CADA bloque:
+   - Línea 1 (Hook Disruptivo con Emoji: 🔥, 🛑, ✨, ⚡, 🤝, 📦).
+   - Línea 2-3 (Dolor agudo o transformación visual congruente al 100% con la escena de la imagen).
+   - Línea 4-6 (Viñetas de beneficios tangibles y Verdad Física con ✅, 📌, 🛠️, ✔️).
+   - Línea 7-8 (Anclaje de Precios reales: 💰 1 Unidad: ${formatGs(p1)} | 🔥 Pack 2 Unidades Ahorro: ${formatGs(p2)} — Antes ${formatGs(pNormal)}).
+   - Línea 9 (Cero Riesgo COD + Llamado a la Acción: 🚚 Envío Gratis · 💵 Pagás recién al repartidor en tu puerta · 👇 Tocá el botón para reservar).
+4. Cada "headline" y cada "hookBadge" DEBE incluir un emoji potente al inicio y ser 100% congruente con la escena visual de ese arquetipo.
+5. Los precios SIEMPRE en formato "Gs. XXX.XXX" usando exactamente los datos reales del producto.
+6. Los videoScenes son obligatorios para los índices 4 y 5 (reels), con 4 escenas dinámicas cada uno.
+7. Cada brief DEBE incluir su "aiImagePrompt" en inglés fotorrealista 8K describiendo la escena exacta sin texto superpuesto ("zero text overlays").
+8. NO incluyas bloques markdown (\`\`\`json), NO incluyas comentarios JS, responde SOLO el objeto JSON puro válido.
 `;
 }
 
@@ -959,9 +982,9 @@ export function buildAiAdImagePromptForBrief(
     `${name} and all original factory accessories`;
 
   const styles = [
-    '8k ultra-detailed commercial Meta Ads studio photography, dramatic lighting, high CTR advertising visual',
-    'photorealistic Latin American lifestyle commercial advertisement, warm golden hour lighting, Sony A7R V 85mm lens',
-    'cinematic high-contrast direct-response e-commerce ad creative, crisp commercial lighting, ultra sharp focus'
+    '8k ultra-detailed commercial Meta Ads studio photography, dramatic lighting, high CTR advertising visual, zero text overlays',
+    'photorealistic Latin American lifestyle commercial advertisement, warm golden hour lighting, Sony A7R V 85mm lens, zero text overlays',
+    'cinematic high-contrast direct-response e-commerce ad creative, crisp commercial lighting, ultra sharp focus, zero text overlays'
   ];
   const styleSuffix = styles[variationSeed % styles.length];
 
@@ -1034,7 +1057,7 @@ export function buildCreativeAssetsFromBrain(
   };
 
   return brain.creativeBriefs.map((brief, idx) => {
-    const aspectRatio = brief.format;
+    const aspectRatio = brief.format || (brief.type === 'feed_1x1' ? '1:1' : '9:16');
     const themeIdx = (brief.themeIndex ?? idx) % CREATIVE_COLOR_THEMES.length;
     const aiImagePrompt = brief.aiImagePrompt || buildAiAdImagePromptForBrief(product, idx, 0);
     const aiGeneratedImageUrl = brief.aiGeneratedImageUrl || '';
@@ -1048,25 +1071,25 @@ export function buildCreativeAssetsFromBrain(
       normalPriceGs: pNormal,
       freeShipping,
       aspectRatio,
-      hookBadge: brief.hookBadge,
-      headline: brief.headline,
-      subHeadline: brief.descriptionText.slice(0, 70),
-      ctaLabel: brief.ctaLabel,
+      hookBadge: brief.hookBadge || '🔥 OFERTA HOY · PAGO EN PUERTA',
+      headline: brief.headline || product.nombre,
+      subHeadline: (brief.descriptionText || '').slice(0, 70),
+      ctaLabel: brief.ctaLabel || 'PEDIR CONTRA ENTREGA',
       themeIndex: themeIdx
     });
 
     const asset: GeneratedAdCreativeAsset = {
-      id: `autoads-${brief.index}-${product.id}-${Date.now()}-${idx}`,
+      id: `autoads-${brief.index ?? idx}-${product.id}-${Date.now()}-${idx}`,
       type: typeMapping[brief.type] || 'image_feed_1x1',
-      formatLabel: `${formatLabelMapping[brief.type] || 'Imagen IA Feed 1:1'} · ${brief.archetypeName}`,
+      formatLabel: `${formatLabelMapping[brief.type] || 'Imagen IA Feed 1:1'} · ${brief.archetypeName || 'Andrómeda'}`,
       aspectRatio,
-      angleTitle: `Ángulo #${brief.index + 1} · ${brief.archetypeName} (${brief.angleType})`,
-      hookBadge: brief.hookBadge,
-      headline: brief.headline,
-      primaryText: brief.primaryText,
-      descriptionText: brief.descriptionText,
-      ctaType: brief.ctaType,
-      ctaLabel: brief.ctaLabel,
+      angleTitle: `Ángulo #${(brief.index ?? idx) + 1} · ${brief.archetypeName || 'Andrómeda'} (${brief.angleType || 'offer'})`,
+      hookBadge: brief.hookBadge || '🔥 OFERTA HOY · PAGO EN PUERTA',
+      headline: brief.headline || product.nombre,
+      primaryText: brief.primaryText || '',
+      descriptionText: brief.descriptionText || 'Envío gratis y pago al recibir en puerta',
+      ctaType: brief.ctaType || 'ORDER_NOW',
+      ctaLabel: brief.ctaLabel || 'PEDIR CONTRA ENTREGA',
       visualThemeIndex: themeIdx,
       imageDataUrl,
       aiGeneratedImageUrl,
@@ -1083,7 +1106,7 @@ export function buildCreativeAssetsFromBrain(
         bgGradient: scene.bgGradient
       }));
     } else if (brief.type === 'reel_9x16') {
-      const archetype = ANDROMEDA_CREATIVE_ARCHETYPES[brief.index];
+      const archetype = ANDROMEDA_CREATIVE_ARCHETYPES[brief.index ?? idx];
       const isUnboxing = archetype?.angleType === 'unboxing';
 
       asset.videoScenes = [
@@ -1157,16 +1180,15 @@ export function regenerateSingleCreativeAssetFromBrain(
     brain.creativeBriefs[0] ||
     defaultFullBrain.creativeBriefs[0];
 
-  // Seleccionamos el paquete escénico congruente para que la Imagen IA y el Copy SIEMPRE hablen de la misma escena
   const congruentSceneIdx = (briefIndex + variationSeed) % defaultFullBrain.creativeBriefs.length;
   const congruentSceneBrief = defaultFullBrain.creativeBriefs[congruentSceneIdx];
 
   const mergedBrief: AutoAdsCreativeBrief = {
     ...baseBrief,
-    hookBadge: congruentSceneBrief.hookBadge,
-    headline: `${congruentSceneBrief.headline} (V#${variationSeed})`,
-    primaryText: congruentSceneBrief.primaryText,
-    descriptionText: congruentSceneBrief.descriptionText,
+    hookBadge: customBriefOverride?.hookBadge || congruentSceneBrief.hookBadge,
+    headline: customBriefOverride?.headline || `${congruentSceneBrief.headline} (V#${variationSeed})`,
+    primaryText: customBriefOverride?.primaryText || congruentSceneBrief.primaryText,
+    descriptionText: customBriefOverride?.descriptionText || congruentSceneBrief.descriptionText,
     ...(customBriefOverride || {}),
     themeIndex: (baseBrief.themeIndex + variationSeed) % CREATIVE_COLOR_THEMES.length
   };
@@ -1189,7 +1211,7 @@ export function regenerateSingleCreativeAssetFromBrain(
     aspectRatio: mergedBrief.format,
     hookBadge: mergedBrief.hookBadge,
     headline: mergedBrief.headline,
-    subHeadline: mergedBrief.descriptionText.slice(0, 70),
+    subHeadline: (mergedBrief.descriptionText || '').slice(0, 70),
     ctaLabel: mergedBrief.ctaLabel,
     themeIndex: themeIdx
   });

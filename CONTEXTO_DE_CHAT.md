@@ -596,6 +596,38 @@ Exigencias expresas:
    - La función extrae los encabezados `x-forwarded-proto`, `host` y `x-forwarded-host` de la solicitud entrante.
    - En producción, OpenRouter registrará la URL real del dominio (p. ej. `https://landingcod.com`) en lugar de `localhost:3000`.
 
+---
 
+## 7. Fase 45 — Auditoría Profunda del Catálogo OpenRouter en Vivo, Reparación de Generación de Imágenes/Video y Restauración del Cerebro Maestro Andrómeda con Emojis
 
+### A. Diagnóstico y Causa Raíz de los 3 Problemas Reportados
+1. **Por qué se quedaba trancado en `"Generando Creativo en OpenRouter"` sin generar ninguna imagen**:
+   - En las Fases 43–44 se había configurado como único modelo de imagen `'openai/gpt-image-2.6'` (`'openai/gpt-image-2.6-sunburst'`, `'openai/gpt-image-2.6-flare'`).
+   - Al auditar directamente el catálogo oficial de OpenRouter (`GET https://openrouter.ai/api/v1/models`), se comprobó que **`openai/gpt-image-2.6` NO EXISTE en OpenRouter**.
+   - Además, el endpoint `/api/autoads/generate-ad-images` en `vite.config.ts` tenía un `catch {}` vacío que tragaba el error 404/400 de OpenRouter y respondía `HTTP 200 { success: true, generatedImages: [{ imageUrl: '' }, ...] }`. Al recibir `imageUrl: ''`, las 6 tarjetas en `AutoAdsView.tsx` quedaban atrapadas indefinidamente mostrando el cartel `"Generando Creativo en OpenRouter"`.
+2. **Por qué `minimax/minimax-m3.1-flash` era un error garrafal para generación de video**:
+   - La auditoría a `https://openrouter.ai/api/v1/models` demostró que `minimax/minimax-m3.1-flash` tiene `input_modalities: ["text", "image", "video"]` pero **`output_modalities: ["text"]`** (solo lee video y devuelve texto; MiniMax no expone generadores de salida de video en OpenRouter).
+   - Los únicos modelos en OpenRouter con capacidad real de salida de video (`output_modalities: ["text", "video"]`) son **`google/gemini-omni-1.2-flash`** ("Google: Gemini Omni 1.2 Flash") y **`google/gemini-omni-1.1-flash`**.
+3. **Modelos Reales de Generación de Imagen en OpenRouter (`output_modalities: ["image", "text"]`)**:
+   - **OpenAI Image Models reales en OpenRouter**:
+     - `openai/gpt-5-image-mini` ("OpenAI: GPT-5 Image Mini")
+     - `openai/gpt-5-image` ("OpenAI: GPT-5 Image")
+     - `openai/gpt-5.4-image-2` ("OpenAI: GPT-5.4 Image 2")
+   - **Google Image Models reales en OpenRouter**:
+     - `google/gemini-3.1-flash-image` ("Google: Nano Banana 2 (Gemini 3.1 Flash Image)")
+     - `google/gemini-2.5-flash-image` ("Google: Nano Banana")
+4. **Por qué los textos generados por `gpt-4o-mini` salían planos, sin emojis ni potencia**:
+   - En la Fase 42 se había reemplazado el System Prompt completo del Cerebro Maestro Andrómeda por un prompt resumido de 15 líneas en `vite.config.ts` que pedía `"copys de 4 a 5 líneas"` sin exigir estructura de respuesta directa, sin emojis estratégicos y sin usar toda la Verdad Física (`physicalTruth`), beneficios (`benefitCards`) ni anclaje de precios en Guaraníes.
 
+### B. Soluciones Implementadas en Código
+1. **Restauración del Cerebro Maestro Andrómeda + Hormozi + Schwartz + Suby (`/vite.config.ts` y `/src/utils/autoAdsBrainEngine.ts`)**:
+   - Se actualizó `AUTOADS_LLM_MODEL = 'z-ai/glm-5.3'` (con respaldo automático a `openai/gpt-4o-mini`).
+   - Se reconstruyó el prompt maestro en `POST /api/autoads/brain-train` y `POST /api/autoads/regenerate-ad` exigiendo copys de alta conversión de **7 a 10 líneas estructuradas con saltos de línea (`\n`) y emojis estratégicos en cada bloque** (`🔥, 🛑, ✨, ⚡, 🤝, 📦, ✅, 📌, 🛠️, 💰, 🚚, 💵, 👇`), integrando el dolor principal, el mecanismo único del producto, 3 bullets de especificaciones reales, la oferta irresistible en Guaraníes (`1x` vs `Pack 2x Ahorro`), la eliminación de riesgo (`Pago Contra Entrega + Envío Gratis`) y el llamado a la acción directo.
+2. **Reparación Total de Generación de Imágenes y Video en OpenRouter (`/vite.config.ts`)**:
+   - Se actualizaron `AUTOADS_IMAGE_MODEL = 'openai/gpt-5-image-mini'` y la cadena de candidatos reales (`openai/gpt-5-image-mini`, `openai/gpt-5-image`, `openai/gpt-5.4-image-2`, `google/gemini-3.1-flash-image`, `google/gemini-2.5-flash-image`).
+   - Se actualizó `AUTOADS_VIDEO_MODEL = 'google/gemini-omni-1.2-flash'` (con candidato `google/gemini-omni-1.1-flash`).
+   - Se implementó el extractor universal `extractImageFromOpenRouterResponse()` que soporta `message.images[0].image_url.url`, `message.images[0].url`, bloques `content` multipart e imágenes por URL remota o `data:image/...`.
+   - **Fin del cuelgue silencioso**: Si OpenRouter devuelve `0` imágenes generadas (por API key inválida, falta de créditos o fallo de red), `/api/autoads/generate-ad-images` y `/api/autoads/regenerate-ad` ahora devuelven `HTTP 400 { success: false, error: ... }` para disparar de inmediato el modal `ApiErrorModal` en lugar de dejar las tarjetas colgadas en `"Generando Creativo en OpenRouter"`.
+3. **Configuración Directa de `OPENROUTER_API_KEY` en el Cajón de Ajustes (`/src/components/AutoAdsView.tsx` y `/vite.config.ts`)**:
+   - Se añadió el campo `🔑 API Key de OpenRouter (sk-or-v1-...)` dentro del cajón `OpenRouter & Pipeboard` (`showSettingsDrawer`), con autodestrucción en el navegador y persistencia inmediata en `.env` y `store_config.json`.
+   - `readKeyFromEnvFile('OPENROUTER_API_KEY')` ahora consulta también `store_config.json` antes de recurrir a la clave por defecto.

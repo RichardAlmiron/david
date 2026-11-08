@@ -59,13 +59,16 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   onOpenLiveProductPage,
   showToast
 }) => {
-  // Configuración de Pipeboard (cero tokens en navegador)
+  // Configuración de Pipeboard y OpenRouter (cero tokens en navegador)
   const [pbConfig, setPbConfig] = useState<PipeboardConnectionConfig>(DEFAULT_PIPEBOARD_CONFIG);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(false);
   const [savingSettings, setSavingSettings] = useState<boolean>(false);
   const [pipeboardTokenInput, setPipeboardTokenInput] = useState<string>('');
+  const [openRouterKeyInput, setOpenRouterKeyInput] = useState<string>('');
   const [hasPipeboardTokenInBackend, setHasPipeboardTokenInBackend] = useState<boolean>(false);
   const [pipeboardTokenPreview, setPipeboardTokenPreview] = useState<string>('');
+  const [hasOpenRouterKeyInBackend, setHasOpenRouterKeyInBackend] = useState<boolean>(false);
+  const [openRouterKeyPreview, setOpenRouterKeyPreview] = useState<string>('');
   const [lastTokenSelfDestructAt, setLastTokenSelfDestructAt] = useState<string>('');
 
   // Modal de Error de OpenRouter (sin fallbacks ficticios)
@@ -164,6 +167,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         }
         setHasPipeboardTokenInBackend(Boolean(data?.hasPipeboardToken));
         setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
+        setHasOpenRouterKeyInBackend(Boolean(data?.hasOpenRouterKey));
+        setOpenRouterKeyPreview(String(data?.openRouterKeyPreview || ''));
         if (Array.isArray(data?.publishedCampaigns)) {
           setPublishedCampaigns(data.publishedCampaigns);
         }
@@ -200,12 +205,14 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       .catch(() => {});
   }, []);
 
-  // Guardar Slot Pipeboard en Backend y autodestruir inmediatamente del navegador
+  // Guardar Slot Pipeboard + OpenRouter Key en Backend y autodestruir inmediatamente del navegador
   const handleSaveConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setSavingSettings(true);
     const tokenToSend = pipeboardTokenInput.trim();
+    const orKeyToSend = openRouterKeyInput.trim();
     setPipeboardTokenInput('');
+    setOpenRouterKeyInput('');
     setPbConfig(prev => ({
       ...prev,
       pipeboardApiToken: '',
@@ -219,7 +226,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         body: JSON.stringify({
           ...pbConfig,
           pipeboardApiToken: tokenToSend,
-          openRouterApiKey: '',
+          openRouterApiKey: orKeyToSend,
           metaAccessTokenFallback: ''
         })
       });
@@ -227,9 +234,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         const data = await res.json();
         setHasPipeboardTokenInBackend(Boolean(data?.hasPipeboardToken));
         setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
-        if (tokenToSend) {
+        setHasOpenRouterKeyInBackend(Boolean(data?.hasOpenRouterKey));
+        setOpenRouterKeyPreview(String(data?.openRouterKeyPreview || ''));
+        if (tokenToSend || orKeyToSend) {
           setLastTokenSelfDestructAt(new Date().toLocaleTimeString('es-PY'));
-          showToast('🔒 API de Pipeboard guardada en el Backend y autodestruida del navegador.');
+          showToast('🔒 Credenciales guardadas en el Backend y autodestruidas del navegador.');
         } else {
           showToast('Configuración actualizada en el Backend.');
         }
@@ -393,7 +402,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // BOTÓN 2: Generar Todos los Anuncios Ganadores + Imágenes GPT Imagen 2.6 + Video MiniMax (OpenRouter)
+  // BOTÓN 2: Generar Todos los Anuncios Ganadores + Imágenes GPT-5 Image + Video Gemini Omni 1.2 (OpenRouter)
   // ─────────────────────────────────────────────────────────────────────────────
   const handleStep2GenerateAds = async () => {
     if (!brainProfile || !activeProduct) return;
@@ -404,12 +413,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     setGenerationProgressText(
       isRegeneratingAll
         ? `🧠 Redactando desde cero 6 nuevos anuncios persuasivos con OpenRouter (${AUTOADS_LLM_MODEL}) para "${activeProduct.nombre}"...`
-        : `🎨 Conectando con OpenRouter (${AUTOADS_IMAGE_MODEL}) para sintetizar las 4 imágenes publicitarias de "${activeProduct.nombre}"...`
+        : `🎨 Conectando con OpenRouter (${AUTOADS_IMAGE_MODEL}) para sintetizar en vivo las imágenes publicitarias 8K de "${activeProduct.nombre}"...`
     );
 
     const genTimer1 = setTimeout(() => {
       setGenerationProgressText(
-        `🎬 Sintetizando en vivo las 6 imágenes y Reels con ${AUTOADS_IMAGE_MODEL} + MiniMax (${AUTOADS_VIDEO_MODEL}) en OpenRouter...`
+        `🎬 Sintetizando en vivo las 6 imágenes y Reels con ${AUTOADS_IMAGE_MODEL} + Video (${AUTOADS_VIDEO_MODEL}) en OpenRouter...`
       );
     }, 2200);
 
@@ -476,10 +485,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         setGenerationProgressText('');
         setApiErrorModal({
           isOpen: true,
-          title: '⚠️ Error en Generación de Imágenes — Trabajo Pausado',
+          title: '⚠️ Error en Generación de Imágenes IA — Trabajo Pausado',
           errorMessage:
             imgData?.error ||
-            `Error ${res.status}: Fallo en la API de GPT Imagen 2.6 / OpenRouter.`,
+            `Error ${res.status}: Fallo en la API de ${AUTOADS_IMAGE_MODEL} en OpenRouter.`,
           sourceEndpoint: '/api/autoads/generate-ad-images'
         });
         return;
@@ -729,7 +738,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm sm:text-base font-bold text-zinc-100">AutoAds Piloto IA</h1>
               <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/90 border border-emerald-800/80 px-2 py-0.5 rounded-md">
-                OpenRouter: GLM-5.3 + GPT Imagen 2.6 + MiniMax Video
+                OpenRouter: GLM-5.3 + GPT-5 Image + Gemini Omni 1.2 Video
               </span>
             </div>
           </div>
@@ -768,7 +777,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Settings2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Slot Pipeboard</span>
+            <span>OpenRouter &amp; Pipeboard</span>
           </button>
 
           <a
@@ -812,26 +821,53 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       )}
 
       {/* ===================================================================== */}
-      {/* 2. DRAWER DE SLOT PIPEBOARD CON AUTODESTRUCCIÓN EN NAVEGADOR          */}
+      {/* 2. DRAWER DE OPENROUTER + SLOT PIPEBOARD CON AUTODESTRUCCIÓN          */}
       {/* ===================================================================== */}
       {showSettingsDrawer && (
         <div className="p-4 rounded-2xl border border-zinc-800 bg-[#0d0d0f] space-y-3">
           <form onSubmit={handleSaveConfig} className="space-y-3" autoComplete="off">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
-                🔌 Slot de Pipeboard · Blindaje Backend (Autodestrucción en Navegador)
+                🔌 Configuración OpenRouter IA &amp; Slot Pipeboard · Blindaje Backend (Autodestrucción en Navegador)
               </h3>
-              <span className="px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
-                {hasPipeboardTokenInBackend
-                  ? `🛡️ Blindado en Backend (${pipeboardTokenPreview || '••••••••'})`
-                  : '🔒 Cero APIs en Navegador'}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
+                  {hasOpenRouterKeyInBackend
+                    ? `🤖 OpenRouter Activo (${openRouterKeyPreview || '••••••••'})`
+                    : '⚠️ Sin OpenRouter Key'}
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
+                  {hasPipeboardTokenInBackend
+                    ? `🛡️ Pipeboard (${pipeboardTokenPreview || '••••••••'})`
+                    : '🔒 Cero APIs en Navegador'}
+                </span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div>
+                <label className="block text-emerald-300 mb-1 font-bold">
+                  🔑 API Key de OpenRouter (sk-or-v1-...)
+                </label>
+                <input
+                  type="password"
+                  name="openrouter_onetime_secret"
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  value={openRouterKeyInput}
+                  onChange={e => setOpenRouterKeyInput(e.target.value)}
+                  placeholder={
+                    hasOpenRouterKeyInBackend
+                      ? `Activa (${openRouterKeyPreview}) · Pegá otra para cambiar...`
+                      : 'sk-or-v1-... (se guarda en .env y store_config)'
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-emerald-700/70 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-400"
+                />
+              </div>
               <div>
                 <label className="block text-zinc-400 mb-1 font-medium">
-                  Pegar API de Pipeboard (Se autodestruye al guardar)
+                  API de Pipeboard (Opcional · Se autodestruye)
                 </label>
                 <input
                   type="password"
@@ -873,7 +909,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
             {lastTokenSelfDestructAt && (
               <p className="text-[11px] text-emerald-400 font-mono">
-                ✅ API autodestruida del navegador a las {lastTokenSelfDestructAt} y guardada únicamente en el servidor.
+                ✅ Credenciales autodestruidas del navegador a las {lastTokenSelfDestructAt} y guardadas únicamente en el servidor.
               </p>
             )}
 
@@ -884,7 +920,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             >
               {savingSettings
                 ? 'Guardando en Backend...'
-                : '🔒 Guardar en Backend y Autodestruir del Navegador'}
+                : '🔒 Guardar Credenciales en Backend y Autodestruir del Navegador'}
             </button>
           </form>
         </div>
@@ -1199,7 +1235,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         Ad #{idx + 1} · {isReel ? '🎬 Reel IA' : ad.aspectRatio === '9:16' ? '📱 Story IA' : '🖼️ Feed IA'}
                       </span>
                       <span className="px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-700/60 text-[9px] font-mono text-emerald-300">
-                        {isReel ? '🎬 MiniMax Video + GPT Imagen 2.6' : '🎨 GPT Imagen 2.6 (OpenRouter)'}
+                        {isReel ? '🎬 Gemini Omni 1.2 + GPT-5 Image' : '🎨 GPT-5 Image (OpenRouter)'}
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -1219,7 +1255,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         data-testid={`regenerate-ad-btn-${idx}`}
                         onClick={() => handleRegenerateSingleAd(idx)}
                         disabled={isRegeneratingThis}
-                        title="Generar una nueva Imagen con GPT Imagen 2.6 en OpenRouter"
+                        title="Generar una nueva Imagen con GPT-5 Image en OpenRouter"
                         className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
                       >
                         <RotateCw className={`w-3 h-3 ${isRegeneratingThis ? 'animate-spin' : ''}`} />
@@ -1265,7 +1301,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         {isEditingThis ? (
                           <div className="space-y-2">
                             <textarea
-                              rows={5}
+                              rows={6}
                               value={ad.primaryText}
                               onChange={e => handleUpdateAdField(idx, 'primaryText', e.target.value)}
                               className="w-full p-2 rounded-lg bg-zinc-900 border border-emerald-500 text-xs text-zinc-100 outline-none"
@@ -1317,10 +1353,22 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                             }`}
                           />
                         ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-zinc-500 bg-zinc-950">
-                            <Sparkles className="w-8 h-8 mb-2 text-emerald-400/80 animate-pulse" />
-                            <span className="text-xs font-mono text-zinc-300 font-bold">Generando Creativo en OpenRouter</span>
-                            <span className="text-[10px] text-zinc-500 mt-1">GPT Imagen 2.6 ({AUTOADS_IMAGE_MODEL})</span>
+                          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-zinc-400 bg-zinc-950 gap-2">
+                            <Sparkles className="w-7 h-7 text-emerald-400/80" />
+                            <span className="text-xs font-mono text-zinc-200 font-bold">
+                              Imagen pendiente en OpenRouter
+                            </span>
+                            <span className="text-[10px] text-zinc-500">
+                              Modelo: {AUTOADS_IMAGE_MODEL}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRegenerateSingleAd(idx, ad.aiImagePrompt)}
+                              disabled={isRegeneratingThis}
+                              className="mt-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-bold cursor-pointer"
+                            >
+                              ⚡ Generar Imagen IA ahora
+                            </button>
                           </div>
                         )}
                         {isRegeneratingThis && (
@@ -1328,8 +1376,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                             <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
                             <span className="text-xs font-bold text-emerald-300 font-mono">
                               {isReel
-                                ? `Generando Reel con MiniMax (${AUTOADS_VIDEO_MODEL}) + GPT Imagen 2.6...`
-                                : `Generando Imagen con GPT Imagen 2.6 (${AUTOADS_IMAGE_MODEL})...`}
+                                ? `Generando Reel con ${AUTOADS_VIDEO_MODEL} + ${AUTOADS_IMAGE_MODEL}...`
+                                : `Generando Imagen con ${AUTOADS_IMAGE_MODEL}...`}
                             </span>
                           </div>
                         )}

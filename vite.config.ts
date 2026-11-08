@@ -134,7 +134,7 @@ function readKeyFromEnvFile(keyName: string): string {
     }
 
     const envPath = path.resolve(__dirname, '.env');
-    if (fs.existsSync(envPath)) {
+      if (fs.existsSync(envPath)) {
       const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
       for (const line of lines) {
         const trimmed = line.trim();
@@ -149,6 +149,17 @@ function readKeyFromEnvFile(keyName: string): string {
               }
             }
           }
+        }
+      }
+    }
+
+    if (keyName === 'OPENROUTER_API_KEY') {
+      const cfgFile = path.resolve(__dirname, 'store_config.json');
+      if (fs.existsSync(cfgFile)) {
+        const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+        const savedOrKey = String(cfg?.pipeboardConfig?.openRouterApiKey || '').trim();
+        if (isValidOpenRouterKey(savedOrKey)) {
+          return savedOrKey;
         }
       }
     }
@@ -1994,7 +2005,11 @@ function registerApiServerMiddlewares(server: any) {
                     readKeyFromEnvFile('OPENROUTE_API_KEY') ||
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
-                const model = 'openai/gpt-4o-mini';
+                const model = String(
+                  parsed.openRouterModel ||
+                    readKeyFromEnvFile('OPENROUTER_MODEL') ||
+                    'z-ai/glm-5.3'
+                ).trim();
 
                 // 0. Si el usuario pegó una URL externa, escrapear y extraer producto + imágenes reales
                 let scrapedSiteData: any = null;
@@ -2119,13 +2134,30 @@ function registerApiServerMiddlewares(server: any) {
                 const prodName = String(product.nombre || 'Producto').trim();
                 const prodDesc = String(product.descripcion || '').trim();
                 const p1 = Number(product.precios?.[1] || 189000);
-                const p2 = Number(product.precios?.[2] || 349000);
-                const p3 = Number(product.precios?.[3] || 499000);
+                const p2 = Number(product.precios?.[2] || 358000);
+                const p3 = Number(product.precios?.[3] || 507000);
                 const pNormal = Number(product.precioNormal || Math.round(p1 * 1.35));
                 const freeShipping = product.freeShipping !== false;
                 const physicalTruth = product.physicalTruth || {};
                 const agentBrain = product.agentBrain || {};
                 const contextIA = String(product.contextoIA || '').trim();
+
+                const mainBenefit = String(
+                  product?.landingContent?.benefitCards?.[0]?.title ||
+                    agentBrain?.usageSummarySpoken ||
+                    prodDesc ||
+                    'Resultados reales desde el primer uso'
+                ).trim();
+                const techSpecs = String(
+                  physicalTruth?.materialMain
+                    ? `${physicalTruth.materialMain}${physicalTruth.powerSourceLabel ? ` · ${physicalTruth.powerSourceLabel}` : ''}`
+                    : agentBrain?.technicalSpecsSpoken || prodDesc || 'Calidad superior comprobada'
+                ).trim();
+                const boxItems = String(
+                  physicalTruth?.boxContents ||
+                    agentBrain?.boxContentsSpoken ||
+                    `1x ${prodName} original + accesorios completos de fábrica en caja sellada`
+                ).trim();
 
                 // 1. Auditoría en Vivo del Píxel (12 Eventos) y Túnel CAPI Anti-Bloqueo
                 const cfgFile = path.resolve(__dirname, 'store_config.json');
@@ -2181,7 +2213,7 @@ function registerApiServerMiddlewares(server: any) {
                   winningPatterns: [
                     `Hook de Disrupción Visual en 2.5s + Demostración Real de "${prodName}" en uso cotidiano`,
                     `Inversión Total de Riesgo COD (Hormozi): "Abrís y verificás en tu puerta antes de pagar un solo Guaraní"`,
-                    `Anclaje Psicológico Pack 2 Familiar (${p2.toLocaleString('es-PY')} Gs.) con Envío Gratis`
+                    `Anclaje Psicológico Pack 2 Familiar (Gs. ${p2.toLocaleString('es-PY')}) con Envío Gratis`
                   ],
                   commonHooks: [
                     `🛑 No compres ningún ${prodName} en Paraguay sin antes ver esta prueba en vivo...`,
@@ -2240,7 +2272,7 @@ function registerApiServerMiddlewares(server: any) {
                   }
                 } catch {}
 
-                // 3. Entrenar Cerebro Maestro Supremo con GLM-5.3 (Andrómeda + Gurús Direct-Response)
+                // 3. Entrenar Cerebro Maestro Supremo con GLM-5.3 / OpenRouter (Andrómeda + Gurús Direct-Response)
                 let brainProfile: any = null;
 
                 if (!openRouterKey || openRouterKey.includes('tu-clave-de-openrouter')) {
@@ -2257,60 +2289,234 @@ function registerApiServerMiddlewares(server: any) {
 
                 let openRouterErrorText: string = '';
 
-                const systemPrompt = `Sos el director creativo experto en Meta Ads Andrómeda y E-Commerce Contra Entrega (COD) en Paraguay.
-Analizá el producto "${prodName}" (${prodDesc}) con precio 1x Gs. ${p1.toLocaleString('es-PY')}, 2x Gs. ${p2.toLocaleString('es-PY')}, ${freeShipping ? 'Envío Gratis' : 'Pago en Puerta'}.
-Generá 3 avatares paraguayos y 6 briefs de anuncios con hooks, titulares, copys persuasivos completos y prompts de imagen 100% congruentes.
-Devolvé SOLO un JSON válido con esta estructura:
+                const systemPrompt = `# SISTEMA AUTOADS — CEREBRO MAESTRO ANDRÓMEDA 2026 (EUGENE SCHWARTZ + ALEX HORMOZI + SABRI SUBY)
+Sos el Director Creativo Supremo experto en Meta Ads Andrómeda y E-Commerce Cobro Contra Entrega (COD) en Paraguay.
+
+DATOS EXACTOS Y VERDAD FÍSICA DEL PRODUCTO A ANUNCIAR:
+- Nombre del Producto: "${prodName}"
+- Descripción Oficial: ${prodDesc}
+- Beneficio Principal: ${mainBenefit}
+- Especificaciones y Materiales: ${techSpecs}
+- Contenido Exacto de la Caja: ${boxItems}
+${contextIA ? `- Contexto Profundo del Producto:\n${contextIA}\n` : ''}
+- Precios Oficiales en Guaraníes:
+  • 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Precio Normal Tachado: Gs. ${pNormal.toLocaleString('es-PY')})
+  • Pack 2 Unidades (Oferta Familiar Más Elegida): Gs. ${p2.toLocaleString('es-PY')} (Ahorro directo de Gs. ${Math.max(0, p1 * 2 - p2).toLocaleString('es-PY')})
+  • Pack 3 Unidades: Gs. ${p3.toLocaleString('es-PY')}
+- Modalidad de Entrega: ${freeShipping ? 'Envío 100% GRATIS a todo Paraguay' : 'Entrega rápida en puerta en todo Paraguay'} + Pago Recién al Recibir (Efectivo, QR o POS frente al repartidor).
+
+REGLAS OBLIGATORIAS DE ALTA POTENCIA PUBLICITARIA (PROHIBIDO HACER ANUNCIOS POBRES O SIN EMOJIS):
+1. DIVERSIDAD CONCEPTUAL ANDRÓMEDA: Los 6 anuncios deben abrir 6 clusters de audiencia distintos en Meta Ads (0: Oferta Directa COD, 1: Confianza Repartidor en Puerta, 2: Problema vs Solución Antes/Después, 3: Story Pack Dúo Ahorro 2x, 4: Reel Demostración de Potencia en Vivo, 5: Reel Unboxing Real en Mesa).
+2. FORMATO DE COPYWRITING DE ALTO CTR (OBLIGATORIO EN CADA "primaryText"):
+   - PROHIBIDO escribir párrafos planos o sin iconos.
+   - Cada "primaryText" DEBE tener entre 7 y 10 líneas separadas con saltos de línea (\\n) y estructuradas con EMOJIS ESTRATÉGICOS de alta conversión:
+     • Línea 1: GANCHO DISRUPTIVO con emoji potente (🔥, 🛑, ✨, ⚡, 🤝, 📦) que detenga el scroll en menos de 2 segundos y mencione la escena de la imagen.
+     • Línea 2-3: Conexión con el dolor o deseo del comprador paraguayo (usando "vos" paraguayo natural: tenés, recibís, pagás, mirá).
+     • Línea 4-6: 3 Viñetas de Beneficios Tangibles y Verdad Física con iconos (✅, 📌, 🛠️, ✔️) explicando por qué "${prodName}" es superior.
+     • Línea 7-8: Escalera de Precios en Guaraníes con iconos (💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} — Antes Gs. ${pNormal.toLocaleString('es-PY')} | 🔥 Pack 2 Unidades Ahorro: Gs. ${p2.toLocaleString('es-PY')}).
+     • Línea 9-10: Inversión Total de Riesgo COD + CTA (🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay' : 'Entrega en puerta'} · 💵 Pagás recién al repartidor al recibir · 👇 Tocá "${'PEDIR CONTRA ENTREGA'}" y reservá en 30 segundos).
+3. CONGRUENCIA 100% TEXTO ↔ IMAGEN IA:
+   - Cada anuncio DEBE hablar en su "headline" (con emoji inicial) y en su "primaryText" exactamente de lo que muestra su "aiImagePrompt".
+   - Los "aiImagePrompt" deben estar redactados en inglés fotorrealista 8K describiendo a "${prodName}" en esa escena exacta con "zero text overlays".
+
+Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) con esta estructura exacta:
 {
-  "avatars": [{"id":"av-1","name":"María de Asunción","description":"Compradora práctica","painPoints":["Miedo a compras online"],"angles":[{"id":"ang-1","type":"offer","hook":"Mirá por qué es tendencia","emotionalTrigger":"curiosidad"}]}],
-  "targeting": {"country":"PY","minAge":20,"maxAge":65,"genders":["all"],"interests":["Compras online","Hogar"],"peakHours":[12,19,20,21]},
+  "avatars": [
+    {
+      "id": "avatar-a",
+      "name": "Nombre Paraguayo (ej. María de Asunción)",
+      "description": "Perfil demográfico y psicográfico real",
+      "painPoints": ["Dolor específico 1", "Dolor específico 2", "Dolor específico 3"],
+      "angles": [{"id": "angle-a1", "type": "offer", "hook": "🔥 Hook potente", "emotionalTrigger": "oportunidad"}]
+    },
+    {
+      "id": "avatar-b",
+      "name": "Carlos de Luque",
+      "description": "Perfil comprador desconfiado que valora ver antes de pagar",
+      "painPoints": ["Miedo a pagar por adelantado", "Falta de tiempo"],
+      "angles": [{"id": "angle-b1", "type": "trust", "hook": "🤝 Hook de confianza", "emotionalTrigger": "seguridad"}]
+    },
+    {
+      "id": "avatar-c",
+      "name": "Laura de Ciudad del Este",
+      "description": "Compradora familiar que busca ahorro en pack",
+      "painPoints": ["Busca calidad duradera", "Quiere aprovechar descuento por 2 unidades"],
+      "angles": [{"id": "angle-c1", "type": "transformation", "hook": "✨ Hook de cambio", "emotionalTrigger": "alivio"}]
+    }
+  ],
+  "targeting": {
+    "country": "PY",
+    "minAge": 21,
+    "maxAge": 65,
+    "genderBalance": "all",
+    "peakHours": [8, 12, 19, 21],
+    "optimizationGoal": "OUTCOME_SALES",
+    "bidStrategy": "LOWEST_COST_WITHOUT_CAP"
+  },
   "creativeBriefs": [
-    {"index": 0, "type": "feed_1x1", "format": "1:1", "archetypeName": "Oferta Directa COD", "avatarTarget": "av-1", "angleType": "offer", "hook3s": "Hook de 3s", "hookBadge": "🔥 OFERTA HOY · PAGO EN PUERTA", "headline": "Titular de alto impacto máx 48 chars", "primaryText": "Copy persuasivo de 6 líneas con beneficios de ${prodName}, precios y pago al recibir", "descriptionText": "Subtítulo descriptivo", "ctaType": "ORDER_NOW", "ctaLabel": "PEDIR CONTRA ENTREGA", "aiImagePrompt": "Commercial Facebook ad photography of ${prodName} in real-world action, 8k, photorealistic, zero text overlays"},
-    {"index": 1, "type": "feed_1x1", "format": "1:1", "archetypeName": "Repartidor en Puerta COD", "avatarTarget": "av-1", "angleType": "trust", "hook3s": "Hook de confianza", "hookBadge": "✅ PAGÁS RECIÉN AL RECIBIR", "headline": "Titular de confianza máx 48 chars", "primaryText": "Copy detallando la entrega en puerta y verificación del paquete de ${prodName}", "descriptionText": "Subtítulo descriptivo", "ctaType": "SHOP_NOW", "ctaLabel": "VER GARANTÍA Y COMPRAR", "aiImagePrompt": "Authentic Cash-on-Delivery lifestyle ad in Paraguay: friendly delivery courier handing the ${prodName} package at the front door to a smiling homeowner paying cash, 8k, zero text overlays"},
-    {"index": 2, "type": "feed_1x1", "format": "1:1", "archetypeName": "Antes vs Después", "avatarTarget": "av-1", "angleType": "transformation", "hook3s": "Hook de transformación", "hookBadge": "💡 ANTES VS DESPUÉS", "headline": "Titular de comparativa máx 48 chars", "primaryText": "Copy contrastando el problema antes de tener ${prodName} vs la solución después", "descriptionText": "Subtítulo descriptivo", "ctaType": "ORDER_NOW", "ctaLabel": "QUIERO LA SOLUCIÓN", "aiImagePrompt": "Split-screen BEFORE and AFTER commercial Meta Ad for ${prodName}: left side frustrating problem, right side instant solution, 8k, zero text overlays"},
-    {"index": 3, "type": "story_9x16", "format": "9:16", "archetypeName": "Pack Dúo Ahorro", "avatarTarget": "av-1", "angleType": "urgency", "hook3s": "Hook de ahorro 2 unidades", "hookBadge": "⚡ PACK DÚO 2 UNIDADES", "headline": "Titular pack dúo máx 48 chars", "primaryText": "Copy sobre el pack 2 de ${prodName} con ahorro especial", "descriptionText": "Subtítulo descriptivo", "ctaType": "ORDER_NOW", "ctaLabel": "QUIERO MI PACK 2 HOY", "aiImagePrompt": "Vertical 9:16 Instagram Story bundle ad: two identical units of ${prodName} on a modern podium, commercial studio lighting, 8k, zero text overlays"},
-    {"index": 4, "type": "reel_9x16", "format": "9:16", "archetypeName": "Demostración en Acción", "avatarTarget": "av-1", "angleType": "social_proof", "hook3s": "Hook de demostración", "hookBadge": "🔥 DEMOSTRACIÓN DE POTENCIA", "headline": "Titular de rendimiento máx 48 chars", "primaryText": "Copy sobre el rendimiento y calidad de ${prodName} funcionando a máxima capacidad", "descriptionText": "Subtítulo descriptivo", "ctaType": "SHOP_NOW", "ctaLabel": "COMPRAR AHORA", "aiImagePrompt": "Vertical 9:16 Reels macro action shot of ${prodName} operating at peak performance showing build quality, 8k, zero text overlays"},
-    {"index": 5, "type": "reel_9x16", "format": "9:16", "archetypeName": "Unboxing Real en Mesa", "avatarTarget": "av-1", "angleType": "unboxing", "hook3s": "Hook de unboxing", "hookBadge": "📦 UNBOXING · CAJA COMPLETA", "headline": "Titular de unboxing máx 48 chars", "primaryText": "Copy describiendo exactamente lo que incluye la caja de ${prodName}", "descriptionText": "Subtítulo descriptivo", "ctaType": "LEARN_MORE", "ctaLabel": "PEDIR KIT COMPLETO", "aiImagePrompt": "Vertical 9:16 first-person POV hands unboxing the ${prodName} box on a wooden table revealing all contents, 8k, zero text overlays"}
+    {
+      "index": 0,
+      "type": "feed_1x1",
+      "format": "1:1",
+      "archetypeName": "Oferta Directa COD · Producto en Acción",
+      "avatarTarget": "avatar-a",
+      "angleType": "offer",
+      "hook3s": "🔥 Gancho de 3s con emoji",
+      "hookBadge": "🔥 OFERTA HOY · PAGO AL RECIBIR",
+      "headline": "🔥 Titular potente con emoji (máx 50 chars)",
+      "primaryText": "✨ [GANCHO POTENTE CON EMOJI]...\\n\\n📌 [BENEFICIO 1]\\n✅ [BENEFICIO 2]\\n🛠️ [ESPECIFICACIÓN REAL]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades (MÁS ELEGIDO): Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay\\n💵 Pagás recién cuando el repartidor llega a tu puerta\\n👇 Tocá en Pedir Contra Entrega y reservá hoy",
+      "descriptionText": "⭐ Envío Gratis a Todo Paraguay · Pagás al Recibir",
+      "ctaType": "ORDER_NOW",
+      "ctaLabel": "PEDIR CONTRA ENTREGA",
+      "themeIndex": 0,
+      "aiImagePrompt": "Commercial Facebook Ad Hero Poster for ${prodName} (${prodDesc}): product showcased in dramatic foreground in real-world action demonstrating ${mainBenefit}, 8k ultra-detailed commercial photography, zero text overlays"
+    },
+    {
+      "index": 1,
+      "type": "feed_1x1",
+      "format": "1:1",
+      "archetypeName": "Trust / Repartidor en tu Puerta",
+      "avatarTarget": "avatar-b",
+      "angleType": "trust",
+      "hook3s": "🤝 El repartidor te entrega en puerta y recién ahí pagás",
+      "hookBadge": "✅ PAGÁS AL REPARTIDOR EN PUERTA",
+      "headline": "🤝 Recibí tu Pedido en Puerta y Pagá al Verificar",
+      "primaryText": "🤝 Copy completo de 8 líneas con emojis (✅, 📦, 🛡️, 💰, 🚚, 💵, 👇) enfocado en que el repartidor entrega en mano y cero riesgo...",
+      "descriptionText": "🛡️ Cero Riesgo · Efectivo o QR al Recibir en Casa",
+      "ctaType": "SHOP_NOW",
+      "ctaLabel": "VER GARANTÍA Y COMPRAR",
+      "themeIndex": 1,
+      "aiImagePrompt": "Authentic Cash-on-Delivery lifestyle advertisement in Paraguay: friendly delivery courier in uniform handing the authentic ${prodName} package at the front door of a modern Paraguayan home to a smiling homeowner inspecting it before paying cash in Guaraníes, 8k photorealistic, zero text overlays"
+    },
+    {
+      "index": 2,
+      "type": "feed_1x1",
+      "format": "1:1",
+      "archetypeName": "Problema vs. Solución (Antes / Después)",
+      "avatarTarget": "avatar-c",
+      "angleType": "transformation",
+      "hook3s": "💡 Mirá la diferencia real entre el ANTES y el DESPUÉS",
+      "hookBadge": "💡 ANTES VS. DESPUÉS COMPROBADO",
+      "headline": "💡 Dejá de Renegar: Cambio Inmediato en Casa",
+      "primaryText": "💡 Copy completo de 8 líneas con emojis contrastando ❌ ANTES vs ✅ DESPUÉS con ${prodName}, precios Gs. y pago contra entrega...",
+      "descriptionText": "✨ Transformación Real Desde el Primer Día · COD",
+      "ctaType": "ORDER_NOW",
+      "ctaLabel": "QUIERO LA SOLUCIÓN",
+      "themeIndex": 2,
+      "aiImagePrompt": "Split-screen BEFORE and AFTER commercial Meta Ad for ${prodName} (${prodDesc}): left side shows the frustrating problem before having ${prodName}; right side shows the instant transformation and solution using ${prodName} (${mainBenefit}), 8k commercial photography, zero text overlays"
+    },
+    {
+      "index": 3,
+      "type": "story_9x16",
+      "format": "9:16",
+      "archetypeName": "Pack Dúo Ahorro (2 Unidades)",
+      "avatarTarget": "avatar-a",
+      "angleType": "urgency",
+      "hook3s": "⚡ El 78% de las familias en Paraguay eligen el Pack 2x",
+      "hookBadge": "⚡ PACK DÚO 2 UNIDADES EN OFERTA",
+      "headline": "⚡ Llevá 2 Unidades con Descuento Especial Hoy",
+      "primaryText": "⚡ Copy completo de 8 líneas con emojis (🔥, 🎁, 💰, 📦, 🚚, 💵, 👇) impulsando el Pack Dúo de 2 unidades por Gs. ${p2.toLocaleString('es-PY')}...",
+      "descriptionText": "🎁 Pack Familiar 2 Unidades · Envío Gratis Hoy",
+      "ctaType": "ORDER_NOW",
+      "ctaLabel": "QUIERO MI PACK 2 HOY",
+      "themeIndex": 3,
+      "aiImagePrompt": "Vertical 9:16 Instagram Story bundle promotion advertisement: two identical units of ${prodName} displayed side by side on a sleek modern podium with warm lifestyle background, 8k commercial studio lighting, zero text overlays"
+    },
+    {
+      "index": 4,
+      "type": "reel_9x16",
+      "format": "9:16",
+      "archetypeName": "Demostración de Potencia y Calidad en Vivo",
+      "avatarTarget": "avatar-b",
+      "angleType": "social_proof",
+      "hook3s": "🔥 Mirá de cerca la potencia y terminación real",
+      "hookBadge": "🔥 DEMOSTRACIÓN DE POTENCIA REAL",
+      "headline": "🔥 Potencia y Calidad Comprobada en Acción",
+      "primaryText": "🔥 Copy completo de 8 líneas con emojis (⚡, 🛠️, ✅, 💰, 🚚, 💵, 👇) destacando ${techSpecs} y ${mainBenefit}...",
+      "descriptionText": "🔥 Demostración Real · Calidad Superior Garantizada",
+      "ctaType": "SHOP_NOW",
+      "ctaLabel": "COMPRAR AHORA",
+      "themeIndex": 0,
+      "aiImagePrompt": "Vertical 9:16 Reels macro action shot of ${prodName} (${techSpecs}) operating at peak performance showing its build quality and materials, 8k commercial photography, zero text overlays",
+      "videoScenes": [
+        {"durationSec": 3, "badge": "ESCENA 1 · HOOK EN VIVO (0-3s)", "title": "🔥 Mirá ${prodName} en acción", "subtitle": "${mainBenefit.slice(0, 60)}", "priceTag": "⚡ POTENCIA REAL", "bgGradient": "from-[#041a12] via-[#0b3d2e] to-[#041a12]"},
+        {"durationSec": 3, "badge": "ESCENA 2 · FICHA TÉCNICA (3-6s)", "title": "🛠️ Materiales de Alta Durabilidad", "subtitle": "${techSpecs.slice(0, 60)}", "priceTag": "🚚 ENVÍO GRATIS PY", "bgGradient": "from-[#0f172a] via-[#1e3a8a] to-[#0f172a]"},
+        {"durationSec": 3, "badge": "ESCENA 3 · OFERTA COD (6-9s)", "title": "💰 1x Gs. ${p1.toLocaleString('es-PY')}", "subtitle": "🔥 Pack Dúo 2x: Gs. ${p2.toLocaleString('es-PY')}", "priceTag": "Antes: Gs. ${pNormal.toLocaleString('es-PY')}", "bgGradient": "from-[#3b0764] via-[#581c87] to-[#1e1b4b]"},
+        {"durationSec": 3, "badge": "ESCENA 4 · CTA FINAL (9-12s)", "title": "💵 Pagás Recién al Recibir", "subtitle": "Tocá el botón y reservá en 30 segundos", "priceTag": "✅ EFECTIVO O QR EN PUERTA", "bgGradient": "from-[#064e3b] via-[#15803d] to-[#041a12]"}
+      ]
+    },
+    {
+      "index": 5,
+      "type": "reel_9x16",
+      "format": "9:16",
+      "archetypeName": "Unboxing Real · Qué Trae la Caja",
+      "avatarTarget": "avatar-c",
+      "angleType": "unboxing",
+      "hook3s": "📦 Abriendo la caja oficial: mirá todo lo que incluye",
+      "hookBadge": "📦 UNBOXING REAL · CAJA COMPLETA",
+      "headline": "📦 Abriendo la Caja: Kit Completo de Fábrica",
+      "primaryText": "📦 Copy completo de 8 líneas con emojis (📦, ✔️, 🛡️, 💰, 🚚, 💵, 👇) detallando el unboxing y contenido de caja (${boxItems})...",
+      "descriptionText": "📦 Caja Sellada con Todos sus Accesorios · COD",
+      "ctaType": "LEARN_MORE",
+      "ctaLabel": "PEDIR KIT COMPLETO",
+      "themeIndex": 1,
+      "aiImagePrompt": "Vertical 9:16 first-person POV hands opening a newly delivered cardboard package on a wooden home table revealing ${prodName} and its included contents (${boxItems}) neatly arranged, 8k photorealistic, zero text overlays",
+      "videoScenes": [
+        {"durationSec": 3, "badge": "ESCENA 1 · UNBOXING EN MESA (0-3s)", "title": "📦 Abriendo la caja de ${prodName}", "subtitle": "Mirá todo lo que recibís en tu puerta", "priceTag": "👀 REVISÁS AL RECIBIR", "bgGradient": "from-[#1f0808] via-[#7f1d1d] to-[#450a0a]"},
+        {"durationSec": 3, "badge": "ESCENA 2 · CONTENIDO (3-6s)", "title": "✔️ Kit Completo de Fábrica", "subtitle": "${boxItems.slice(0, 60)}", "priceTag": "📦 CAJA SELLADA", "bgGradient": "from-[#0f172a] via-[#1e3a8a] to-[#0f172a]"},
+        {"durationSec": 3, "badge": "ESCENA 3 · OFERTA HOY (6-9s)", "title": "💰 Llevá el tuyo por Gs. ${p1.toLocaleString('es-PY')}", "subtitle": "🔥 Pack Dúo 2x por Gs. ${p2.toLocaleString('es-PY')}", "priceTag": "Antes: Gs. ${pNormal.toLocaleString('es-PY')}", "bgGradient": "from-[#3b0764] via-[#581c87] to-[#1e1b4b]"},
+        {"durationSec": 3, "badge": "ESCENA 4 · CTA FINAL (9-12s)", "title": "💵 Pagás al Repartidor en Casa", "subtitle": "Tocá el botón y asegurá tu pedido hoy", "priceTag": "✅ GARANTÍA OFICIAL PY", "bgGradient": "from-[#064e3b] via-[#15803d] to-[#041a12]"}
+      ]
+    }
   ]
 }`;
 
-                try {
-                  const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                      Authorization: `Bearer ${openRouterKey}`,
-                      'Content-Type': 'application/json',
-                      'HTTP-Referer': getOpenRouterReferer(req),
-                      'X-Title': 'AutoAds Supreme Brain'
-                    },
-                    body: JSON.stringify({
-                      model,
-                      reasoning: { effort: 'low' },
-                      messages: [
-                        { role: 'system', content: systemPrompt },
-                        {
-                          role: 'user',
-                          content: `Analizá ${prodName} (${prodDesc}) y devolvé los 3 avatares y los 6 briefs creativos en JSON puro.`
-                        }
-                      ],
-                      temperature: 0.75,
-                      max_tokens: 6000
-                    })
-                  });
-                  console.log('[brain-train] orRes status:', orRes.status);
-                  if (!orRes.ok) {
-                    openRouterErrorText = await orRes.text();
-                    console.error('[brain-train] OpenRouter error:', openRouterErrorText);
-                    res.statusCode = 400;
-                    res.end(
-                      JSON.stringify({
-                        success: false,
-                        error: `Error de la API de OpenRouter (HTTP ${orRes.status}): ${openRouterErrorText || orRes.statusText}`
-                      })
-                    );
-                    return;
-                  }
-                  if (orRes.ok) {
+                const candidateLlmModels = Array.from(
+                  new Set([model, 'z-ai/glm-5.3', 'openai/gpt-4o-mini'])
+                );
+
+                for (const llmModel of candidateLlmModels) {
+                  try {
+                    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${openRouterKey}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': getOpenRouterReferer(req),
+                        'X-Title': 'AutoAds Supreme Brain'
+                      },
+                      body: JSON.stringify({
+                        model: llmModel,
+                        reasoning: { effort: 'low' },
+                        messages: [
+                          { role: 'system', content: systemPrompt },
+                          {
+                            role: 'user',
+                            content: `Analizá a fondo "${prodName}" (${prodDesc}) y redactá los 3 avatares y los 6 briefs creativos con emojis ricos, saltos de línea, viñetas persuasivas, precios exactos en Gs. y prompts de imagen 8K en JSON puro válido.`
+                          }
+                        ],
+                        temperature: 0.78,
+                        max_tokens: 6500
+                      }),
+                      signal: AbortSignal.timeout(35000)
+                    });
+                    console.log(`[brain-train] model=${llmModel} status:`, orRes.status);
+                    if (!orRes.ok) {
+                      openRouterErrorText = await orRes.text();
+                      console.error(`[brain-train] OpenRouter error (${llmModel}):`, openRouterErrorText);
+                      if (orRes.status === 401 || orRes.status === 402 || orRes.status === 403) {
+                        res.statusCode = 400;
+                        res.end(
+                          JSON.stringify({
+                            success: false,
+                            error: `Error de Autenticación/Créditos en OpenRouter (HTTP ${orRes.status}): ${openRouterErrorText || orRes.statusText}`
+                          })
+                        );
+                        return;
+                      }
+                      continue;
+                    }
+
                     const orJson: any = await orRes.json();
                     const choice = orJson?.choices?.[0];
                     const rawContent = String(choice?.message?.content || choice?.message?.reasoning || '').trim();
@@ -2318,7 +2524,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                     if (jsonMatch) {
                       try {
                         brainProfile = JSON.parse(jsonMatch[0]);
-                      } catch (e1) {
+                      } catch {
                         try {
                           let sanitized = '';
                           let inString = false;
@@ -2342,59 +2548,61 @@ Devolvé SOLO un JSON válido con esta estructura:
                           brainProfile = JSON.parse(sanitized);
                         } catch {}
                       }
+                    }
 
-                      if (Array.isArray(brainProfile?.avatars)) {
-                        brainProfile.avatars = brainProfile.avatars.map((av: any) => ({
-                          ...av,
-                          painPoints: Array.isArray(av.painPoints)
-                            ? av.painPoints
-                            : typeof av.painPoints === 'string'
-                            ? av.painPoints.split(/\n|(?<=\.)(?=\s)/).map((s: string) => s.trim()).filter(Boolean)
-                            : [],
-                          angles: Array.isArray(av.angles) && av.angles.length > 0 && typeof av.angles[0] === 'object'
-                            ? av.angles
-                            : [{ id: `angle-${av.id}`, type: 'offer', hook: av.name || '', emotionalTrigger: 'interés' }]
-                        }));
-                      }
+                    if (brainProfile && Array.isArray(brainProfile?.creativeBriefs) && brainProfile.creativeBriefs.length > 0) {
+                      break;
+                    }
+                  } catch (fetchErr: any) {
+                    openRouterErrorText = fetchErr?.message || 'Timeout o fallo de red';
+                  }
+                }
 
-                      if (brainProfile?.targeting?.peakHours) {
-                        const ph = brainProfile.targeting.peakHours;
-                        if (Array.isArray(ph) && typeof ph[0] === 'string') {
-                          brainProfile.targeting.peakHours = ph.flatMap((h: string) => {
-                            const match = h.match(/(\d+)/);
-                            return match ? [Number(match[1])] : [];
-                          });
-                        }
-                      }
+                if (brainProfile) {
+                  if (Array.isArray(brainProfile?.avatars)) {
+                    brainProfile.avatars = brainProfile.avatars.map((av: any) => ({
+                      ...av,
+                      painPoints: Array.isArray(av.painPoints)
+                        ? av.painPoints
+                        : typeof av.painPoints === 'string'
+                        ? av.painPoints.split(/\n|(?<=\.)(?=\s)/).map((s: string) => s.trim()).filter(Boolean)
+                        : [],
+                      angles: Array.isArray(av.angles) && av.angles.length > 0 && typeof av.angles[0] === 'object'
+                        ? av.angles
+                        : [{ id: `angle-${av.id}`, type: 'offer', hook: av.name || '', emotionalTrigger: 'interés' }]
+                    }));
+                  }
 
-                      if (Array.isArray(brainProfile?.creativeBriefs)) {
-                        brainProfile.creativeBriefs = brainProfile.creativeBriefs.map((brief: any, bIdx: number) => ({
-                          ...brief,
-                          themeIndex: brief.themeIndex ?? bIdx % 4,
-                          aiGeneratedImageUrl: brief.aiGeneratedImageUrl || '',
-                          videoScenes: Array.isArray(brief.videoScenes) && brief.videoScenes.length > 0 && typeof brief.videoScenes[0] === 'object'
-                            ? brief.videoScenes.map((s: any) => ({
-                                durationSec: s.durationSec || 3,
-                                badge: s.badge || 'ESCENA',
-                                title: s.title || '',
-                                subtitle: s.subtitle || '',
-                                priceTag: s.priceTag || '',
-                                bgGradient: s.bgGradient || 'from-[#041a12] via-[#0b3d2e] to-[#041a12]'
-                              }))
-                            : undefined
-                        }));
-                      }
+                  if (brainProfile?.targeting?.peakHours) {
+                    const ph = brainProfile.targeting.peakHours;
+                    if (Array.isArray(ph) && typeof ph[0] === 'string') {
+                      brainProfile.targeting.peakHours = ph.flatMap((h: string) => {
+                        const match = h.match(/(\d+)/);
+                        return match ? [Number(match[1])] : [];
+                      });
                     }
                   }
-                } catch (fetchErr: any) {
-                  res.statusCode = 500;
-                  res.end(
-                    JSON.stringify({
-                      success: false,
-                      error: `Error de red al conectar con OpenRouter: ${fetchErr?.message || 'Fallo de conexión'}`
-                    })
-                  );
-                  return;
+
+                  if (Array.isArray(brainProfile?.creativeBriefs)) {
+                    brainProfile.creativeBriefs = brainProfile.creativeBriefs.map((brief: any, bIdx: number) => ({
+                      ...brief,
+                      index: bIdx,
+                      type: brief.type || (bIdx < 3 ? 'feed_1x1' : bIdx === 3 ? 'story_9x16' : 'reel_9x16'),
+                      format: brief.format || (bIdx < 3 ? '1:1' : '9:16'),
+                      themeIndex: brief.themeIndex ?? bIdx % 4,
+                      aiGeneratedImageUrl: brief.aiGeneratedImageUrl || '',
+                      videoScenes: Array.isArray(brief.videoScenes) && brief.videoScenes.length > 0 && typeof brief.videoScenes[0] === 'object'
+                        ? brief.videoScenes.map((s: any) => ({
+                            durationSec: s.durationSec || 3,
+                            badge: s.badge || 'ESCENA',
+                            title: s.title || '',
+                            subtitle: s.subtitle || '',
+                            priceTag: s.priceTag || '',
+                            bgGradient: s.bgGradient || 'from-[#041a12] via-[#0b3d2e] to-[#041a12]'
+                          }))
+                        : undefined
+                    }));
+                  }
                 }
 
                 if (!brainProfile || !Array.isArray(brainProfile?.creativeBriefs) || brainProfile.creativeBriefs.length === 0) {
@@ -2404,7 +2612,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                       success: false,
                       error:
                         openRouterErrorText ||
-                        'La API de OpenRouter (openai/gpt-4o-mini) no devolvió una estructura JSON válida de anuncios. El trabajo ha sido pausado.'
+                        `La API de OpenRouter (${model}) no devolvió una estructura JSON válida de anuncios. El trabajo ha sido pausado.`
                     })
                   );
                   return;
@@ -2430,7 +2638,7 @@ Devolvé SOLO un JSON válido con esta estructura:
             return;
           }
 
-          // Motor Universal de Generación de Imágenes (GPT Imagen 2.6) + Video Reels (MiniMax) vía Cliente OpenRouter
+          // Motor Universal de Generación de Imágenes (OpenAI GPT-5 Image / Gemini 3.1 Flash Image) + Video Reels (Gemini Omni 1.2 Flash) vía OpenRouter
           if (req.method === 'POST' && url === '/api/autoads/generate-ad-images') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
@@ -2458,16 +2666,43 @@ Devolvé SOLO un JSON válido con esta estructura:
                 ).trim();
 
                 const openRouterKey = String(
-                  readKeyFromEnvFile('OPENROUTER_API_KEY') ||
+                  parsed.openRouterApiKey ||
+                    readKeyFromEnvFile('OPENROUTER_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTESERVICE_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTE_API_KEY') ||
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
 
-                const configuredImageModel =
-                  readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL') || 'openai/gpt-image-2.6';
-                const configuredVideoModel =
-                  readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL') || 'minimax/minimax-m3.1-flash';
+                if (!openRouterKey || openRouterKey.includes('tu-clave-de-openrouter')) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        'No se ha detectado una API Key de OpenRouter (OPENROUTER_API_KEY). La generación de imágenes se ha pausado.'
+                    })
+                  );
+                  return;
+                }
+
+                // Normalizar modelos candidatos reales que tienen output_modalities: ["image", "text"] y ["text", "video"] en OpenRouter
+                const rawImgEnv = readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL');
+                const validEnvImgModel =
+                  rawImgEnv && rawImgEnv !== 'openai/gpt-image-2.6' ? rawImgEnv : 'openai/gpt-5-image-mini';
+                const rawVidEnv = readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL');
+                const validEnvVidModel =
+                  rawVidEnv && !rawVidEnv.includes('minimax') ? rawVidEnv : 'google/gemini-omni-1.2-flash';
+
+                const candidateImageModels = Array.from(
+                  new Set([
+                    validEnvImgModel,
+                    'openai/gpt-5-image-mini',
+                    'openai/gpt-5-image',
+                    'openai/gpt-5.4-image-2',
+                    'google/gemini-3.1-flash-image',
+                    'google/gemini-2.5-flash-image'
+                  ])
+                );
 
                 const universalArchetypePrompts = [
                   inputBriefs[0]?.aiImagePrompt ||
@@ -2489,12 +2724,77 @@ Devolvé SOLO un JSON válido con esta estructura:
                   fs.mkdirSync(aiAdsDir, { recursive: true });
                 }
 
-                // Helper que invoca OpenRouter (GPT Imagen 2.6 / GPT-5 Image / Gemini Image + MiniMax para Reels)
+                // Helper extractor universal de imagen (Data URL o URL remota) desde la respuesta de OpenRouter
+                const extractImageFromOpenRouterResponse = async (orImgJson: any, idx: number, prefix: string): Promise<string> => {
+                  const msg = orImgJson?.choices?.[0]?.message;
+                  if (!msg) return '';
+
+                  // 1. Formato estándar OpenRouter: message.images[0].image_url.url o message.images[0].url
+                  let rawImgUrl =
+                    msg?.images?.[0]?.image_url?.url ||
+                    msg?.images?.[0]?.url ||
+                    (typeof msg?.images?.[0] === 'string' ? msg.images[0] : '') ||
+                    '';
+
+                  // 2. Si viene en array multipart content: [{ type: 'image_url', image_url: { url: '...' } }]
+                  if (!rawImgUrl && Array.isArray(msg.content)) {
+                    for (const part of msg.content) {
+                      const candidate = part?.image_url?.url || part?.url || part?.data || '';
+                      if (candidate && (String(candidate).startsWith('data:image/') || String(candidate).startsWith('http'))) {
+                        rawImgUrl = String(candidate);
+                        break;
+                      }
+                    }
+                  }
+
+                  // 3. Si viene embebido en un string markdown o data:image dentro de msg.content
+                  if (!rawImgUrl && typeof msg.content === 'string') {
+                    const dataMatch = msg.content.match(/(data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+)/);
+                    if (dataMatch) {
+                      rawImgUrl = dataMatch[1];
+                    } else {
+                      const urlMatch = msg.content.match(/https?:\/\/[^\s)"']+\.(?:png|jpg|jpeg|webp)[^\s)"']*/i);
+                      if (urlMatch) rawImgUrl = urlMatch[0];
+                    }
+                  }
+
+                  if (rawImgUrl.startsWith('data:image/')) {
+                    const base64Part = rawImgUrl.split(',')[1] || '';
+                    const buf = Buffer.from(base64Part, 'base64');
+                    if (buf.length > 2000) {
+                      const ext = rawImgUrl.includes('image/png') ? 'png' : rawImgUrl.includes('image/webp') ? 'webp' : 'jpg';
+                      const fileName = `${prefix}_${Date.now()}_${idx}.${ext}`;
+                      fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
+                      return `/assets/ai-ads/${fileName}`;
+                    }
+                  } else if (rawImgUrl.startsWith('http')) {
+                    try {
+                      const dlRes = await fetch(rawImgUrl, { signal: AbortSignal.timeout(10000) });
+                      if (dlRes.ok) {
+                        const arrBuf = await dlRes.arrayBuffer();
+                        const buf = Buffer.from(arrBuf);
+                        if (buf.length > 2000) {
+                          const cType = dlRes.headers.get('content-type') || '';
+                          const ext = cType.includes('png') ? 'png' : cType.includes('webp') ? 'webp' : 'jpg';
+                          const fileName = `${prefix}_${Date.now()}_${idx}.${ext}`;
+                          fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
+                          return `/assets/ai-ads/${fileName}`;
+                        }
+                      }
+                    } catch {}
+                    return rawImgUrl;
+                  }
+
+                  return '';
+                };
+
+                let lastOpenRouterImgError = '';
+
                 const generateOneCreativeViaOpenRouter = async (promptText: string, idx: number) => {
                   const isReel = idx >= 4;
                   let finalPrompt = promptText;
 
-                  // Si es un Reel (Anuncio #5 o #6), primero enriquecemos la dirección de movimiento/escena con MiniMax en OpenRouter
+                  // Si es un Reel (Anuncio #5 o #6), enriquecemos la dirección cinematográfica 9:16 con el modelo de video de OpenRouter (google/gemini-omni-1.2-flash)
                   if (isReel && openRouterKey) {
                     try {
                       const mmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -2503,15 +2803,15 @@ Devolvé SOLO un JSON válido con esta estructura:
                           Authorization: `Bearer ${openRouterKey}`,
                           'Content-Type': 'application/json',
                           'HTTP-Referer': getOpenRouterReferer(req),
-                          'X-Title': 'AutoAds MiniMax Video Reel Engine'
+                          'X-Title': 'AutoAds Video Reel Director'
                         },
                         body: JSON.stringify({
-                          model: configuredVideoModel,
+                          model: validEnvVidModel,
                           messages: [
                             {
                               role: 'system',
                               content:
-                                'You are MiniMax Video Director for high-converting Meta Ads Reels. Write a single 1-sentence ultra-vivid photorealistic visual prompt in English for a 9:16 vertical commercial Reel frame with zero text overlays.'
+                                'You are a commercial Meta Ads Reels Director. Write a single 1-sentence ultra-vivid photorealistic visual prompt in English for a 9:16 vertical commercial Reel frame with zero text overlays.'
                             },
                             {
                               role: 'user',
@@ -2520,7 +2820,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                           ],
                           max_tokens: 180
                         }),
-                        signal: AbortSignal.timeout(7000)
+                        signal: AbortSignal.timeout(8000)
                       });
                       if (mmRes.ok) {
                         const mmJson: any = await mmRes.json();
@@ -2532,14 +2832,6 @@ Devolvé SOLO un JSON válido con esta estructura:
                     } catch {}
                   }
 
-                  // Candidatos de generación de imagen en OpenRouter (Estricto GPT Image 2.6)
-                  const candidateImageModels = [
-                    configuredImageModel || 'openai/gpt-image-2.6',
-                    'openai/gpt-image-2.6',
-                    'openai/gpt-image-2.6-sunburst',
-                    'openai/gpt-image-2.6-flare'
-                  ];
-
                   for (const imgModel of candidateImageModels) {
                     try {
                       const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -2548,7 +2840,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                           Authorization: `Bearer ${openRouterKey}`,
                           'Content-Type': 'application/json',
                           'HTTP-Referer': getOpenRouterReferer(req),
-                          'X-Title': 'AutoAds GPT Imagen 2.6 Generator'
+                          'X-Title': 'AutoAds OpenRouter Image Generator'
                         },
                         body: JSON.stringify({
                           model: imgModel,
@@ -2560,39 +2852,44 @@ Devolvé SOLO un JSON válido con esta estructura:
                             }
                           ]
                         }),
-                        signal: AbortSignal.timeout(18000)
+                        signal: AbortSignal.timeout(25000)
                       });
 
-                      if (orImgRes.ok) {
-                        const orImgJson: any = await orImgRes.json();
-                        const dataUrl: string =
-                          orImgJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url || '';
-                        if (dataUrl.startsWith('data:image/')) {
-                          const base64Part = dataUrl.split(',')[1] || '';
-                          const buf = Buffer.from(base64Part, 'base64');
-                          if (buf.length > 4000) {
-                            const ext = dataUrl.includes('image/png') ? 'png' : 'jpg';
-                            const fileName = `gpt_imagen_${Date.now()}_${idx}.${ext}`;
-                            fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
-                            return {
-                              adIndex: idx,
-                              imageUrl: `/assets/ai-ads/${fileName}`,
-                              prompt: finalPrompt,
-                              imageModel: 'GPT Imagen 2.6 (OpenRouter)',
-                              videoModel: isReel ? 'MiniMax Video (OpenRouter)' : undefined
-                            };
-                          }
+                      if (!orImgRes.ok) {
+                        const errBody = await orImgRes.text();
+                        lastOpenRouterImgError = `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 220)}`;
+                        console.warn(`[generate-ad-images] Model ${imgModel} failed:`, lastOpenRouterImgError);
+                        if (orImgRes.status === 401 || orImgRes.status === 402) {
+                          break;
                         }
+                        continue;
                       }
-                    } catch {}
+
+                      const orImgJson: any = await orImgRes.json();
+                      const savedUrl = await extractImageFromOpenRouterResponse(orImgJson, idx, 'autoads_img');
+                      if (savedUrl) {
+                        return {
+                          adIndex: idx,
+                          imageUrl: savedUrl,
+                          prompt: finalPrompt,
+                          imageModel: imgModel,
+                          videoModel: isReel ? validEnvVidModel : undefined
+                        };
+                      } else {
+                        lastOpenRouterImgError = `El modelo ${imgModel} respondió sin bloque de imagen adjunto.`;
+                      }
+                    } catch (err: any) {
+                      lastOpenRouterImgError = `Timeout/Red en ${imgModel}: ${err?.message || 'Error'}`;
+                    }
                   }
 
                   return {
                     adIndex: idx,
                     imageUrl: '',
                     prompt: finalPrompt,
-                    imageModel: 'GPT Imagen 2.6 (OpenRouter)',
-                    videoModel: isReel ? 'MiniMax Video (OpenRouter)' : undefined
+                    imageModel: validEnvImgModel,
+                    videoModel: isReel ? validEnvVidModel : undefined,
+                    error: lastOpenRouterImgError
                   };
                 };
 
@@ -2602,12 +2899,26 @@ Devolvé SOLO un JSON válido con esta estructura:
                   )
                 );
 
+                const successCount = generatedImages.filter(g => Boolean(g.imageUrl)).length;
+                if (successCount === 0) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        lastOpenRouterImgError ||
+                        `OpenRouter no pudo sintetizar las imágenes con los modelos de salida de imagen (${candidateImageModels.join(', ')}). Verificá tu API Key y créditos en OpenRouter.`
+                    })
+                  );
+                  return;
+                }
+
                 res.end(
                   JSON.stringify({
                     success: true,
-                    engine: 'OpenRouter: GPT Imagen 2.6 (Imágenes) + MiniMax (Video Reels)',
-                    imageModel: 'openai/gpt-image-2.6',
-                    videoModel: 'minimax/video-01',
+                    engine: `OpenRouter: ${validEnvImgModel} (Imágenes) + ${validEnvVidModel} (Video Reels)`,
+                    imageModel: validEnvImgModel,
+                    videoModel: validEnvVidModel,
                     generatedImages
                   })
                 );
@@ -2619,7 +2930,7 @@ Devolvé SOLO un JSON válido con esta estructura:
             return;
           }
 
-          // Endpoint Universal para regenerar UN anuncio específico en vivo con OpenRouter (GLM-5.3 + GPT Imagen 2.6 + MiniMax)
+          // Endpoint Universal para regenerar UN anuncio específico en vivo con OpenRouter (GLM-5.3 + GPT-5 Image / Gemini Flash Image + Gemini Omni Video)
           if (req.method === 'POST' && url === '/api/autoads/regenerate-ad') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
@@ -2632,16 +2943,19 @@ Devolvé SOLO un JSON válido con esta estructura:
                 const currentHeadline = String(parsed.currentHeadline || '').trim();
                 const customImagePromptInput = String(parsed.customImagePrompt || '').trim();
                 const openRouterKey = String(
-                  readKeyFromEnvFile('OPENROUTER_API_KEY') ||
+                  parsed.openRouterApiKey ||
+                    readKeyFromEnvFile('OPENROUTER_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTESERVICE_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTE_API_KEY') ||
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
 
-                const configuredImageModel =
-                  readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL') || 'openai/gpt-image-2.6';
-                const configuredVideoModel =
-                  readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL') || 'minimax/minimax-m3.1-flash';
+                const rawImgEnv = readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL');
+                const validEnvImgModel =
+                  rawImgEnv && rawImgEnv !== 'openai/gpt-image-2.6' ? rawImgEnv : 'openai/gpt-5-image-mini';
+                const rawVidEnv = readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL');
+                const validEnvVidModel =
+                  rawVidEnv && !rawVidEnv.includes('minimax') ? rawVidEnv : 'google/gemini-omni-1.2-flash';
 
                 const prodName = String(product.nombre || 'Producto').trim();
                 const prodDesc = String(product.descripcion || '').trim();
@@ -2661,7 +2975,8 @@ Devolvé SOLO un JSON válido con esta estructura:
                     `${prodName} and all included factory accessories`
                 ).trim();
                 const p1 = Number(product.precios?.[1] || 189000);
-                const p2 = Number(product.precios?.[2] || 349000);
+                const p2 = Number(product.precios?.[2] || 358000);
+                const pNormal = Number(product.precioNormal || Math.round(p1 * 1.35));
                 const freeShipping = product.freeShipping !== false;
 
                 const sceneContexts = [
@@ -2707,54 +3022,61 @@ Devolvé SOLO un JSON válido con esta estructura:
                   return;
                 }
 
-                try {
-                  const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                      Authorization: `Bearer ${openRouterKey}`,
-                      'Content-Type': 'application/json',
-                      'HTTP-Referer': getOpenRouterReferer(req),
-                      'X-Title': 'AutoAds Universal Congruent Ad + Image Regenerator'
-                    },
-                    body: JSON.stringify({
-                      model: 'openai/gpt-4o-mini',
-                      reasoning: { effort: 'low' },
-                      messages: [
-                        {
-                          role: 'system',
-                          content:
-                            `Sos un director creativo experto en Meta Ads Andrómeda y Respuesta Directa COD en Paraguay para CUALQUIER rubro o producto.\n` +
-                            `REGLA ESTRICTA DE CONGRUENCIA 100% (TEXTO ↔ IMAGEN IA):\n` +
-                            `El anuncio #${adIndex + 1} del producto "${prodName}" (${prodDesc}) se va a mostrar con la siguiente ESCENA VISUAL EXACTA adaptada a este producto: "${targetScene.sceneName}".\n` +
-                            `Por lo tanto, el "hookBadge", el "headline" y el "primaryText" DEBEN hablar específicamente de "${prodName}" y de esa misma escena visual ("${targetScene.sceneName}") sin repetir dos veces la misma frase.\n` +
-                            `Precio 1x: Gs. ${p1.toLocaleString('es-PY')} | Pack 2x: Gs. ${p2.toLocaleString('es-PY')} | ${freeShipping ? 'Envío Gratis' : 'Pago en Puerta'}.\n` +
-                            `No repitas el titular anterior ("${currentHeadline}").\n` +
-                            `Devolvé SOLO un objeto JSON con:\n` +
-                            `{ "hookBadge": "MÁX 28 CHARS EN MAYÚSCULAS CONGRUENTE CON LA ESCENA", "headline": "Titular congruente con ${targetScene.sceneName} máx 48 chars", "primaryText": "Copy completo de 5 a 7 líneas que describa exactamente la escena (${targetScene.sceneName}), beneficios de ${prodName}, precios Gs. y pago al recibir", "descriptionText": "Subtítulo corto congruente con la escena", "aiImagePrompt": "${targetScene.enPrompt}" }`
-                        },
-                        {
-                          role: 'user',
-                          content: `Generá la variante congruente #${variationSeed} para la escena "${targetScene.sceneName}" del producto "${prodName}". Respondé solo JSON.`
-                        }
-                      ],
-                      temperature: 0.75,
-                      max_tokens: 2500
-                    })
-                  });
+                const candidateLlmModels = ['z-ai/glm-5.3', 'openai/gpt-4o-mini'];
+                let llmErrorText = '';
 
-                  if (!orRes.ok) {
-                    const errTxt = await orRes.text();
-                    res.statusCode = 400;
-                    res.end(
-                      JSON.stringify({
-                        success: false,
-                        error: `Error de OpenRouter al regenerar anuncio (HTTP ${orRes.status}): ${errTxt || orRes.statusText}`
-                      })
-                    );
-                    return;
-                  }
+                for (const llmModel of candidateLlmModels) {
+                  try {
+                    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${openRouterKey}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': getOpenRouterReferer(req),
+                        'X-Title': 'AutoAds Universal Congruent Ad + Image Regenerator'
+                      },
+                      body: JSON.stringify({
+                        model: llmModel,
+                        reasoning: { effort: 'low' },
+                        messages: [
+                          {
+                            role: 'system',
+                            content:
+                              `Sos el Director Creativo Supremo experto en Meta Ads Andrómeda y Respuesta Directa COD en Paraguay.\n` +
+                              `REGLA ESTRICTA DE CONGRUENCIA 100% (TEXTO ↔ IMAGEN IA) Y ALTA POTENCIA CON EMOJIS:\n` +
+                              `El anuncio #${adIndex + 1} del producto "${prodName}" (${prodDesc}) se va a mostrar con la siguiente ESCENA VISUAL EXACTA: "${targetScene.sceneName}".\n` +
+                              `Por lo tanto, el "hookBadge", el "headline" y el "primaryText" DEBEN hablar específicamente de "${prodName}" y de esa misma escena visual ("${targetScene.sceneName}").\n` +
+                              `PROHIBIDO TEXTO PLANO: El "primaryText" DEBE tener de 7 a 9 líneas con saltos de línea (\\n), iconos y emojis en cada línea (🔥, ✨, ✅, 📌, 🛠️, 💰, 🚚, 💵, 👇), beneficio clave (${mainBenefit}), precios exactos (1x Gs. ${p1.toLocaleString('es-PY')} — Antes Gs. ${pNormal.toLocaleString('es-PY')} | Pack 2x Ahorro: Gs. ${p2.toLocaleString('es-PY')}) y ${freeShipping ? 'Envío Gratis a todo Paraguay' : 'Entrega en puerta'} con Pago al Recibir.\n` +
+                              `No repitas el titular anterior ("${currentHeadline}").\n` +
+                              `Devolvé SOLO un objeto JSON válido con:\n` +
+                              `{ "hookBadge": "🔥 MÁX 30 CHARS EN MAYÚSCULAS CON EMOJI", "headline": "🔥 Titular potente con emoji congruente con ${targetScene.sceneName} máx 48 chars", "primaryText": "Copy persuasivo completo de 7 a 9 líneas con emojis en cada bloque describiendo la escena, beneficios, precios Gs. y pago al recibir", "descriptionText": "⭐ Subtítulo corto con emoji congruente con la escena", "aiImagePrompt": "${targetScene.enPrompt}" }`
+                          },
+                          {
+                            role: 'user',
+                            content: `Generá la variante congruente #${variationSeed} para la escena "${targetScene.sceneName}" del producto "${prodName}". Respondé solo JSON puro.`
+                          }
+                        ],
+                        temperature: 0.78,
+                        max_tokens: 2500
+                      }),
+                      signal: AbortSignal.timeout(25000)
+                    });
 
-                  if (orRes.ok) {
+                    if (!orRes.ok) {
+                      llmErrorText = await orRes.text();
+                      if (orRes.status === 401 || orRes.status === 402) {
+                        res.statusCode = 400;
+                        res.end(
+                          JSON.stringify({
+                            success: false,
+                            error: `Error de OpenRouter al regenerar anuncio (HTTP ${orRes.status}): ${llmErrorText || orRes.statusText}`
+                          })
+                        );
+                        return;
+                      }
+                      continue;
+                    }
+
                     const orJson: any = await orRes.json();
                     const rawContent = String(orJson?.choices?.[0]?.message?.content || '').trim();
                     const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
@@ -2786,13 +3108,18 @@ Devolvé SOLO un JSON válido con esta estructura:
                         } catch {}
                       }
                     }
+                    if (customBrief && customBrief.primaryText) break;
+                  } catch (err: any) {
+                    llmErrorText = err?.message || 'Fallo de red';
                   }
-                } catch (err: any) {
-                  res.statusCode = 500;
+                }
+
+                if (!customBrief) {
+                  res.statusCode = 400;
                   res.end(
                     JSON.stringify({
                       success: false,
-                      error: `Fallo de red al conectar con OpenRouter: ${err?.message || 'Error de conexión'}`
+                      error: `No se pudo regenerar el texto del anuncio en OpenRouter: ${llmErrorText}`
                     })
                   );
                   return;
@@ -2812,15 +3139,15 @@ Devolvé SOLO un JSON válido con esta estructura:
                         Authorization: `Bearer ${openRouterKey}`,
                         'Content-Type': 'application/json',
                         'HTTP-Referer': getOpenRouterReferer(req),
-                        'X-Title': 'AutoAds MiniMax Video Reel Engine'
+                        'X-Title': 'AutoAds Video Reel Director'
                       },
                       body: JSON.stringify({
-                        model: configuredVideoModel,
+                        model: validEnvVidModel,
                         messages: [
                           {
                             role: 'system',
                             content:
-                              'You are MiniMax Video Director for Meta Ads Reels. Write a single 1-sentence photorealistic visual prompt in English for a 9:16 commercial Reel frame with zero text overlays.'
+                              'You are a commercial Meta Ads Reels Director. Write a single 1-sentence photorealistic visual prompt in English for a 9:16 commercial Reel frame with zero text overlays.'
                           },
                           {
                             role: 'user',
@@ -2829,7 +3156,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                         ],
                         max_tokens: 180
                       }),
-                      signal: AbortSignal.timeout(7000)
+                      signal: AbortSignal.timeout(8000)
                     });
                     if (mmRes.ok) {
                       const mmJson: any = await mmRes.json();
@@ -2842,18 +3169,23 @@ Devolvé SOLO un JSON válido con esta estructura:
                 }
 
                 let newGeneratedImageUrl = '';
+                let singleImgError = '';
 
-                // Siempre generar la nueva imagen en vivo vía OpenRouter (GPT Imagen 2.6 / GPT-5 Image / Gemini Image)
                 if (openRouterKey) {
                   const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
                   if (!fs.existsSync(aiAdsDir)) {
                     fs.mkdirSync(aiAdsDir, { recursive: true });
                   }
-                  const candidateImageModels = [
-                    'openai/gpt-image-2.6',
-                    'openai/gpt-image-2.6-sunburst',
-                    'openai/gpt-image-2.6-flare'
-                  ];
+                  const candidateImageModels = Array.from(
+                    new Set([
+                      validEnvImgModel,
+                      'openai/gpt-5-image-mini',
+                      'openai/gpt-5-image',
+                      'openai/gpt-5.4-image-2',
+                      'google/gemini-3.1-flash-image',
+                      'google/gemini-2.5-flash-image'
+                    ])
+                  );
                   for (const imgModel of candidateImageModels) {
                     try {
                       const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -2862,7 +3194,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                           Authorization: `Bearer ${openRouterKey}`,
                           'Content-Type': 'application/json',
                           'HTTP-Referer': getOpenRouterReferer(req),
-                          'X-Title': 'AutoAds GPT Imagen 2.6 Single Ad Regenerator'
+                          'X-Title': 'AutoAds OpenRouter Single Ad Regenerator'
                         },
                         body: JSON.stringify({
                           model: imgModel,
@@ -2874,30 +3206,48 @@ Devolvé SOLO un JSON válido con esta estructura:
                             }
                           ]
                         }),
-                        signal: AbortSignal.timeout(18000)
+                        signal: AbortSignal.timeout(25000)
                       });
-                      if (orImgRes.ok) {
-                        const orImgJson: any = await orImgRes.json();
-                        const dataUrl: string =
-                          orImgJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url || '';
-                        if (dataUrl.startsWith('data:image/')) {
-                          const base64Part = dataUrl.split(',')[1] || '';
-                          const buf = Buffer.from(base64Part, 'base64');
-                          if (buf.length > 4000) {
-                            const ext = dataUrl.includes('image/png') ? 'png' : 'jpg';
-                            const fileName = `gpt_imagen_regen_${Date.now()}_${adIndex}_v${variationSeed}.${ext}`;
-                            fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
-                            newGeneratedImageUrl = `/assets/ai-ads/${fileName}`;
-                            break;
-                          }
+                      if (!orImgRes.ok) {
+                        const errBody = await orImgRes.text();
+                        singleImgError = `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 200)}`;
+                        if (orImgRes.status === 401 || orImgRes.status === 402) break;
+                        continue;
+                      }
+                      const orImgJson: any = await orImgRes.json();
+                      const msg = orImgJson?.choices?.[0]?.message;
+                      const dataUrl: string =
+                        msg?.images?.[0]?.image_url?.url ||
+                        msg?.images?.[0]?.url ||
+                        '';
+                      if (dataUrl.startsWith('data:image/')) {
+                        const base64Part = dataUrl.split(',')[1] || '';
+                        const buf = Buffer.from(base64Part, 'base64');
+                        if (buf.length > 2000) {
+                          const ext = dataUrl.includes('image/png') ? 'png' : 'jpg';
+                          const fileName = `autoads_regen_${Date.now()}_${adIndex}_v${variationSeed}.${ext}`;
+                          fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
+                          newGeneratedImageUrl = `/assets/ai-ads/${fileName}`;
+                          break;
                         }
                       }
-                    } catch {}
+                    } catch (err: any) {
+                      singleImgError = err?.message || 'Error al generar imagen';
+                    }
                   }
                 }
 
                 if (!newGeneratedImageUrl) {
-                  newGeneratedImageUrl = '';
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        singleImgError ||
+                        'OpenRouter no pudo generar la nueva imagen para este anuncio. Verificá tu conexión o créditos en OpenRouter.'
+                    })
+                  );
+                  return;
                 }
 
                 customBrief = {
@@ -2911,8 +3261,8 @@ Devolvé SOLO un JSON válido con esta estructura:
                     success: true,
                     adIndex,
                     variationSeed,
-                    imageModel: 'openai/gpt-image-2.6',
-                    videoModel: isReel ? 'minimax/video-01' : undefined,
+                    imageModel: validEnvImgModel,
+                    videoModel: isReel ? validEnvVidModel : undefined,
                     customBrief,
                     aiGeneratedImageUrl: newGeneratedImageUrl,
                     aiImagePrompt: finalImagePrompt
@@ -2937,10 +3287,17 @@ Devolvé SOLO un JSON válido con esta estructura:
                 cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
               }
               const pbConfig = cfg.pipeboardConfig || {};
-              const orKey =
+              const orKey = String(
                 pbConfig.openRouterApiKey ||
-                readKeyFromEnvFile('OPENROUTER_API_KEY') ||
-                DEFAULT_OPENROUTER_API_KEY;
+                  readKeyFromEnvFile('OPENROUTER_API_KEY') ||
+                  DEFAULT_OPENROUTER_API_KEY
+              ).trim();
+              const orKeyPreview =
+                orKey.length > 8
+                  ? `${orKey.slice(0, 8)}••••••••${orKey.slice(-4)}`
+                  : orKey
+                  ? '••••••••'
+                  : '';
               const pbToken = String(
                 pbConfig.pipeboardApiToken ||
                   readKeyFromEnvFile('PIPEBOARD_API_TOKEN') ||
@@ -2972,6 +3329,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                   hasPipeboardToken: Boolean(pbToken),
                   pipeboardTokenPreview: tokenPreview,
                   hasOpenRouterKey: Boolean(orKey),
+                  openRouterKeyPreview: orKeyPreview,
                   publishedCampaigns: Array.isArray(cfg.pipeboardPublishedCampaigns)
                     ? cfg.pipeboardPublishedCampaigns
                     : []
@@ -3034,14 +3392,25 @@ Devolvé SOLO un JSON válido con esta estructura:
                     : effectivePbToken
                     ? '••••••••'
                     : '';
+                const finalOrKey = String(
+                  effectiveOrKey || readKeyFromEnvFile('OPENROUTER_API_KEY') || ''
+                ).trim();
+                const orKeyPreview =
+                  finalOrKey.length > 8
+                    ? `${finalOrKey.slice(0, 8)}••••••••${finalOrKey.slice(-4)}`
+                    : finalOrKey
+                    ? '••••••••'
+                    : '';
 
                 // Seguridad Total: La respuesta devuelve config con el token vacío para autodestrucción en navegador
                 res.end(
                   JSON.stringify({
                     success: true,
-                    message: 'Configuración de Pipeboard blindada en el Backend (autodestruida del navegador).',
+                    message: 'Configuración de Pipeboard y OpenRouter blindada en el Backend (autodestruida del navegador).',
                     hasPipeboardToken: Boolean(effectivePbToken),
                     pipeboardTokenPreview: tokenPreview,
+                    hasOpenRouterKey: Boolean(finalOrKey),
+                    openRouterKeyPreview: orKeyPreview,
                     config: {
                       ...nextPb,
                       pipeboardApiToken: '',
