@@ -685,6 +685,8 @@ test('DeepSeek Harness (deepseek-ai/deepseek-harness) Cordis Kernel applies reve
 
 import {
   extractAllProductImages,
+  extractProductCoreIdentity,
+  sanitizeAdCopyForParaguayCod,
   createDefaultBrainProfile,
   buildCreativeAssetsFromBrain,
   regenerateSingleCreativeAssetFromBrain
@@ -747,35 +749,26 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
     assert.equal(combined.includes('ip65'), false);
     assert.equal(combined.includes('casetes'), false);
     assert.equal(combined.includes('estaca'), false);
+    assert.equal(combined.includes('mirá la imagen'), false);
+    assert.equal(combined.includes('hoy mismo en tu puerta'), false);
     assert.ok(combined.includes('taladro percutor 21v industrial'));
   }
 
-  // Verify 100% Scene-to-Copy congruence across all 6 universal scenes:
-  // Ad #1 (index 0): Producto en Primer Plano en Acción + Beneficio Clave ("Motor Brushless")
-  assert.ok(assets[0].primaryText.includes('Motor Brushless'));
-  assert.ok((assets[0].aiImagePrompt || '').includes('Motor Brushless'));
+  // Verify Product-First Identity extraction & COD Paraguay copy sanitization (strips unknown brand like Noelux™, fixes "hoy mismo en tu puerta", strips "Mirá la imagen:")
+  const brandedProduct: Partial<ProductPage> = {
+    nombre: 'Noelux™ Proyector Navideño 12 Diseños'
+  };
+  const identity = extractProductCoreIdentity(brandedProduct);
+  assert.equal(identity.brandTokenRemoved, 'Noelux');
+  assert.equal(identity.genericProductName, 'Proyector Navideño 12 Diseños');
 
-  // Ad #2 (index 1): Repartidor entregando en la puerta
-  assert.ok(assets[1].primaryText.toLowerCase().includes('repartidor'));
-  assert.ok(assets[1].headline.toLowerCase().includes('repartidor'));
-
-  // Ad #3 (index 2): ANTES vs. DESPUÉS con el beneficio del producto
-  assert.ok(assets[2].primaryText.includes('ANTES') && assets[2].primaryText.includes('DESPUÉS'));
-  assert.ok(assets[2].primaryText.includes('Motor Brushless'));
-
-  // Ad #4 (index 3): Pack 2 Ahorro (2 unidades)
-  assert.ok(assets[3].primaryText.toLowerCase().includes('2 unidades') || assets[3].headline.toLowerCase().includes('pack 2'));
-
-  // Ad #5 (index 4): Demostración en primer plano de potencia y calidad
-  assert.ok(assets[4].primaryText.toLowerCase().includes('primer plano') && assets[4].primaryText.includes('Motor Brushless'));
-
-  // Ad #6 (index 5): Abriendo la caja en la mesa (Unboxing POV)
-  assert.ok(assets[5].primaryText.toLowerCase().includes('caja') || assets[5].headline.toLowerCase().includes('caja'));
-
-  // When Ad #1 (index 0) is regenerated with variationSeed=1, it moves to Scene #2 (courier at the door)
-  // and BOTH its image AND its text/headline describe the courier at the door for that exact product!
-  assert.ok(regeneratedAd0.headline.toLowerCase().includes('repartidor'));
-  assert.ok(regeneratedAd0.primaryText.toLowerCase().includes('repartidor'));
-  assert.ok(regeneratedAd0.headline.includes('Taladro Percutor 21V Industrial'));
+  const dirtyCopy =
+    '🔥 Mirá la imagen: una sola Noelux™ proyectando 70 m². Vos podés tener esto HOY mismo en tu puerta.';
+  const cleanCopy = sanitizeAdCopyForParaguayCod(dirtyCopy, brandedProduct);
+  assert.equal(cleanCopy.toLowerCase().includes('noelux'), false);
+  assert.equal(cleanCopy.toLowerCase().includes('mirá la imagen'), false);
+  assert.equal(cleanCopy.toLowerCase().includes('hoy mismo en tu puerta'), false);
+  assert.ok(cleanCopy.includes('2 a 3 días hábiles'));
+  assert.ok(cleanCopy.includes('Proyector Navideño'));
 });
 

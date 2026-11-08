@@ -25,6 +25,7 @@ import {
   buildCreativeAssetsFromBrain,
   regenerateSingleCreativeAssetFromBrain,
   extractAllProductImages,
+  extractProductCoreIdentity,
   AUTOADS_LLM_MODEL,
   AUTOADS_IMAGE_MODEL,
   AUTOADS_VIDEO_MODEL,
@@ -1452,12 +1453,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                             />
                           ) : (
                             <div className="w-9 h-9 rounded-full bg-emerald-950 border border-emerald-500/50 text-emerald-300 flex items-center justify-center font-black text-xs shrink-0">
-                              {(activeProduct.nombre || 'A')[0]}
+                              {(extractProductCoreIdentity(activeProduct).shortCategoryNoun || 'P')[0]}
                             </div>
                           )}
                           <div>
                             <div className="text-xs font-bold text-white leading-tight">
-                              {activeProduct.nombre.split(' ').slice(0, 3).join(' ')} Oficial PY
+                              {extractProductCoreIdentity(activeProduct).shortCategoryNoun} · Oficial PY
                             </div>
                             <div className="text-[11px] text-zinc-400 flex items-center gap-1">
                               <span>Publicidad</span>
