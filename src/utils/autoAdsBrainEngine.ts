@@ -33,20 +33,78 @@ import { buildHighImpactAdSvgDataUrl } from './pipeboardEngine';
 
 /** Modelos oficiales vía OpenRouter para el sistema AutoAds */
 export const AUTOADS_LLM_MODEL = 'z-ai/glm-5.3';
-export const AUTOADS_IMAGE_MODEL = 'openai/gpt-5-image-mini';
-export const AUTOADS_VIDEO_MODEL = 'google/gemini-omni-1.2-flash';
+export const AUTOADS_IMAGE_MODEL = 'openai/gpt-image-2.6-flare';
+export const AUTOADS_VIDEO_MODEL = 'bytedance/seedance-2.5';
 
 export const AUTOADS_IMAGE_MODEL_CANDIDATES = [
+  'openai/gpt-image-2.6-flare',
+  'openai/gpt-image-2.6-sunburst',
   'openai/gpt-5-image-mini',
-  'openai/gpt-5-image',
+  'openai/gpt-image-1-mini',
   'openai/gpt-5.4-image-2',
-  'google/gemini-3.1-flash-image',
-  'google/gemini-2.5-flash-image'
+  'openai/gpt-image-2'
 ] as const;
 
 export const AUTOADS_VIDEO_MODEL_CANDIDATES = [
+  'bytedance/seedance-2.5',
   'google/gemini-omni-1.2-flash',
-  'google/gemini-omni-1.1-flash'
+  'bytedance/seedance-2.0-fast'
+] as const;
+
+export const AUTOADS_OPENAI_IMAGE_CATALOG = [
+  {
+    id: 'openai/gpt-image-2.6-flare',
+    label: 'OpenAI: GPT Image 2.6 Flare (50% más rápido · $8/$30M)',
+    shortLabel: 'GPT Image 2.6 Flare',
+    endpointType: 'images_api' as const,
+    pricingLabel: '$8/M in · $30/M out'
+  },
+  {
+    id: 'openai/gpt-image-2.6-sunburst',
+    label: 'OpenAI: GPT Image 2.6 Sunburst (Máximo detalle y edición · $8/$30M)',
+    shortLabel: 'GPT Image 2.6 Sunburst',
+    endpointType: 'images_api' as const,
+    pricingLabel: '$8/M in · $30/M out'
+  },
+  {
+    id: 'openai/gpt-5-image-mini',
+    label: 'OpenAI: GPT-5 Image Mini (⭐ 4x más económico · $2.50/$8M)',
+    shortLabel: 'GPT-5 Image Mini',
+    endpointType: 'both' as const,
+    pricingLabel: '$2.50/M in · $8/M out'
+  },
+  {
+    id: 'openai/gpt-image-1-mini',
+    label: 'OpenAI: GPT Image 1 Mini (⭐ Económico Images API · $2.50/$8M)',
+    shortLabel: 'GPT Image 1 Mini',
+    endpointType: 'images_api' as const,
+    pricingLabel: '$2.50/M in · $8/M out'
+  },
+  {
+    id: 'openai/gpt-5.4-image-2',
+    label: 'OpenAI: GPT-5.4 Image 2 (Multimodal + GPT Image 2 · $8/$30M)',
+    shortLabel: 'GPT-5.4 Image 2',
+    endpointType: 'both' as const,
+    pricingLabel: '$8/M in · $30/M out'
+  }
+] as const;
+
+export const AUTOADS_VIDEO_CATALOG = [
+  {
+    id: 'bytedance/seedance-2.5',
+    label: 'ByteDance: Seedance 2.5 (⭐ Toma Foto Producto + Avatar/Video · 100% Uptime)',
+    shortLabel: 'Seedance 2.5'
+  },
+  {
+    id: 'google/gemini-omni-1.2-flash',
+    label: 'Google: Gemini Omni 1.2 Flash (Video Multimodal 15s · $1.50/$9M)',
+    shortLabel: 'Gemini Omni 1.2 Flash'
+  },
+  {
+    id: 'bytedance/seedance-2.0-fast',
+    label: 'ByteDance: Seedance 2.0 Fast (Rápido Image-to-Video)',
+    shortLabel: 'Seedance 2.0 Fast'
+  }
 ] as const;
 
 // Paleta de colores para creativos (misma que pipeboardEngine)

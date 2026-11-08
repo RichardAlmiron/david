@@ -2685,24 +2685,39 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return;
                 }
 
-                // Normalizar modelos candidatos reales que tienen output_modalities: ["image", "text"] y ["text", "video"] en OpenRouter
+                // Resolver el modelo de imagen OpenAI y modelo de video elegido por el usuario o .env
+                const requestedImgModel = String(parsed.imageModel || '').trim();
                 const rawImgEnv = readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL');
-                const validEnvImgModel =
-                  rawImgEnv && rawImgEnv !== 'openai/gpt-image-2.6' ? rawImgEnv : 'openai/gpt-5-image-mini';
+                const normalizedImgModel = (m: string) =>
+                  !m || m === 'openai/gpt-image-2.6' ? 'openai/gpt-image-2.6-flare' : m;
+                const validEnvImgModel = normalizedImgModel(requestedImgModel || rawImgEnv);
+
+                const requestedVidModel = String(parsed.videoModel || '').trim();
                 const rawVidEnv = readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL');
                 const validEnvVidModel =
-                  rawVidEnv && !rawVidEnv.includes('minimax') ? rawVidEnv : 'google/gemini-omni-1.2-flash';
+                  requestedVidModel && !requestedVidModel.includes('minimax')
+                    ? requestedVidModel
+                    : rawVidEnv && !rawVidEnv.includes('minimax')
+                    ? rawVidEnv
+                    : 'bytedance/seedance-2.5';
 
+                // Lista priorizada de modelos de imagen de OpenAI en OpenRouter
                 const candidateImageModels = Array.from(
                   new Set([
                     validEnvImgModel,
+                    'openai/gpt-image-2.6-flare',
+                    'openai/gpt-image-2.6-sunburst',
                     'openai/gpt-5-image-mini',
-                    'openai/gpt-5-image',
-                    'openai/gpt-5.4-image-2',
-                    'google/gemini-3.1-flash-image',
-                    'google/gemini-2.5-flash-image'
+                    'openai/gpt-image-1-mini',
+                    'openai/gpt-5.4-image-2'
                   ])
                 );
+
+                // Determinar si un modelo usa exclusivamente el endpoint /api/v1/images de OpenRouter
+                const usesDedicatedImagesEndpointOnly = (modelId: string) =>
+                  modelId.startsWith('openai/gpt-image-') ||
+                  modelId.startsWith('bytedance-seed/') ||
+                  modelId.startsWith('black-forest-labs/');
 
                 const universalArchetypePrompts = [
                   inputBriefs[0]?.aiImagePrompt ||
@@ -2724,37 +2739,51 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   fs.mkdirSync(aiAdsDir, { recursive: true });
                 }
 
-                // Helper extractor universal de imagen (Data URL o URL remota) desde la respuesta de OpenRouter
+                // Helper extractor universal de imagen (soporta /api/v1/images y /api/v1/chat/completions de OpenRouter)
                 const extractImageFromOpenRouterResponse = async (orImgJson: any, idx: number, prefix: string): Promise<string> => {
-                  const msg = orImgJson?.choices?.[0]?.message;
-                  if (!msg) return '';
+                  let rawImgUrl = '';
 
-                  // 1. Formato estándar OpenRouter: message.images[0].image_url.url o message.images[0].url
-                  let rawImgUrl =
-                    msg?.images?.[0]?.image_url?.url ||
-                    msg?.images?.[0]?.url ||
-                    (typeof msg?.images?.[0] === 'string' ? msg.images[0] : '') ||
-                    '';
-
-                  // 2. Si viene en array multipart content: [{ type: 'image_url', image_url: { url: '...' } }]
-                  if (!rawImgUrl && Array.isArray(msg.content)) {
-                    for (const part of msg.content) {
-                      const candidate = part?.image_url?.url || part?.url || part?.data || '';
-                      if (candidate && (String(candidate).startsWith('data:image/') || String(candidate).startsWith('http'))) {
-                        rawImgUrl = String(candidate);
-                        break;
-                      }
+                  // 0. Formato /api/v1/images/generations o /api/v1/images: { data: [{ b64_json: "..." } | { url: "..." }] }
+                  const firstImgData = Array.isArray(orImgJson?.data) ? orImgJson.data[0] : null;
+                  if (firstImgData) {
+                    if (firstImgData.b64_json) {
+                      rawImgUrl = `data:image/png;base64,${firstImgData.b64_json}`;
+                    } else if (firstImgData.url) {
+                      rawImgUrl = String(firstImgData.url);
+                    } else if (firstImgData.image_url?.url) {
+                      rawImgUrl = String(firstImgData.image_url.url);
                     }
                   }
 
-                  // 3. Si viene embebido en un string markdown o data:image dentro de msg.content
-                  if (!rawImgUrl && typeof msg.content === 'string') {
-                    const dataMatch = msg.content.match(/(data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+)/);
-                    if (dataMatch) {
-                      rawImgUrl = dataMatch[1];
-                    } else {
-                      const urlMatch = msg.content.match(/https?:\/\/[^\s)"']+\.(?:png|jpg|jpeg|webp)[^\s)"']*/i);
-                      if (urlMatch) rawImgUrl = urlMatch[0];
+                  // 1. Formato estándar OpenRouter /api/v1/chat/completions: message.images[0].image_url.url o message.images[0].url
+                  const msg = orImgJson?.choices?.[0]?.message;
+                  if (!rawImgUrl && msg) {
+                    rawImgUrl =
+                      msg?.images?.[0]?.image_url?.url ||
+                      msg?.images?.[0]?.url ||
+                      (typeof msg?.images?.[0] === 'string' ? msg.images[0] : '') ||
+                      '';
+
+                    // 2. Si viene en array multipart content: [{ type: 'image_url', image_url: { url: '...' } }]
+                    if (!rawImgUrl && Array.isArray(msg.content)) {
+                      for (const part of msg.content) {
+                        const candidate = part?.image_url?.url || part?.url || part?.data || '';
+                        if (candidate && (String(candidate).startsWith('data:image/') || String(candidate).startsWith('http'))) {
+                          rawImgUrl = String(candidate);
+                          break;
+                        }
+                      }
+                    }
+
+                    // 3. Si viene embebido en un string markdown o data:image dentro de msg.content
+                    if (!rawImgUrl && typeof msg.content === 'string') {
+                      const dataMatch = msg.content.match(/(data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+)/);
+                      if (dataMatch) {
+                        rawImgUrl = dataMatch[1];
+                      } else {
+                        const urlMatch = msg.content.match(/https?:\/\/[^\s)"']+\.(?:png|jpg|jpeg|webp)[^\s)"']*/i);
+                        if (urlMatch) rawImgUrl = urlMatch[0];
+                      }
                     }
                   }
 
@@ -2788,99 +2817,199 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return '';
                 };
 
+                // Helper unificado que invoca el endpoint exacto de OpenRouter según la arquitectura del modelo
+                const invokeOpenRouterImageModel = async (
+                  imgModel: string,
+                  prompt: string,
+                  idx: number,
+                  prefix: string
+                ): Promise<{ savedUrl: string; errorText: string; fatalAuth: boolean }> => {
+                  const fullPrompt = `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${prompt}`;
+
+                  // A. Si el modelo pertenece a la familia /api/v1/images (ej: openai/gpt-image-2.6-flare, openai/gpt-image-2.6-sunburst, openai/gpt-image-1-mini)
+                  if (usesDedicatedImagesEndpointOnly(imgModel)) {
+                    try {
+                      const imgApiRes = await fetch('https://openrouter.ai/api/v1/images/generations', {
+                        method: 'POST',
+                        headers: {
+                          Authorization: `Bearer ${openRouterKey}`,
+                          'Content-Type': 'application/json',
+                          'HTTP-Referer': getOpenRouterReferer(req),
+                          'X-Title': 'AutoAds OpenRouter Images API Generator'
+                        },
+                        body: JSON.stringify({
+                          model: imgModel,
+                          prompt: fullPrompt,
+                          n: 1,
+                          size: idx >= 3 ? '1024x1536' : '1024x1024'
+                        }),
+                        signal: AbortSignal.timeout(28000)
+                      });
+
+                      if (!imgApiRes.ok) {
+                        const errBody = await imgApiRes.text();
+                        const fatal = imgApiRes.status === 401 || imgApiRes.status === 402;
+                        return {
+                          savedUrl: '',
+                          errorText: `HTTP ${imgApiRes.status} (${imgModel} via /api/v1/images/generations): ${errBody.slice(0, 220)}`,
+                          fatalAuth: fatal
+                        };
+                      }
+
+                      const imgApiJson: any = await imgApiRes.json();
+                      const savedUrl = await extractImageFromOpenRouterResponse(imgApiJson, idx, prefix);
+                      if (savedUrl) return { savedUrl, errorText: '', fatalAuth: false };
+                      return {
+                        savedUrl: '',
+                        errorText: `El modelo ${imgModel} respondió sin imagen en /api/v1/images/generations.`,
+                        fatalAuth: false
+                      };
+                    } catch (err: any) {
+                      return {
+                        savedUrl: '',
+                        errorText: `Timeout/Red en ${imgModel}: ${err?.message || 'Error'}`,
+                        fatalAuth: false
+                      };
+                    }
+                  }
+
+                  // B. Si el modelo soporta /api/v1/chat/completions (ej: openai/gpt-5-image-mini, openai/gpt-5.4-image-2)
+                  try {
+                    const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${openRouterKey}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': getOpenRouterReferer(req),
+                        'X-Title': 'AutoAds OpenRouter Multimodal Image Generator'
+                      },
+                      body: JSON.stringify({
+                        model: imgModel,
+                        modalities: ['image', 'text'],
+                        messages: [
+                          {
+                            role: 'user',
+                            content: fullPrompt
+                          }
+                        ]
+                      }),
+                      signal: AbortSignal.timeout(25000)
+                    });
+
+                    if (!orImgRes.ok) {
+                      const errBody = await orImgRes.text();
+                      const fatal = orImgRes.status === 401 || orImgRes.status === 402;
+                      return {
+                        savedUrl: '',
+                        errorText: `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 220)}`,
+                        fatalAuth: fatal
+                      };
+                    }
+
+                    const orImgJson: any = await orImgRes.json();
+                    const savedUrl = await extractImageFromOpenRouterResponse(orImgJson, idx, prefix);
+                    if (savedUrl) return { savedUrl, errorText: '', fatalAuth: false };
+                    return {
+                      savedUrl: '',
+                      errorText: `El modelo ${imgModel} respondió sin bloque de imagen adjunto.`,
+                      fatalAuth: false
+                    };
+                  } catch (err: any) {
+                    return {
+                      savedUrl: '',
+                      errorText: `Timeout/Red en ${imgModel}: ${err?.message || 'Error'}`,
+                      fatalAuth: false
+                    };
+                  }
+                };
+
                 let lastOpenRouterImgError = '';
 
                 const generateOneCreativeViaOpenRouter = async (promptText: string, idx: number) => {
                   const isReel = idx >= 4;
                   let finalPrompt = promptText;
 
-                  // Si es un Reel (Anuncio #5 o #6), enriquecemos la dirección cinematográfica 9:16 con el modelo de video de OpenRouter (google/gemini-omni-1.2-flash)
+                  // Si es un Reel (Anuncio #5 o #6):
+                  // - Si usa google/gemini-omni-1.2-flash, puede dirigir y generar tanto en /api/v1/chat/completions como en /api/v1/videos
+                  // - Si usa bytedance/seedance-2.5 (o seedance-2.0-fast), su endpoint nativo es /api/v1/videos tomando la foto del producto como referencia (image-to-video)
                   if (isReel && openRouterKey) {
-                    try {
-                      const mmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                          Authorization: `Bearer ${openRouterKey}`,
-                          'Content-Type': 'application/json',
-                          'HTTP-Referer': getOpenRouterReferer(req),
-                          'X-Title': 'AutoAds Video Reel Director'
-                        },
-                        body: JSON.stringify({
-                          model: validEnvVidModel,
-                          messages: [
-                            {
-                              role: 'system',
-                              content:
-                                'You are a commercial Meta Ads Reels Director. Write a single 1-sentence ultra-vivid photorealistic visual prompt in English for a 9:16 vertical commercial Reel frame with zero text overlays.'
-                            },
-                            {
-                              role: 'user',
-                              content: `Create a clean 9:16 commercial visual frame for: ${promptText}`
-                            }
-                          ],
-                          max_tokens: 180
-                        }),
-                        signal: AbortSignal.timeout(8000)
-                      });
-                      if (mmRes.ok) {
-                        const mmJson: any = await mmRes.json();
-                        const mmContent = String(mmJson?.choices?.[0]?.message?.content || '').trim();
-                        if (mmContent.length > 25) {
-                          finalPrompt = `${mmContent} (Product: ${prodName}, 8k commercial photography, zero text overlays)`;
+                    if (validEnvVidModel.startsWith('google/gemini-omni')) {
+                      try {
+                        const mmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                          method: 'POST',
+                          headers: {
+                            Authorization: `Bearer ${openRouterKey}`,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': getOpenRouterReferer(req),
+                            'X-Title': 'AutoAds Gemini Omni 1.2 Flash Video Director'
+                          },
+                          body: JSON.stringify({
+                            model: validEnvVidModel,
+                            messages: [
+                              {
+                                role: 'system',
+                                content:
+                                  'You are a commercial Meta Ads Reels Director. Write a single 1-sentence ultra-vivid photorealistic visual prompt in English for a 9:16 vertical commercial Reel frame with zero text overlays.'
+                              },
+                              {
+                                role: 'user',
+                                content: `Create a clean 9:16 commercial visual frame for: ${promptText}`
+                              }
+                            ],
+                            max_tokens: 180
+                          }),
+                          signal: AbortSignal.timeout(8000)
+                        });
+                        if (mmRes.ok) {
+                          const mmJson: any = await mmRes.json();
+                          const mmContent = String(mmJson?.choices?.[0]?.message?.content || '').trim();
+                          if (mmContent.length > 25) {
+                            finalPrompt = `${mmContent} (Product: ${prodName}, 8k commercial photography, zero text overlays)`;
+                          }
                         }
-                      }
-                    } catch {}
+                      } catch {}
+                    } else if (validEnvVidModel.startsWith('bytedance/seedance')) {
+                      // Invocación a /api/v1/videos para Seedance 2.5 con imagen de referencia del producto
+                      try {
+                        const refImg = String(product.imagenPrincipal || product.imagenesExtra?.[0] || '').trim();
+                        await fetch('https://openrouter.ai/api/v1/videos', {
+                          method: 'POST',
+                          headers: {
+                            Authorization: `Bearer ${openRouterKey}`,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': getOpenRouterReferer(req),
+                            'X-Title': 'AutoAds Seedance 2.5 Reference Image-to-Video'
+                          },
+                          body: JSON.stringify({
+                            model: validEnvVidModel,
+                            prompt: `Commercial 9:16 vertical Reel showing ${prodName} in action: ${promptText}`,
+                            ...(refImg.startsWith('http') ? { image_url: refImg } : {})
+                          }),
+                          signal: AbortSignal.timeout(9000)
+                        });
+                      } catch {}
+                    }
                   }
 
                   for (const imgModel of candidateImageModels) {
-                    try {
-                      const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                          Authorization: `Bearer ${openRouterKey}`,
-                          'Content-Type': 'application/json',
-                          'HTTP-Referer': getOpenRouterReferer(req),
-                          'X-Title': 'AutoAds OpenRouter Image Generator'
-                        },
-                        body: JSON.stringify({
-                          model: imgModel,
-                          modalities: ['image', 'text'],
-                          messages: [
-                            {
-                              role: 'user',
-                              content: `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${finalPrompt}`
-                            }
-                          ]
-                        }),
-                        signal: AbortSignal.timeout(25000)
-                      });
-
-                      if (!orImgRes.ok) {
-                        const errBody = await orImgRes.text();
-                        lastOpenRouterImgError = `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 220)}`;
-                        console.warn(`[generate-ad-images] Model ${imgModel} failed:`, lastOpenRouterImgError);
-                        if (orImgRes.status === 401 || orImgRes.status === 402) {
-                          break;
-                        }
-                        continue;
-                      }
-
-                      const orImgJson: any = await orImgRes.json();
-                      const savedUrl = await extractImageFromOpenRouterResponse(orImgJson, idx, 'autoads_img');
-                      if (savedUrl) {
-                        return {
-                          adIndex: idx,
-                          imageUrl: savedUrl,
-                          prompt: finalPrompt,
-                          imageModel: imgModel,
-                          videoModel: isReel ? validEnvVidModel : undefined
-                        };
-                      } else {
-                        lastOpenRouterImgError = `El modelo ${imgModel} respondió sin bloque de imagen adjunto.`;
-                      }
-                    } catch (err: any) {
-                      lastOpenRouterImgError = `Timeout/Red en ${imgModel}: ${err?.message || 'Error'}`;
+                    const { savedUrl, errorText, fatalAuth } = await invokeOpenRouterImageModel(
+                      imgModel,
+                      finalPrompt,
+                      idx,
+                      'autoads_img'
+                    );
+                    if (savedUrl) {
+                      return {
+                        adIndex: idx,
+                        imageUrl: savedUrl,
+                        prompt: finalPrompt,
+                        imageModel: imgModel,
+                        videoModel: isReel ? validEnvVidModel : undefined
+                      };
                     }
+                    lastOpenRouterImgError = errorText;
+                    console.warn(`[generate-ad-images] Model ${imgModel} failed:`, lastOpenRouterImgError);
+                    if (fatalAuth) break;
                   }
 
                   return {
@@ -2907,7 +3036,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       success: false,
                       error:
                         lastOpenRouterImgError ||
-                        `OpenRouter no pudo sintetizar las imágenes con los modelos de salida de imagen (${candidateImageModels.join(', ')}). Verificá tu API Key y créditos en OpenRouter.`
+                        `OpenRouter no pudo sintetizar las imágenes con los modelos de OpenAI (${candidateImageModels.join(', ')}). Verificá tu API Key y créditos en OpenRouter.`
                     })
                   );
                   return;
@@ -2930,7 +3059,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             return;
           }
 
-          // Endpoint Universal para regenerar UN anuncio específico en vivo con OpenRouter (GLM-5.3 + GPT-5 Image / Gemini Flash Image + Gemini Omni Video)
+          // Endpoint Universal para regenerar UN anuncio específico en vivo con OpenRouter (GLM-5.3 + OpenAI GPT Image + Seedance 2.5 / Gemini Omni 1.2 Video)
           if (req.method === 'POST' && url === '/api/autoads/regenerate-ad') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
@@ -2950,12 +3079,23 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
 
+                const requestedImgModel = String(parsed.imageModel || '').trim();
                 const rawImgEnv = readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL');
                 const validEnvImgModel =
-                  rawImgEnv && rawImgEnv !== 'openai/gpt-image-2.6' ? rawImgEnv : 'openai/gpt-5-image-mini';
+                  requestedImgModel && requestedImgModel !== 'openai/gpt-image-2.6'
+                    ? requestedImgModel
+                    : rawImgEnv && rawImgEnv !== 'openai/gpt-image-2.6'
+                    ? rawImgEnv
+                    : 'openai/gpt-image-2.6-flare';
+
+                const requestedVidModel = String(parsed.videoModel || '').trim();
                 const rawVidEnv = readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL');
                 const validEnvVidModel =
-                  rawVidEnv && !rawVidEnv.includes('minimax') ? rawVidEnv : 'google/gemini-omni-1.2-flash';
+                  requestedVidModel && !requestedVidModel.includes('minimax')
+                    ? requestedVidModel
+                    : rawVidEnv && !rawVidEnv.includes('minimax')
+                    ? rawVidEnv
+                    : 'bytedance/seedance-2.5';
 
                 const prodName = String(product.nombre || 'Producto').trim();
                 const prodDesc = String(product.descripcion || '').trim();
@@ -3131,7 +3271,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   targetScene.enPrompt;
 
                 const isReel = adIndex >= 4;
-                if (isReel && openRouterKey) {
+                if (isReel && openRouterKey && validEnvVidModel.startsWith('google/gemini-omni')) {
                   try {
                     const mmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                       method: 'POST',
@@ -3179,16 +3319,43 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   const candidateImageModels = Array.from(
                     new Set([
                       validEnvImgModel,
+                      'openai/gpt-image-2.6-flare',
+                      'openai/gpt-image-2.6-sunburst',
                       'openai/gpt-5-image-mini',
-                      'openai/gpt-5-image',
-                      'openai/gpt-5.4-image-2',
-                      'google/gemini-3.1-flash-image',
-                      'google/gemini-2.5-flash-image'
+                      'openai/gpt-image-1-mini',
+                      'openai/gpt-5.4-image-2'
                     ])
                   );
                   for (const imgModel of candidateImageModels) {
                     try {
-                      const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                      const isDedicatedImgEndpoint =
+                        imgModel.startsWith('openai/gpt-image-') ||
+                        imgModel.startsWith('bytedance-seed/') ||
+                        imgModel.startsWith('black-forest-labs/');
+
+                      const endpointUrl = isDedicatedImgEndpoint
+                        ? 'https://openrouter.ai/api/v1/images/generations'
+                        : 'https://openrouter.ai/api/v1/chat/completions';
+
+                      const reqPayload = isDedicatedImgEndpoint
+                        ? {
+                            model: imgModel,
+                            prompt: `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${finalImagePrompt}`,
+                            n: 1,
+                            size: adIndex >= 3 ? '1024x1536' : '1024x1024'
+                          }
+                        : {
+                            model: imgModel,
+                            modalities: ['image', 'text'],
+                            messages: [
+                              {
+                                role: 'user',
+                                content: `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${finalImagePrompt}`
+                              }
+                            ]
+                          };
+
+                      const orImgRes = await fetch(endpointUrl, {
                         method: 'POST',
                         headers: {
                           Authorization: `Bearer ${openRouterKey}`,
@@ -3196,17 +3363,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           'HTTP-Referer': getOpenRouterReferer(req),
                           'X-Title': 'AutoAds OpenRouter Single Ad Regenerator'
                         },
-                        body: JSON.stringify({
-                          model: imgModel,
-                          modalities: ['image', 'text'],
-                          messages: [
-                            {
-                              role: 'user',
-                              content: `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${finalImagePrompt}`
-                            }
-                          ]
-                        }),
-                        signal: AbortSignal.timeout(25000)
+                        body: JSON.stringify(reqPayload),
+                        signal: AbortSignal.timeout(28000)
                       });
                       if (!orImgRes.ok) {
                         const errBody = await orImgRes.text();
@@ -3215,8 +3373,11 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         continue;
                       }
                       const orImgJson: any = await orImgRes.json();
+                      const firstImgData = Array.isArray(orImgJson?.data) ? orImgJson.data[0] : null;
                       const msg = orImgJson?.choices?.[0]?.message;
                       const dataUrl: string =
+                        (firstImgData?.b64_json ? `data:image/png;base64,${firstImgData.b64_json}` : '') ||
+                        firstImgData?.url ||
                         msg?.images?.[0]?.image_url?.url ||
                         msg?.images?.[0]?.url ||
                         '';
@@ -3230,6 +3391,9 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           newGeneratedImageUrl = `/assets/ai-ads/${fileName}`;
                           break;
                         }
+                      } else if (dataUrl.startsWith('http')) {
+                        newGeneratedImageUrl = dataUrl;
+                        break;
                       }
                     } catch (err: any) {
                       singleImgError = err?.message || 'Error al generar imagen';

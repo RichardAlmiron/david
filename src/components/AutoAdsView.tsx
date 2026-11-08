@@ -28,6 +28,8 @@ import {
   AUTOADS_LLM_MODEL,
   AUTOADS_IMAGE_MODEL,
   AUTOADS_VIDEO_MODEL,
+  AUTOADS_OPENAI_IMAGE_CATALOG,
+  AUTOADS_VIDEO_CATALOG,
   PipeboardConnectionConfig,
   PipeboardPublishedCampaignRecord,
   DEFAULT_PIPEBOARD_CONFIG,
@@ -70,6 +72,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [hasOpenRouterKeyInBackend, setHasOpenRouterKeyInBackend] = useState<boolean>(false);
   const [openRouterKeyPreview, setOpenRouterKeyPreview] = useState<string>('');
   const [lastTokenSelfDestructAt, setLastTokenSelfDestructAt] = useState<string>('');
+
+  // Modelos activos elegidos por el usuario (Imagen OpenAI + Video Seedance 2.5 / Gemini Omni 1.2 Flash)
+  const [selectedImageModel, setSelectedImageModel] = useState<string>(AUTOADS_IMAGE_MODEL);
+  const [selectedVideoModel, setSelectedVideoModel] = useState<string>(AUTOADS_VIDEO_MODEL);
 
   // Modal de Error de OpenRouter (sin fallbacks ficticios)
   const [apiErrorModal, setApiErrorModal] = useState<{
@@ -413,12 +419,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     setGenerationProgressText(
       isRegeneratingAll
         ? `🧠 Redactando desde cero 6 nuevos anuncios persuasivos con OpenRouter (${AUTOADS_LLM_MODEL}) para "${activeProduct.nombre}"...`
-        : `🎨 Conectando con OpenRouter (${AUTOADS_IMAGE_MODEL}) para sintetizar en vivo las imágenes publicitarias 8K de "${activeProduct.nombre}"...`
+        : `🎨 Conectando con OpenRouter (${selectedImageModel}) para sintetizar en vivo las imágenes publicitarias 8K de "${activeProduct.nombre}"...`
     );
 
     const genTimer1 = setTimeout(() => {
       setGenerationProgressText(
-        `🎬 Sintetizando en vivo las 6 imágenes y Reels con ${AUTOADS_IMAGE_MODEL} + Video (${AUTOADS_VIDEO_MODEL}) en OpenRouter...`
+        `🎬 Sintetizando en vivo las 6 imágenes y Reels con ${selectedImageModel} + Video (${selectedVideoModel}) en OpenRouter...`
       );
     }, 2200);
 
@@ -474,8 +480,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           product: activeProduct,
           creativeBriefs: currentBrain.creativeBriefs,
           forceNewGeneration: true,
-          imageModel: AUTOADS_IMAGE_MODEL,
-          videoModel: AUTOADS_VIDEO_MODEL
+          imageModel: selectedImageModel,
+          videoModel: selectedVideoModel
         })
       });
       const imgData = await res.json();
@@ -488,7 +494,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           title: '⚠️ Error en Generación de Imágenes IA — Trabajo Pausado',
           errorMessage:
             imgData?.error ||
-            `Error ${res.status}: Fallo en la API de ${AUTOADS_IMAGE_MODEL} en OpenRouter.`,
+            `Error ${res.status}: Fallo en la API de ${selectedImageModel} en OpenRouter.`,
           sourceEndpoint: '/api/autoads/generate-ad-images'
         });
         return;
@@ -511,7 +517,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       setAdPhotoIndexOverride({});
       setWorkflowStep('generated');
       showToast(
-        `🤖 6 anuncios creados desde cero en OpenRouter (Textos: ${AUTOADS_LLM_MODEL} · Imágenes: ${AUTOADS_IMAGE_MODEL} · Video: ${AUTOADS_VIDEO_MODEL}).`
+        `🤖 6 anuncios creados desde cero en OpenRouter (Textos: ${AUTOADS_LLM_MODEL} · Imágenes: ${selectedImageModel} · Video: ${selectedVideoModel}).`
       );
     } catch (err: any) {
       clearTimeout(genTimer1);
@@ -549,7 +555,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           adIndex,
           variationSeed: nextSeed,
           currentHeadline: currentAd?.headline || '',
-          customImagePrompt: customPromptOverride || ''
+          customImagePrompt: customPromptOverride || '',
+          imageModel: selectedImageModel,
+          videoModel: selectedVideoModel
         })
       });
       const data = await res.json();
@@ -738,7 +746,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm sm:text-base font-bold text-zinc-100">AutoAds Piloto IA</h1>
               <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/90 border border-emerald-800/80 px-2 py-0.5 rounded-md">
-                OpenRouter: GLM-5.3 + GPT-5 Image + Gemini Omni 1.2 Video
+                OpenRouter: {AUTOADS_LLM_MODEL} + {selectedImageModel} + {selectedVideoModel}
               </span>
             </div>
           </div>
@@ -1026,6 +1034,43 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           </div>
         )}
 
+        {/* Selector directo de Modelo de Imagen OpenAI y Modelo de Video en OpenRouter */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-1">
+            <label className="block text-[11px] font-bold text-emerald-300 font-mono">
+              🎨 Generador de Imagen OpenAI (OpenRouter):
+            </label>
+            <select
+              value={selectedImageModel}
+              onChange={e => setSelectedImageModel(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-950 text-xs font-mono text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
+            >
+              {AUTOADS_OPENAI_IMAGE_CATALOG.map(m => (
+                <option key={m.id} value={m.id} className="bg-zinc-950 text-zinc-100">
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-1">
+            <label className="block text-[11px] font-bold text-blue-300 font-mono">
+              🎬 Generador de Video Reels (OpenRouter):
+            </label>
+            <select
+              value={selectedVideoModel}
+              onChange={e => setSelectedVideoModel(e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-950 text-xs font-mono text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
+            >
+              {AUTOADS_VIDEO_CATALOG.map(m => (
+                <option key={m.id} value={m.id} className="bg-zinc-950 text-zinc-100">
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {/* ================================================================= */}
         {/* BARRA DE LOS 3 BOTONES MAESTROS DEL PILOTO AUTOMÁTICO             */}
         {/* ================================================================= */}
@@ -1235,7 +1280,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         Ad #{idx + 1} · {isReel ? '🎬 Reel IA' : ad.aspectRatio === '9:16' ? '📱 Story IA' : '🖼️ Feed IA'}
                       </span>
                       <span className="px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-700/60 text-[9px] font-mono text-emerald-300">
-                        {isReel ? '🎬 Gemini Omni 1.2 + GPT-5 Image' : '🎨 GPT-5 Image (OpenRouter)'}
+                        {isReel ? `🎬 ${selectedVideoModel.split('/')[1]} + ${selectedImageModel.split('/')[1]}` : `🎨 ${selectedImageModel}`}
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -1255,7 +1300,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         data-testid={`regenerate-ad-btn-${idx}`}
                         onClick={() => handleRegenerateSingleAd(idx)}
                         disabled={isRegeneratingThis}
-                        title="Generar una nueva Imagen con GPT-5 Image en OpenRouter"
+                        title={`Generar una nueva Imagen con ${selectedImageModel} en OpenRouter`}
                         className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
                       >
                         <RotateCw className={`w-3 h-3 ${isRegeneratingThis ? 'animate-spin' : ''}`} />
@@ -1308,7 +1353,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                             />
                             <div className="p-2 rounded-lg bg-black/80 border border-zinc-800 space-y-1.5">
                               <span className="text-[10px] font-mono font-bold text-emerald-400 block">
-                                🎨 PROMPT OPENROUTER ({isReel ? `${AUTOADS_VIDEO_MODEL} + ${AUTOADS_IMAGE_MODEL}` : AUTOADS_IMAGE_MODEL}):
+                                🎨 PROMPT OPENROUTER ({isReel ? `${selectedVideoModel} + ${selectedImageModel}` : selectedImageModel}):
                               </span>
                               <textarea
                                 rows={2}
@@ -1359,7 +1404,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                               Imagen pendiente en OpenRouter
                             </span>
                             <span className="text-[10px] text-zinc-500">
-                              Modelo: {AUTOADS_IMAGE_MODEL}
+                              Modelo: {selectedImageModel}
                             </span>
                             <button
                               type="button"
@@ -1376,8 +1421,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                             <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
                             <span className="text-xs font-bold text-emerald-300 font-mono">
                               {isReel
-                                ? `Generando Reel con ${AUTOADS_VIDEO_MODEL} + ${AUTOADS_IMAGE_MODEL}...`
-                                : `Generando Imagen con ${AUTOADS_IMAGE_MODEL}...`}
+                                ? `Generando Reel con ${selectedVideoModel} + ${selectedImageModel}...`
+                                : `Generando Imagen con ${selectedImageModel}...`}
                             </span>
                           </div>
                         )}
