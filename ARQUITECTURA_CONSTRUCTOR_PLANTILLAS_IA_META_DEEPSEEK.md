@@ -1,6 +1,6 @@
-# 🏗️ ARQUITECTURA ALGORÍTMICA COMPLETA: KERNEL OFICIAL `deepseek-ai/deepseek-harness` (CORDIS) + ESTUDIO AUTOPILOTO 1-CLIC + MOTOR EXCLUSIVO `GLM-5.3` (OPENROUTER) + META CAPI ANTI-APPLE + PIPEBOARD ADS AUTOPILOT + INTERFAZ MÓVIL ANDROID 100% NEGRO PURO
+# 🏗️ ARQUITECTURA ALGORÍTMICA COMPLETA: KERNEL OFICIAL `deepseek-ai/deepseek-harness` (CORDIS) + ESTUDIO AUTOPILOTO 1-CLIC + DISTRIBUCIÓN MULTI-MODELO OPENROUTER (`z-ai/glm-5.3` DESARROLLO WEB + `openai/gpt-4o-mini` COPYWRITING + `openai/gpt-image-2.6` IMÁGENES + `minimax/minimax-m3.1-flash` VIDEO REELS) + META CAPI ANTI-APPLE + PIPEBOARD ADS AUTOPILOT + INTERFAZ MÓVIL ANDROID 100% NEGRO PURO
 
-Este documento detalla **píxel por píxel** y **algoritmo por algoritmo** la arquitectura vigente del **Estudio Autopiloto de Páginas de Producto**, el **Kernel Oficial DeepSeek Harness (`deepseek-ai/deepseek-harness`)**, el **Motor Exclusivo `z-ai/glm-5.3` vía OpenRouter**, el **Gateway First-Party de Meta Conversions API (CAPI)**, el **Creador de Anuncios en Piloto Automático Pipeboard Meta Ads** y la **Interfaz Móvil Nativa Android / Vercel 100% Negro Puro**.
+Este documento detalla **píxel por píxel** y **algoritmo por algoritmo** la arquitectura vigente del **Estudio Autopiloto de Páginas de Producto**, el **Kernel Oficial DeepSeek Harness (`deepseek-ai/deepseek-harness`)**, la **Distribución Multi-Modelo vía OpenRouter**, el **Gateway First-Party de Meta Conversions API (CAPI)**, el **Creador de Anuncios en Piloto Automático Pipeboard Meta Ads** y la **Interfaz Móvil Nativa Android / Vercel 100% Negro Puro**.
 
 ---
 
@@ -47,20 +47,26 @@ Cada vez que el Kernel aplica una mutación sobre el borrador (`ProductDraftStat
 
 ---
 
-## 3. Motor Exclusivo `GLM-5.3` (`z-ai/glm-5.3`) vía OpenRouter y Variables de Railway
+## 3. Distribución Específica de Modelos de IA vía OpenRouter y Variables de Railway
 
-Todo el ecosistema de Inteligencia Artificial de la plataforma opera **exclusivamente** con el modelo **`z-ai/glm-5.3` (GLM-5.3)** a través de **OpenRouter (`https://openrouter.ai/api/v1/chat/completions`)**:
+La plataforma implementa una distribución especializada de modelos de IA para maximizar la velocidad y la calidad en cada área:
 
-1. **Bloqueo Estricto de Modelo (`DEFAULT_OPENROUTER_MODEL = 'z-ai/glm-5.3'`)**:
-   - Se eliminaron todos los modelos antiguos o secundarios (`gpt-4o-mini`, `deepseek-chat`, `claude-3.5-sonnet`, `gemini-2.5-pro`, `glm-3`).
-   - El modelo **`z-ai/glm-5.3`** está fijado de forma exclusiva en:
-     - `server/whatsappEngine.ts`: Confirmación de 5 pasos y atención post-confirmación en WhatsApp.
-     - `vite.config.ts`: Endpoint `/api/builder/coding-agent` (Kernel Autopiloto de Páginas) y endpoint `/api/pipeboard/generate-creatives` (Piloto Automático de Anuncios Meta Ads).
-     - `src/utils/pipeboardEngine.ts` y `src/views/AdminView.tsx`.
-2. **Detección Automática desde Railway (Cero Configuración Manual Repetitiva)**:
-   - El servidor lee automáticamente la clave desde las variables de entorno ya configuradas por el usuario en Railway:
-     `process.env.OPENROUTER_API_KEY || process.env.OPENROUTESERVICE_API_KEY || process.env.OPENROUTE_API_KEY || process.env.OPENAI_API_KEY`.
-   - También permite verificar el estado o pegar una clave desde el menú **Motor GLM-5.3 (OpenRouter)** del panel administrativo, persistiendo en Supabase (`CFG-*`).
+1. **Desarrollo Web & Agente de Código (`ProductTemplateBuilderStudio.tsx` / `/api/builder/coding-agent`)**:
+   - Modelo: **`z-ai/glm-5.3` (GLM 5.3)** en OpenRouter.
+   - Utilizado para razonamiento estructural profundo, mutación de componentes y plugins del Kernel Harness Cordis.
+2. **AutoAds Cerebro Maestro, Contexto & Director de Prompts (`AutoAdsView.tsx` / `/api/autoads/brain-train` / `/api/autoads/regenerate-ad`)**:
+   - Modelo: **`openai/gpt-4o-mini`** (GPT-4o Mini) en OpenRouter.
+   - Es el cerebro central de donde nace todo el contexto de generación, redacción de copy y orquestación de prompts para imágenes y videos.
+3. **Generación Única de Imágenes**:
+   - Modelo: **`openai/gpt-image-2.6`** (GPT Image 2.6) exclusivamente en OpenRouter.
+   - Generación de imágenes 8K fotorrealistas en tiempo real sin *pre-holdings*.
+4. **Creador de Video Reels**:
+   - Modelo: **`minimax/minimax-m3.1-flash`** (MiniMax M3.1 Flash) exclusivamente en OpenRouter.
+   - Generador y director de video reels animados de 4 escenas.
+
+**Detección Automática desde Railway**:
+- El servidor lee automáticamente la API Key desde las variables de entorno de Railway (`process.env.OPENROUTER_API_KEY || process.env.OPENROUTESERVICE_API_KEY`).
+- También permite verificar el estado o ingresar una clave desde el menú de la aplicación administrativa (`#admin`).
 
 ---
 

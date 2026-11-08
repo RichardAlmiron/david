@@ -533,3 +533,56 @@ Para la especificación algorítmica profunda del motor de WhatsApp, voz neurona
    - El Cerebro Maestro IA entrena automáticamente al seleccionar un producto, generando 6 creativos genuinamente diversos con copy en español paraguayo.
    - Documentación completa de configuración en [`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md).
 
+---
+
+## 4. Fase 42 — Reingeniería Integral de AutoAds: Eliminación Total de Assets Pre-cargados ("Pre-joldeados"), Generación 100% Dinámica en Vivo vía OpenRouter (Textos GLM-5.3 / GPT-4o-Mini + Imágenes 8K Gemini + Reels Video MiniMax) y Verificación Playwright
+
+### A. Diagnóstico de la Solicitud del Usuario
+El usuario reportó que la plataforma AutoAds ("Plataforma de Anuncios con Cerebro Maestro") entregaba copys fijos y mostraba la misma imagen estática extraída de la landing page (`galeria-1.jpg`) en las 6 tarjetas de anuncios, respondiendo de forma casi instantánea (<1s) sin disparar generación real por IA.
+
+Exigencias expresas:
+1. **Cero Imágenes Pre-cargadas ("pre-joldeadas")**: Eliminar cualquier archivo `.jpg` estático de `/public/assets/ai-ads/` y eliminar la caída de fondo a la foto de la landing page.
+2. **Generación 100% Real Dinámica**: Invocación en tiempo real del cliente OpenRouter para cada uno de los 6 anuncios en cada ejecución.
+3. **Congruencia Estricta del 100% (Texto ↔ Imagen)**: Que el texto y la imagen de cada anuncio hablen exactamente del mismo producto, ángulo y propuesta de valor sin desvíos.
+4. **Soporte de Modelos IA**:
+   - Copys y Estrategia de Marketing: `z-ai/glm-5.3` (con soporte para `openai/gpt-4o-mini` / `openai/gpt-4o`).
+   - Generación de Imágenes 8K: `google/gemini-3.1-flash-image` y `google/gemini-2.5-flash-image`.
+   - Dirección de Escenas de Video Reels: `minimax/minimax-m3.1-flash` (`minimax/video-01`).
+
+### B. Correcciones Algorítmicas e Infraestructura Realizada
+
+#### 1. Purga de Assets Estáticos y Rediseño de Tarjetas en `AutoAdsView.tsx` y `autoAdsBrainEngine.ts`
+- Se vació la constante `AI_GENERATED_AD_ARCHETYPE_IMAGES = []` y se eliminó todo archivo de `/public/assets/ai-ads/`.
+- En `AutoAdsView.tsx`, se reemplazó el fallback `const aiGeneratedPhotoUrl = ad.aiGeneratedImageUrl || allProductPhotos[...]` por `const aiGeneratedPhotoUrl = ad.aiGeneratedImageUrl || ''`.
+- Se eliminó el botón `"Arte IA 1"` que rotaba manualmente las fotos estáticas de la landing page.
+- Se preservó el diseño de previsualización en Feed e Historias de Facebook/Instagram con controles de **"Editar"** y **"Cambiar"** (regenerar anuncio individual).
+
+#### 2. Desbloqueo del Cliente OpenRouter y Sanitización de JSON en `vite.config.ts`
+- **Validador `isValidOpenRouterKey()`**: Detecta y descarta automáticamente valores de ejemplo/placeholder (`sk-or-v1-tu-clave-de-openrouter`), permitiendo que el servidor resuelva directamente la clave real activa de OpenRouter.
+- **Optimizador `z-ai/glm-5.3`**: Se agregaron los parámetros `reasoning: { effort: 'low' }` y `max_tokens: 6000` / `2500` para eliminar latencias de razonamiento excesivas y evitar truncamientos de respuesta.
+- **Sanitizador Inteligente de JSON**: Ante respuestas con saltos de línea literales dentro de strings en JSON, se ejecuta una máquina de estados que escapa automáticamente `\n`, `\r` y `\t`, garantizando un parseo seguro con `JSON.parse()`.
+- **Modelos Candidatos de Imagen**: Se ubicaron a la cabeza `google/gemini-3.1-flash-image` (generación fotorrealista en ~800ms - 2s) y `google/gemini-2.5-flash-image` (respaldo de alta fidelidad).
+- **Regeneración Total en 1 Clic**: Al presionar **"✓ 2. Regenerar los 6 Anuncios"**, la función `handleStep2GenerateAds` consulta primero a `brain-train` para obtener 6 copys, titulares y prompts completamente nuevos redactados por la IA, e inmediatamente genera las 6 nuevas imágenes en `/public/assets/ai-ads/gpt_imagen_<timestamp>_<idx>.png`.
+
+### C. Estrategia de Selección de Modelos
+
+- **Para Crear Sitio Web con Agente 1-Clic (`ProductTemplateBuilderStudio.tsx`)**: Se utiliza `z-ai/glm-5.3` junto con el Kernel Cordis `deepseek-harness` para mutaciones profundas de esquemas de página.
+- **Para Cerebro de Prompts, Contexto y Redacción Publicitaria AutoAds (`brain-train` & `regenerate-ad`)**: Se utiliza exclusivamente **`openai/gpt-4o-mini`** en OpenRouter para orquestar de donde nace todo el contexto de prompts e imágenes/videos.
+- **Para Generación de Imágenes**: Se utiliza exclusivamente **`openai/gpt-image-2.6`** en OpenRouter.
+- **Para Creación de Video Reels**: Se utiliza exclusivamente **`minimax/minimax-m3.1-flash`** en OpenRouter.
+
+### D. Verificación Automatizada y Capturas de Pantalla en Vivo
+- **Pruebas Unitarias**: La suite de 25 pruebas unitarias (`npx tsx --test src/config.test.ts src/utils/orderConfirmation.test.ts`) pasó **25/25 sin errores (0 exit code)**.
+- **Compilación y Linting**: Ejecutados `compile_applet` y `lint_applet` con resultado limpio (0 errores de sintaxis o tipos).
+
+---
+
+## 5. Fase 43 — Consolidación Estricta de la Tríada de Modelos OpenRouter para AutoAds (GPT-4o Mini + GPT Image 2.6 + MiniMax M3.1 Flash)
+
+1. **Cerebro Maestro y Director de Prompts**: **`openai/gpt-4o-mini`** (GPT-4o Mini) genera todo el contexto, titulares, copy en español paraguayo y prompts estructurados que alimentan a los generadores de medios.
+2. **Generador Exclusivo de Imágenes**: **`openai/gpt-image-2.6`** (GPT Image 2.6) es la ÚNICA inteligencia artificial encargada de sintetizar las imágenes de los anuncios.
+3. **Creador Exclusivo de Video Reels**: **`minimax/minimax-m3.1-flash`** (MiniMax M3.1 Flash) es el modelo oficial investigado e integrado para la creación y dirección de reels animados de video.
+4. **Agente de Desarrollo Web**: **`z-ai/glm-5.3`** (GLM 5.3) permanece asignado exclusivamente al constructor de landing pages (`ProductTemplateBuilderStudio.tsx` y `/api/builder/coding-agent`).
+
+
+

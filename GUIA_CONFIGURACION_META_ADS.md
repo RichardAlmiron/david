@@ -461,7 +461,7 @@ Una vez configurada la conexión con Meta Ads, es momento de probar todo el fluj
 
 ### 5.2 🧠 Entrenamiento del Cerebro Maestro IA
 
-Al iniciar la creación de una campaña, el sistema activa el **Cerebro Maestro IA** (endpoint `POST /api/autoads/brain-train`), que utiliza el modelo **GLM-5.3** a través de OpenRouter.
+Al iniciar la creación de una campaña, el sistema activa el **Cerebro Maestro IA** (endpoint `POST /api/autoads/brain-train`), que utiliza el modelo **`openai/gpt-4o-mini`** a través de OpenRouter para redacción ultra-rápida en ~1.6s, junto con **`openai/gpt-image-2.6`** para generación visual y **`minimax/minimax-m3.1-flash`** para dirección de video reels.
 
 **Animación de 3 pasos:**
 
@@ -940,7 +940,7 @@ Content-Type: application/json
 
 #### 5. `POST /api/autoads/brain-train` — Entrenar Cerebro Maestro IA
 
-Envía los datos del producto al modelo GLM-5.3 para generar creativos publicitarios optimizados.
+Envía los datos del producto al modelo `openai/gpt-4o-mini` (OpenRouter) para generar creativos publicitarios optimizados de forma ultra-rápida.
 
 **Request:**
 ```http

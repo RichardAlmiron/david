@@ -32,9 +32,9 @@ import { buildHighImpactAdSvgDataUrl } from './pipeboardEngine';
 // ────────────────────────────────────────────────────────────────────────────────
 
 /** Modelos oficiales vía OpenRouter para el sistema AutoAds */
-export const AUTOADS_LLM_MODEL = 'z-ai/glm-5.3';
+export const AUTOADS_LLM_MODEL = 'openai/gpt-4o-mini';
 export const AUTOADS_IMAGE_MODEL = 'openai/gpt-image-2.6';
-export const AUTOADS_VIDEO_MODEL = 'minimax/video-01';
+export const AUTOADS_VIDEO_MODEL = 'minimax/minimax-m3.1-flash';
 
 // Paleta de colores para creativos (misma que pipeboardEngine)
 const CREATIVE_COLOR_THEMES = [

@@ -1984,7 +1984,7 @@ function registerApiServerMiddlewares(server: any) {
                     readKeyFromEnvFile('OPENROUTE_API_KEY') ||
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
-                const model = 'z-ai/glm-5.3';
+                const model = 'openai/gpt-4o-mini';
 
                 // 0. Si el usuario pegó una URL externa, escrapear y extraer producto + imágenes reales
                 let scrapedSiteData: any = null;
@@ -2654,7 +2654,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                         'X-Title': 'AutoAds Universal Congruent Ad + Image Regenerator'
                       },
                       body: JSON.stringify({
-                        model: 'z-ai/glm-5.3',
+                        model: 'openai/gpt-4o-mini',
                         reasoning: { effort: 'low' },
                         messages: [
                           {

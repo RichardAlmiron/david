@@ -1,6 +1,23 @@
-# Noelux™ — Plataforma E-Commerce COD (Pago Contra Entrega) + Kernel Autopiloto `deepseek-harness` + Motor Multi-WhatsApp, Voz Deepgram Aura-2, AutoAds (Cerebro Maestro IA + Meta Ads Directo) y Modelo Exclusivo `GLM-5.3` (OpenRouter)
+# Noelux™ — Plataforma E-Commerce COD (Pago Contra Entrega) + Kernel Autopiloto `deepseek-harness` + Motor Multi-WhatsApp, Voz Deepgram Aura-2, AutoAds (Cerebro Maestro GPT-4o Mini + Meta Ads Directo) y Modelo Dual `GLM-5.3` (Desarrollo Web) + `openai/gpt-4o-mini` (Anuncios)
 
-Aplicación full-stack desarrollada en **React 19 + TypeScript + Vite 6 + Tailwind CSS v4 + Baileys Multi-Device + Deepgram Aura-2 (TTS OGG/Opus Nativo) + Deepgram Nova-3 (STT) + Kernel Oficial `deepseek-ai/deepseek-harness` (Cordis) & OpenRouter `z-ai/glm-5.3` (GLM-5.3 Exclusivo)** con sincronización universal en tiempo real sobre **Supabase** e interfaz administrativa **100% Negro Puro estilo App Móvil Android / Vercel**.
+Aplicación full-stack desarrollada en **React 19 + TypeScript + Vite 6 + Tailwind CSS v4 + Baileys Multi-Device + Deepgram Aura-2 (TTS OGG/Opus Nativo) + Deepgram Nova-3 (STT) + Kernel Oficial `deepseek-ai/deepseek-harness` (Cordis) & OpenRouter `z-ai/glm-5.3` (Desarrollo Web) + `openai/gpt-4o-mini` (AutoAds Marketing Copy)** con sincronización universal en tiempo real sobre **Supabase** e interfaz administrativa **100% Negro Puro estilo App Móvil Android / Vercel**.
+
+---
+
+## 🤖 Distribución Específica de Modelos de IA en OpenRouter
+
+1. **Desarrollo Web & Kernel Autopiloto de Páginas (`ProductTemplateBuilderStudio.tsx` / `/api/builder/coding-agent`)**:
+   - Modelo: **`z-ai/glm-5.3` (GLM 5.3)** en OpenRouter.
+   - Función: Mutación algorítmica de plantillas de landing pages, ejecución de los 4 plugins del Kernel Cordis y reestructuración de código HTML/React.
+2. **AutoAds — Cerebro Maestro de Prompts y Copywriting (`AutoAdsView.tsx` / `/api/autoads/brain-train` / `/api/autoads/regenerate-ad`)**:
+   - Modelo: **`openai/gpt-4o-mini`** (GPT-4o Mini) en OpenRouter (~1.6s de respuesta).
+   - Función: Generación de todo el contexto, redacción de los 6 creativos publicitarios y dirección de prompts visuales/video.
+3. **Generación de Imágenes de Anuncios**:
+   - Modelo: **`openai/gpt-image-2.6`** (GPT Image 2.6) exclusivamente en OpenRouter.
+   - Función: Sintetizar imágenes publicitarias 8K fotorrealistas en tiempo real sin *pre-holdings*.
+4. **Creador de Video Reels Animados**:
+   - Modelo: **`minimax/minimax-m3.1-flash`** (MiniMax M3.1 Flash) exclusivamente en OpenRouter.
+   - Función: Producción y dirección de video reels comerciales.
 
 ---
 
@@ -30,7 +47,8 @@ Diseñada desde cero como una aplicación nativa Android con estética monocrom�
    - Motor **100% Autopiloto de 1 Clic** impulsado por el **Kernel Oficial `deepseek-ai/deepseek-harness` (`src/utils/deepseekHarnessKernel.ts`)** y **`z-ai/glm-5.3`**.
    - 4 plugins activos (`theme-architect`, `cod-pricing-engine`, `physical-truth-shield`, `whatsapp-brain-trainer`), 5 comandos slash (`/autopilot`, `/luxury`, `/flash`, `/pack2-gift`, `/audit`), 33 plantillas diferenciadas y botón `Undo` reversible.
 3. **Módulo 3 — AutoAds: Cerebro Maestro IA + Meta Ads Directo (`autoads` — `AutoAdsView.tsx`)**:
-   - Plataforma de publicidad con **Cerebro Maestro IA** entrenado con `GLM-5.3` que investiga competencia, genera **6 creativos genuinamente diversos** (3 Feed 1:1 + 1 Story 9:16 + 2 Reels 9:16) con copy completo en español paraguayo.
+   - Plataforma de publicidad impulsada por **`openai/gpt-4o-mini`** que investiga competencia, genera **6 creativos genuinamente diversos** (3 Feed 1:1 + 1 Story 9:16 + 2 Reels 9:16) con copy completo en español paraguayo sin *pre-holdings*.
+   - Generación visual con **`openai/gpt-image-2.6`** y animación de video reels con **`minimax/minimax-m3.1-flash`**.
    - **6 arquetipos creativos Andrómeda**: `hero-transform`, `raw-ugc`, `objection-killer`, `hook-reel`, `social-proof-surge`, `flash-scarcity`.
    - **Conexión dual**: Meta Ads Directo (cuenta propia del usuario vía OAuth Graph API v21.0) + Pipeboard MCP (para suscriptores).
    - Flujo 100% autopiloto: seleccionar producto → brain se entrena auto → clic en "Lanzar Piloto Automático" → campaña publicada en Meta Ads.
@@ -39,15 +57,15 @@ Diseñada desde cero como una aplicación nativa Android con estética monocrom�
    - Centro multi-línea ilimitado por Código QR o Código de 8 dígitos con respaldo GZIP automático en Supabase (`WAAUTH-*`) resistente a redespliegues en Railway.
 5. **Módulo 5 — Voz Neuronal Deepgram Aura-2 (`deepgram`)**:
    - Síntesis de notas de voz nativas OGG/Opus PTT (`Aura-2`) y transcripción ultrarrápida de audios entrantes en español (`Nova-3` + `Nova-2`).
-6. **Módulo 6 — Motor Exclusivo GLM-5.3 OpenRouter (`openrouter`)**:
-   - Bloqueado exclusivamente al modelo **`z-ai/glm-5.3` (GLM-5.3)** con detección automática de la variable de entorno ya configurada en Railway (`OPENROUTER_API_KEY` / `OPENROUTESERVICE_API_KEY`).
+6. **Módulo 6 — Motor Dual OpenRouter (`openrouter`)**:
+   - `z-ai/glm-5.3` para desarrollo web + `openai/gpt-4o-mini` para redacción de anuncios + `openai/gpt-image-2.6` para imágenes + `minimax/minimax-m3.1-flash` para video reels, con detección automática de la API Key en Railway (`OPENROUTER_API_KEY` / `OPENROUTESERVICE_API_KEY`).
 
 ---
 
 ## Documentación Técnica Actualizada del Proyecto
 
-- 📜 **[`CONTEXTO_DE_CHAT.md`](./CONTEXTO_DE_CHAT.md)**: Bitácora cronológica completa de todas las solicitudes y fases del chat (Fases 1 a 40), mapa de archivos y reglas invariantes.
-- 🏗️ **[`ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md`](./ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md)**: Especificación algorítmica del Kernel Oficial `deepseek-ai/deepseek-harness` (Cordis), Estudio Autopiloto 1-Clic, modelo exclusivo `GLM-5.3`, Meta CAPI, Pipeboard Ads Autopilot e interfaz móvil Android 100% negro puro.
+- 📜 **[`CONTEXTO_DE_CHAT.md`](./CONTEXTO_DE_CHAT.md)**: Bitácora cronológica completa de todas las solicitudes y fases del chat (Fases 1 a 42), mapa de archivos y reglas invariantes.
+- 🏗️ **[`ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md`](./ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md)**: Especificación algorítmica del Kernel Oficial `deepseek-ai/deepseek-harness` (Cordis), Estudio Autopiloto 1-Clic, distribución multi-modelo, Meta CAPI, Pipeboard Ads Autopilot e interfaz móvil Android 100% negro puro.
 - 🎙️ **[`ARQUITECTURA_WHATSAPP_IA_VOZ.md`](./ARQUITECTURA_WHATSAPP_IA_VOZ.md)**: Documentación técnica del motor WhatsApp de 5 pasos, voz Deepgram Aura-2 OGG/Opus, STT Deepgram Nova-3, pronunciación telefónica `4-3-3`, cerebro `GLM-5.3` y aislamiento de Railway.
 - 📲 **[`ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md`](./ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md)**: Especificación de Reportes Ejecutivos Directos al WhatsApp del Vendedor, Panel de Confirmados, Logística Universal y tombstones `DEL-ORD-*` en Supabase.
 - 🎯 **[`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md)**: Guía paso a paso completa para configurar Meta Ads (Facebook Login, Marketing API, permisos, variables de entorno Railway, conexión OAuth y pruebas del flujo AutoAds).
