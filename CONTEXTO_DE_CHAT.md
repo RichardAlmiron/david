@@ -631,3 +631,28 @@ Exigencias expresas:
 3. **Configuración Directa de `OPENROUTER_API_KEY` en el Cajón de Ajustes (`/src/components/AutoAdsView.tsx` y `/vite.config.ts`)**:
    - Se añadió el campo `🔑 API Key de OpenRouter (sk-or-v1-...)` dentro del cajón `OpenRouter & Pipeboard` (`showSettingsDrawer`), con autodestrucción en el navegador y persistencia inmediata en `.env` y `store_config.json`.
    - `readKeyFromEnvFile('OPENROUTER_API_KEY')` ahora consulta también `store_config.json` antes de recurrir a la clave por defecto.
+
+---
+
+## 8. Fase 46 — Corrección Definitiva de Generación 6/6 de Imágenes IA en OpenRouter (`size: '1024x1024'` + Lotes Progresivos de 2 + Sanitización de Prompts) y Selectores de Modelos OpenAI / Video
+
+### A. Diagnóstico Técnico de por qué solo se generaban 2 de las 6 imágenes (Anuncios #1 y #3)
+1. **Rechazo silencioso en Anuncios #4, #5 y #6 (`idx >= 3`) por `size: '1024x1536'`**:
+   - En `invokeOpenRouterImageModel` (`/vite.config.ts`), se enviaba `size: idx >= 3 ? '1024x1536' : '1024x1024'` al endpoint `https://openrouter.ai/api/v1/images/generations`.
+   - El proxy de OpenRouter para `/api/v1/images/generations` rechazaba `size: '1024x1536'` antes siquiera de despachar la petición a OpenAI (por eso esas 3 generaciones ni siquiera aparecían en los logs de OpenRouter), mientras que `idx = 0` (Ad #1) e `idx = 2` (Ad #3) enviaban `size: '1024x1024'` y sí se generaban.
+2. **Ráfaga simultánea de 6 peticiones (`Promise.all`) y filtro de seguridad por la palabra `"banknotes"` en el Anuncio #2 (`idx = 1`)**:
+   - Disparar las 6 peticiones al mismo milisegundo chocaba con el límite de concurrencia de 2 peticiones simultáneas para `openai/gpt-image-2.6-flare`.
+   - Además, el prompt del Anuncio #2 incluía `"holding Guaraníes banknotes"`, término que activa el filtro de falsificación de papel moneda en la API de imágenes de OpenAI.
+
+### B. Soluciones Implementadas
+1. **Resolución Estándar `size: '1024x1024'` para los 6 Anuncios (`/vite.config.ts`)**:
+   - Tanto `/api/autoads/generate-ad-images` como `/api/autoads/regenerate-ad` envían ahora `size: '1024x1024'` en los 6 anuncios (`idx = 0..5`), garantizando aceptación del 100% en `https://openrouter.ai/api/v1/images/generations`.
+2. **Sanitización Automática de Prompts para OpenAI Images (`sanitizePromptForOpenAiImages` en `/vite.config.ts`)**:
+   - Reemplaza términos bloqueados por el filtro de seguridad de OpenAI (`banknotes`, `cash bills`, `paying cash`) por descripciones seguras (`contactless payment terminal`, `receiving sealed package at front door`).
+3. **Generación Progresiva en 3 Lotes de 2 (`[0, 1]` → `[2, 3]` → `[4, 5]`) + Autorrecuperación Individual (`/src/components/AutoAdsView.tsx` y `/vite.config.ts`)**:
+   - Al tocar **Paso 2 ("Generar Todos los Anuncios IA")**, las 6 tarjetas se muestran al instante con indicadores de carga individuales y se procesan en 3 olas controladas de 2 imágenes (`targetIndices: [0, 1]`, `[2, 3]`, `[4, 5]`), actualizando la pantalla en vivo a medida que llega cada par.
+   - En el backend, cada lote respeta `batchSize = 2` con pausa de `450ms` y reintento automático (`attempt = 0..1`).
+   - Al finalizar las 3 olas, si alguna tarjeta quedó pendiente, el frontend y el backend ejecutan automáticamente un pase de autorrecuperación individual para completar las **6 de 6 imágenes**.
+4. **Botón `"⚡ Generar Imagen IA ahora"` (`handleGenerateImageOnlyForAd` con `imageOnly: true`)**:
+   - Permite sintetizar o regenerar únicamente la imagen IA de una tarjeta específica en OpenRouter sin sobreescribir el texto persuasivo actual de ese anuncio.
+

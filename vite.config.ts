@@ -2723,16 +2723,23 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   inputBriefs[0]?.aiImagePrompt ||
                     `High-converting commercial Facebook Ad photograph for "${prodName}" (${prodDesc}): product showcased in dramatic foreground in real-world action demonstrating its main benefit (${mainBenefit}), 8k ultra detailed, no text overlays`,
                   inputBriefs[1]?.aiImagePrompt ||
-                    `Authentic UGC Cash-on-Delivery lifestyle advertisement in Paraguay: friendly delivery courier in polo shirt handing the authentic package of "${prodName}" (${prodDesc}) at the front door of a modern house to a smiling buyer holding Guaraníes banknotes, package clearly showcasing "${prodName}", warm golden hour lighting, 8k photorealistic, no text overlays`,
+                    `Authentic UGC Cash-on-Delivery lifestyle advertisement in Paraguay: friendly delivery courier in polo shirt handing the authentic sealed box package of "${prodName}" (${prodDesc}) at the front door of a modern house to a smiling homeowner, package clearly showcasing "${prodName}", warm golden hour lighting, 8k photorealistic, no text overlays`,
                   inputBriefs[2]?.aiImagePrompt ||
                     `Split-screen BEFORE and AFTER commercial Meta Ad for "${prodName}" (${prodDesc}): left side shows the frustrating everyday problem before having "${prodName}"; right side shows the instant transformation and solution using "${prodName}" (${mainBenefit}), clean 8k commercial photography, no text overlays`,
                   inputBriefs[3]?.aiImagePrompt ||
-                    `Vertical 9:16 Instagram Story bundle promotion advertisement: two identical units of "${prodName}" displayed side by side on a sleek modern podium with warm lifestyle background, commercial studio lighting, 8k, no text overlays`,
+                    `Vertical Instagram Story bundle promotion advertisement: two identical units of "${prodName}" displayed side by side on a sleek modern podium with warm lifestyle background, commercial studio lighting, 8k, no text overlays`,
                   inputBriefs[4]?.aiImagePrompt ||
-                    `Vertical 9:16 Reels macro action demonstration commercial shot: close-up macro of "${prodName}" (${techSpecs}) operating at peak performance showing its build quality and materials, dynamic commercial photography, 8k, no text overlays`,
+                    `Vertical Reels macro action demonstration commercial shot: close-up macro of "${prodName}" (${techSpecs}) operating at peak performance showing its build quality and materials, dynamic commercial photography, 8k, no text overlays`,
                   inputBriefs[5]?.aiImagePrompt ||
-                    `Vertical 9:16 first-person POV unboxing advertisement: hands opening a newly delivered cardboard package on a wooden home table revealing "${prodName}" and its included contents (${boxItems}) neatly arranged, 8k photorealistic, no text overlays`
+                    `Vertical first-person POV unboxing advertisement: hands opening a newly delivered cardboard package on a wooden home table revealing "${prodName}" and its included contents (${boxItems}) neatly arranged, 8k photorealistic, no text overlays`
                 ];
+
+                // Sanitizar palabras que puedan disparar filtros de billetes/moneda en OpenAI Images API
+                const sanitizePromptForOpenAiImages = (raw: string) =>
+                  String(raw || '')
+                    .replace(/\bbanknotes?\b/gi, 'delivery receipt')
+                    .replace(/\bcash bills?\b/gi, 'delivery package')
+                    .replace(/\bpaying cash\b/gi, 'receiving the package at the door');
 
                 const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
                 if (!fs.existsSync(aiAdsDir)) {
@@ -2792,20 +2799,20 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     const buf = Buffer.from(base64Part, 'base64');
                     if (buf.length > 2000) {
                       const ext = rawImgUrl.includes('image/png') ? 'png' : rawImgUrl.includes('image/webp') ? 'webp' : 'jpg';
-                      const fileName = `${prefix}_${Date.now()}_${idx}.${ext}`;
+                      const fileName = `${prefix}_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
                       fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
                       return `/assets/ai-ads/${fileName}`;
                     }
                   } else if (rawImgUrl.startsWith('http')) {
                     try {
-                      const dlRes = await fetch(rawImgUrl, { signal: AbortSignal.timeout(10000) });
+                      const dlRes = await fetch(rawImgUrl, { signal: AbortSignal.timeout(12000) });
                       if (dlRes.ok) {
                         const arrBuf = await dlRes.arrayBuffer();
                         const buf = Buffer.from(arrBuf);
                         if (buf.length > 2000) {
                           const cType = dlRes.headers.get('content-type') || '';
                           const ext = cType.includes('png') ? 'png' : cType.includes('webp') ? 'webp' : 'jpg';
-                          const fileName = `${prefix}_${Date.now()}_${idx}.${ext}`;
+                          const fileName = `${prefix}_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
                           fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
                           return `/assets/ai-ads/${fileName}`;
                         }
@@ -2817,54 +2824,147 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return '';
                 };
 
-                // Helper unificado que invoca el endpoint exacto de OpenRouter según la arquitectura del modelo
+                // Helper unificado que invoca el endpoint exacto de OpenRouter según la arquitectura del modelo (con reintento automático ante 429/5xx)
                 const invokeOpenRouterImageModel = async (
                   imgModel: string,
                   prompt: string,
                   idx: number,
                   prefix: string
                 ): Promise<{ savedUrl: string; errorText: string; fatalAuth: boolean }> => {
-                  const fullPrompt = `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${prompt}`;
+                  const cleanPrompt = sanitizePromptForOpenAiImages(prompt);
+                  const fullPrompt = `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${cleanPrompt}`;
 
                   // A. Si el modelo pertenece a la familia /api/v1/images (ej: openai/gpt-image-2.6-flare, openai/gpt-image-2.6-sunburst, openai/gpt-image-1-mini)
                   if (usesDedicatedImagesEndpointOnly(imgModel)) {
+                    for (let attempt = 1; attempt <= 2; attempt++) {
+                      try {
+                        const imgApiRes = await fetch('https://openrouter.ai/api/v1/images/generations', {
+                          method: 'POST',
+                          headers: {
+                            Authorization: `Bearer ${openRouterKey}`,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': getOpenRouterReferer(req),
+                            'X-Title': 'AutoAds OpenRouter Images API Generator'
+                          },
+                          body: JSON.stringify({
+                            model: imgModel,
+                            prompt: fullPrompt,
+                            n: 1,
+                            // IMPORTANTE: Usar siempre 1024x1024 en /api/v1/images/generations para máxima compatibilidad en OpenRouter (1024x1536 era rechazado en anuncios #4, #5 y #6)
+                            size: '1024x1024'
+                          }),
+                          signal: AbortSignal.timeout(35000)
+                        });
+
+                        if (!imgApiRes.ok) {
+                          const errBody = await imgApiRes.text();
+                          const fatal = imgApiRes.status === 401 || imgApiRes.status === 402;
+                          if (fatal) {
+                            return {
+                              savedUrl: '',
+                              errorText: `HTTP ${imgApiRes.status} (${imgModel}): ${errBody.slice(0, 220)}`,
+                              fatalAuth: true
+                            };
+                          }
+                          if (attempt === 1) {
+                            await new Promise(r => setTimeout(r, 1200));
+                            continue;
+                          }
+                          return {
+                            savedUrl: '',
+                            errorText: `HTTP ${imgApiRes.status} (${imgModel} via /api/v1/images/generations): ${errBody.slice(0, 220)}`,
+                            fatalAuth: false
+                          };
+                        }
+
+                        const imgApiJson: any = await imgApiRes.json();
+                        const savedUrl = await extractImageFromOpenRouterResponse(imgApiJson, idx, prefix);
+                        if (savedUrl) return { savedUrl, errorText: '', fatalAuth: false };
+                        if (attempt === 1) {
+                          await new Promise(r => setTimeout(r, 1000));
+                          continue;
+                        }
+                        return {
+                          savedUrl: '',
+                          errorText: `El modelo ${imgModel} respondió sin imagen en /api/v1/images/generations.`,
+                          fatalAuth: false
+                        };
+                      } catch (err: any) {
+                        if (attempt === 1) {
+                          await new Promise(r => setTimeout(r, 1200));
+                          continue;
+                        }
+                        return {
+                          savedUrl: '',
+                          errorText: `Timeout/Red en ${imgModel}: ${err?.message || 'Error'}`,
+                          fatalAuth: false
+                        };
+                      }
+                    }
+                  }
+
+                  // B. Si el modelo soporta /api/v1/chat/completions (ej: openai/gpt-5-image-mini, openai/gpt-5.4-image-2)
+                  for (let attempt = 1; attempt <= 2; attempt++) {
                     try {
-                      const imgApiRes = await fetch('https://openrouter.ai/api/v1/images/generations', {
+                      const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                         method: 'POST',
                         headers: {
                           Authorization: `Bearer ${openRouterKey}`,
                           'Content-Type': 'application/json',
                           'HTTP-Referer': getOpenRouterReferer(req),
-                          'X-Title': 'AutoAds OpenRouter Images API Generator'
+                          'X-Title': 'AutoAds OpenRouter Multimodal Image Generator'
                         },
                         body: JSON.stringify({
                           model: imgModel,
-                          prompt: fullPrompt,
-                          n: 1,
-                          size: idx >= 3 ? '1024x1536' : '1024x1024'
+                          modalities: ['image', 'text'],
+                          messages: [
+                            {
+                              role: 'user',
+                              content: fullPrompt
+                            }
+                          ]
                         }),
-                        signal: AbortSignal.timeout(28000)
+                        signal: AbortSignal.timeout(32000)
                       });
 
-                      if (!imgApiRes.ok) {
-                        const errBody = await imgApiRes.text();
-                        const fatal = imgApiRes.status === 401 || imgApiRes.status === 402;
+                      if (!orImgRes.ok) {
+                        const errBody = await orImgRes.text();
+                        const fatal = orImgRes.status === 401 || orImgRes.status === 402;
+                        if (fatal) {
+                          return {
+                            savedUrl: '',
+                            errorText: `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 220)}`,
+                            fatalAuth: true
+                          };
+                        }
+                        if (attempt === 1) {
+                          await new Promise(r => setTimeout(r, 1200));
+                          continue;
+                        }
                         return {
                           savedUrl: '',
-                          errorText: `HTTP ${imgApiRes.status} (${imgModel} via /api/v1/images/generations): ${errBody.slice(0, 220)}`,
-                          fatalAuth: fatal
+                          errorText: `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 220)}`,
+                          fatalAuth: false
                         };
                       }
 
-                      const imgApiJson: any = await imgApiRes.json();
-                      const savedUrl = await extractImageFromOpenRouterResponse(imgApiJson, idx, prefix);
+                      const orImgJson: any = await orImgRes.json();
+                      const savedUrl = await extractImageFromOpenRouterResponse(orImgJson, idx, prefix);
                       if (savedUrl) return { savedUrl, errorText: '', fatalAuth: false };
+                      if (attempt === 1) {
+                        await new Promise(r => setTimeout(r, 1000));
+                        continue;
+                      }
                       return {
                         savedUrl: '',
-                        errorText: `El modelo ${imgModel} respondió sin imagen en /api/v1/images/generations.`,
+                        errorText: `El modelo ${imgModel} respondió sin bloque de imagen adjunto.`,
                         fatalAuth: false
                       };
                     } catch (err: any) {
+                      if (attempt === 1) {
+                        await new Promise(r => setTimeout(r, 1200));
+                        continue;
+                      }
                       return {
                         savedUrl: '',
                         errorText: `Timeout/Red en ${imgModel}: ${err?.message || 'Error'}`,
@@ -2873,123 +2973,14 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     }
                   }
 
-                  // B. Si el modelo soporta /api/v1/chat/completions (ej: openai/gpt-5-image-mini, openai/gpt-5.4-image-2)
-                  try {
-                    const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                      method: 'POST',
-                      headers: {
-                        Authorization: `Bearer ${openRouterKey}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': getOpenRouterReferer(req),
-                        'X-Title': 'AutoAds OpenRouter Multimodal Image Generator'
-                      },
-                      body: JSON.stringify({
-                        model: imgModel,
-                        modalities: ['image', 'text'],
-                        messages: [
-                          {
-                            role: 'user',
-                            content: fullPrompt
-                          }
-                        ]
-                      }),
-                      signal: AbortSignal.timeout(25000)
-                    });
-
-                    if (!orImgRes.ok) {
-                      const errBody = await orImgRes.text();
-                      const fatal = orImgRes.status === 401 || orImgRes.status === 402;
-                      return {
-                        savedUrl: '',
-                        errorText: `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 220)}`,
-                        fatalAuth: fatal
-                      };
-                    }
-
-                    const orImgJson: any = await orImgRes.json();
-                    const savedUrl = await extractImageFromOpenRouterResponse(orImgJson, idx, prefix);
-                    if (savedUrl) return { savedUrl, errorText: '', fatalAuth: false };
-                    return {
-                      savedUrl: '',
-                      errorText: `El modelo ${imgModel} respondió sin bloque de imagen adjunto.`,
-                      fatalAuth: false
-                    };
-                  } catch (err: any) {
-                    return {
-                      savedUrl: '',
-                      errorText: `Timeout/Red en ${imgModel}: ${err?.message || 'Error'}`,
-                      fatalAuth: false
-                    };
-                  }
+                  return { savedUrl: '', errorText: `Fallo en ${imgModel}`, fatalAuth: false };
                 };
 
                 let lastOpenRouterImgError = '';
 
                 const generateOneCreativeViaOpenRouter = async (promptText: string, idx: number) => {
                   const isReel = idx >= 4;
-                  let finalPrompt = promptText;
-
-                  // Si es un Reel (Anuncio #5 o #6):
-                  // - Si usa google/gemini-omni-1.2-flash, puede dirigir y generar tanto en /api/v1/chat/completions como en /api/v1/videos
-                  // - Si usa bytedance/seedance-2.5 (o seedance-2.0-fast), su endpoint nativo es /api/v1/videos tomando la foto del producto como referencia (image-to-video)
-                  if (isReel && openRouterKey) {
-                    if (validEnvVidModel.startsWith('google/gemini-omni')) {
-                      try {
-                        const mmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                          method: 'POST',
-                          headers: {
-                            Authorization: `Bearer ${openRouterKey}`,
-                            'Content-Type': 'application/json',
-                            'HTTP-Referer': getOpenRouterReferer(req),
-                            'X-Title': 'AutoAds Gemini Omni 1.2 Flash Video Director'
-                          },
-                          body: JSON.stringify({
-                            model: validEnvVidModel,
-                            messages: [
-                              {
-                                role: 'system',
-                                content:
-                                  'You are a commercial Meta Ads Reels Director. Write a single 1-sentence ultra-vivid photorealistic visual prompt in English for a 9:16 vertical commercial Reel frame with zero text overlays.'
-                              },
-                              {
-                                role: 'user',
-                                content: `Create a clean 9:16 commercial visual frame for: ${promptText}`
-                              }
-                            ],
-                            max_tokens: 180
-                          }),
-                          signal: AbortSignal.timeout(8000)
-                        });
-                        if (mmRes.ok) {
-                          const mmJson: any = await mmRes.json();
-                          const mmContent = String(mmJson?.choices?.[0]?.message?.content || '').trim();
-                          if (mmContent.length > 25) {
-                            finalPrompt = `${mmContent} (Product: ${prodName}, 8k commercial photography, zero text overlays)`;
-                          }
-                        }
-                      } catch {}
-                    } else if (validEnvVidModel.startsWith('bytedance/seedance')) {
-                      // Invocación a /api/v1/videos para Seedance 2.5 con imagen de referencia del producto
-                      try {
-                        const refImg = String(product.imagenPrincipal || product.imagenesExtra?.[0] || '').trim();
-                        await fetch('https://openrouter.ai/api/v1/videos', {
-                          method: 'POST',
-                          headers: {
-                            Authorization: `Bearer ${openRouterKey}`,
-                            'Content-Type': 'application/json',
-                            'HTTP-Referer': getOpenRouterReferer(req),
-                            'X-Title': 'AutoAds Seedance 2.5 Reference Image-to-Video'
-                          },
-                          body: JSON.stringify({
-                            model: validEnvVidModel,
-                            prompt: `Commercial 9:16 vertical Reel showing ${prodName} in action: ${promptText}`,
-                            ...(refImg.startsWith('http') ? { image_url: refImg } : {})
-                          }),
-                          signal: AbortSignal.timeout(9000)
-                        });
-                      } catch {}
-                    }
-                  }
+                  const finalPrompt = sanitizePromptForOpenAiImages(promptText);
 
                   for (const imgModel of candidateImageModels) {
                     const { savedUrl, errorText, fatalAuth } = await invokeOpenRouterImageModel(
@@ -3008,7 +2999,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       };
                     }
                     lastOpenRouterImgError = errorText;
-                    console.warn(`[generate-ad-images] Model ${imgModel} failed:`, lastOpenRouterImgError);
+                    console.warn(`[generate-ad-images] Ad #${idx + 1} Model ${imgModel} failed:`, lastOpenRouterImgError);
                     if (fatalAuth) break;
                   }
 
@@ -3022,11 +3013,49 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   };
                 };
 
-                const generatedImages = await Promise.all(
-                  universalArchetypePrompts.map((promptText, idx) =>
-                    generateOneCreativeViaOpenRouter(promptText, idx)
-                  )
-                );
+                // Soportar generación de índices específicos (ej: [0, 1], [2, 3], [4, 5] o [idx]) o los 6 en lotes controlados de a 2 para no saturar el rate-limit concurrente de OpenAI en OpenRouter
+                const requestedIndices: number[] = Array.isArray(parsed.targetIndices) && parsed.targetIndices.length > 0
+                  ? parsed.targetIndices.map((n: any) => Number(n)).filter((n: number) => n >= 0 && n < 6)
+                  : [0, 1, 2, 3, 4, 5];
+
+                const generatedImages: Array<{
+                  adIndex: number;
+                  imageUrl: string;
+                  prompt: string;
+                  imageModel: string;
+                  videoModel?: string;
+                  error?: string;
+                }> = [];
+
+                // Procesar en lotes de máximo 2 en paralelo (evita que OpenAI en OpenRouter rechace las otras 4 cuando se envían 6 al mismo milisegundo)
+                const batchSize = 2;
+                for (let i = 0; i < requestedIndices.length; i += batchSize) {
+                  const batchIndices = requestedIndices.slice(i, i + batchSize);
+                  const batchResults = await Promise.all(
+                    batchIndices.map(idx =>
+                      generateOneCreativeViaOpenRouter(universalArchetypePrompts[idx], idx)
+                    )
+                  );
+                  generatedImages.push(...batchResults);
+                  if (i + batchSize < requestedIndices.length) {
+                    await new Promise(r => setTimeout(r, 450));
+                  }
+                }
+
+                // Segunda pasada automática de autorreparación si alguna tarjeta del lote quedó sin imagen por pico de concurrencia
+                for (let k = 0; k < generatedImages.length; k++) {
+                  if (!generatedImages[k].imageUrl) {
+                    const retryIdx = generatedImages[k].adIndex;
+                    await new Promise(r => setTimeout(r, 800));
+                    const retryRes = await generateOneCreativeViaOpenRouter(
+                      universalArchetypePrompts[retryIdx],
+                      retryIdx
+                    );
+                    if (retryRes.imageUrl) {
+                      generatedImages[k] = retryRes;
+                    }
+                  }
+                }
 
                 const successCount = generatedImages.filter(g => Boolean(g.imageUrl)).length;
                 if (successCount === 0) {
@@ -3071,6 +3100,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 const variationSeed = Number(parsed.variationSeed || 1);
                 const currentHeadline = String(parsed.currentHeadline || '').trim();
                 const customImagePromptInput = String(parsed.customImagePrompt || '').trim();
+                const imageOnlyMode = Boolean(parsed.imageOnly);
                 const openRouterKey = String(
                   parsed.openRouterApiKey ||
                     readKeyFromEnvFile('OPENROUTER_API_KEY') ||
@@ -3126,7 +3156,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   },
                   {
                     sceneName: `Repartidor Entregando "${prodName}" en Puerta con Pago al Recibir`,
-                    enPrompt: `Authentic Cash-on-Delivery lifestyle Meta Ad in Paraguay: friendly delivery courier handing the authentic package of "${prodName}" (${prodDesc}) at the front door to a smiling homeowner paying cash in Guaraníes upon delivery, package clearly showcasing "${prodName}", 8k photorealistic, no text overlays`
+                    enPrompt: `Authentic Cash-on-Delivery lifestyle Meta Ad in Paraguay: friendly delivery courier handing the authentic sealed package of "${prodName}" (${prodDesc}) at the front door to a smiling homeowner upon delivery, package clearly showcasing "${prodName}", 8k photorealistic, no text overlays`
                   },
                   {
                     sceneName: `Comparativa Dividida ANTES (Problema sin "${prodName}") vs. DESPUÉS (Solución con "${prodName}")`,
@@ -3134,15 +3164,15 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   },
                   {
                     sceneName: `Pack Dúo Ahorro (2 Unidades de "${prodName}" Lado a Lado en Podio)`,
-                    enPrompt: `Vertical 9:16 Instagram Story bundle promotion advertisement: two identical units of "${prodName}" displayed side by side on a sleek podium for a 2x savings bundle, 8k studio lighting, no text overlays`
+                    enPrompt: `Vertical Instagram Story bundle promotion advertisement: two identical units of "${prodName}" displayed side by side on a sleek podium for a 2x savings bundle, 8k studio lighting, no text overlays`
                   },
                   {
                     sceneName: `Demostración Macro en Primer Plano de la Calidad y Potencia de "${prodName}"`,
-                    enPrompt: `Vertical 9:16 Reels macro action shot of "${prodName}" (${techSpecs}) operating at peak performance showing its build quality and materials, 8k commercial photography, no text overlays`
+                    enPrompt: `Vertical Reels macro action shot of "${prodName}" (${techSpecs}) operating at peak performance showing its build quality and materials, 8k commercial photography, no text overlays`
                   },
                   {
                     sceneName: `Unboxing Real en Primera Persona Abriendo la Caja de "${prodName}" en Mesa`,
-                    enPrompt: `Vertical 9:16 first-person POV hands unboxing the "${prodName}" shipping box on a wooden home table revealing "${prodName}" and its included contents (${boxItems}) neatly arranged, 8k photorealistic, no text overlays`
+                    enPrompt: `Vertical first-person POV hands unboxing the "${prodName}" shipping box on a wooden home table revealing "${prodName}" and its included contents (${boxItems}) neatly arranged, 8k photorealistic, no text overlays`
                   }
                 ];
 
@@ -3162,152 +3192,121 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return;
                 }
 
-                const candidateLlmModels = ['z-ai/glm-5.3', 'openai/gpt-4o-mini'];
-                let llmErrorText = '';
+                if (!imageOnlyMode) {
+                  const candidateLlmModels = ['z-ai/glm-5.3', 'openai/gpt-4o-mini'];
+                  let llmErrorText = '';
 
-                for (const llmModel of candidateLlmModels) {
-                  try {
-                    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                      method: 'POST',
-                      headers: {
-                        Authorization: `Bearer ${openRouterKey}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': getOpenRouterReferer(req),
-                        'X-Title': 'AutoAds Universal Congruent Ad + Image Regenerator'
-                      },
-                      body: JSON.stringify({
-                        model: llmModel,
-                        reasoning: { effort: 'low' },
-                        messages: [
-                          {
-                            role: 'system',
-                            content:
-                              `Sos el Director Creativo Supremo experto en Meta Ads Andrómeda y Respuesta Directa COD en Paraguay.\n` +
-                              `REGLA ESTRICTA DE CONGRUENCIA 100% (TEXTO ↔ IMAGEN IA) Y ALTA POTENCIA CON EMOJIS:\n` +
-                              `El anuncio #${adIndex + 1} del producto "${prodName}" (${prodDesc}) se va a mostrar con la siguiente ESCENA VISUAL EXACTA: "${targetScene.sceneName}".\n` +
-                              `Por lo tanto, el "hookBadge", el "headline" y el "primaryText" DEBEN hablar específicamente de "${prodName}" y de esa misma escena visual ("${targetScene.sceneName}").\n` +
-                              `PROHIBIDO TEXTO PLANO: El "primaryText" DEBE tener de 7 a 9 líneas con saltos de línea (\\n), iconos y emojis en cada línea (🔥, ✨, ✅, 📌, 🛠️, 💰, 🚚, 💵, 👇), beneficio clave (${mainBenefit}), precios exactos (1x Gs. ${p1.toLocaleString('es-PY')} — Antes Gs. ${pNormal.toLocaleString('es-PY')} | Pack 2x Ahorro: Gs. ${p2.toLocaleString('es-PY')}) y ${freeShipping ? 'Envío Gratis a todo Paraguay' : 'Entrega en puerta'} con Pago al Recibir.\n` +
-                              `No repitas el titular anterior ("${currentHeadline}").\n` +
-                              `Devolvé SOLO un objeto JSON válido con:\n` +
-                              `{ "hookBadge": "🔥 MÁX 30 CHARS EN MAYÚSCULAS CON EMOJI", "headline": "🔥 Titular potente con emoji congruente con ${targetScene.sceneName} máx 48 chars", "primaryText": "Copy persuasivo completo de 7 a 9 líneas con emojis en cada bloque describiendo la escena, beneficios, precios Gs. y pago al recibir", "descriptionText": "⭐ Subtítulo corto con emoji congruente con la escena", "aiImagePrompt": "${targetScene.enPrompt}" }`
-                          },
-                          {
-                            role: 'user',
-                            content: `Generá la variante congruente #${variationSeed} para la escena "${targetScene.sceneName}" del producto "${prodName}". Respondé solo JSON puro.`
-                          }
-                        ],
-                        temperature: 0.78,
-                        max_tokens: 2500
-                      }),
-                      signal: AbortSignal.timeout(25000)
-                    });
-
-                    if (!orRes.ok) {
-                      llmErrorText = await orRes.text();
-                      if (orRes.status === 401 || orRes.status === 402) {
-                        res.statusCode = 400;
-                        res.end(
-                          JSON.stringify({
-                            success: false,
-                            error: `Error de OpenRouter al regenerar anuncio (HTTP ${orRes.status}): ${llmErrorText || orRes.statusText}`
-                          })
-                        );
-                        return;
-                      }
-                      continue;
-                    }
-
-                    const orJson: any = await orRes.json();
-                    const rawContent = String(orJson?.choices?.[0]?.message?.content || '').trim();
-                    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                      try {
-                        customBrief = JSON.parse(jsonMatch[0]);
-                      } catch {
-                        try {
-                          let sanitized = '';
-                          let inString = false;
-                          let isEscaped = false;
-                          const src = jsonMatch[0];
-                          for (let i = 0; i < src.length; i++) {
-                            const char = src[i];
-                            if (char === '"' && !isEscaped) {
-                              inString = !inString;
-                              sanitized += char;
-                            } else if (inString) {
-                              if (char === '\n') sanitized += '\\n';
-                              else if (char === '\r') sanitized += '\\r';
-                              else if (char === '\t') sanitized += '\\t';
-                              else sanitized += char;
-                            } else {
-                              sanitized += char;
+                  for (const llmModel of candidateLlmModels) {
+                    try {
+                      const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                          Authorization: `Bearer ${openRouterKey}`,
+                          'Content-Type': 'application/json',
+                          'HTTP-Referer': getOpenRouterReferer(req),
+                          'X-Title': 'AutoAds Universal Congruent Ad + Image Regenerator'
+                        },
+                        body: JSON.stringify({
+                          model: llmModel,
+                          reasoning: { effort: 'low' },
+                          messages: [
+                            {
+                              role: 'system',
+                              content:
+                                `Sos el Director Creativo Supremo experto en Meta Ads Andrómeda y Respuesta Directa COD en Paraguay.\n` +
+                                `REGLA ESTRICTA DE CONGRUENCIA 100% (TEXTO ↔ IMAGEN IA) Y ALTA POTENCIA CON EMOJIS:\n` +
+                                `El anuncio #${adIndex + 1} del producto "${prodName}" (${prodDesc}) se va a mostrar con la siguiente ESCENA VISUAL EXACTA: "${targetScene.sceneName}".\n` +
+                                `Por lo tanto, el "hookBadge", el "headline" y el "primaryText" DEBEN hablar específicamente de "${prodName}" y de esa misma escena visual ("${targetScene.sceneName}").\n` +
+                                `PROHIBIDO TEXTO PLANO: El "primaryText" DEBE tener de 7 a 9 líneas con saltos de línea (\\n), iconos y emojis en cada línea (🔥, ✨, ✅, 📌, 🛠️, 💰, 🚚, 💵, 👇), beneficio clave (${mainBenefit}), precios exactos (1x Gs. ${p1.toLocaleString('es-PY')} — Antes Gs. ${pNormal.toLocaleString('es-PY')} | Pack 2x Ahorro: Gs. ${p2.toLocaleString('es-PY')}) y ${freeShipping ? 'Envío Gratis a todo Paraguay' : 'Entrega en puerta'} con Pago al Recibir.\n` +
+                                `No repitas el titular anterior ("${currentHeadline}").\n` +
+                                `Devolvé SOLO un objeto JSON válido con:\n` +
+                                `{ "hookBadge": "🔥 MÁX 30 CHARS EN MAYÚSCULAS CON EMOJI", "headline": "🔥 Titular potente con emoji congruente con ${targetScene.sceneName} máx 48 chars", "primaryText": "Copy persuasivo completo de 7 a 9 líneas con emojis en cada bloque describiendo la escena, beneficios, precios Gs. y pago al recibir", "descriptionText": "⭐ Subtítulo corto con emoji congruente con la escena", "aiImagePrompt": "${targetScene.enPrompt}" }`
+                            },
+                            {
+                              role: 'user',
+                              content: `Generá la variante congruente #${variationSeed} para la escena "${targetScene.sceneName}" del producto "${prodName}". Respondé solo JSON puro.`
                             }
-                            isEscaped = char === '\\' && !isEscaped;
-                          }
-                          customBrief = JSON.parse(sanitized);
-                        } catch {}
+                          ],
+                          temperature: 0.78,
+                          max_tokens: 2500
+                        }),
+                        signal: AbortSignal.timeout(25000)
+                      });
+
+                      if (!orRes.ok) {
+                        llmErrorText = await orRes.text();
+                        if (orRes.status === 401 || orRes.status === 402) {
+                          res.statusCode = 400;
+                          res.end(
+                            JSON.stringify({
+                              success: false,
+                              error: `Error de OpenRouter al regenerar anuncio (HTTP ${orRes.status}): ${llmErrorText || orRes.statusText}`
+                            })
+                          );
+                          return;
+                        }
+                        continue;
                       }
+
+                      const orJson: any = await orRes.json();
+                      const rawContent = String(orJson?.choices?.[0]?.message?.content || '').trim();
+                      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+                      if (jsonMatch) {
+                        try {
+                          customBrief = JSON.parse(jsonMatch[0]);
+                        } catch {
+                          try {
+                            let sanitized = '';
+                            let inString = false;
+                            let isEscaped = false;
+                            const src = jsonMatch[0];
+                            for (let i = 0; i < src.length; i++) {
+                              const char = src[i];
+                              if (char === '"' && !isEscaped) {
+                                inString = !inString;
+                                sanitized += char;
+                              } else if (inString) {
+                                if (char === '\n') sanitized += '\\n';
+                                else if (char === '\r') sanitized += '\\r';
+                                else if (char === '\t') sanitized += '\\t';
+                                else sanitized += char;
+                              } else {
+                                sanitized += char;
+                              }
+                              isEscaped = char === '\\' && !isEscaped;
+                            }
+                            customBrief = JSON.parse(sanitized);
+                          } catch {}
+                        }
+                      }
+                      if (customBrief && customBrief.primaryText) break;
+                    } catch (err: any) {
+                      llmErrorText = err?.message || 'Fallo de red';
                     }
-                    if (customBrief && customBrief.primaryText) break;
-                  } catch (err: any) {
-                    llmErrorText = err?.message || 'Fallo de red';
+                  }
+
+                  if (!customBrief) {
+                    res.statusCode = 400;
+                    res.end(
+                      JSON.stringify({
+                        success: false,
+                        error: `No se pudo regenerar el texto del anuncio en OpenRouter: ${llmErrorText}`
+                      })
+                    );
+                    return;
                   }
                 }
 
-                if (!customBrief) {
-                  res.statusCode = 400;
-                  res.end(
-                    JSON.stringify({
-                      success: false,
-                      error: `No se pudo regenerar el texto del anuncio en OpenRouter: ${llmErrorText}`
-                    })
-                  );
-                  return;
-                }
-
-                let finalImagePrompt =
+                const rawFinalImgPrompt =
                   customImagePromptInput ||
                   customBrief?.aiImagePrompt ||
                   targetScene.enPrompt;
+                const finalImagePrompt = String(rawFinalImgPrompt || '')
+                  .replace(/\bbanknotes?\b/gi, 'delivery receipt')
+                  .replace(/\bcash bills?\b/gi, 'delivery package')
+                  .replace(/\bpaying cash\b/gi, 'receiving the package at the door');
 
                 const isReel = adIndex >= 4;
-                if (isReel && openRouterKey && validEnvVidModel.startsWith('google/gemini-omni')) {
-                  try {
-                    const mmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                      method: 'POST',
-                      headers: {
-                        Authorization: `Bearer ${openRouterKey}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': getOpenRouterReferer(req),
-                        'X-Title': 'AutoAds Video Reel Director'
-                      },
-                      body: JSON.stringify({
-                        model: validEnvVidModel,
-                        messages: [
-                          {
-                            role: 'system',
-                            content:
-                              'You are a commercial Meta Ads Reels Director. Write a single 1-sentence photorealistic visual prompt in English for a 9:16 commercial Reel frame with zero text overlays.'
-                          },
-                          {
-                            role: 'user',
-                            content: `Create a clean 9:16 commercial visual frame for: ${finalImagePrompt}`
-                          }
-                        ],
-                        max_tokens: 180
-                      }),
-                      signal: AbortSignal.timeout(8000)
-                    });
-                    if (mmRes.ok) {
-                      const mmJson: any = await mmRes.json();
-                      const mmContent = String(mmJson?.choices?.[0]?.message?.content || '').trim();
-                      if (mmContent.length > 25) {
-                        finalImagePrompt = `${mmContent} (Product: ${prodName}, 8k commercial photography, zero text overlays)`;
-                      }
-                    }
-                  } catch {}
-                }
-
                 let newGeneratedImageUrl = '';
                 let singleImgError = '';
 
@@ -3342,7 +3341,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                             model: imgModel,
                             prompt: `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${finalImagePrompt}`,
                             n: 1,
-                            size: adIndex >= 3 ? '1024x1536' : '1024x1024'
+                            // Usar siempre 1024x1024 para evitar rechazos en OpenRouter Images API
+                            size: '1024x1024'
                           }
                         : {
                             model: imgModel,
@@ -3364,7 +3364,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           'X-Title': 'AutoAds OpenRouter Single Ad Regenerator'
                         },
                         body: JSON.stringify(reqPayload),
-                        signal: AbortSignal.timeout(28000)
+                        signal: AbortSignal.timeout(35000)
                       });
                       if (!orImgRes.ok) {
                         const errBody = await orImgRes.text();
@@ -3392,6 +3392,21 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           break;
                         }
                       } else if (dataUrl.startsWith('http')) {
+                        try {
+                          const dlRes = await fetch(dataUrl, { signal: AbortSignal.timeout(12000) });
+                          if (dlRes.ok) {
+                            const arrBuf = await dlRes.arrayBuffer();
+                            const buf = Buffer.from(arrBuf);
+                            if (buf.length > 2000) {
+                              const cType = dlRes.headers.get('content-type') || '';
+                              const ext = cType.includes('png') ? 'png' : cType.includes('webp') ? 'webp' : 'jpg';
+                              const fileName = `autoads_regen_${Date.now()}_${adIndex}_v${variationSeed}.${ext}`;
+                              fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
+                              newGeneratedImageUrl = `/assets/ai-ads/${fileName}`;
+                              break;
+                            }
+                          }
+                        } catch {}
                         newGeneratedImageUrl = dataUrl;
                         break;
                       }

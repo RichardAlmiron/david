@@ -471,53 +471,121 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       }
 
       const baseAssets = buildCreativeAssetsFromBrain(activeProduct, currentBrain);
-      let finalAssets = baseAssets;
+      let workingAssets = [...baseAssets];
 
-      const res = await fetch('/api/autoads/generate-ad-images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product: activeProduct,
-          creativeBriefs: currentBrain.creativeBriefs,
-          forceNewGeneration: true,
-          imageModel: selectedImageModel,
-          videoModel: selectedVideoModel
-        })
-      });
-      const imgData = await res.json();
-      if (!res.ok || imgData?.success === false) {
+      // Mostrar inmediatamente las 6 tarjetas mientras cada lote de 2 imágenes se sintetiza en vivo
+      setCreatives(workingAssets);
+      setAdVariationCounters({});
+      setAdPhotoIndexOverride({});
+
+      const waves: number[][] = [
+        [0, 1],
+        [2, 3],
+        [4, 5]
+      ];
+      let lastWaveError = '';
+
+      for (let waveIdx = 0; waveIdx < waves.length; waveIdx++) {
+        const targetIndices = waves[waveIdx];
+        setGenerationProgressText(
+          `🎨 Generando lote ${waveIdx + 1}/3 en OpenRouter (Anuncios #${targetIndices[0] + 1} y #${targetIndices[1] + 1}) con ${selectedImageModel}...`
+        );
+
+        const res = await fetch('/api/autoads/generate-ad-images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product: activeProduct,
+            creativeBriefs: currentBrain.creativeBriefs,
+            forceNewGeneration: true,
+            imageModel: selectedImageModel,
+            videoModel: selectedVideoModel,
+            targetIndices
+          })
+        });
+        const imgData = await res.json();
+        if (!res.ok || imgData?.success === false) {
+          lastWaveError =
+            imgData?.error ||
+            `Error ${res.status}: Fallo en la API de ${selectedImageModel} en OpenRouter.`;
+          continue;
+        }
+        if (Array.isArray(imgData?.generatedImages) && imgData.generatedImages.length > 0) {
+          workingAssets = workingAssets.map((asset, idx) => {
+            const match = imgData.generatedImages.find((g: any) => g.adIndex === idx);
+            if (!match?.imageUrl) return asset;
+            return {
+              ...asset,
+              aiGeneratedImageUrl: match.imageUrl,
+              aiImagePrompt: match.prompt || asset.aiImagePrompt
+            };
+          });
+          setCreatives([...workingAssets]);
+        }
+      }
+
+      // Verificación final de autorrecuperación: si alguna de las 6 tarjetas quedó sin imagen por límite de ráfaga, reintentarla individualmente
+      const missingIndices = workingAssets
+        .map((asset, idx) => (!asset.aiGeneratedImageUrl ? idx : -1))
+        .filter(idx => idx !== -1);
+
+      if (missingIndices.length > 0 && missingIndices.length < 6) {
+        for (const missingIdx of missingIndices) {
+          setGenerationProgressText(
+            `🔄 Completando imagen faltante del Anuncio #${missingIdx + 1} en OpenRouter (${selectedImageModel})...`
+          );
+          try {
+            const retryRes = await fetch('/api/autoads/generate-ad-images', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                product: activeProduct,
+                creativeBriefs: currentBrain.creativeBriefs,
+                forceNewGeneration: true,
+                imageModel: selectedImageModel,
+                videoModel: selectedVideoModel,
+                targetIndices: [missingIdx]
+              })
+            });
+            const retryData = await retryRes.json();
+            if (retryRes.ok && Array.isArray(retryData?.generatedImages)) {
+              const recovered = retryData.generatedImages.find((g: any) => g.adIndex === missingIdx);
+              if (recovered?.imageUrl) {
+                workingAssets = workingAssets.map((asset, idx) =>
+                  idx === missingIdx
+                    ? {
+                        ...asset,
+                        aiGeneratedImageUrl: recovered.imageUrl,
+                        aiImagePrompt: recovered.prompt || asset.aiImagePrompt
+                      }
+                    : asset
+                );
+                setCreatives([...workingAssets]);
+              }
+            }
+          } catch {}
+        }
+      }
+
+      const totalGeneratedCount = workingAssets.filter(a => Boolean(a.aiGeneratedImageUrl)).length;
+      if (totalGeneratedCount === 0 && lastWaveError) {
         clearTimeout(genTimer1);
         setWorkflowStep('researched');
         setGenerationProgressText('');
         setApiErrorModal({
           isOpen: true,
           title: '⚠️ Error en Generación de Imágenes IA — Trabajo Pausado',
-          errorMessage:
-            imgData?.error ||
-            `Error ${res.status}: Fallo en la API de ${selectedImageModel} en OpenRouter.`,
+          errorMessage: lastWaveError,
           sourceEndpoint: '/api/autoads/generate-ad-images'
         });
         return;
       }
-      if (Array.isArray(imgData?.generatedImages) && imgData.generatedImages.length > 0) {
-        finalAssets = baseAssets.map((asset, idx) => {
-          const match = imgData.generatedImages.find((g: any) => g.adIndex === idx) || imgData.generatedImages[idx];
-          if (!match?.imageUrl) return asset;
-          return {
-            ...asset,
-            aiGeneratedImageUrl: match.imageUrl,
-            aiImagePrompt: match.prompt || asset.aiImagePrompt
-          };
-        });
-      }
 
       clearTimeout(genTimer1);
-      setCreatives(finalAssets);
-      setAdVariationCounters({});
-      setAdPhotoIndexOverride({});
+      setCreatives(workingAssets);
       setWorkflowStep('generated');
       showToast(
-        `🤖 6 anuncios creados desde cero en OpenRouter (Textos: ${AUTOADS_LLM_MODEL} · Imágenes: ${selectedImageModel} · Video: ${selectedVideoModel}).`
+        `🤖 ${totalGeneratedCount}/6 anuncios con imagen IA generados en OpenRouter (Textos: ${AUTOADS_LLM_MODEL} · Imágenes: ${selectedImageModel} · Video: ${selectedVideoModel}).`
       );
     } catch (err: any) {
       clearTimeout(genTimer1);
@@ -532,6 +600,66 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     } finally {
       clearTimeout(genTimer1);
       setGenerationProgressText('');
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Generar SOLO la imagen IA de una tarjeta sin tocar su copywriting actual
+  // ─────────────────────────────────────────────────────────────────────────────
+  const handleGenerateImageOnlyForAd = async (adIndex: number, customPromptOverride?: string) => {
+    if (!brainProfile || !activeProduct) return;
+    setRegeneratingAdIdx(adIndex);
+    try {
+      const currentAd = creatives[adIndex];
+      const res = await fetch('/api/autoads/regenerate-ad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product: activeProduct,
+          adIndex,
+          variationSeed: (adVariationCounters[adIndex] || 0) + 1,
+          currentHeadline: currentAd?.headline || '',
+          customImagePrompt: customPromptOverride || currentAd?.aiImagePrompt || '',
+          imageModel: selectedImageModel,
+          videoModel: selectedVideoModel,
+          imageOnly: true
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data?.success === false || !data?.customBrief?.aiGeneratedImageUrl) {
+        setRegeneratingAdIdx(null);
+        setApiErrorModal({
+          isOpen: true,
+          title: '⚠️ Error al Generar Imagen IA — Trabajo Pausado',
+          errorMessage:
+            data?.error ||
+            `Error ${res.status}: OpenRouter (${selectedImageModel}) no devolvió la imagen para el Anuncio #${adIndex + 1}.`,
+          sourceEndpoint: '/api/autoads/regenerate-ad'
+        });
+        return;
+      }
+
+      setCreatives(prev =>
+        prev.map((item, idx) =>
+          idx === adIndex
+            ? {
+                ...item,
+                aiGeneratedImageUrl: data.customBrief.aiGeneratedImageUrl,
+                aiImagePrompt: data.customBrief.imagePrompt || item.aiImagePrompt
+              }
+            : item
+        )
+      );
+      setRegeneratingAdIdx(null);
+      showToast(`🎨 Imagen IA del Anuncio #${adIndex + 1} generada con éxito en OpenRouter.`);
+    } catch (err: any) {
+      setRegeneratingAdIdx(null);
+      setApiErrorModal({
+        isOpen: true,
+        title: '⚠️ Error de Red al Generar Imagen — Trabajo Pausado',
+        errorMessage: err?.message || 'Fallo de red al conectar con OpenRouter.',
+        sourceEndpoint: '/api/autoads/regenerate-ad'
+      });
     }
   };
 
@@ -1369,7 +1497,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                               />
                               <button
                                 type="button"
-                                onClick={() => handleRegenerateSingleAd(idx, ad.aiImagePrompt)}
+                                onClick={() => handleGenerateImageOnlyForAd(idx, ad.aiImagePrompt)}
                                 disabled={isRegeneratingThis}
                                 className="w-full py-1.5 rounded bg-emerald-500 text-black text-[11px] font-bold hover:bg-emerald-400 cursor-pointer"
                               >
@@ -1397,6 +1525,16 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                               isRegeneratingThis ? 'opacity-30' : 'opacity-100'
                             }`}
                           />
+                        ) : workflowStep === 'generating' ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-emerald-300 bg-zinc-950 gap-2.5">
+                            <Loader2 className="w-7 h-7 animate-spin text-emerald-400" />
+                            <span className="text-xs font-mono text-zinc-100 font-bold">
+                              Sintetizando Imagen IA #{idx + 1} en OpenRouter...
+                            </span>
+                            <span className="text-[10px] text-zinc-400 font-mono">
+                              {isReel ? `${selectedVideoModel} + ${selectedImageModel}` : selectedImageModel}
+                            </span>
+                          </div>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-zinc-400 bg-zinc-950 gap-2">
                             <Sparkles className="w-7 h-7 text-emerald-400/80" />
@@ -1408,7 +1546,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                             </span>
                             <button
                               type="button"
-                              onClick={() => handleRegenerateSingleAd(idx, ad.aiImagePrompt)}
+                              onClick={() => handleGenerateImageOnlyForAd(idx, ad.aiImagePrompt)}
                               disabled={isRegeneratingThis}
                               className="mt-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-bold cursor-pointer"
                             >
