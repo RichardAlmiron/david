@@ -91,21 +91,17 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // Campañas publicadas
   const [publishedCampaigns, setPublishedCampaigns] = useState<PipeboardPublishedCampaignRecord[]>([]);
 
-  // Drawer de configuración
+  // Drawer de configuración (exclusivamente para Slot Pipeboard con autodestrucción en navegador)
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(false);
   const [savingSettings, setSavingSettings] = useState<boolean>(false);
+  const [pipeboardTokenInput, setPipeboardTokenInput] = useState<string>('');
+  const [hasPipeboardTokenInBackend, setHasPipeboardTokenInBackend] = useState<boolean>(false);
+  const [pipeboardTokenPreview, setPipeboardTokenPreview] = useState<string>('');
+  const [lastTokenSelfDestructAt, setLastTokenSelfDestructAt] = useState<string>('');
 
-  // Modo de conexión: 'meta_direct' (cuenta propia) o 'pipeboard' (servicio terceros)
-  const [connectionMode, setConnectionMode] = useState<'meta_direct' | 'pipeboard'>('meta_direct');
-
-  // Estado de conexión directa con Meta
+  // Estado de conexión en servidor (leído desde variables de entorno del backend)
   const [metaConnected, setMetaConnected] = useState<boolean>(false);
-  const [metaUser, setMetaUser] = useState<{ id: string; name: string } | null>(null);
-  const [metaAdAccounts, setMetaAdAccounts] = useState<Array<{ id: string; name: string; currency: string; status: string }>>([]);
   const [metaPages, setMetaPages] = useState<Array<{ id: string; name: string; category: string; access_token?: string }>>([]);
-  const [isConnectingMeta, setIsConnectingMeta] = useState<boolean>(false);
-  const [metaAppId, setMetaAppId] = useState<string>('');
-  const [metaAppSecret, setMetaAppSecret] = useState<string>('');
 
   // Reproductor de video para creativos tipo reel
   const [isPlayingVideo, setIsPlayingVideo] = useState<boolean>(true);
@@ -116,15 +112,24 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Cargar configuración al montar
+  // Cargar configuración al montar (jamás carga tokens ni APIs en el navegador)
   // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     fetch('/api/pipeboard/config')
       .then(r => r.json())
       .then(data => {
         if (data?.config) {
-          setPbConfig(prev => ({ ...prev, ...data.config }));
+          setPbConfig(prev => ({
+            ...prev,
+            ...data.config,
+            // Seguridad Total: el navegador jamás retiene tokens ni API keys en memoria
+            pipeboardApiToken: '',
+            openRouterApiKey: '',
+            metaAccessTokenFallback: ''
+          }));
         }
+        setHasPipeboardTokenInBackend(Boolean(data?.hasPipeboardToken));
+        setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
         if (Array.isArray(data?.publishedCampaigns)) {
           setPublishedCampaigns(data.publishedCampaigns);
         }
@@ -220,13 +225,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }, 300);
 
     try {
-      // Llamar al endpoint de entrenamiento del cerebro
+      // Llamar al endpoint de entrenamiento del cerebro (las credenciales viven 100% en el backend)
       const response = await fetch('/api/autoads/brain-train', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           product,
-          openRouterApiKey: pbConfig.openRouterApiKey,
           openRouterModel: AUTOADS_LLM_MODEL
         }),
         signal: abortController.signal
@@ -318,27 +322,53 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Guardar configuración
+  // Guardar configuración de Pipeboard (Viaja al Backend y se Autodestruye en el Navegador)
   // ─────────────────────────────────────────────────────────────────────────────
   const handleSaveConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setSavingSettings(true);
+    const tokenToSend = pipeboardTokenInput.trim();
+    // Autodestrucción inmediata en el navegador antes incluso de esperar la red
+    setPipeboardTokenInput('');
+    setPbConfig(prev => ({
+      ...prev,
+      pipeboardApiToken: '',
+      openRouterApiKey: '',
+      metaAccessTokenFallback: ''
+    }));
     try {
-      await fetch('/api/pipeboard/config', {
+      const res = await fetch('/api/pipeboard/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pbConfig)
+        body: JSON.stringify({
+          ...pbConfig,
+          pipeboardApiToken: tokenToSend,
+          openRouterApiKey: '',
+          metaAccessTokenFallback: ''
+        })
       });
-      showToast('Configuración de AutoAds guardada.');
+      if (res.ok) {
+        const data = await res.json();
+        setHasPipeboardTokenInBackend(Boolean(data?.hasPipeboardToken));
+        setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
+        if (tokenToSend) {
+          setLastTokenSelfDestructAt(new Date().toLocaleTimeString('es-PY'));
+          showToast('🔒 API de Pipeboard guardada en el Backend y autodestruida del navegador.');
+        } else {
+          showToast('Configuración de Pipeboard actualizada en el Backend.');
+        }
+      } else {
+        showToast('Error al guardar la configuración en el servidor.');
+      }
     } catch {
-      showToast('Error al guardar la configuración.');
+      showToast('Error de red al conectar con el servidor.');
     } finally {
       setSavingSettings(false);
     }
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Verificar estado de conexión Meta Ads al montar
+  // Verificar estado de variables de servidor al montar (100% Backend)
   // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     checkMetaStatus();
@@ -351,67 +381,30 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         const data = await res.json();
         if (data.connected) {
           setMetaConnected(true);
-          setMetaUser(data.user);
-          if (Array.isArray(data.adAccounts)) setMetaAdAccounts(data.adAccounts);
-          if (Array.isArray(data.pages)) setMetaPages(data.pages);
-          setRobotTerminalLogs(prev => [
-            ...prev,
-            `[META] ✅ Cuenta conectada: ${data.user?.name} (${data.adAccounts?.length || 0} cuentas publicitarias)`
-          ]);
+          if (Array.isArray(data.adAccounts) && data.adAccounts[0]?.id) {
+            setPbConfig(prev => ({
+              ...prev,
+              selectedAdAccountId:
+                prev.selectedAdAccountId && prev.selectedAdAccountId !== 'act_595884210394'
+                  ? prev.selectedAdAccountId
+                  : data.adAccounts[0].id
+            }));
+          }
+          if (Array.isArray(data.pages)) {
+            setMetaPages(data.pages);
+            if (data.pages[0]?.id) {
+              setPbConfig(prev => ({
+                ...prev,
+                selectedFacebookPageId:
+                  prev.selectedFacebookPageId && prev.selectedFacebookPageId !== '104928374650192'
+                    ? prev.selectedFacebookPageId
+                    : data.pages[0].id
+              }));
+            }
+          }
         }
       }
     } catch {}
-  };
-
-  // Iniciar OAuth con Meta
-  const handleMetaLogin = async () => {
-    setIsConnectingMeta(true);
-    try {
-      const params = new URLSearchParams();
-      if (metaAppId) params.set('app_id', metaAppId);
-      if (metaAppSecret) params.set('app_secret', metaAppSecret);
-      
-      const res = await fetch(`/api/meta/auth-url?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.authUrl) {
-          // Abrir ventana de login de Facebook
-          const popup = window.open(data.authUrl, 'meta_login', 'width=600,height=700,scrollbars=yes');
-          
-          // Escuchar mensaje de éxito desde la ventana popup
-          const messageHandler = (event: MessageEvent) => {
-            if (event.data?.type === 'META_AUTH_SUCCESS') {
-              window.removeEventListener('message', messageHandler);
-              setIsConnectingMeta(false);
-              showToast(`✅ Conectado con Meta como ${event.data.userName}`);
-              checkMetaStatus(); // Recargar estado
-            }
-          };
-          window.addEventListener('message', messageHandler);
-          
-          // Timeout de seguridad
-          setTimeout(() => {
-            window.removeEventListener('message', messageHandler);
-            setIsConnectingMeta(false);
-          }, 120000); // 2 minutos
-          
-          return;
-        }
-      }
-      showToast('Error: No se pudo generar la URL de login. Verificá App ID y App Secret.');
-    } catch {
-      showToast('Error de conexión al servidor.');
-    }
-    setIsConnectingMeta(false);
-  };
-
-  // Desconectar Meta
-  const handleMetaDisconnect = async () => {
-    setMetaConnected(false);
-    setMetaUser(null);
-    setMetaAdAccounts([]);
-    setMetaPages([]);
-    showToast('Meta Ads desconectado.');
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -446,16 +439,15 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         `[CREATIVOS] ${freshCreatives.length} piezas sintetizadas con diversidad conceptual.`
       ]);
 
-      // 2. Publicar campaña vía Meta Ads Directo o Pipeboard MCP
-      const modeLabel = connectionMode === 'meta_direct' && metaConnected
-        ? 'Meta Ads Directo (tu cuenta personal)'
-        : 'Pipeboard MCP';
+      // 2. Publicar campaña desde el Backend (las credenciales viven exclusivamente en el servidor)
+      const modeLabel = metaConnected && !hasPipeboardTokenInBackend
+        ? 'Servidor Backend Meta Ads'
+        : 'Pipeboard MCP (Backend Blindado)';
       
       setPilotStage(`Transmitiendo al servidor ${modeLabel}...`);
       setRobotTerminalLogs(prev => [
         ...prev,
         `[MCP] Publicando vía ${modeLabel}...`,
-        `[MCP] Conectando con servidor (${connectionMode === 'meta_direct' ? 'Meta Marketing API v21.0' : pbConfig.pipeboardMcpEndpoint})...`,
         `[MCP #1] get_ad_accounts -> Verificando cuenta ${pbConfig.selectedAdAccountId}...`,
         `[MCP #2] upload_ad_image -> Subiendo ${freshCreatives.length} activos a la biblioteca de Meta Ads...`,
         `[MCP #3] create_campaign -> Creando Campaña OUTCOME_SALES con CBO...`,
@@ -466,8 +458,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
       const landingUrl = `${window.location.origin}/?p=${selectedProduct.slug}`;
       
-      // Elegir endpoint según modo de conexión
-      const publishEndpoint = connectionMode === 'meta_direct' && metaConnected
+      // Si hay Slot Pipeboard activo en el backend, usa Pipeboard MCP; si no, usa las variables del servidor
+      const publishEndpoint = metaConnected && !hasPipeboardTokenInBackend
         ? '/api/meta/publish-direct'
         : '/api/pipeboard/publish-campaign';
       
@@ -485,9 +477,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           pageAccessToken: selectedPage?.access_token || '',
           dailyBudgetGs: pbConfig.dailyBudgetGs,
           publishStatus: pbConfig.defaultPublishStatus,
-          pipeboardApiToken: pbConfig.pipeboardApiToken,
           pipeboardMcpEndpoint: pbConfig.pipeboardMcpEndpoint,
-          metaAccessTokenFallback: pbConfig.metaAccessTokenFallback,
           landingUrl,
           pixelId: selectedProduct.metaTracking?.pixelId || ''
         })
@@ -584,276 +574,106 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       </div>
 
       {/* ===================================================================== */}
-      {/* 2. DRAWER DE CONFIGURACIÓN (COLAPSABLE)                              */}
+      {/* 2. DRAWER DE CONFIGURACIÓN: EXCLUSIVO SLOT PIPEBOARD (BLINDAJE TOTAL) */}
       {/* ===================================================================== */}
       {showSettingsDrawer && (
         <div className="p-4 sm:p-5 rounded-2xl border border-zinc-800 bg-[#0d0d0f] space-y-4 animate-fadeIn">
-          {/* Pestañas de modo */}
-          <div className="flex items-center gap-1 p-1 bg-zinc-900 rounded-xl border border-zinc-800">
-            <button
-              type="button"
-              onClick={() => setConnectionMode('meta_direct')}
-              className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                connectionMode === 'meta_direct'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              🔗 Meta Ads Directo
-            </button>
-            <button
-              type="button"
-              onClick={() => setConnectionMode('pipeboard')}
-              className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                connectionMode === 'pipeboard'
-                  ? 'bg-purple-600 text-white shadow'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              🔌 Pipeboard
-            </button>
-          </div>
+          <form onSubmit={handleSaveConfig} className="space-y-4" autoComplete="off">
+            <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-wider flex items-center gap-2">
+                  <span>🔌 Slot de Pipeboard · Blindaje Backend</span>
+                </h3>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
+                  🔒 Cero APIs en Navegador
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Tus variables maestras de Meta viven eternamente en el servidor (Railway). Desde este panel únicamente se conecta el{' '}
+                <strong className="text-zinc-200">Slot de Pipeboard</strong> (para usuarios o alquiler de slot en{' '}
+                <a href="https://pipeboard.co" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">
+                  pipeboard.co
+                </a>
+                ). Al guardar tu API, viaja cifrada directo al Backend y <strong className="text-emerald-300">se autodestruye al instante del navegador</strong>.
+              </p>
+            </div>
 
-          {/* ══════ TAB META ADS DIRECTO ══════ */}
-          {connectionMode === 'meta_direct' && (
-            <div className="space-y-4">
-              {!metaConnected ? (
-                // Estado: NO CONECTADO
-                <div className="space-y-4">
-                  <div className="p-3.5 rounded-xl bg-blue-950/40 border border-blue-800/50 space-y-2">
-                    <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wider">
-                      Conectá tu cuenta personal de Meta Ads
-                    </h3>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      Usá tu propia cuenta de Meta Ads directamente sin intermediarios.
-                      Necesitás crear una App en{' '}
-                      <a href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">
-                        developers.facebook.com
-                      </a>{' '}
-                      y copiar el App ID y App Secret.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block text-zinc-400 mb-1 font-medium">Meta App ID</label>
-                      <input
-                        type="text"
-                        value={metaAppId}
-                        onChange={e => setMetaAppId(e.target.value)}
-                        placeholder="123456789012345"
-                        className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-zinc-400 mb-1 font-medium">Meta App Secret</label>
-                      <input
-                        type="password"
-                        value={metaAppSecret}
-                        onChange={e => setMetaAppSecret(e.target.value)}
-                        placeholder="abc123def456..."
-                        className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="text-center space-y-2">
-                    <p className="text-[11px] text-zinc-500">
-                      También podés pegar directamente un Access Token de Meta:
-                    </p>
-                    <input
-                      type="text"
-                      value={pbConfig.metaAccessTokenFallback || ''}
-                      onChange={e => setPbConfig(prev => ({ ...prev, metaAccessTokenFallback: e.target.value }))}
-                      placeholder="EAAxxxxxxx... (Token de acceso de Meta)"
-                      className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleMetaLogin}
-                    disabled={isConnectingMeta}
-                    className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isConnectingMeta ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Conectando con Meta...</span>
-                      </>
-                    ) : (
-                      <>
-                        <ExternalLink className="w-4 h-4" />
-                        <span>Conectar con Meta Ads</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                // Estado: CONECTADO
-                <div className="space-y-4">
-                  <div className="p-3.5 rounded-xl bg-emerald-950/50 border border-emerald-800/50 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <div>
-                        <span className="text-xs font-bold text-emerald-300">
-                          ✅ Conectado como {metaUser?.name || 'Usuario Meta'}
-                        </span>
-                        <span className="text-[10px] text-zinc-400 block mt-0.5">
-                          ID: {metaUser?.id || '---'} · Acceso directo a Meta Marketing API v21.0
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleMetaDisconnect}
-                      className="px-3 py-1.5 rounded-lg border border-red-800 bg-red-950/50 text-red-300 text-[11px] font-semibold hover:bg-red-900/50 cursor-pointer transition-colors"
-                    >
-                      Desconectar
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block text-zinc-400 mb-1 font-medium">Cuenta Publicitaria</label>
-                      <select
-                        value={pbConfig.selectedAdAccountId}
-                        onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
-                        className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 text-xs outline-none focus:border-emerald-500 cursor-pointer appearance-none"
-                      >
-                        {metaAdAccounts.length > 0 ? (
-                          metaAdAccounts.map(acc => (
-                            <option key={acc.id} value={acc.id} className="bg-zinc-900">
-                              {acc.name} ({acc.id}) · {acc.currency}
-                            </option>
-                          ))
-                        ) : (
-                          <option value={pbConfig.selectedAdAccountId} className="bg-zinc-900">
-                            {pbConfig.selectedAdAccountId}
-                          </option>
-                        )}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-zinc-400 mb-1 font-medium">Página de Facebook</label>
-                      <select
-                        value={pbConfig.selectedFacebookPageId}
-                        onChange={e => {
-                          const page = metaPages.find(p => p.id === e.target.value);
-                          setPbConfig(prev => ({ ...prev, selectedFacebookPageId: e.target.value }));
-                        }}
-                        className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 text-xs outline-none focus:border-emerald-500 cursor-pointer appearance-none"
-                      >
-                        {metaPages.length > 0 ? (
-                          metaPages.map(page => (
-                            <option key={page.id} value={page.id} className="bg-zinc-900">
-                              {page.name} ({page.id})
-                            </option>
-                          ))
-                        ) : (
-                          <option value={pbConfig.selectedFacebookPageId} className="bg-zinc-900">
-                            {pbConfig.selectedFacebookPageId}
-                          </option>
-                        )}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block text-zinc-400 mb-1 font-medium">Presupuesto Diario (Gs.)</label>
-                      <input
-                        type="number"
-                        value={pbConfig.dailyBudgetGs}
-                        onChange={e => setPbConfig(prev => ({ ...prev, dailyBudgetGs: Number(e.target.value) || 50000 }))}
-                        placeholder="65000"
-                        className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-zinc-400 mb-1 font-medium">Estado de Publicación</label>
-                      <select
-                        value={pbConfig.defaultPublishStatus}
-                        onChange={e => setPbConfig(prev => ({ ...prev, defaultPublishStatus: e.target.value as 'ACTIVE' | 'PAUSED' }))}
-                        className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 text-xs outline-none focus:border-emerald-500 cursor-pointer appearance-none"
-                      >
-                        <option value="PAUSED" className="bg-zinc-900">⏸️ PAUSADO (revisar antes)</option>
-                        <option value="ACTIVE" className="bg-zinc-900">▶️ ACTIVO (publicar directo)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleSaveConfig}
-                    disabled={savingSettings}
-                    className="w-full py-3 rounded-xl bg-emerald-500 text-black text-sm font-bold hover:bg-emerald-400 cursor-pointer transition-colors disabled:opacity-50"
-                  >
-                    {savingSettings ? 'Guardando...' : '💾 Guardar Configuración'}
-                  </button>
-                </div>
+            {/* Estado actual del Token en el Backend (sin exponer jamás el valor) */}
+            <div className="p-3 rounded-xl bg-black border border-zinc-800 flex items-center justify-between gap-3 text-xs">
+              <div className="min-w-0">
+                <span className="font-bold text-zinc-200 block">
+                  {hasPipeboardTokenInBackend
+                    ? `🛡️ API Pipeboard Blindada en Servidor (${pipeboardTokenPreview || '••••••••'})`
+                    : '⚪ Sin Slot de Pipeboard adicional en el servidor'}
+                </span>
+                <span className="text-[11px] text-zinc-400 block mt-0.5">
+                  {lastTokenSelfDestructAt
+                    ? `✅ Autodestruida del navegador a las ${lastTokenSelfDestructAt} · Guardada únicamente en Backend`
+                    : hasPipeboardTokenInBackend
+                    ? 'La llave vive exclusivamente en el Backend. El navegador tiene 0 acceso al valor.'
+                    : 'Pegá tu token abajo cuando quieras activar o alquilar un slot de Pipeboard.'}
+                </span>
+              </div>
+              {hasPipeboardTokenInBackend && (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-800 text-emerald-300 font-mono text-[10px] shrink-0">
+                  ACTIVO EN BACKEND
+                </span>
               )}
             </div>
-          )}
 
-          {/* ══════ TAB PIPEBOARD ══════ */}
-          {connectionMode === 'pipeboard' && (
-            <form onSubmit={handleSaveConfig} className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-800/50 space-y-2">
-                <h3 className="text-xs font-bold text-purple-300 uppercase tracking-wider">
-                  🔌 Conexión vía Pipeboard (Servicio de Terceros)
-                </h3>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">
-                  Pipeboard es un servicio MCP que conecta con Meta Ads. Ideal para equipos que necesitan gestión centralizada.
-                  Suscripción en{' '}
-                  <a href="https://pipeboard.co" target="_blank" rel="noreferrer" className="text-purple-400 hover:underline">
-                    pipeboard.co
-                  </a>
-                </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <label className="block text-zinc-400 mb-1 font-medium">
+                  {hasPipeboardTokenInBackend ? 'Reemplazar API de Pipeboard (Autodestruible)' : 'Pegar API de Pipeboard (Autodestruible)'}
+                </label>
+                <input
+                  type="password"
+                  name="pipeboard_onetime_secret"
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  value={pipeboardTokenInput}
+                  onChange={e => setPipeboardTokenInput(e.target.value)}
+                  placeholder={
+                    hasPipeboardTokenInBackend
+                      ? 'Blindada en Backend (pegá otra para cambiar)...'
+                      : 'pipeboard_... (se autodestruye al guardar)'
+                  }
+                  className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
+                />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <label className="block text-zinc-400 mb-1 font-medium">Token de Pipeboard</label>
-                  <input
-                    type="text"
-                    value={pbConfig.pipeboardApiToken}
-                    onChange={e => setPbConfig(prev => ({ ...prev, pipeboardApiToken: e.target.value }))}
-                    placeholder="pipeboard_..."
-                    className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-purple-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-zinc-400 mb-1 font-medium">Cuenta de Anuncios</label>
-                  <input
-                    type="text"
-                    value={pbConfig.selectedAdAccountId}
-                    onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
-                    placeholder="act_..."
-                    className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-purple-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-zinc-400 mb-1 font-medium">Presupuesto Diario (Gs.)</label>
-                  <input
-                    type="number"
-                    value={pbConfig.dailyBudgetGs}
-                    onChange={e => setPbConfig(prev => ({ ...prev, dailyBudgetGs: Number(e.target.value) || 50000 }))}
-                    placeholder="50000"
-                    className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-purple-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-zinc-400 mb-1 font-medium">Cuenta de Anuncios (act_...)</label>
+                <input
+                  type="text"
+                  value={pbConfig.selectedAdAccountId}
+                  onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
+                  placeholder="act_..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
+                />
               </div>
+              <div>
+                <label className="block text-zinc-400 mb-1 font-medium">Presupuesto Diario (Gs.)</label>
+                <input
+                  type="number"
+                  value={pbConfig.dailyBudgetGs}
+                  onChange={e => setPbConfig(prev => ({ ...prev, dailyBudgetGs: Number(e.target.value) || 50000 }))}
+                  placeholder="65000"
+                  className="w-full px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
 
-              <button
-                type="submit"
-                disabled={savingSettings}
-                className="w-full py-3 rounded-xl bg-purple-500 text-white text-sm font-bold hover:bg-purple-400 cursor-pointer transition-colors disabled:opacity-50"
-              >
-                {savingSettings ? 'Guardando...' : '💾 Guardar Configuración Pipeboard'}
-              </button>
-            </form>
-          )}
+            <button
+              type="submit"
+              disabled={savingSettings}
+              className="w-full py-3 rounded-xl bg-emerald-500 text-black text-sm font-bold hover:bg-emerald-400 cursor-pointer transition-colors disabled:opacity-50"
+            >
+              {savingSettings
+                ? 'Blindando en Backend y limpiando navegador...'
+                : '🔒 Guardar en Backend y Autodestruir del Navegador'}
+            </button>
+          </form>
         </div>
       )}
 

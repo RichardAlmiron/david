@@ -100,6 +100,10 @@ function readKeyFromEnvFile(keyName: string): string {
           ]
         : keyName === 'OPENROUTER_MODEL'
         ? ['OPENROUTER_MODEL', 'GLM_MODEL']
+        : keyName === 'META_CAPI_ACCESS_TOKEN' || keyName === 'META_CAPI_TOKEN'
+        ? ['META_CAPI_ACCESS_TOKEN', 'META_CAPI_TOKEN']
+        : keyName === 'META_ACCESS_TOKEN' || keyName === 'META_ADS_ACCESS_TOKEN'
+        ? ['META_ACCESS_TOKEN', 'META_ADS_ACCESS_TOKEN']
         : [keyName];
 
     for (const k of candidateKeys) {
@@ -165,11 +169,32 @@ function verifyAdminToken(authHeader: string | undefined): { valid: boolean; use
   return { valid: true, user: session.user };
 }
 
-const isProductionEnv = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT || !!process.env.RAILWAY_SERVICE_ID;
-const serverPort = process.env.PORT ? parseInt(process.env.PORT, 10) : (isProductionEnv ? 8080 : 3000);
+const isRailwayEnv =
+  !!process.env.RAILWAY_ENVIRONMENT ||
+  !!process.env.RAILWAY_SERVICE_ID ||
+  !!process.env.RAILWAY_PROJECT_ID ||
+  !!process.env.RAILWAY_STATIC_URL;
+const isProductionEnv = process.env.NODE_ENV === 'production' || isRailwayEnv;
+const serverPort = isRailwayEnv
+  ? process.env.PORT
+    ? parseInt(process.env.PORT, 10)
+    : 8080
+  : 3000;
+
+if (!(globalThis as any).__noeluxProcessGuardsRegistered) {
+  (globalThis as any).__noeluxProcessGuardsRegistered = true;
+  process.on('uncaughtException', (err) => {
+    console.warn('[Server Guard] Uncaught exception ignorada para mantener servidor activo:', err?.message || err);
+  });
+  process.on('unhandledRejection', (reason: any) => {
+    console.warn('[Server Guard] Unhandled rejection ignorada para mantener servidor activo:', reason?.message || reason);
+  });
+}
 
 let auxiliaryServerInitialized = false;
 function attachAuxiliaryHttpListener(viteServer: any, primaryPort: number) {
+  // Solo activar el listener dual 8080/3000 en Railway (en contenedores locales 8080 es usado por nginx)
+  if (!isRailwayEnv) return;
   if (auxiliaryServerInitialized) return;
   auxiliaryServerInitialized = true;
 
@@ -203,7 +228,7 @@ function registerApiServerMiddlewares(server: any) {
   // Auto-conectar WhatsApp y puente cloud en dev y Railway preview
   autoBootWhatsAppIfSessionExists();
 
-  // Activar servidor gemelo para responder tanto en 8080 como en 3000 simultáneamente
+  // Activar servidor gemelo para responder tanto en 8080 como en 3000 simultáneamente en Railway
   attachAuxiliaryHttpListener(server, serverPort);
 
   server.middlewares.use((req: any, res: any, next: any) => {
@@ -1268,12 +1293,41 @@ function registerApiServerMiddlewares(server: any) {
           if (req.method === 'GET' && url === '/api/config') {
             try {
               const file = path.resolve(__dirname, 'store_config.json');
+              let cfgObj: any = {};
               if (fs.existsSync(file)) {
                 const raw = fs.readFileSync(file, 'utf-8');
-                res.end(JSON.stringify({ config: JSON.parse(raw || 'null') }));
-                return;
+                cfgObj = JSON.parse(raw || '{}') || {};
               }
-              res.end(JSON.stringify({ config: null }));
+              const universalPixelId =
+                cfgObj.pixelId ||
+                cfgObj.metaDirectConfig?.pixelId ||
+                readKeyFromEnvFile('META_PIXEL_ID') ||
+                '';
+              if (universalPixelId && !cfgObj.pixelId) {
+                cfgObj.pixelId = universalPixelId;
+              }
+              // Sanitizar secretos de backend para que jamás viajen al navegador
+              const safeCfg: any = { ...cfgObj };
+              delete safeCfg.pipeboardConfig;
+              delete safeCfg.metaDirectConfig;
+              delete safeCfg.deepgramApiKey;
+              delete safeCfg.openRouterApiKey;
+              delete safeCfg.capiAccessToken;
+              if (Array.isArray(safeCfg.productPages)) {
+                safeCfg.productPages = safeCfg.productPages.map((p: any) => {
+                  if (!p || typeof p !== 'object') return p;
+                  const clonedProd = { ...p };
+                  if (clonedProd.metaTracking && typeof clonedProd.metaTracking === 'object') {
+                    clonedProd.metaTracking = {
+                      ...clonedProd.metaTracking,
+                      capiAccessToken: ''
+                    };
+                  }
+                  return clonedProd;
+                });
+              }
+              res.end(JSON.stringify({ config: Object.keys(safeCfg).length > 0 ? safeCfg : null }));
+              return;
             } catch (err: any) {
               res.end(JSON.stringify({ config: null }));
             }
@@ -1295,6 +1349,13 @@ function registerApiServerMiddlewares(server: any) {
                   } catch {}
                 }
                 const merged = { ...existing, ...parsed };
+                // Preservar siempre configuraciones privadas del backend
+                if (existing.pipeboardConfig && !parsed.pipeboardConfig) {
+                  merged.pipeboardConfig = existing.pipeboardConfig;
+                }
+                if (existing.metaDirectConfig && !parsed.metaDirectConfig) {
+                  merged.metaDirectConfig = existing.metaDirectConfig;
+                }
                 const deletedProdIds: string[] = Array.isArray(parsed.deletedProductIds)
                   ? parsed.deletedProductIds
                   : Array.isArray(existing.deletedProductIds)
@@ -1311,9 +1372,20 @@ function registerApiServerMiddlewares(server: any) {
                       const prevProd = existingPages.find(ep => ep?.id === p.id);
                       const finalVoz = p?.vozAgente || prevProd?.vozAgente || existing?.selectedVoiceId;
                       const finalVozNombre = p?.vozAgenteNombre || prevProd?.vozAgenteNombre || existing?.selectedVoiceName;
+                      const preservedCapiToken =
+                        p?.metaTracking?.capiAccessToken || prevProd?.metaTracking?.capiAccessToken || '';
                       incomingMap.set(p.id, {
                         ...prevProd,
                         ...p,
+                        ...(p?.metaTracking || prevProd?.metaTracking
+                          ? {
+                              metaTracking: {
+                                ...(prevProd?.metaTracking || {}),
+                                ...(p?.metaTracking || {}),
+                                ...(preservedCapiToken ? { capiAccessToken: preservedCapiToken } : {})
+                              }
+                            }
+                          : {}),
                         ...(finalVoz ? { vozAgente: finalVoz } : {}),
                         ...(finalVozNombre ? { vozAgenteNombre: finalVozNombre } : {})
                       });
@@ -1330,7 +1402,13 @@ function registerApiServerMiddlewares(server: any) {
                 merged.deepgramApiKey = parsed.deepgramApiKey || existing.deepgramApiKey || DEFAULT_DEEPGRAM_API_KEY;
                 merged.openRouterApiKey = '';
                 fs.writeFileSync(file, JSON.stringify(merged, null, 2), 'utf-8');
-                res.end(JSON.stringify({ success: true, message: 'Configuración actualizada', config: merged }));
+                const safeMerged = { ...merged };
+                delete safeMerged.pipeboardConfig;
+                delete safeMerged.metaDirectConfig;
+                delete safeMerged.deepgramApiKey;
+                delete safeMerged.openRouterApiKey;
+                delete safeMerged.capiAccessToken;
+                res.end(JSON.stringify({ success: true, message: 'Configuración actualizada', config: safeMerged }));
               } catch (err: any) {
                 res.statusCode = 500;
                 res.end(JSON.stringify({ error: err?.message }));
@@ -1653,14 +1731,18 @@ function registerApiServerMiddlewares(server: any) {
                 const eventTime = Number(parsed.eventTime || Math.floor(Date.now() / 1000));
                 const eventSourceUrl = String(parsed.eventSourceUrl || 'http://localhost:3000/');
 
-                // Resolver credenciales del Píxel y CAPI desde request, store_config.json por producto, o variables de entorno
+                // Resolver credenciales del Píxel y CAPI desde request, store_config.json (por producto o universal OAuth), o variables de entorno
                 let storedPixelId = '';
                 let storedCapiToken = '';
                 let storedTestCode = '';
+                let universalOAuthPixelId = '';
+                let universalOAuthToken = '';
                 try {
                   const cfgFile = path.resolve(__dirname, 'store_config.json');
                   if (fs.existsSync(cfgFile)) {
                     const cfgRaw = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+                    universalOAuthPixelId = String(cfgRaw.pixelId || cfgRaw.metaDirectConfig?.pixelId || '');
+                    universalOAuthToken = String(cfgRaw.metaDirectConfig?.accessToken || '');
                     const pagesList: any[] = Array.isArray(cfgRaw.productPages) ? cfgRaw.productPages : [];
                     const matchedProd = pagesList.find(
                       p =>
@@ -1676,10 +1758,19 @@ function registerApiServerMiddlewares(server: any) {
                 } catch {}
 
                 const pixelId = String(
-                  parsed.pixelId || storedPixelId || readKeyFromEnvFile('META_PIXEL_ID') || ''
+                  parsed.pixelId ||
+                    storedPixelId ||
+                    universalOAuthPixelId ||
+                    readKeyFromEnvFile('META_PIXEL_ID') ||
+                    ''
                 ).replace(/\D+/g, '');
                 const capiAccessToken = String(
-                  parsed.capiAccessToken || storedCapiToken || readKeyFromEnvFile('META_CAPI_ACCESS_TOKEN') || ''
+                  parsed.capiAccessToken ||
+                    storedCapiToken ||
+                    universalOAuthToken ||
+                    readKeyFromEnvFile('META_CAPI_ACCESS_TOKEN') ||
+                    readKeyFromEnvFile('META_ACCESS_TOKEN') ||
+                    ''
                 ).trim();
                 const testEventCode = String(
                   parsed.testEventCode || storedTestCode || readKeyFromEnvFile('META_TEST_EVENT_CODE') || ''
@@ -2191,20 +2282,28 @@ IMPORTANTE: Respondé SOLO el JSON. Sin explicaciones antes ni después. Los tex
                 pbConfig.openRouterApiKey ||
                 readKeyFromEnvFile('OPENROUTER_API_KEY') ||
                 DEFAULT_OPENROUTER_API_KEY;
-              const pbToken =
+              const pbToken = String(
                 pbConfig.pipeboardApiToken ||
-                readKeyFromEnvFile('PIPEBOARD_API_TOKEN') ||
-                '';
+                  readKeyFromEnvFile('PIPEBOARD_API_TOKEN') ||
+                  ''
+              ).trim();
+              const tokenPreview =
+                pbToken.length > 4
+                  ? `••••••••${pbToken.slice(-4)}`
+                  : pbToken
+                  ? '••••••••'
+                  : '';
 
               res.end(
                 JSON.stringify({
                   success: true,
+                  // Seguridad Total: Jamás enviamos tokens ni API keys de regreso al navegador
                   config: {
-                    pipeboardApiToken: pbToken,
+                    pipeboardApiToken: '',
                     pipeboardMcpEndpoint:
                       pbConfig.pipeboardMcpEndpoint || 'https://meta-ads.mcp.pipeboard.co',
-                    metaAccessTokenFallback: pbConfig.metaAccessTokenFallback || '',
-                    openRouterApiKey: orKey,
+                    metaAccessTokenFallback: '',
+                    openRouterApiKey: '',
                     openRouterModel: pbConfig.openRouterModel || 'z-ai/glm-5.3',
                     selectedAdAccountId: pbConfig.selectedAdAccountId || 'act_595884210394',
                     selectedFacebookPageId: pbConfig.selectedFacebookPageId || '104928374650192',
@@ -2212,6 +2311,7 @@ IMPORTANTE: Respondé SOLO el JSON. Sin explicaciones antes ni después. Los tex
                     defaultPublishStatus: pbConfig.defaultPublishStatus || 'ACTIVE'
                   },
                   hasPipeboardToken: Boolean(pbToken),
+                  pipeboardTokenPreview: tokenPreview,
                   hasOpenRouterKey: Boolean(orKey),
                   publishedCampaigns: Array.isArray(cfg.pipeboardPublishedCampaigns)
                     ? cfg.pipeboardPublishedCampaigns
@@ -2237,24 +2337,58 @@ IMPORTANTE: Respondé SOLO el JSON. Sin explicaciones antes ni después. Los tex
                   cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
                 }
                 const prevPb = cfg.pipeboardConfig || {};
+                const incomingToken = String(parsed.pipeboardApiToken || '').trim();
+                const incomingOrKey = String(parsed.openRouterApiKey || '').trim();
+                const clearToken = Boolean(parsed.clearPipeboardToken);
+
+                const effectivePbToken = clearToken
+                  ? ''
+                  : incomingToken || String(prevPb.pipeboardApiToken || readKeyFromEnvFile('PIPEBOARD_API_TOKEN') || '').trim();
+                const effectiveOrKey =
+                  incomingOrKey || String(prevPb.openRouterApiKey || '').trim();
+
                 const nextPb = {
                   ...prevPb,
                   ...parsed,
+                  pipeboardApiToken: effectivePbToken,
+                  openRouterApiKey: effectiveOrKey,
+                  metaAccessTokenFallback: '',
                   updatedAt: new Date().toISOString()
                 };
-                if (nextPb.pipeboardApiToken) {
-                  saveKeyToEnvFile('PIPEBOARD_API_TOKEN', String(nextPb.pipeboardApiToken).trim());
+                delete nextPb.clearPipeboardToken;
+
+                if (clearToken) {
+                  saveKeyToEnvFile('PIPEBOARD_API_TOKEN', '');
+                } else if (incomingToken) {
+                  saveKeyToEnvFile('PIPEBOARD_API_TOKEN', incomingToken);
                 }
-                if (nextPb.openRouterApiKey) {
-                  saveKeyToEnvFile('OPENROUTER_API_KEY', String(nextPb.openRouterApiKey).trim());
+                if (incomingOrKey) {
+                  saveKeyToEnvFile('OPENROUTER_API_KEY', incomingOrKey);
                 }
+
                 cfg.pipeboardConfig = nextPb;
                 fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+
+                const tokenPreview =
+                  effectivePbToken.length > 4
+                    ? `••••••••${effectivePbToken.slice(-4)}`
+                    : effectivePbToken
+                    ? '••••••••'
+                    : '';
+
+                // Seguridad Total: La respuesta devuelve config con el token vacío para autodestrucción en navegador
                 res.end(
                   JSON.stringify({
                     success: true,
-                    message: 'Configuración de Pipeboard + OpenRouter guardada en Base de Datos.',
-                    config: nextPb
+                    message: 'Configuración de Pipeboard blindada en el Backend (autodestruida del navegador).',
+                    hasPipeboardToken: Boolean(effectivePbToken),
+                    pipeboardTokenPreview: tokenPreview,
+                    config: {
+                      ...nextPb,
+                      pipeboardApiToken: '',
+                      openRouterApiKey: '',
+                      metaAccessTokenFallback: ''
+                    }
                   })
                 );
               } catch (err: any) {
@@ -2412,27 +2546,55 @@ setTimeout(()=>window.close(),5000);
               const userId = meJson.id || 'unknown';
               const userName = meJson.name || 'Usuario Meta';
 
-              // Guardar token y datos en store_config.json
+              // Paso 4: Auto-descubrir el Píxel Universal de la cuenta publicitaria para configurar META_PIXEL_ID y META_CAPI_TOKEN en 1 clic
+              let discoveredPixelId = cfg.metaDirectConfig?.pixelId || cfg.pixelId || readKeyFromEnvFile('META_PIXEL_ID') || '';
+              try {
+                const accRes = await fetch(
+                  `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name&access_token=${encodeURIComponent(longLivedToken)}`
+                );
+                const accJson: any = await accRes.json();
+                const accounts: any[] = Array.isArray(accJson?.data) ? accJson.data : [];
+                for (const acc of accounts) {
+                  if (!acc?.id) continue;
+                  const pixRes = await fetch(
+                    `https://graph.facebook.com/v21.0/${encodeURIComponent(acc.id)}/adspixels?fields=id,name&access_token=${encodeURIComponent(longLivedToken)}`
+                  );
+                  const pixJson: any = await pixRes.json();
+                  if (Array.isArray(pixJson?.data) && pixJson.data.length > 0 && pixJson.data[0]?.id) {
+                    discoveredPixelId = String(pixJson.data[0].id);
+                    break;
+                  }
+                }
+              } catch {}
+
+              // Guardar token y Píxel Universal en store_config.json
               if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
               cfg.metaDirectConfig.accessToken = longLivedToken;
               cfg.metaDirectConfig.userId = userId;
               cfg.metaDirectConfig.userName = userName;
               cfg.metaDirectConfig.connectedAt = new Date().toISOString();
+              if (discoveredPixelId) {
+                cfg.metaDirectConfig.pixelId = discoveredPixelId;
+                cfg.pixelId = discoveredPixelId;
+                saveKeyToEnvFile('META_PIXEL_ID', discoveredPixelId);
+              }
               fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
 
-              // Guardar token también en .env
+              // Guardar token también en .env (sirve tanto para Meta Ads Directo como para Servidor CAPI Universal)
               saveKeyToEnvFile('META_ACCESS_TOKEN', longLivedToken);
+              saveKeyToEnvFile('META_CAPI_TOKEN', longLivedToken);
 
               // Responder con HTML que notifica a la ventana padre y se auto-cierra
               res.setHeader('Content-Type', 'text/html; charset=utf-8');
               res.end(`<!DOCTYPE html><html><body style="background:#000;color:#10b981;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
 <div style="text-align:center">
-<h1>✅ Meta Ads Conectado</h1>
+<h1>✅ Meta Ads + Píxel CAPI Conectados</h1>
 <p>Cuenta: ${userName} (${userId})</p>
+${discoveredPixelId ? `<p>🎯 Píxel Universal Activo: ${discoveredPixelId}</p>` : ''}
 <p>Podés cerrar esta ventana.</p>
 <script>
-window.opener && window.opener.postMessage({type:'META_AUTH_SUCCESS',userId:'${userId}',userName:'${userName.replace(/'/g, "\\'")}'},'*');
-setTimeout(()=>window.close(),3000);
+window.opener && window.opener.postMessage({type:'META_AUTH_SUCCESS',userId:'${userId}',userName:'${userName.replace(/'/g, "\\'")}',pixelId:'${discoveredPixelId}'},'*');
+setTimeout(()=>window.close(),2500);
 </script>
 </div></body></html>`);
             } catch (err: any) {
@@ -2474,6 +2636,8 @@ setTimeout(()=>window.close(),5000);
                   user: null,
                   adAccounts: [],
                   pages: [],
+                  pixels: [],
+                  universalPixelId: cfg.pixelId || cfg.metaDirectConfig?.pixelId || readKeyFromEnvFile('META_PIXEL_ID') || '',
                   tokenExpiresIn: null,
                   connectedAt: cfg.metaDirectConfig?.connectedAt || null
                 }));
@@ -2494,6 +2658,7 @@ setTimeout(()=>window.close(),5000);
                   user: null,
                   adAccounts: [],
                   pages: [],
+                  pixels: [],
                   error: meJson.error.message,
                   tokenExpiresIn: null,
                   connectedAt: cfg.metaDirectConfig?.connectedAt || null
@@ -2521,6 +2686,46 @@ setTimeout(()=>window.close(),5000);
                 pages = pagesJson.data || [];
               } catch {}
 
+              // Obtener Píxeles de las cuentas publicitarias y auto-configurar Píxel Universal si aún no estaba guardado
+              let pixels: Array<{ id: string; name: string; adAccountId: string }> = [];
+              try {
+                for (const acc of adAccounts.slice(0, 5)) {
+                  if (!acc?.id) continue;
+                  const pixRes = await fetch(
+                    `https://graph.facebook.com/v21.0/${encodeURIComponent(acc.id)}/adspixels?fields=id,name&access_token=${encodeURIComponent(accessToken)}`
+                  );
+                  const pixJson: any = await pixRes.json();
+                  if (Array.isArray(pixJson?.data)) {
+                    for (const px of pixJson.data) {
+                      if (px?.id && !pixels.some(existing => existing.id === String(px.id))) {
+                        pixels.push({
+                          id: String(px.id),
+                          name: String(px.name || `Píxel ${px.id}`),
+                          adAccountId: String(acc.id)
+                        });
+                      }
+                    }
+                  }
+                }
+              } catch {}
+
+              let universalPixelId =
+                cfg.pixelId ||
+                cfg.metaDirectConfig?.pixelId ||
+                readKeyFromEnvFile('META_PIXEL_ID') ||
+                '';
+
+              if (!universalPixelId && pixels.length > 0) {
+                universalPixelId = pixels[0].id;
+                if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
+                cfg.metaDirectConfig.pixelId = universalPixelId;
+                cfg.pixelId = universalPixelId;
+                try {
+                  fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                  saveKeyToEnvFile('META_PIXEL_ID', universalPixelId);
+                } catch {}
+              }
+
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({
                 success: true,
@@ -2528,6 +2733,9 @@ setTimeout(()=>window.close(),5000);
                 user: { id: meJson.id, name: meJson.name },
                 adAccounts,
                 pages,
+                pixels,
+                universalPixelId,
+                capiTokenAutoConnected: true,
                 tokenExpiresIn: 'long-lived (~60 days)',
                 connectedAt: cfg.metaDirectConfig?.connectedAt || null
               }));
@@ -2556,14 +2764,20 @@ setTimeout(()=>window.close(),5000);
                 const landingUrl = String(
                   parsed.landingUrl || `http://localhost:3000/?p=${product.slug || 'producto'}`
                 );
-                const pixelId = String(parsed.pixelId || product.metaTracking?.pixelId || '').trim();
-
                 // Leer credenciales desde store_config o .env
                 const cfgFile = path.resolve(__dirname, 'store_config.json');
                 let cfg: any = {};
                 if (fs.existsSync(cfgFile)) {
                   cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
                 }
+                const pixelId = String(
+                  parsed.pixelId ||
+                    product.metaTracking?.pixelId ||
+                    cfg.pixelId ||
+                    cfg.metaDirectConfig?.pixelId ||
+                    readKeyFromEnvFile('META_PIXEL_ID') ||
+                    ''
+                ).trim();
                 const accessToken =
                   cfg.metaDirectConfig?.accessToken ||
                   readKeyFromEnvFile('META_ACCESS_TOKEN') ||
@@ -3121,24 +3335,47 @@ setTimeout(()=>window.close(),5000);
             req.on('end', async () => {
               try {
                 const parsed = JSON.parse(body || '{}');
+                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                let cfg: any = {};
+                if (fs.existsSync(cfgFile)) {
+                  try {
+                    cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+                  } catch {}
+                }
                 const product = parsed.product || {};
                 const creatives: any[] = Array.isArray(parsed.creatives) ? parsed.creatives : [];
-                const adAccountId = String(parsed.adAccountId || 'act_595884210394').trim();
-                const pageId = String(parsed.facebookPageId || '104928374650192').trim();
-                const dailyBudgetGs = Number(parsed.dailyBudgetGs || 65000);
+                const adAccountId = String(
+                  parsed.adAccountId || cfg.pipeboardConfig?.selectedAdAccountId || 'act_595884210394'
+                ).trim();
+                const pageId = String(
+                  parsed.facebookPageId || cfg.pipeboardConfig?.selectedFacebookPageId || '104928374650192'
+                ).trim();
+                const dailyBudgetGs = Number(
+                  parsed.dailyBudgetGs || cfg.pipeboardConfig?.dailyBudgetGs || 65000
+                );
                 const publishStatus: 'ACTIVE' | 'PAUSED' =
                   parsed.publishStatus === 'PAUSED' ? 'PAUSED' : 'ACTIVE';
                 const pbToken = String(
-                  parsed.pipeboardApiToken || readKeyFromEnvFile('PIPEBOARD_API_TOKEN') || ''
+                  parsed.pipeboardApiToken ||
+                    cfg.pipeboardConfig?.pipeboardApiToken ||
+                    readKeyFromEnvFile('PIPEBOARD_API_TOKEN') ||
+                    ''
                 ).trim();
                 const mcpEndpoint = String(
-                  parsed.pipeboardMcpEndpoint || 'https://meta-ads.mcp.pipeboard.co'
+                  parsed.pipeboardMcpEndpoint ||
+                    cfg.pipeboardConfig?.pipeboardMcpEndpoint ||
+                    'https://meta-ads.mcp.pipeboard.co'
                 ).trim();
-                const metaDirectToken = String(parsed.metaAccessTokenFallback || '').trim();
                 const landingUrl = String(
                   parsed.landingUrl || `http://localhost:3000/?p=${product.slug || 'producto'}`
                 );
-                const pixelId = String(product.metaTracking?.pixelId || '129485739201948').trim();
+                const pixelId = String(
+                  product.metaTracking?.pixelId ||
+                    cfg.pixelId ||
+                    cfg.metaDirectConfig?.pixelId ||
+                    readKeyFromEnvFile('META_PIXEL_ID') ||
+                    '129485739201948'
+                ).trim();
 
                 const nowIso = new Date().toISOString();
                 const mcpStepLogs: any[] = [];
@@ -3384,11 +3621,14 @@ export default defineConfig({
     watch: {
       ignored: [
         '**/wa_chats.json',
+        '**/seller_agent_chats.json',
         '**/pedidos.json',
         '**/store_config.json',
         '**/admin_sessions.json',
         '**/deleted_orders.json',
-        '**/.wa_auth_session/**'
+        '**/.wa_auth_session/**',
+        '**/.env',
+        '**/.env.*'
       ]
     }
   },
