@@ -386,20 +386,53 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     if (!brainProfile || !activeProduct) return;
     const isRegeneratingAll = creatives.length > 0;
     setWorkflowStep('generating');
-    // Limpiamos los creativos previos mientras OpenRouter genera las nuevas imágenes para que nunca parezca instantáneo/simulado
+    // Limpiamos los creativos previos mientras OpenRouter genera desde cero los nuevos textos e imágenes
     setCreatives([]);
     setGenerationProgressText(
-      `🎨 Conectando con OpenRouter (${AUTOADS_IMAGE_MODEL}) para sintetizar las 4 imágenes publicitarias de "${activeProduct.nombre}"...`
+      isRegeneratingAll
+        ? `🧠 Redactando desde cero 6 nuevos anuncios persuasivos con OpenRouter (${AUTOADS_LLM_MODEL}) para "${activeProduct.nombre}"...`
+        : `🎨 Conectando con OpenRouter (${AUTOADS_IMAGE_MODEL}) para sintetizar las 4 imágenes publicitarias de "${activeProduct.nombre}"...`
     );
 
     const genTimer1 = setTimeout(() => {
       setGenerationProgressText(
-        `🎬 Sintetizando los 2 Reels de Video con MiniMax (${AUTOADS_VIDEO_MODEL}) + Keyframes GPT Imagen 2.6 en OpenRouter...`
+        `🎬 Sintetizando en vivo las 6 imágenes y Reels con ${AUTOADS_IMAGE_MODEL} + MiniMax (${AUTOADS_VIDEO_MODEL}) en OpenRouter...`
       );
-    }, 1600);
+    }, 2200);
 
     try {
-      const baseAssets = buildCreativeAssetsFromBrain(activeProduct, brainProfile);
+      let currentBrain = brainProfile;
+
+      // Si el usuario tocó "Regenerar los 6 Anuncios", primero pedimos 6 textos, titulares y prompts totalmente nuevos a GLM-5.3
+      if (isRegeneratingAll) {
+        try {
+          const trainRes = await fetch('/api/autoads/brain-train', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              product: activeProduct,
+              externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
+              openRouterModel: AUTOADS_LLM_MODEL,
+              variationTimestamp: Date.now()
+            })
+          });
+          if (trainRes.ok) {
+            const trainData = await trainRes.json();
+            if (trainData?.brainProfile?.creativeBriefs?.length > 0) {
+              currentBrain = {
+                ...currentBrain,
+                trainedAt: new Date().toISOString(),
+                avatars: trainData.brainProfile.avatars || currentBrain.avatars,
+                targeting: trainData.brainProfile.targeting || currentBrain.targeting,
+                creativeBriefs: trainData.brainProfile.creativeBriefs
+              };
+              setBrainProfile(currentBrain);
+            }
+          }
+        } catch {}
+      }
+
+      const baseAssets = buildCreativeAssetsFromBrain(activeProduct, currentBrain);
       let finalAssets = baseAssets;
 
       try {
@@ -408,8 +441,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             product: activeProduct,
-            creativeBriefs: brainProfile.creativeBriefs,
-            forceNewGeneration: isRegeneratingAll,
+            creativeBriefs: currentBrain.creativeBriefs,
+            forceNewGeneration: true,
             imageModel: AUTOADS_IMAGE_MODEL,
             videoModel: AUTOADS_VIDEO_MODEL
           })
@@ -436,7 +469,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       setAdPhotoIndexOverride({});
       setWorkflowStep('generated');
       showToast(
-        `🤖 6 anuncios creados en OpenRouter (Imágenes: ${AUTOADS_IMAGE_MODEL} · Reels Video: ${AUTOADS_VIDEO_MODEL}) para "${activeProduct.nombre}".`
+        `🤖 6 anuncios creados desde cero en OpenRouter (Textos: ${AUTOADS_LLM_MODEL} · Imágenes: ${AUTOADS_IMAGE_MODEL} · Video: ${AUTOADS_VIDEO_MODEL}).`
       );
     } finally {
       clearTimeout(genTimer1);
@@ -1088,10 +1121,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {creatives.map((ad, idx) => {
               const isReel = ad.type === 'video_reel_9x16';
-              const currentPhotoIdx = adPhotoIndexOverride[idx] ?? idx;
-              const aiGeneratedPhotoUrl =
-                ad.aiGeneratedImageUrl ||
-                allProductPhotos[currentPhotoIdx % allProductPhotos.length];
+              const aiGeneratedPhotoUrl = ad.aiGeneratedImageUrl || '';
               const isEditingThis = editingAdIdx === idx;
               const isRegeneratingThis = regeneratingAdIdx === idx;
 
@@ -1111,16 +1141,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         {isReel ? '🎬 MiniMax Video + GPT Imagen 2.6' : '🎨 GPT Imagen 2.6 (OpenRouter)'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleCycleProductPhotoForAd(idx)}
-                        title="Rotar escena y copy congruente"
-                        className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[10px] font-semibold text-zinc-200 inline-flex items-center gap-1 cursor-pointer"
-                      >
-                        <ImageIcon className="w-3 h-3 text-blue-400" />
-                        <span>Arte IA {(currentPhotoIdx % allProductPhotos.length) + 1}</span>
-                      </button>
+                    <div className="flex items-center gap-1.5">
 
                       <button
                         type="button"
@@ -1152,12 +1173,18 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                       {/* 1. Cabecera de Página de Facebook (Avatar + Nombre + "Publicidad · 🌍") */}
                       <div className="p-3 flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                          <img
-                            src={aiGeneratedPhotoUrl}
-                            alt={activeProduct.nombre}
-                            referrerPolicy="no-referrer"
-                            className="w-9 h-9 rounded-full object-cover border border-emerald-500/50 shrink-0"
-                          />
+                          {aiGeneratedPhotoUrl ? (
+                            <img
+                              src={aiGeneratedPhotoUrl}
+                              alt={activeProduct.nombre}
+                              referrerPolicy="no-referrer"
+                              className="w-9 h-9 rounded-full object-cover border border-emerald-500/50 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-emerald-950 border border-emerald-500/50 text-emerald-300 flex items-center justify-center font-black text-xs shrink-0">
+                              {(activeProduct.nombre || 'A')[0]}
+                            </div>
+                          )}
                           <div>
                             <div className="text-xs font-bold text-white leading-tight">
                               {activeProduct.nombre.split(' ').slice(0, 3).join(' ')} Oficial PY

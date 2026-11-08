@@ -86,6 +86,22 @@ const DEFAULT_OPENROUTER_API_KEY = Buffer.from(
   'base64'
 ).toString('utf8');
 
+function isValidOpenRouterKey(key: string): boolean {
+  if (!key || typeof key !== 'string') return false;
+  const clean = key.trim();
+  if (!clean.startsWith('sk-or-')) return false;
+  if (
+    clean.includes('tu-clave') ||
+    clean.includes('tu_clave') ||
+    clean.includes('placeholder') ||
+    clean.includes('example') ||
+    clean.includes('your-key')
+  ) {
+    return false;
+  }
+  return clean.length > 45;
+}
+
 function readKeyFromEnvFile(keyName: string): string {
   try {
     const candidateKeys =
@@ -107,7 +123,14 @@ function readKeyFromEnvFile(keyName: string): string {
         : [keyName];
 
     for (const k of candidateKeys) {
-      if (process.env[k]) return process.env[k]!.trim();
+      const val = process.env[k]?.trim();
+      if (val) {
+        if (keyName === 'OPENROUTER_API_KEY') {
+          if (isValidOpenRouterKey(val)) return val;
+        } else {
+          return val;
+        }
+      }
     }
 
     const envPath = path.resolve(__dirname, '.env');
@@ -118,7 +141,13 @@ function readKeyFromEnvFile(keyName: string): string {
         for (const k of candidateKeys) {
           if (trimmed.startsWith(k + '=')) {
             const val = trimmed.substring(k.length + 1).replace(/^["']|["']$/g, '').trim();
-            if (val) return val;
+            if (val) {
+              if (keyName === 'OPENROUTER_API_KEY') {
+                if (isValidOpenRouterKey(val)) return val;
+              } else {
+                return val;
+              }
+            }
           }
         }
       }
@@ -126,6 +155,7 @@ function readKeyFromEnvFile(keyName: string): string {
   } catch {}
   if (keyName === 'DEEPGRAM_API_KEY') return DEFAULT_DEEPGRAM_API_KEY;
   if (keyName === 'OPENROUTER_MODEL') return 'z-ai/glm-5.3';
+  if (keyName === 'OPENROUTER_API_KEY') return DEFAULT_OPENROUTER_API_KEY;
   return '';
 }
 
@@ -2204,163 +2234,22 @@ function registerApiServerMiddlewares(server: any) {
                 let brainProfile: any = null;
 
                 if (openRouterKey) {
-                  const systemPrompt = `Sos el Cerebro Maestro Supremo de AutoAds — el estratega #1 del mundo en Meta Ads (Algoritmo Andrómeda 2025-2026) y Respuesta Directa para E-Commerce Cobro Contra Entrega (COD) en Paraguay y Latinoamérica.
-
-## TU MISIÓN
-Analizar a fondo el producto, los hallazgos de competencia en Paraguay y mercados internacionales, y sintetizar 3 avatares hiper-rentables + 6 anuncios ganadores genuinamente diversos listos para dominar la subasta de Meta Ads.
-
-## SECRETOS MAESTROS DE GURÚS + ALGORITMO META ANDRÓMEDA (2025-2026)
-1. **META ANDRÓMEDA — "EL CREATIVO ES EL TARGETING"**:
-   - El motor de recuperación Andrómeda de Meta agrupa anuncios visual o conceptualmente parecidos en el mismo Entity ID.
-   - Para abrir 6 clusters de compradores distintos, cada uno de los 6 anuncios debe tener un ÁNGULO PSICOLÓGICO, un HOOK de primeros 3 segundos, una ESTRUCTURA DE COPY y un NIVEL DE CONCIENCIA totalmente diferente (>70% de varianza conceptual).
-2. **EUGENE SCHWARTZ (5 NIVELES DE CONCIENCIA)**:
-   - Cubrí compradores Inconscientes del Solucionador (Hook de curiosidad/problema agudo), Conscientes del Problema (Dolor → Transformación), Conscientes de la Solución (Comparativa demoledora contra alternativas viejas) y Conscientes del Producto (Oferta Directa COD + Escasez).
-3. **ALEX HORMOZI ($100M GRAND SLAM OFFER & INVERSIÓN TOTAL DE RIESGO)**:
-   - Multiplicá el Resultado Soñado y la Probabilidad Percibida de Éxito; reducí a cero el Tiempo de Espera y el Esfuerzo.
-   - **Inversión Agresiva de Riesgo COD**: En Paraguay el freno #1 es el miedo a ser estafado en internet. Destruí esa objeción repitiendo que el cliente NO pone tarjeta y paga recién en la puerta de su casa al verificar su paquete con el repartidor.
-4. **PSICOLOGÍA DE DISRUPCIÓN DE PATRÓN (SCROLL-STOPPERS DE ALTO CTR)**:
-   - Usá ganchos de curiosidad extrema ("No compres esto sin saber...", "Compré esto por internet y mirá lo que llegó...", "Por qué las tiendas tradicionales odian este equipo") combinados con la Verdad Física real del producto (sin promesas falsas que bloqueen la cuenta).
-
-## DATOS DEL PRODUCTO ANALIZADO
-- Nombre: ${prodName}
-- Descripción: ${prodDesc}
-${scrapedSiteData ? `- URL Externa Escrapeada: ${scrapedSiteData.sourceUrl} (Encabezados detectados: ${scrapedSiteData.headings.join(' | ')})` : ''}
-- Precio 1 Unidad: Gs. ${p1.toLocaleString('es-PY')}
-- Precio Pack 2 (Más Vendido): Gs. ${p2.toLocaleString('es-PY')}
-- Precio Pack 3: Gs. ${p3.toLocaleString('es-PY')}
-- Precio Normal Tachado: Gs. ${pNormal.toLocaleString('es-PY')}
-- Envío: ${freeShipping ? 'GRATIS a todo Paraguay' : 'Entrega rápida en puerta'}
-- Verdad Física: ${JSON.stringify(physicalTruth).slice(0, 500)}
-- Cerebro del Agente WhatsApp: ${JSON.stringify(agentBrain).slice(0, 300)}
-- Contexto IA: ${contextIA.slice(0, 300)}
-
-## INTELIGENCIA COMPETITIVA DETECTADA (PARAGUAY + LATAM)
-- Anuncios competidores analizados: ${competitorInsights.activeAdsFound}
-- Hooks detectados en competencia: ${JSON.stringify(competitorInsights.commonHooks).slice(0, 500)}
-- Ángulos de mercado: ${JSON.stringify(competitorInsights.commonAngles).slice(0, 500)}
-- Patrones ganadores (>30 días activos): ${JSON.stringify(competitorInsights.winningPatterns).slice(0, 400)}
-
-## LO QUE DEBÉS DEVOLVER
-Un objeto JSON con esta estructura EXACTA:
+                  const systemPrompt = `Sos el director creativo experto en Meta Ads Andrómeda y E-Commerce Contra Entrega (COD) en Paraguay.
+Analizá el producto "${prodName}" (${prodDesc}) con precio 1x Gs. ${p1.toLocaleString('es-PY')}, 2x Gs. ${p2.toLocaleString('es-PY')}, ${freeShipping ? 'Envío Gratis' : 'Pago en Puerta'}.
+Generá 3 avatares paraguayos y 6 briefs de anuncios con hooks, titulares, copys persuasivos completos y prompts de imagen 100% congruentes.
+Devolvé SOLO un JSON válido con esta estructura:
 {
-  "avatars": [
-    {
-      "id": "avatar-1",
-      "name": "nombre descriptivo paraguayo",
-      "description": "perfil psicológico y demográfico",
-      "painPoints": ["dolor 1", "dolor 2"],
-      "angles": [
-        { "id": "angle-1", "type": "offer|trust|transformation|urgency|social_proof|unboxing", "hook": "hook disruptivo de 3 segundos", "emotionalTrigger": "emoción que activa" }
-      ]
-    }
-  ],
-  "targeting": {
-    "country": "PY",
-    "minAge": 18,
-    "maxAge": 65,
-    "genderBalance": "all",
-    "peakHours": [8, 12, 19, 21],
-    "optimizationGoal": "OUTCOME_SALES",
-    "bidStrategy": "LOWEST_COST_WITHOUT_CAP"
-  },
+  "avatars": [{"id":"av-1","name":"María de Asunción","description":"Compradora práctica","painPoints":["Miedo a compras online"],"angles":[{"id":"ang-1","type":"offer","hook":"Mirá por qué es tendencia","emotionalTrigger":"curiosidad"}]}],
+  "targeting": {"country":"PY","minAge":20,"maxAge":65,"genders":["all"],"interests":["Compras online","Hogar"],"peakHours":[12,19,20,21]},
   "creativeBriefs": [
-    {
-      "index": 0,
-      "type": "feed_1x1",
-      "format": "1:1",
-      "archetypeName": "Oferta Grand Slam COD",
-      "avatarTarget": "avatar-1",
-      "angleType": "offer",
-      "hook3s": "texto hook primeros 3 segundos",
-      "hookBadge": "BADGE EN MAYÚSCULAS (máx 28 chars)",
-      "headline": "titular persuasivo como se ve en Facebook Ads (máx 48 chars)",
-      "primaryText": "copy persuasivo completo listo para publicar en Facebook Ads con saltos de línea, beneficios, precios en Gs. y llamado a la acción contra entrega",
-      "descriptionText": "subtítulo de 1 línea debajo del titular en Facebook",
-      "ctaType": "ORDER_NOW",
-      "ctaLabel": "PEDIR CONTRA ENTREGA",
-      "aiImagePrompt": "High-converting commercial Facebook Ad photograph showing the exact scene described in primaryText and headline"
-    },
-    {
-      "index": 1,
-      "type": "feed_1x1",
-      "format": "1:1",
-      "archetypeName": "Anti-Estafa / Repartidor en Puerta",
-      "avatarTarget": "avatar-2",
-      "angleType": "trust",
-      "hook3s": "...", "hookBadge": "...", "headline": "...", "primaryText": "...", "descriptionText": "...",
-      "ctaType": "SHOP_NOW", "ctaLabel": "VER OFERTA SEGURA",
-      "aiImagePrompt": "Authentic Cash-on-Delivery courier at the front door in Paraguay handing the box to a smiling buyer paying cash on delivery, matching primaryText"
-    },
-    {
-      "index": 2,
-      "type": "feed_1x1",
-      "format": "1:1",
-      "archetypeName": "Comparativa ANTES vs. DESPUÉS",
-      "avatarTarget": "avatar-3",
-      "angleType": "transformation",
-      "hook3s": "...", "hookBadge": "...", "headline": "...", "primaryText": "...", "descriptionText": "...",
-      "ctaType": "ORDER_NOW", "ctaLabel": "QUIERO LA SOLUCIÓN",
-      "aiImagePrompt": "Split-screen BEFORE vs AFTER commercial Meta Ad showing the frustrating problem on the left and the instant solution on the right, matching primaryText"
-    },
-    {
-      "index": 3,
-      "type": "story_9x16",
-      "format": "9:16",
-      "archetypeName": "Pack 2 Familiar Ahorro",
-      "avatarTarget": "avatar-1",
-      "angleType": "urgency",
-      "hook3s": "...", "hookBadge": "...", "headline": "...", "primaryText": "...", "descriptionText": "...",
-      "ctaType": "ORDER_NOW", "ctaLabel": "QUIERO MI PACK HOY",
-      "aiImagePrompt": "Vertical 9:16 Instagram Story bundle promotion showing 2 units side by side on a sleek podium for family savings, matching primaryText"
-    },
-    {
-      "index": 4,
-      "type": "reel_9x16",
-      "format": "9:16",
-      "archetypeName": "Demostración Extrema en Vivo",
-      "avatarTarget": "avatar-2",
-      "angleType": "social_proof",
-      "hook3s": "...", "hookBadge": "...", "headline": "...", "primaryText": "...", "descriptionText": "...",
-      "ctaType": "SHOP_NOW", "ctaLabel": "COMPRAR AHORA",
-      "aiImagePrompt": "Vertical 9:16 macro action demonstration under outdoor night rain droplets proving durability and power, matching primaryText",
-      "videoScenes": [
-        { "badge": "HOOK (0-3s)", "title": "...", "subtitle": "...", "priceTag": "...", "bgGradient": "from-[#041a12] via-[#0b3d2e] to-[#041a12]" },
-        { "badge": "PROBLEMA (3-6s)", "title": "...", "subtitle": "...", "priceTag": "...", "bgGradient": "from-[#0f172a] via-[#1e3a8a] to-[#0f172a]" },
-        { "badge": "DEMO REAL (6-9s)", "title": "...", "subtitle": "...", "priceTag": "...", "bgGradient": "from-[#3b0764] via-[#581c87] to-[#1e1b4b]" },
-        { "badge": "CTA COD (9-12s)", "title": "...", "subtitle": "...", "priceTag": "...", "bgGradient": "from-[#064e3b] via-[#15803d] to-[#041a12]" }
-      ]
-    },
-    {
-      "index": 5,
-      "type": "reel_9x16",
-      "format": "9:16",
-      "archetypeName": "Unboxing POV ¿Qué Trae la Caja?",
-      "avatarTarget": "avatar-3",
-      "angleType": "unboxing",
-      "hook3s": "...", "hookBadge": "...", "headline": "...", "primaryText": "...", "descriptionText": "...",
-      "ctaType": "SHOP_NOW", "ctaLabel": "PEDIR EL MÍO HOY",
-      "aiImagePrompt": "Vertical 9:16 first-person POV hands unboxing the cardboard box on a wooden table showing all included accessories, matching primaryText",
-      "videoScenes": [
-        { "badge": "SOSPECHA (0-3s)", "title": "...", "subtitle": "...", "priceTag": "...", "bgGradient": "from-[#1f0808] via-[#7f1d1d] to-[#450a0a]" },
-        { "badge": "ABRIENDO (3-6s)", "title": "...", "subtitle": "...", "priceTag": "...", "bgGradient": "from-[#0f172a] via-[#1e3a8a] to-[#0f172a]" },
-        { "badge": "PRUEBA REAL (6-9s)", "title": "...", "subtitle": "...", "priceTag": "...", "bgGradient": "from-[#064e3b] via-[#15803d] to-[#041a12]" },
-        { "badge": "OFERTA COD (9-12s)", "title": "...", "subtitle": "...", "priceTag": "...", "bgGradient": "from-[#3b0764] via-[#581c87] to-[#1e1b4b]" }
-      ]
-    }
+    {"index": 0, "type": "feed_1x1", "format": "1:1", "archetypeName": "Oferta Directa COD", "avatarTarget": "av-1", "angleType": "offer", "hook3s": "Hook de 3s", "hookBadge": "🔥 OFERTA HOY · PAGO EN PUERTA", "headline": "Titular de alto impacto máx 48 chars", "primaryText": "Copy persuasivo de 6 líneas con beneficios de ${prodName}, precios y pago al recibir", "descriptionText": "Subtítulo descriptivo", "ctaType": "ORDER_NOW", "ctaLabel": "PEDIR CONTRA ENTREGA", "aiImagePrompt": "Commercial Facebook ad photography of ${prodName} in real-world action, 8k, photorealistic, zero text overlays"},
+    {"index": 1, "type": "feed_1x1", "format": "1:1", "archetypeName": "Repartidor en Puerta COD", "avatarTarget": "av-1", "angleType": "trust", "hook3s": "Hook de confianza", "hookBadge": "✅ PAGÁS RECIÉN AL RECIBIR", "headline": "Titular de confianza máx 48 chars", "primaryText": "Copy detallando la entrega en puerta y verificación del paquete de ${prodName}", "descriptionText": "Subtítulo descriptivo", "ctaType": "SHOP_NOW", "ctaLabel": "VER GARANTÍA Y COMPRAR", "aiImagePrompt": "Authentic Cash-on-Delivery lifestyle ad in Paraguay: friendly delivery courier handing the ${prodName} package at the front door to a smiling homeowner paying cash, 8k, zero text overlays"},
+    {"index": 2, "type": "feed_1x1", "format": "1:1", "archetypeName": "Antes vs Después", "avatarTarget": "av-1", "angleType": "transformation", "hook3s": "Hook de transformación", "hookBadge": "💡 ANTES VS DESPUÉS", "headline": "Titular de comparativa máx 48 chars", "primaryText": "Copy contrastando el problema antes de tener ${prodName} vs la solución después", "descriptionText": "Subtítulo descriptivo", "ctaType": "ORDER_NOW", "ctaLabel": "QUIERO LA SOLUCIÓN", "aiImagePrompt": "Split-screen BEFORE and AFTER commercial Meta Ad for ${prodName}: left side frustrating problem, right side instant solution, 8k, zero text overlays"},
+    {"index": 3, "type": "story_9x16", "format": "9:16", "archetypeName": "Pack Dúo Ahorro", "avatarTarget": "av-1", "angleType": "urgency", "hook3s": "Hook de ahorro 2 unidades", "hookBadge": "⚡ PACK DÚO 2 UNIDADES", "headline": "Titular pack dúo máx 48 chars", "primaryText": "Copy sobre el pack 2 de ${prodName} con ahorro especial", "descriptionText": "Subtítulo descriptivo", "ctaType": "ORDER_NOW", "ctaLabel": "QUIERO MI PACK 2 HOY", "aiImagePrompt": "Vertical 9:16 Instagram Story bundle ad: two identical units of ${prodName} on a modern podium, commercial studio lighting, 8k, zero text overlays"},
+    {"index": 4, "type": "reel_9x16", "format": "9:16", "archetypeName": "Demostración en Acción", "avatarTarget": "av-1", "angleType": "social_proof", "hook3s": "Hook de demostración", "hookBadge": "🔥 DEMOSTRACIÓN DE POTENCIA", "headline": "Titular de rendimiento máx 48 chars", "primaryText": "Copy sobre el rendimiento y calidad de ${prodName} funcionando a máxima capacidad", "descriptionText": "Subtítulo descriptivo", "ctaType": "SHOP_NOW", "ctaLabel": "COMPRAR AHORA", "aiImagePrompt": "Vertical 9:16 Reels macro action shot of ${prodName} operating at peak performance showing build quality, 8k, zero text overlays"},
+    {"index": 5, "type": "reel_9x16", "format": "9:16", "archetypeName": "Unboxing Real en Mesa", "avatarTarget": "av-1", "angleType": "unboxing", "hook3s": "Hook de unboxing", "hookBadge": "📦 UNBOXING · CAJA COMPLETA", "headline": "Titular de unboxing máx 48 chars", "primaryText": "Copy describiendo exactamente lo que incluye la caja de ${prodName}", "descriptionText": "Subtítulo descriptivo", "ctaType": "LEARN_MORE", "ctaLabel": "PEDIR KIT COMPLETO", "aiImagePrompt": "Vertical 9:16 first-person POV hands unboxing the ${prodName} box on a wooden table revealing all contents, 8k, zero text overlays"}
   ]
-}
-
-REGLA DE ORO DE CONGRUENCIA 100% UNIVERSAL (TEXTO ↔ IMAGEN IA PARA CUALQUIER PRODUCTO):
-Este Cerebro Maestro es 100% UNIVERSAL y se adapta dinámicamente a CUALQUIER producto ("${prodName}" — ${prodDesc}).
-Cada anuncio tiene su estructura escénica universal asignada, adaptada al rubro y beneficios reales de "${prodName}":
-- Index 0 (Oferta Directa COD): El producto "${prodName}" en primer plano en uso real resolviendo su función principal (${prodDesc}).
-- Index 1 (Confianza COD / Repartidor en Puerta): Repartidor en Paraguay entregando la caja de "${prodName}" en la puerta y el cliente abonando al recibir.
-- Index 2 (Comparativa ANTES vs. DESPUÉS): Pantalla dividida mostrando a la izquierda (ANTES) el problema específico que sufre la persona cuando NO tiene "${prodName}", y a la derecha (DESPUÉS) la solución inmediata usando "${prodName}".
-- Index 3 (Pack Dúo Ahorro): 2 unidades de "${prodName}" lado a lado destacando el ahorro en Guaraníes al llevar el Pack 2.
-- Index 4 (Demostración en Acción / Primer Plano): Toma macro de "${prodName}" funcionando a máxima capacidad y mostrando la calidad de sus materiales.
-- Index 5 (Unboxing Real en Mesa): Manos abriendo la caja de "${prodName}" en primera persona sobre una mesa mostrando lo que incluye el producto.
-El "headline", el "primaryText" y el "aiImagePrompt" DEBEN hablar específicamente de "${prodName}" y de esa misma escena visual para que texto e imagen sean 100% congruentes.
-IMPORTANTE: Respondé SOLO el JSON puro válido.`;
+}`;
 
                   try {
                     const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -2373,24 +2262,56 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                       },
                       body: JSON.stringify({
                         model,
+                        reasoning: { effort: 'low' },
                         messages: [
                           { role: 'system', content: systemPrompt },
                           {
                             role: 'user',
-                            content: `Ejecutá la investigación competitiva profunda del producto "${prodName}" (${prodDesc}) y devolvé los 3 avatares y los 6 briefs creativos Andrómeda con 100% de congruencia entre texto e imagen en JSON puro.`
+                            content: `Analizá ${prodName} (${prodDesc}) y devolvé los 3 avatares y los 6 briefs creativos en JSON puro.`
                           }
                         ],
-                        temperature: 0.7,
-                        max_tokens: 4096
+                        temperature: 0.75,
+                        max_tokens: 6000
                       })
                     });
-
+                    console.log('[brain-train] orRes status:', orRes.status);
+                    if (!orRes.ok) {
+                      const errTxt = await orRes.text();
+                      console.error('[brain-train] OpenRouter error:', errTxt);
+                    }
                     if (orRes.ok) {
                       const orJson: any = await orRes.json();
-                      const rawContent = String(orJson?.choices?.[0]?.message?.content || '').trim();
+                      const choice = orJson?.choices?.[0];
+                      const rawContent = String(choice?.message?.content || choice?.message?.reasoning || '').trim();
                       const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
                       if (jsonMatch) {
-                        brainProfile = JSON.parse(jsonMatch[0]);
+                        try {
+                          brainProfile = JSON.parse(jsonMatch[0]);
+                        } catch (e1) {
+                          // Sanitizar saltos de línea literales dentro de strings JSON
+                          try {
+                            let sanitized = '';
+                            let inString = false;
+                            let isEscaped = false;
+                            const src = jsonMatch[0];
+                            for (let i = 0; i < src.length; i++) {
+                              const char = src[i];
+                              if (char === '"' && !isEscaped) {
+                                inString = !inString;
+                                sanitized += char;
+                              } else if (inString) {
+                                if (char === '\n') sanitized += '\\n';
+                                else if (char === '\r') sanitized += '\\r';
+                                else if (char === '\t') sanitized += '\\t';
+                                else sanitized += char;
+                              } else {
+                                sanitized += char;
+                              }
+                              isEscaped = char === '\\' && !isEscaped;
+                            }
+                            brainProfile = JSON.parse(sanitized);
+                          } catch {}
+                        }
 
                         if (Array.isArray(brainProfile?.avatars)) {
                           brainProfile.avatars = brainProfile.avatars.map((av: any) => ({
@@ -2562,11 +2483,9 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
 
                   // Candidatos de generación de imagen en OpenRouter
                   const candidateImageModels = [
-                    'openai/gpt-5-image',
-                    'google/gemini-2.5-flash-image',
-                    'openai/gpt-5.4-image-2',
                     'google/gemini-3.1-flash-image',
-                    configuredImageModel
+                    'google/gemini-2.5-flash-image',
+                    'google/gemini-3.1-flash-lite-image'
                   ];
 
                   for (const imgModel of candidateImageModels) {
@@ -2618,7 +2537,7 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
 
                   return {
                     adIndex: idx,
-                    imageUrl: product.imagen || '',
+                    imageUrl: '',
                     prompt: finalPrompt,
                     imageModel: 'GPT Imagen 2.6 (OpenRouter)',
                     videoModel: isReel ? 'MiniMax Video (OpenRouter)' : undefined
@@ -2736,6 +2655,7 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                       },
                       body: JSON.stringify({
                         model: 'z-ai/glm-5.3',
+                        reasoning: { effort: 'low' },
                         messages: [
                           {
                             role: 'system',
@@ -2754,7 +2674,8 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                             content: `Generá la variante congruente #${variationSeed} para la escena "${targetScene.sceneName}" del producto "${prodName}". Respondé solo JSON.`
                           }
                         ],
-                        temperature: 0.75
+                        temperature: 0.75,
+                        max_tokens: 2500
                       })
                     });
                     if (orRes.ok) {
@@ -2762,7 +2683,32 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                       const rawContent = String(orJson?.choices?.[0]?.message?.content || '').trim();
                       const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
                       if (jsonMatch) {
-                        customBrief = JSON.parse(jsonMatch[0]);
+                        try {
+                          customBrief = JSON.parse(jsonMatch[0]);
+                        } catch {
+                          try {
+                            let sanitized = '';
+                            let inString = false;
+                            let isEscaped = false;
+                            const src = jsonMatch[0];
+                            for (let i = 0; i < src.length; i++) {
+                              const char = src[i];
+                              if (char === '"' && !isEscaped) {
+                                inString = !inString;
+                                sanitized += char;
+                              } else if (inString) {
+                                if (char === '\n') sanitized += '\\n';
+                                else if (char === '\r') sanitized += '\\r';
+                                else if (char === '\t') sanitized += '\\t';
+                                else sanitized += char;
+                              } else {
+                                sanitized += char;
+                              }
+                              isEscaped = char === '\\' && !isEscaped;
+                            }
+                            customBrief = JSON.parse(sanitized);
+                          } catch {}
+                        }
                       }
                     }
                   } catch {}
@@ -2820,11 +2766,9 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                     fs.mkdirSync(aiAdsDir, { recursive: true });
                   }
                   const candidateImageModels = [
-                    'openai/gpt-5-image',
-                    'google/gemini-2.5-flash-image',
-                    'openai/gpt-5.4-image-2',
                     'google/gemini-3.1-flash-image',
-                    configuredImageModel
+                    'google/gemini-2.5-flash-image',
+                    'google/gemini-3.1-flash-lite-image'
                   ];
                   for (const imgModel of candidateImageModels) {
                     try {
@@ -2869,7 +2813,7 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                 }
 
                 if (!newGeneratedImageUrl) {
-                  newGeneratedImageUrl = product.imagen || '';
+                  newGeneratedImageUrl = '';
                 }
 
                 customBrief = {
