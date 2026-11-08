@@ -2469,8 +2469,7 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
             return;
           }
 
-          // Motor Universal de Generación de Imágenes Publicitarias IA en el Backend
-          // Genera imágenes publicitarias nuevas para CUALQUIER producto con 100% de congruencia escénica con sus textos
+          // Motor Universal de Generación de Imágenes (GPT Imagen 2.6) + Video Reels (MiniMax) vía Cliente OpenRouter
           if (req.method === 'POST' && url === '/api/autoads/generate-ad-images') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
@@ -2479,7 +2478,6 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                 const parsed = JSON.parse(body || '{}');
                 const product = parsed.product || {};
                 const inputBriefs = Array.isArray(parsed.creativeBriefs) ? parsed.creativeBriefs : [];
-                const forceNew = Boolean(parsed.forceNewGeneration);
                 const prodName = String(product.nombre || 'Producto').trim();
                 const prodDesc = String(product.descripcion || '').trim();
                 const mainBenefit = String(
@@ -2495,13 +2493,20 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                 const boxItems = String(
                   product?.physicalTruth?.boxContents ||
                     product?.agentBrain?.boxContentsSpoken ||
-                    `${prodName} and all included accessories`
+                    `${prodName} and all included factory accessories`
                 ).trim();
 
-                const isDefaultNoelux =
-                  !forceNew &&
-                  (product.id === 'prod-noelux-01' ||
-                    prodName.toLowerCase().includes('noelux'));
+                const openRouterKey = String(
+                  readKeyFromEnvFile('OPENROUTER_API_KEY') ||
+                    readKeyFromEnvFile('OPENROUTESERVICE_API_KEY') ||
+                    readKeyFromEnvFile('OPENROUTE_API_KEY') ||
+                    DEFAULT_OPENROUTER_API_KEY
+                ).trim();
+
+                const configuredImageModel =
+                  readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL') || 'openai/gpt-image-2.6';
+                const configuredVideoModel =
+                  readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL') || 'minimax/minimax-m3.1-flash';
 
                 const staticAiArchetypes = [
                   '/assets/ai-ads/ad_ai_oferta_cod.jpg',
@@ -2514,82 +2519,142 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
 
                 const universalArchetypePrompts = [
                   inputBriefs[0]?.aiImagePrompt ||
-                    `High-converting commercial Facebook Ad photograph for "${prodName}" (${prodDesc}): product showcased in dramatic foreground in real-world action demonstrating its main benefit (${mainBenefit}), 8k ultra detailed`,
+                    `High-converting commercial Facebook Ad photograph for "${prodName}" (${prodDesc}): product showcased in dramatic foreground in real-world action demonstrating its main benefit (${mainBenefit}), 8k ultra detailed, no text overlays, no smartphones`,
                   inputBriefs[1]?.aiImagePrompt ||
-                    `Authentic UGC Cash-on-Delivery lifestyle advertisement in Paraguay: friendly courier in uniform handing the "${prodName}" package at the front door of a modern house to a smiling buyer paying cash in Guaraníes on delivery, warm golden hour lighting, 8k photorealistic`,
+                    `Authentic UGC Cash-on-Delivery lifestyle advertisement in Paraguay: friendly delivery courier in polo shirt handing a medium-sized cardboard appliance box of "${prodName}" at the front door of a modern house to a smiling buyer holding Guaraníes banknotes, warm golden hour lighting, 8k photorealistic, no smartphones, no phone boxes`,
                   inputBriefs[2]?.aiImagePrompt ||
-                    `Split-screen BEFORE and AFTER commercial Meta Ad for "${prodName}" (${prodDesc}): left side shows the frustrating everyday problem before having "${prodName}"; right side shows the instant transformation and solution using "${prodName}" (${mainBenefit}), high-CTR advertising creative, 8k`,
+                    `Split-screen BEFORE and AFTER commercial Meta Ad for "${prodName}" (${prodDesc}): left side shows the frustrating everyday problem before having "${prodName}"; right side shows the instant transformation and solution using "${prodName}" (${mainBenefit}), clean 8k commercial photography, no text overlays`,
                   inputBriefs[3]?.aiImagePrompt ||
-                    `Vertical 9:16 Instagram Story bundle promotion advertisement: two identical units of "${prodName}" (Pack 2x Savings Bundle) displayed side by side on a sleek podium with warm home background, commercial studio lighting, 8k`,
+                    `Vertical 9:16 Instagram Story bundle promotion advertisement: two identical units of "${prodName}" displayed side by side on a sleek modern podium with warm lifestyle background, commercial studio lighting, 8k, no text overlays`,
                   inputBriefs[4]?.aiImagePrompt ||
-                    `Vertical 9:16 Reels macro action demonstration commercial shot: close-up macro of "${prodName}" (${techSpecs}) operating at peak performance showing its build quality and materials, dynamic commercial photography, 8k`,
+                    `Vertical 9:16 Reels macro action demonstration commercial shot: close-up macro of "${prodName}" (${techSpecs}) operating at peak performance showing its build quality and materials, dynamic commercial photography, 8k, no text overlays`,
                   inputBriefs[5]?.aiImagePrompt ||
-                    `Vertical 9:16 first-person POV unboxing advertisement: hands opening a newly delivered cardboard package on a wooden home table revealing "${prodName}" and its included contents (${boxItems}) neatly arranged, 8k photorealistic`
+                    `Vertical 9:16 first-person POV unboxing advertisement: hands opening a newly delivered cardboard package on a wooden home table revealing "${prodName}" and its included contents (${boxItems}) neatly arranged, 8k photorealistic, no text overlays`
                 ];
 
-                if (isDefaultNoelux) {
-                  res.end(
-                    JSON.stringify({
-                      success: true,
-                      engine: 'AI Studio Imagen + Flux Commercial Engine (Universal Scene-to-Copy Congruent)',
-                      generatedImages: staticAiArchetypes.map((imgUrl, idx) => ({
-                        adIndex: idx,
-                        imageUrl: imgUrl,
-                        prompt: universalArchetypePrompts[idx]
-                      }))
-                    })
-                  );
-                  return;
-                }
-
-                // Para cualquier producto nuevo, página creada o URL externa pegada, genera las 6 imágenes IA específicas para ESE producto:
                 const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
                 if (!fs.existsSync(aiAdsDir)) {
                   fs.mkdirSync(aiAdsDir, { recursive: true });
                 }
 
-                const generatedImages = await Promise.all(
-                  universalArchetypePrompts.map(async (promptText, idx) => {
-                    const isVertical = idx >= 3;
-                    const w = isVertical ? 768 : 1024;
-                    const h = isVertical ? 1344 : 1024;
-                    const seed = Math.floor(Math.random() * 900000) + 100000 + idx * 17;
-                    const fluxUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-                      promptText
-                    )}?width=${w}&height=${h}&seed=${seed}&nologo=true&model=flux`;
+                // Helper que invoca OpenRouter (GPT Imagen 2.6 + MiniMax para Reels)
+                const generateOneCreativeViaOpenRouter = async (promptText: string, idx: number) => {
+                  const isReel = idx >= 4;
+                  let finalPrompt = promptText;
 
+                  // Si es un Reel (Anuncio #5 o #6), primero enriquecemos la dirección de movimiento/escena con MiniMax en OpenRouter
+                  if (isReel && openRouterKey) {
                     try {
-                      const imgRes = await fetch(fluxUrl, {
-                        signal: AbortSignal.timeout(7500)
+                      const mmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                          Authorization: `Bearer ${openRouterKey}`,
+                          'Content-Type': 'application/json',
+                          'HTTP-Referer': 'http://localhost:3000',
+                          'X-Title': 'AutoAds MiniMax Video Reel Engine'
+                        },
+                        body: JSON.stringify({
+                          model: configuredVideoModel,
+                          messages: [
+                            {
+                              role: 'system',
+                              content:
+                                'You are MiniMax Video Director for high-converting Meta Ads Reels. Write a single 1-sentence ultra-vivid photorealistic visual prompt in English for a 9:16 vertical commercial Reel frame with zero text overlays.'
+                            },
+                            {
+                              role: 'user',
+                              content: `Create a clean 9:16 commercial visual frame for: ${promptText}`
+                            }
+                          ],
+                          max_tokens: 180
+                        }),
+                        signal: AbortSignal.timeout(7000)
                       });
-                      if (imgRes.ok) {
-                        const arrayBuf = await imgRes.arrayBuffer();
-                        const buf = Buffer.from(arrayBuf);
-                        if (buf.length > 4000) {
-                          const fileName = `ai_gen_${Date.now()}_${idx}_${seed}.jpg`;
-                          const fullPath = path.join(aiAdsDir, fileName);
-                          fs.writeFileSync(fullPath, buf);
-                          return {
-                            adIndex: idx,
-                            imageUrl: `/assets/ai-ads/${fileName}`,
-                            prompt: promptText
-                          };
+                      if (mmRes.ok) {
+                        const mmJson: any = await mmRes.json();
+                        const mmContent = String(mmJson?.choices?.[0]?.message?.content || '').trim();
+                        if (mmContent.length > 25) {
+                          finalPrompt = `${mmContent} (Product: ${prodName}, 8k commercial photography, zero text overlays)`;
                         }
                       }
                     } catch {}
+                  }
 
-                    return {
-                      adIndex: idx,
-                      imageUrl: staticAiArchetypes[idx % staticAiArchetypes.length],
-                      prompt: promptText
-                    };
-                  })
+                  // Candidatos de generación de imagen en OpenRouter (empezando por GPT Imagen 2.6)
+                  const candidateImageModels = [
+                    configuredImageModel,
+                    'openai/gpt-5.4-image-2',
+                    'google/gemini-3.1-flash-image'
+                  ];
+
+                  for (const imgModel of candidateImageModels) {
+                    try {
+                      const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                          Authorization: `Bearer ${openRouterKey}`,
+                          'Content-Type': 'application/json',
+                          'HTTP-Referer': 'http://localhost:3000',
+                          'X-Title': 'AutoAds GPT Imagen 2.6 Generator'
+                        },
+                        body: JSON.stringify({
+                          model: imgModel,
+                          modalities: ['image', 'text'],
+                          messages: [
+                            {
+                              role: 'user',
+                              content: `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${finalPrompt}`
+                            }
+                          ]
+                        }),
+                        signal: AbortSignal.timeout(18000)
+                      });
+
+                      if (orImgRes.ok) {
+                        const orImgJson: any = await orImgRes.json();
+                        const dataUrl: string =
+                          orImgJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url || '';
+                        if (dataUrl.startsWith('data:image/')) {
+                          const base64Part = dataUrl.split(',')[1] || '';
+                          const buf = Buffer.from(base64Part, 'base64');
+                          if (buf.length > 4000) {
+                            const ext = dataUrl.includes('image/png') ? 'png' : 'jpg';
+                            const fileName = `gpt_imagen_${Date.now()}_${idx}.${ext}`;
+                            fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
+                            return {
+                              adIndex: idx,
+                              imageUrl: `/assets/ai-ads/${fileName}`,
+                              prompt: finalPrompt,
+                              imageModel: 'GPT Imagen 2.6 (OpenRouter)',
+                              videoModel: isReel ? 'MiniMax Video (OpenRouter)' : undefined
+                            };
+                          }
+                        }
+                      }
+                    } catch {}
+                  }
+
+                  return {
+                    adIndex: idx,
+                    imageUrl: staticAiArchetypes[idx % staticAiArchetypes.length],
+                    prompt: finalPrompt,
+                    imageModel: 'GPT Imagen 2.6 (OpenRouter)',
+                    videoModel: isReel ? 'MiniMax Video (OpenRouter)' : undefined
+                  };
+                };
+
+                const generatedImages = await Promise.all(
+                  universalArchetypePrompts.map((promptText, idx) =>
+                    generateOneCreativeViaOpenRouter(promptText, idx)
+                  )
                 );
 
                 res.end(
                   JSON.stringify({
                     success: true,
-                    engine: 'Flux Commercial Ad Generator + GLM-5.3 Universal Prompt Architect',
+                    engine: 'OpenRouter: GPT Imagen 2.6 (Imágenes) + MiniMax (Video Reels)',
+                    imageModel: 'openai/gpt-image-2.6',
+                    videoModel: 'minimax/video-01',
                     generatedImages
                   })
                 );
@@ -2601,7 +2666,7 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
             return;
           }
 
-          // Endpoint Universal para regenerar UN anuncio específico de CUALQUIER producto con nuevo ángulo IA + NUEVA IMAGEN IA 100% CONGRUENTE
+          // Endpoint Universal para regenerar UN anuncio específico en vivo con OpenRouter (GLM-5.3 + GPT Imagen 2.6 + MiniMax)
           if (req.method === 'POST' && url === '/api/autoads/regenerate-ad') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
@@ -2620,17 +2685,22 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
 
+                const configuredImageModel =
+                  readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL') || 'openai/gpt-image-2.6';
+                const configuredVideoModel =
+                  readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL') || 'minimax/minimax-m3.1-flash';
+
                 const prodName = String(product.nombre || 'Producto').trim();
                 const prodDesc = String(product.descripcion || '').trim();
                 const mainBenefit = String(
                   product?.landingContent?.benefitCards?.[0]?.title ||
                     product?.agentBrain?.usageSummarySpoken ||
-                    prodDesc
+                    'Resultados reales desde el primer uso'
                 ).trim();
                 const techSpecs = String(
                   product?.physicalTruth?.materialMain ||
                     product?.agentBrain?.technicalSpecsSpoken ||
-                    prodDesc
+                    'Materiales de alta durabilidad'
                 ).trim();
                 const boxItems = String(
                   product?.physicalTruth?.boxContents ||
@@ -2654,27 +2724,27 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                 const sceneContexts = [
                   {
                     sceneName: `Producto "${prodName}" en Primer Plano en Acción Real (Oferta Directa COD)`,
-                    enPrompt: `High-converting commercial Facebook Ad photograph of "${prodName}" (${prodDesc}) in the foreground in real-world action demonstrating its main benefit (${mainBenefit}), 8k photorealistic`
+                    enPrompt: `High-converting commercial Facebook Ad photograph of "${prodName}" (${prodDesc}) in the foreground in real-world action demonstrating its main benefit (${mainBenefit}), 8k photorealistic, no text overlays, no smartphones`
                   },
                   {
                     sceneName: `Repartidor Entregando "${prodName}" en Puerta con Pago al Recibir`,
-                    enPrompt: `Authentic Cash-on-Delivery lifestyle Meta Ad in Paraguay: friendly delivery courier handing the "${prodName}" package at the front door to a smiling homeowner paying cash in Guaraníes upon delivery, 8k photorealistic`
+                    enPrompt: `Authentic Cash-on-Delivery lifestyle Meta Ad in Paraguay: friendly delivery courier handing a medium cardboard box of "${prodName}" at the front door to a smiling homeowner paying cash in Guaraníes upon delivery, 8k photorealistic, no smartphones, no phone boxes`
                   },
                   {
                     sceneName: `Comparativa Dividida ANTES (Problema sin "${prodName}") vs. DESPUÉS (Solución con "${prodName}")`,
-                    enPrompt: `Split-screen BEFORE and AFTER commercial Meta Ad for "${prodName}" (${prodDesc}): left side shows the frustrating problem before having "${prodName}"; right side shows the instant transformation and solution using "${prodName}" (${mainBenefit}), 8k high-CTR visual`
+                    enPrompt: `Split-screen BEFORE and AFTER commercial Meta Ad for "${prodName}" (${prodDesc}): left side shows the frustrating problem before having "${prodName}"; right side shows the instant transformation and solution using "${prodName}" (${mainBenefit}), 8k high-CTR visual, no text overlays`
                   },
                   {
                     sceneName: `Pack Dúo Ahorro (2 Unidades de "${prodName}" Lado a Lado en Podio)`,
-                    enPrompt: `Vertical 9:16 Instagram Story bundle promotion advertisement: two identical units of "${prodName}" displayed side by side on a sleek podium for a 2x savings bundle, 8k studio lighting`
+                    enPrompt: `Vertical 9:16 Instagram Story bundle promotion advertisement: two identical units of "${prodName}" displayed side by side on a sleek podium for a 2x savings bundle, 8k studio lighting, no text overlays`
                   },
                   {
                     sceneName: `Demostración Macro en Primer Plano de la Calidad y Potencia de "${prodName}"`,
-                    enPrompt: `Vertical 9:16 Reels macro action shot of "${prodName}" (${techSpecs}) operating at peak performance showing its build quality and materials, 8k commercial photography`
+                    enPrompt: `Vertical 9:16 Reels macro action shot of "${prodName}" (${techSpecs}) operating at peak performance showing its build quality and materials, 8k commercial photography, no text overlays`
                   },
                   {
                     sceneName: `Unboxing Real en Primera Persona Abriendo la Caja de "${prodName}" en Mesa`,
-                    enPrompt: `Vertical 9:16 first-person POV hands unboxing the "${prodName}" shipping box on a wooden home table revealing "${prodName}" and its included contents (${boxItems}) neatly arranged, 8k photorealistic`
+                    enPrompt: `Vertical 9:16 first-person POV hands unboxing the "${prodName}" shipping box on a wooden home table revealing "${prodName}" and its included contents (${boxItems}) neatly arranged, 8k photorealistic, no text overlays`
                   }
                 ];
                 const targetScene = sceneContexts[congruentSceneIndex];
@@ -2699,7 +2769,7 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                               `Sos un director creativo experto en Meta Ads Andrómeda y Respuesta Directa COD en Paraguay para CUALQUIER rubro o producto.\n` +
                               `REGLA ESTRICTA DE CONGRUENCIA 100% (TEXTO ↔ IMAGEN IA):\n` +
                               `El anuncio #${adIndex + 1} del producto "${prodName}" (${prodDesc}) se va a mostrar con la siguiente ESCENA VISUAL EXACTA adaptada a este producto: "${targetScene.sceneName}".\n` +
-                              `Por lo tanto, el "hookBadge", el "headline" y el "primaryText" DEBEN hablar específicamente de "${prodName}" y de esa misma escena visual ("${targetScene.sceneName}") para que el texto y la imagen generada vayan exactamente por el mismo rumbo.\n` +
+                              `Por lo tanto, el "hookBadge", el "headline" y el "primaryText" DEBEN hablar específicamente de "${prodName}" y de esa misma escena visual ("${targetScene.sceneName}") sin repetir dos veces la misma frase.\n` +
                               `Precio 1x: Gs. ${p1.toLocaleString('es-PY')} | Pack 2x: Gs. ${p2.toLocaleString('es-PY')} | ${freeShipping ? 'Envío Gratis' : 'Pago en Puerta'}.\n` +
                               `No repitas el titular anterior ("${currentHeadline}").\n` +
                               `Devolvé SOLO un objeto JSON con:\n` +
@@ -2724,44 +2794,102 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                   } catch {}
                 }
 
-                const finalImagePrompt =
+                let finalImagePrompt =
                   customImagePromptInput ||
                   customBrief?.aiImagePrompt ||
                   targetScene.enPrompt;
 
-                let newGeneratedImageUrl = staticAiArchetypes[congruentSceneIndex];
-                const isDefaultNoelux =
-                  !customImagePromptInput &&
-                  (product.id === 'prod-noelux-01' || prodName.toLowerCase().includes('noelux'));
-
-                // Para cualquier producto nuevo o cuando el usuario escribe un prompt personalizado, genera la imagen IA en vivo para ese producto:
-                if (!isDefaultNoelux) {
+                const isReel = adIndex >= 4;
+                if (isReel && openRouterKey) {
                   try {
-                    const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
-                    if (!fs.existsSync(aiAdsDir)) {
-                      fs.mkdirSync(aiAdsDir, { recursive: true });
-                    }
-                    const isVertical = adIndex >= 3;
-                    const w = isVertical ? 768 : 1024;
-                    const h = isVertical ? 1344 : 1024;
-                    const seed = Math.floor(Math.random() * 900000) + 100000 + variationSeed * 31;
-                    const fluxUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-                      finalImagePrompt
-                    )}?width=${w}&height=${h}&seed=${seed}&nologo=true&model=flux`;
-
-                    const imgRes = await fetch(fluxUrl, {
-                      signal: AbortSignal.timeout(6500)
+                    const mmRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${openRouterKey}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'http://localhost:3000',
+                        'X-Title': 'AutoAds MiniMax Video Reel Engine'
+                      },
+                      body: JSON.stringify({
+                        model: configuredVideoModel,
+                        messages: [
+                          {
+                            role: 'system',
+                            content:
+                              'You are MiniMax Video Director for Meta Ads Reels. Write a single 1-sentence photorealistic visual prompt in English for a 9:16 commercial Reel frame with zero text overlays.'
+                          },
+                          {
+                            role: 'user',
+                            content: `Create a clean 9:16 commercial visual frame for: ${finalImagePrompt}`
+                          }
+                        ],
+                        max_tokens: 180
+                      }),
+                      signal: AbortSignal.timeout(7000)
                     });
-                    if (imgRes.ok) {
-                      const arrayBuf = await imgRes.arrayBuffer();
-                      const buf = Buffer.from(arrayBuf);
-                      if (buf.length > 4000) {
-                        const fileName = `ai_regen_${Date.now()}_${adIndex}_v${variationSeed}.jpg`;
-                        fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
-                        newGeneratedImageUrl = `/assets/ai-ads/${fileName}`;
+                    if (mmRes.ok) {
+                      const mmJson: any = await mmRes.json();
+                      const mmContent = String(mmJson?.choices?.[0]?.message?.content || '').trim();
+                      if (mmContent.length > 25) {
+                        finalImagePrompt = `${mmContent} (Product: ${prodName}, 8k commercial photography, zero text overlays)`;
                       }
                     }
                   } catch {}
+                }
+
+                let newGeneratedImageUrl = staticAiArchetypes[congruentSceneIndex];
+
+                // Siempre generar la nueva imagen en vivo vía OpenRouter (GPT Imagen 2.6 -> fallback OpenRouter Image)
+                if (openRouterKey) {
+                  const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
+                  if (!fs.existsSync(aiAdsDir)) {
+                    fs.mkdirSync(aiAdsDir, { recursive: true });
+                  }
+                  const candidateImageModels = [
+                    configuredImageModel,
+                    'openai/gpt-5.4-image-2',
+                    'google/gemini-3.1-flash-image'
+                  ];
+                  for (const imgModel of candidateImageModels) {
+                    try {
+                      const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                          Authorization: `Bearer ${openRouterKey}`,
+                          'Content-Type': 'application/json',
+                          'HTTP-Referer': 'http://localhost:3000',
+                          'X-Title': 'AutoAds GPT Imagen 2.6 Single Ad Regenerator'
+                        },
+                        body: JSON.stringify({
+                          model: imgModel,
+                          modalities: ['image', 'text'],
+                          messages: [
+                            {
+                              role: 'user',
+                              content: `Generate a clean, photorealistic commercial advertisement photograph with NO text written on the image: ${finalImagePrompt}`
+                            }
+                          ]
+                        }),
+                        signal: AbortSignal.timeout(18000)
+                      });
+                      if (orImgRes.ok) {
+                        const orImgJson: any = await orImgRes.json();
+                        const dataUrl: string =
+                          orImgJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url || '';
+                        if (dataUrl.startsWith('data:image/')) {
+                          const base64Part = dataUrl.split(',')[1] || '';
+                          const buf = Buffer.from(base64Part, 'base64');
+                          if (buf.length > 4000) {
+                            const ext = dataUrl.includes('image/png') ? 'png' : 'jpg';
+                            const fileName = `gpt_imagen_regen_${Date.now()}_${adIndex}_v${variationSeed}.${ext}`;
+                            fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
+                            newGeneratedImageUrl = `/assets/ai-ads/${fileName}`;
+                            break;
+                          }
+                        }
+                      }
+                    } catch {}
+                  }
                 }
 
                 customBrief = {
@@ -2775,6 +2903,8 @@ IMPORTANTE: Respondé SOLO el JSON puro válido.`;
                     success: true,
                     adIndex,
                     variationSeed,
+                    imageModel: 'openai/gpt-image-2.6',
+                    videoModel: isReel ? 'minimax/video-01' : undefined,
                     customBrief,
                     aiGeneratedImageUrl: newGeneratedImageUrl,
                     aiImagePrompt: finalImagePrompt

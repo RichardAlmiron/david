@@ -31,8 +31,10 @@ import { buildHighImpactAdSvgDataUrl } from './pipeboardEngine';
 // Constantes del modelo y configuración
 // ────────────────────────────────────────────────────────────────────────────────
 
-/** Modelo LLM exclusivo para el sistema AutoAds */
+/** Modelos oficiales vía OpenRouter para el sistema AutoAds */
 export const AUTOADS_LLM_MODEL = 'z-ai/glm-5.3';
+export const AUTOADS_IMAGE_MODEL = 'openai/gpt-image-2.6';
+export const AUTOADS_VIDEO_MODEL = 'minimax/video-01';
 
 // Paleta de colores para creativos (misma que pipeboardEngine)
 const CREATIVE_COLOR_THEMES = [
@@ -335,15 +337,23 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
   const desc =
     product.descripcion ||
     'Calidad superior y rendimiento comprobado para facilitar tu día a día';
-  const mainBenefit =
+  const rawMainBenefit =
     product.landingContent?.benefitCards?.[0]?.title ||
     product.agentBrain?.usageSummarySpoken ||
-    desc;
-  const techSpecs = product.physicalTruth?.materialMain
+    '';
+  const mainBenefit =
+    rawMainBenefit && rawMainBenefit.trim() !== desc.trim()
+      ? rawMainBenefit.trim()
+      : 'Resultados reales y comprobados desde el primer uso';
+  const rawTechSpecs = product.physicalTruth?.materialMain
     ? `${product.physicalTruth.materialMain}${
         product.physicalTruth.powerSourceLabel ? ` · ${product.physicalTruth.powerSourceLabel}` : ''
       }`
-    : product.agentBrain?.technicalSpecsSpoken || desc;
+    : product.agentBrain?.technicalSpecsSpoken || '';
+  const techSpecs =
+    rawTechSpecs && rawTechSpecs.trim() !== desc.trim()
+      ? rawTechSpecs.trim()
+      : 'Materiales de alta durabilidad y terminación de fábrica';
   const boxItems =
     product.physicalTruth?.boxContents ||
     product.agentBrain?.boxContentsSpoken ||
@@ -361,7 +371,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       hook3s: `✨ Mirá por qué ${nombre} es el favorito hoy en todo Paraguay`,
       hookBadge: '🔥 OFERTA HOY · PAGO AL RECIBIR',
       headline: `${nombre} — Calidad Real y Pagás Recién al Recibir`,
-      primaryText: `✨ Mirá en la imagen el ${nombre} en primer plano mostrando todo su potencial (${desc}):\n\n✅ Beneficio clave: ${mainBenefit}\n✅ 1 Unidad Completa: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades (MÁS ELEGIDO): ${formatGs(p2)}\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay' : 'Entrega rápida a domicilio en todo Paraguay'}\n💵 Pagás recién cuando el repartidor llega a tu puerta\n📱 Confirmamos tu pedido por WhatsApp antes de enviar\n\n👇 Tocá "Pedir Contra Entrega" y reservá el tuyo hoy`,
+      primaryText: `✨ Mirá en la imagen el ${nombre} en primer plano mostrando todo su potencial:\n\n📌 ${desc}\n✅ Beneficio clave: ${mainBenefit}\n✅ 1 Unidad Completa: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades (MÁS ELEGIDO): ${formatGs(p2)}\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay' : 'Entrega rápida a domicilio en todo Paraguay'}\n💵 Pagás recién cuando el repartidor llega a tu puerta\n📱 Confirmamos tu pedido por WhatsApp antes de enviar\n\n👇 Tocá "Pedir Contra Entrega" y reservá el tuyo hoy`,
       descriptionText: `${nombre} original · ${freeShipping ? 'Envío gratis y pago al recibir' : 'Pago contra entrega en puerta'}`,
       ctaType: 'ORDER_NOW',
       ctaLabel: 'PEDIR CONTRA ENTREGA',
@@ -379,7 +389,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       hook3s: '🤝 El repartidor te entrega en tu puerta y recién ahí abonás',
       hookBadge: '✅ PAGÁS AL REPARTIDOR EN PUERTA',
       headline: `El Repartidor Entrega tu ${nombre} en Puerta y Ahí Pagás`,
-      primaryText: `🤝 Tal como ves en la imagen: nuestro repartidor llega hasta la puerta de tu casa, recibís tu ${nombre} en tus manos, lo verificás y recién ahí abonás en efectivo o QR.\n\n✅ Cero pagos adelantados ni tarjetas en internet\n✅ Revisás tu pedido en puerta con total tranquilidad\n✅ Garantía real y atención directa por WhatsApp\n\n💰 1 Unidad: ${formatGs(p1)} | Pack 2 Ahorro: ${formatGs(p2)}\n🚚 ${freeShipping ? 'Envío GRATIS hasta tu casa o trabajo' : 'Entrega directa hasta tu casa o trabajo'}`,
+      primaryText: `🤝 Tal como ves en la imagen: nuestro repartidor llega hasta la puerta de tu casa, recibís la caja de tu ${nombre} en tus manos, lo verificás y recién ahí abonás en efectivo o QR.\n\n✅ Cero pagos adelantados ni tarjetas en internet\n✅ Revisás tu pedido en puerta con total tranquilidad\n✅ Garantía real y atención directa por WhatsApp\n\n💰 1 Unidad: ${formatGs(p1)} | Pack 2 Ahorro: ${formatGs(p2)}\n🚚 ${freeShipping ? 'Envío GRATIS hasta tu casa o trabajo' : 'Entrega directa hasta tu casa o trabajo'}`,
       descriptionText: 'Entrega en mano en todo Paraguay — Abonás en efectivo o QR al recibir',
       ctaType: 'SHOP_NOW',
       ctaLabel: 'VER GARANTÍA Y COMPRAR',
@@ -397,7 +407,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       hook3s: `❌ ANTES: Complicaciones y pérdida de tiempo vs. ✅ DESPUÉS: ${nombre}`,
       hookBadge: '💡 ANTES VS. DESPUÉS COMPROBADO',
       headline: `Dejá de Renegar — Mirá el Cambio Real con ${nombre}`,
-      primaryText: `Mirá la diferencia real entre el ANTES y el DESPUÉS en la imagen:\n\n❌ ANTES (Izquierda): Renegando, perdiendo tiempo y gastando de más con alternativas que no dan resultado.\n✅ DESPUÉS (Derecha): Con tu ${nombre} (${desc}) obtenés resultados inmediatos desde el primer uso: ${mainBenefit}.\n\n💰 1 Unidad: ${formatGs(p1)}\n🔥 Pack 2 Unidades: ${formatGs(p2)} (Ahorro Especial)\n🚚 ${freeShipping ? 'Envío GRATIS' : 'Entrega rápida'} · 💵 Pagás recién al recibir`,
+      primaryText: `Mirá la diferencia real entre el ANTES y el DESPUÉS en la imagen:\n\n❌ ANTES (Izquierda): Renegando, perdiendo tiempo y gastando de más con alternativas que no dan resultado.\n✅ DESPUÉS (Derecha): Con tu ${nombre} contás con ${desc} (${mainBenefit}).\n\n💰 1 Unidad: ${formatGs(p1)}\n🔥 Pack 2 Unidades: ${formatGs(p2)} (Ahorro Especial)\n🚚 ${freeShipping ? 'Envío GRATIS' : 'Entrega rápida'} · 💵 Pagás recién al recibir`,
       descriptionText: `Transformación real con ${nombre} — Pago contra entrega`,
       ctaType: 'ORDER_NOW',
       ctaLabel: 'QUIERO LA SOLUCIÓN',
@@ -433,7 +443,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       hook3s: `🔥 Mirá de cerca la calidad y rendimiento real de ${nombre}`,
       hookBadge: '🔥 DEMOSTRACIÓN DE CALIDAD REAL',
       headline: `${nombre} en Acción — Calidad y Rendimiento Superior`,
-      primaryText: `🔥 Mirá en la imagen de primer plano el ${nombre} funcionando a máxima capacidad:\n\n🛠️ Construcción y detalles: ${techSpecs}\n✨ Resultado comprobado: ${mainBenefit}\n✅ 1 Unidad: ${formatGs(p1)} | Pack 2x: ${formatGs(p2)}\n🚚 ${freeShipping ? 'Envío GRATIS' : 'Entrega en puerta'} · 💵 Pagás al recibir en tu casa`,
+      primaryText: `🔥 Mirá en primer plano el ${nombre} funcionando a máxima capacidad:\n\n📌 ${desc}\n🛠️ Construcción y detalles: ${techSpecs}\n✨ Ventaja principal: ${mainBenefit}\n✅ 1 Unidad: ${formatGs(p1)} | Pack 2x: ${formatGs(p2)}\n🚚 ${freeShipping ? 'Envío GRATIS' : 'Entrega en puerta'} · 💵 Pagás al recibir en tu casa`,
       descriptionText: `Demostración real de ${nombre} — Calidad verificada`,
       ctaType: 'SHOP_NOW',
       ctaLabel: 'COMPRAR AHORA',
