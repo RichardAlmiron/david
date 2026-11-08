@@ -14,7 +14,8 @@ import {
   ThumbsUp,
   MessageCircle,
   Share2,
-  Send
+  Send,
+  AlertTriangle
 } from 'lucide-react';
 import { ProductPage } from '../types';
 import { formatGs } from '../config';
@@ -66,6 +67,14 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [hasPipeboardTokenInBackend, setHasPipeboardTokenInBackend] = useState<boolean>(false);
   const [pipeboardTokenPreview, setPipeboardTokenPreview] = useState<string>('');
   const [lastTokenSelfDestructAt, setLastTokenSelfDestructAt] = useState<string>('');
+
+  // Modal de Error de OpenRouter (sin fallbacks ficticios)
+  const [apiErrorModal, setApiErrorModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    errorMessage: string;
+    sourceEndpoint?: string;
+  } | null>(null);
 
   // Estado de conexión en servidor
   const [metaConnected, setMetaConnected] = useState<boolean>(false);
@@ -319,61 +328,65 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);
 
-      let finalProduct = selectedCatalogProduct;
-      if (response.ok) {
-        const data = await response.json();
-        if (data?.scrapedProduct) {
-          finalProduct = data.scrapedProduct;
-          setScrapedExternalProduct(data.scrapedProduct);
-        }
-        if (data?.capiAudit) {
-          setCapiAudit({
-            ...data.capiAudit,
-            lastTestAt: new Date().toLocaleTimeString('es-PY')
-          });
-        }
+      const data = await response.json();
 
-        const baseProfile = createDefaultBrainProfile(finalProduct);
-        const trainedProfile: AutoAdsBrainProfile = {
-          ...baseProfile,
-          status: 'ready',
-          trainedAt: new Date().toISOString(),
-          productAnalysis: {
-            ...baseProfile.productAnalysis,
-            images: extractAllProductImages(finalProduct)
-          },
-          avatars: data?.brainProfile?.avatars || baseProfile.avatars,
-          targeting: data?.brainProfile?.targeting || baseProfile.targeting,
-          competitorInsights: data?.competitorInsights || baseProfile.competitorInsights,
-          creativeBriefs: data?.brainProfile?.creativeBriefs || baseProfile.creativeBriefs
-        };
-
-        setBrainProfile(trainedProfile);
-        setWorkflowStep('researched');
-        showToast(
-          `✅ Investigación completada para "${finalProduct.nombre}". Ya podés darle al Botón 2 para generar los anuncios.`
-        );
-      } else {
-        const fallbackProfile = {
-          ...createDefaultBrainProfile(finalProduct),
-          status: 'ready' as const,
-          trainedAt: new Date().toISOString()
-        };
-        setBrainProfile(fallbackProfile);
-        setWorkflowStep('researched');
-        showToast(`✅ Análisis listo para "${finalProduct.nombre}".`);
+      if (!response.ok || data?.success === false) {
+        setWorkflowStep('idle');
+        setApiErrorModal({
+          isOpen: true,
+          title: '⚠️ Error en la API de OpenRouter — Trabajo Pausado',
+          errorMessage:
+            data?.error ||
+            `Error ${response.status}: No se pudo comunicar con la API de OpenRouter (${AUTOADS_LLM_MODEL}). Se suspendió el proceso sin fallbacks ficticios.`,
+          sourceEndpoint: '/api/autoads/brain-train'
+        });
+        return;
       }
-    } catch {
+
+      let finalProduct = selectedCatalogProduct;
+      if (data?.scrapedProduct) {
+        finalProduct = data.scrapedProduct;
+        setScrapedExternalProduct(data.scrapedProduct);
+      }
+      if (data?.capiAudit) {
+        setCapiAudit({
+          ...data.capiAudit,
+          lastTestAt: new Date().toLocaleTimeString('es-PY')
+        });
+      }
+
+      const baseProfile = createDefaultBrainProfile(finalProduct);
+      const trainedProfile: AutoAdsBrainProfile = {
+        ...baseProfile,
+        status: 'ready',
+        trainedAt: new Date().toISOString(),
+        productAnalysis: {
+          ...baseProfile.productAnalysis,
+          images: extractAllProductImages(finalProduct)
+        },
+        avatars: data?.brainProfile?.avatars || baseProfile.avatars,
+        targeting: data?.brainProfile?.targeting || baseProfile.targeting,
+        competitorInsights: data?.competitorInsights || baseProfile.competitorInsights,
+        creativeBriefs: data?.brainProfile?.creativeBriefs || baseProfile.creativeBriefs
+      };
+
+      setBrainProfile(trainedProfile);
+      setWorkflowStep('researched');
+      showToast(
+        `✅ Investigación completada para "${finalProduct.nombre}". Ya podés darle al Botón 2 para generar los anuncios.`
+      );
+    } catch (err: any) {
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);
-      const fallbackProfile = {
-        ...createDefaultBrainProfile(selectedCatalogProduct),
-        status: 'ready' as const,
-        trainedAt: new Date().toISOString()
-      };
-      setBrainProfile(fallbackProfile);
-      setWorkflowStep('researched');
-      showToast('Investigación completada.');
+      setWorkflowStep('idle');
+      setApiErrorModal({
+        isOpen: true,
+        title: '⚠️ Error de Conexión con OpenRouter — Trabajo Pausado',
+        errorMessage:
+          err?.message ||
+          'Fallo de red o timeout al conectar con OpenRouter. Por favor, verificá tu conexión y la validez de tu API Key.',
+        sourceEndpoint: '/api/autoads/brain-train'
+      });
     } finally {
       setResearchProgressText('');
     }
@@ -403,65 +416,85 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     try {
       let currentBrain = brainProfile;
 
-      // Si el usuario tocó "Regenerar los 6 Anuncios", primero pedimos 6 textos, titulares y prompts totalmente nuevos a GLM-5.3
+      // Si el usuario tocó "Regenerar los 6 Anuncios", primero pedimos 6 textos, titulares y prompts totalmente nuevos
       if (isRegeneratingAll) {
-        try {
-          const trainRes = await fetch('/api/autoads/brain-train', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              product: activeProduct,
-              externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
-              openRouterModel: AUTOADS_LLM_MODEL,
-              variationTimestamp: Date.now()
-            })
+        const trainRes = await fetch('/api/autoads/brain-train', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product: activeProduct,
+            externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
+            openRouterModel: AUTOADS_LLM_MODEL,
+            variationTimestamp: Date.now()
+          })
+        });
+        const trainData = await trainRes.json();
+        if (!trainRes.ok || trainData?.success === false) {
+          clearTimeout(genTimer1);
+          setWorkflowStep('researched');
+          setGenerationProgressText('');
+          setApiErrorModal({
+            isOpen: true,
+            title: '⚠️ Error en la API de OpenRouter — Trabajo Pausado',
+            errorMessage:
+              trainData?.error ||
+              `Error ${trainRes.status}: La API de OpenRouter (${AUTOADS_LLM_MODEL}) retornó un error al generar copys.`,
+            sourceEndpoint: '/api/autoads/brain-train'
           });
-          if (trainRes.ok) {
-            const trainData = await trainRes.json();
-            if (trainData?.brainProfile?.creativeBriefs?.length > 0) {
-              currentBrain = {
-                ...currentBrain,
-                trainedAt: new Date().toISOString(),
-                avatars: trainData.brainProfile.avatars || currentBrain.avatars,
-                targeting: trainData.brainProfile.targeting || currentBrain.targeting,
-                creativeBriefs: trainData.brainProfile.creativeBriefs
-              };
-              setBrainProfile(currentBrain);
-            }
-          }
-        } catch {}
+          return;
+        }
+        if (trainData?.brainProfile?.creativeBriefs?.length > 0) {
+          currentBrain = {
+            ...currentBrain,
+            trainedAt: new Date().toISOString(),
+            avatars: trainData.brainProfile.avatars || currentBrain.avatars,
+            targeting: trainData.brainProfile.targeting || currentBrain.targeting,
+            creativeBriefs: trainData.brainProfile.creativeBriefs
+          };
+          setBrainProfile(currentBrain);
+        }
       }
 
       const baseAssets = buildCreativeAssetsFromBrain(activeProduct, currentBrain);
       let finalAssets = baseAssets;
 
-      try {
-        const res = await fetch('/api/autoads/generate-ad-images', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            product: activeProduct,
-            creativeBriefs: currentBrain.creativeBriefs,
-            forceNewGeneration: true,
-            imageModel: AUTOADS_IMAGE_MODEL,
-            videoModel: AUTOADS_VIDEO_MODEL
-          })
+      const res = await fetch('/api/autoads/generate-ad-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product: activeProduct,
+          creativeBriefs: currentBrain.creativeBriefs,
+          forceNewGeneration: true,
+          imageModel: AUTOADS_IMAGE_MODEL,
+          videoModel: AUTOADS_VIDEO_MODEL
+        })
+      });
+      const imgData = await res.json();
+      if (!res.ok || imgData?.success === false) {
+        clearTimeout(genTimer1);
+        setWorkflowStep('researched');
+        setGenerationProgressText('');
+        setApiErrorModal({
+          isOpen: true,
+          title: '⚠️ Error en Generación de Imágenes — Trabajo Pausado',
+          errorMessage:
+            imgData?.error ||
+            `Error ${res.status}: Fallo en la API de GPT Imagen 2.6 / OpenRouter.`,
+          sourceEndpoint: '/api/autoads/generate-ad-images'
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data?.generatedImages) && data.generatedImages.length > 0) {
-            finalAssets = baseAssets.map((asset, idx) => {
-              const match = data.generatedImages.find((g: any) => g.adIndex === idx) || data.generatedImages[idx];
-              if (!match?.imageUrl) return asset;
-              return {
-                ...asset,
-                aiGeneratedImageUrl: match.imageUrl,
-                aiImagePrompt: match.prompt || asset.aiImagePrompt
-              };
-            });
-          }
-        }
-      } catch {}
+        return;
+      }
+      if (Array.isArray(imgData?.generatedImages) && imgData.generatedImages.length > 0) {
+        finalAssets = baseAssets.map((asset, idx) => {
+          const match = imgData.generatedImages.find((g: any) => g.adIndex === idx) || imgData.generatedImages[idx];
+          if (!match?.imageUrl) return asset;
+          return {
+            ...asset,
+            aiGeneratedImageUrl: match.imageUrl,
+            aiImagePrompt: match.prompt || asset.aiImagePrompt
+          };
+        });
+      }
 
       clearTimeout(genTimer1);
       setCreatives(finalAssets);
@@ -471,10 +504,19 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       showToast(
         `🤖 6 anuncios creados desde cero en OpenRouter (Textos: ${AUTOADS_LLM_MODEL} · Imágenes: ${AUTOADS_IMAGE_MODEL} · Video: ${AUTOADS_VIDEO_MODEL}).`
       );
+    } catch (err: any) {
+      clearTimeout(genTimer1);
+      setGenerationProgressText('');
+      setWorkflowStep('researched');
+      setApiErrorModal({
+        isOpen: true,
+        title: '⚠️ Error de Ejecución — Trabajo Pausado',
+        errorMessage: err?.message || 'Error inesperado al generar los anuncios.',
+        sourceEndpoint: '/api/autoads/generate-ad-images'
+      });
     } finally {
       clearTimeout(genTimer1);
       setGenerationProgressText('');
-      setWorkflowStep('generated');
     }
   };
 
@@ -501,13 +543,32 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           customImagePrompt: customPromptOverride || ''
         })
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.customBrief) {
-          customBrief = data.customBrief;
-        }
+      const data = await res.json();
+      if (!res.ok || data?.success === false) {
+        setRegeneratingAdIdx(null);
+        setApiErrorModal({
+          isOpen: true,
+          title: '⚠️ Error al Regenerar Anuncio — Trabajo Pausado',
+          errorMessage:
+            data?.error ||
+            `Error ${res.status}: La API de OpenRouter (${AUTOADS_LLM_MODEL}) retornó un fallo al regenerar este anuncio.`,
+          sourceEndpoint: '/api/autoads/regenerate-ad'
+        });
+        return;
       }
-    } catch {}
+      if (data?.customBrief) {
+        customBrief = data.customBrief;
+      }
+    } catch (err: any) {
+      setRegeneratingAdIdx(null);
+      setApiErrorModal({
+        isOpen: true,
+        title: '⚠️ Error de Red al Regenerar — Trabajo Pausado',
+        errorMessage: err?.message || 'Fallo de red al conectar con OpenRouter.',
+        sourceEndpoint: '/api/autoads/regenerate-ad'
+      });
+      return;
+    }
 
     const freshAsset = regenerateSingleCreativeAssetFromBrain(
       activeProduct,
@@ -1347,6 +1408,52 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pop-up Modal de Error de OpenRouter (Trabajo Pausado - Sin Fallbacks Ficticios) */}
+      {apiErrorModal?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-[#0d0d0f] border border-red-500/30 rounded-2xl shadow-2xl p-6 text-white space-y-4 relative overflow-hidden">
+            <div className="absolute -top-12 -right-12 w-36 h-36 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="flex items-start space-x-3">
+              <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-red-400 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white leading-tight">
+                  {apiErrorModal.title}
+                </h3>
+                <p className="text-xs text-zinc-400 leading-normal">
+                  Se ha pausado la generación de anuncios porque la API de OpenRouter retornó un error o no está activa. Se desactivaron todos los fallbacks ficticios para garantizar contenido 100% genuino.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-950 border border-red-900/40 rounded-xl p-3 text-xs font-mono text-red-300 leading-relaxed max-h-48 overflow-y-auto select-text break-words">
+              {apiErrorModal.errorMessage}
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setApiErrorModal(null);
+                  setShowSettingsDrawer(true);
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl text-xs flex items-center justify-center space-x-2 transition-all shadow-lg shadow-emerald-950/40"
+              >
+                <Settings2 className="w-4 h-4" />
+                <span>Configurar API Key en OpenRouter</span>
+              </button>
+              <button
+                onClick={() => setApiErrorModal(null)}
+                className="w-full sm:w-auto px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-xl text-xs transition-all"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -2233,8 +2233,21 @@ function registerApiServerMiddlewares(server: any) {
                 // 3. Entrenar Cerebro Maestro Supremo con GLM-5.3 (Andrómeda + Gurús Direct-Response)
                 let brainProfile: any = null;
 
-                if (openRouterKey) {
-                  const systemPrompt = `Sos el director creativo experto en Meta Ads Andrómeda y E-Commerce Contra Entrega (COD) en Paraguay.
+                if (!openRouterKey || openRouterKey.includes('tu-clave-de-openrouter')) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        'No se ha detectado una API Key de OpenRouter (OPENROUTER_API_KEY). El trabajo de generación de anuncios se ha pausado. Por favor, configurá tu API Key para reanudar.'
+                    })
+                  );
+                  return;
+                }
+
+                let openRouterErrorText: string = '';
+
+                const systemPrompt = `Sos el director creativo experto en Meta Ads Andrómeda y E-Commerce Contra Entrega (COD) en Paraguay.
 Analizá el producto "${prodName}" (${prodDesc}) con precio 1x Gs. ${p1.toLocaleString('es-PY')}, 2x Gs. ${p2.toLocaleString('es-PY')}, ${freeShipping ? 'Envío Gratis' : 'Pago en Puerta'}.
 Generá 3 avatares paraguayos y 6 briefs de anuncios con hooks, titulares, copys persuasivos completos y prompts de imagen 100% congruentes.
 Devolvé SOLO un JSON válido con esta estructura:
@@ -2251,112 +2264,140 @@ Devolvé SOLO un JSON válido con esta estructura:
   ]
 }`;
 
-                  try {
-                    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                      method: 'POST',
-                      headers: {
-                        Authorization: `Bearer ${openRouterKey}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': 'http://localhost:3000',
-                        'X-Title': 'AutoAds Supreme Brain'
-                      },
-                      body: JSON.stringify({
-                        model,
-                        reasoning: { effort: 'low' },
-                        messages: [
-                          { role: 'system', content: systemPrompt },
-                          {
-                            role: 'user',
-                            content: `Analizá ${prodName} (${prodDesc}) y devolvé los 3 avatares y los 6 briefs creativos en JSON puro.`
-                          }
-                        ],
-                        temperature: 0.75,
-                        max_tokens: 6000
+                try {
+                  const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${openRouterKey}`,
+                      'Content-Type': 'application/json',
+                      'HTTP-Referer': 'http://localhost:3000',
+                      'X-Title': 'AutoAds Supreme Brain'
+                    },
+                    body: JSON.stringify({
+                      model,
+                      reasoning: { effort: 'low' },
+                      messages: [
+                        { role: 'system', content: systemPrompt },
+                        {
+                          role: 'user',
+                          content: `Analizá ${prodName} (${prodDesc}) y devolvé los 3 avatares y los 6 briefs creativos en JSON puro.`
+                        }
+                      ],
+                      temperature: 0.75,
+                      max_tokens: 6000
+                    })
+                  });
+                  console.log('[brain-train] orRes status:', orRes.status);
+                  if (!orRes.ok) {
+                    openRouterErrorText = await orRes.text();
+                    console.error('[brain-train] OpenRouter error:', openRouterErrorText);
+                    res.statusCode = 400;
+                    res.end(
+                      JSON.stringify({
+                        success: false,
+                        error: `Error de la API de OpenRouter (HTTP ${orRes.status}): ${openRouterErrorText || orRes.statusText}`
                       })
-                    });
-                    console.log('[brain-train] orRes status:', orRes.status);
-                    if (!orRes.ok) {
-                      const errTxt = await orRes.text();
-                      console.error('[brain-train] OpenRouter error:', errTxt);
-                    }
-                    if (orRes.ok) {
-                      const orJson: any = await orRes.json();
-                      const choice = orJson?.choices?.[0];
-                      const rawContent = String(choice?.message?.content || choice?.message?.reasoning || '').trim();
-                      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-                      if (jsonMatch) {
+                    );
+                    return;
+                  }
+                  if (orRes.ok) {
+                    const orJson: any = await orRes.json();
+                    const choice = orJson?.choices?.[0];
+                    const rawContent = String(choice?.message?.content || choice?.message?.reasoning || '').trim();
+                    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                      try {
+                        brainProfile = JSON.parse(jsonMatch[0]);
+                      } catch (e1) {
                         try {
-                          brainProfile = JSON.parse(jsonMatch[0]);
-                        } catch (e1) {
-                          // Sanitizar saltos de línea literales dentro de strings JSON
-                          try {
-                            let sanitized = '';
-                            let inString = false;
-                            let isEscaped = false;
-                            const src = jsonMatch[0];
-                            for (let i = 0; i < src.length; i++) {
-                              const char = src[i];
-                              if (char === '"' && !isEscaped) {
-                                inString = !inString;
-                                sanitized += char;
-                              } else if (inString) {
-                                if (char === '\n') sanitized += '\\n';
-                                else if (char === '\r') sanitized += '\\r';
-                                else if (char === '\t') sanitized += '\\t';
-                                else sanitized += char;
-                              } else {
-                                sanitized += char;
-                              }
-                              isEscaped = char === '\\' && !isEscaped;
+                          let sanitized = '';
+                          let inString = false;
+                          let isEscaped = false;
+                          const src = jsonMatch[0];
+                          for (let i = 0; i < src.length; i++) {
+                            const char = src[i];
+                            if (char === '"' && !isEscaped) {
+                              inString = !inString;
+                              sanitized += char;
+                            } else if (inString) {
+                              if (char === '\n') sanitized += '\\n';
+                              else if (char === '\r') sanitized += '\\r';
+                              else if (char === '\t') sanitized += '\\t';
+                              else sanitized += char;
+                            } else {
+                              sanitized += char;
                             }
-                            brainProfile = JSON.parse(sanitized);
-                          } catch {}
-                        }
-
-                        if (Array.isArray(brainProfile?.avatars)) {
-                          brainProfile.avatars = brainProfile.avatars.map((av: any) => ({
-                            ...av,
-                            painPoints: Array.isArray(av.painPoints)
-                              ? av.painPoints
-                              : typeof av.painPoints === 'string'
-                              ? av.painPoints.split(/\n|(?<=\.)(?=\s)/).map((s: string) => s.trim()).filter(Boolean)
-                              : [],
-                            angles: Array.isArray(av.angles) && av.angles.length > 0 && typeof av.angles[0] === 'object'
-                              ? av.angles
-                              : [{ id: `angle-${av.id}`, type: 'offer', hook: av.name || '', emotionalTrigger: 'interés' }]
-                          }));
-                        }
-
-                        if (brainProfile?.targeting?.peakHours) {
-                          const ph = brainProfile.targeting.peakHours;
-                          if (Array.isArray(ph) && typeof ph[0] === 'string') {
-                            brainProfile.targeting.peakHours = ph.flatMap((h: string) => {
-                              const match = h.match(/(\d+)/);
-                              return match ? [Number(match[1])] : [];
-                            });
+                            isEscaped = char === '\\' && !isEscaped;
                           }
-                        }
+                          brainProfile = JSON.parse(sanitized);
+                        } catch {}
+                      }
 
-                        if (Array.isArray(brainProfile?.creativeBriefs)) {
-                          brainProfile.creativeBriefs = brainProfile.creativeBriefs.map((brief: any, bIdx: number) => ({
-                            ...brief,
-                            themeIndex: brief.themeIndex ?? bIdx % 4,
-                            aiGeneratedImageUrl: brief.aiGeneratedImageUrl || '',
-                            videoScenes: Array.isArray(brief.videoScenes) && brief.videoScenes.length > 0 && typeof brief.videoScenes[0] === 'object'
-                              ? brief.videoScenes.map((s: any) => ({
-                                  durationSec: s.durationSec || 3,
-                                  badge: s.badge || 'ESCENA',
-                                  title: s.title || '',
-                                  subtitle: s.subtitle || '',
-                                  priceTag: s.priceTag || '',
-                                  bgGradient: s.bgGradient || 'from-[#041a12] via-[#0b3d2e] to-[#041a12]'
-                                }))
-                              : undefined
-                          }));
+                      if (Array.isArray(brainProfile?.avatars)) {
+                        brainProfile.avatars = brainProfile.avatars.map((av: any) => ({
+                          ...av,
+                          painPoints: Array.isArray(av.painPoints)
+                            ? av.painPoints
+                            : typeof av.painPoints === 'string'
+                            ? av.painPoints.split(/\n|(?<=\.)(?=\s)/).map((s: string) => s.trim()).filter(Boolean)
+                            : [],
+                          angles: Array.isArray(av.angles) && av.angles.length > 0 && typeof av.angles[0] === 'object'
+                            ? av.angles
+                            : [{ id: `angle-${av.id}`, type: 'offer', hook: av.name || '', emotionalTrigger: 'interés' }]
+                        }));
+                      }
+
+                      if (brainProfile?.targeting?.peakHours) {
+                        const ph = brainProfile.targeting.peakHours;
+                        if (Array.isArray(ph) && typeof ph[0] === 'string') {
+                          brainProfile.targeting.peakHours = ph.flatMap((h: string) => {
+                            const match = h.match(/(\d+)/);
+                            return match ? [Number(match[1])] : [];
+                          });
                         }
                       }
+
+                      if (Array.isArray(brainProfile?.creativeBriefs)) {
+                        brainProfile.creativeBriefs = brainProfile.creativeBriefs.map((brief: any, bIdx: number) => ({
+                          ...brief,
+                          themeIndex: brief.themeIndex ?? bIdx % 4,
+                          aiGeneratedImageUrl: brief.aiGeneratedImageUrl || '',
+                          videoScenes: Array.isArray(brief.videoScenes) && brief.videoScenes.length > 0 && typeof brief.videoScenes[0] === 'object'
+                            ? brief.videoScenes.map((s: any) => ({
+                                durationSec: s.durationSec || 3,
+                                badge: s.badge || 'ESCENA',
+                                title: s.title || '',
+                                subtitle: s.subtitle || '',
+                                priceTag: s.priceTag || '',
+                                bgGradient: s.bgGradient || 'from-[#041a12] via-[#0b3d2e] to-[#041a12]'
+                              }))
+                            : undefined
+                        }));
+                      }
                     }
-                  } catch {}
+                  }
+                } catch (fetchErr: any) {
+                  res.statusCode = 500;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error: `Error de red al conectar con OpenRouter: ${fetchErr?.message || 'Fallo de conexión'}`
+                    })
+                  );
+                  return;
+                }
+
+                if (!brainProfile || !Array.isArray(brainProfile?.creativeBriefs) || brainProfile.creativeBriefs.length === 0) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        openRouterErrorText ||
+                        'La API de OpenRouter (openai/gpt-4o-mini) no devolvió una estructura JSON válida de anuncios. El trabajo ha sido pausado.'
+                    })
+                  );
+                  return;
                 }
 
                 res.end(
@@ -2368,7 +2409,7 @@ Devolvé SOLO un JSON válido con esta estructura:
                     brainProfile,
                     competitorInsights,
                     model,
-                    openRouterConnected: Boolean(brainProfile)
+                    openRouterConnected: true
                   })
                 );
               } catch (err: any) {
@@ -2643,75 +2684,107 @@ Devolvé SOLO un JSON válido con esta estructura:
                 const targetScene = sceneContexts[congruentSceneIndex];
 
                 let customBrief: any = null;
-                if (openRouterKey) {
-                  try {
-                    const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                      method: 'POST',
-                      headers: {
-                        Authorization: `Bearer ${openRouterKey}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': 'http://localhost:3000',
-                        'X-Title': 'AutoAds Universal Congruent Ad + Image Regenerator'
-                      },
-                      body: JSON.stringify({
-                        model: 'openai/gpt-4o-mini',
-                        reasoning: { effort: 'low' },
-                        messages: [
-                          {
-                            role: 'system',
-                            content:
-                              `Sos un director creativo experto en Meta Ads Andrómeda y Respuesta Directa COD en Paraguay para CUALQUIER rubro o producto.\n` +
-                              `REGLA ESTRICTA DE CONGRUENCIA 100% (TEXTO ↔ IMAGEN IA):\n` +
-                              `El anuncio #${adIndex + 1} del producto "${prodName}" (${prodDesc}) se va a mostrar con la siguiente ESCENA VISUAL EXACTA adaptada a este producto: "${targetScene.sceneName}".\n` +
-                              `Por lo tanto, el "hookBadge", el "headline" y el "primaryText" DEBEN hablar específicamente de "${prodName}" y de esa misma escena visual ("${targetScene.sceneName}") sin repetir dos veces la misma frase.\n` +
-                              `Precio 1x: Gs. ${p1.toLocaleString('es-PY')} | Pack 2x: Gs. ${p2.toLocaleString('es-PY')} | ${freeShipping ? 'Envío Gratis' : 'Pago en Puerta'}.\n` +
-                              `No repitas el titular anterior ("${currentHeadline}").\n` +
-                              `Devolvé SOLO un objeto JSON con:\n` +
-                              `{ "hookBadge": "MÁX 28 CHARS EN MAYÚSCULAS CONGRUENTE CON LA ESCENA", "headline": "Titular congruente con ${targetScene.sceneName} máx 48 chars", "primaryText": "Copy completo de 5 a 7 líneas que describa exactamente la escena (${targetScene.sceneName}), beneficios de ${prodName}, precios Gs. y pago al recibir", "descriptionText": "Subtítulo corto congruente con la escena", "aiImagePrompt": "${targetScene.enPrompt}" }`
-                          },
-                          {
-                            role: 'user',
-                            content: `Generá la variante congruente #${variationSeed} para la escena "${targetScene.sceneName}" del producto "${prodName}". Respondé solo JSON.`
-                          }
-                        ],
-                        temperature: 0.75,
-                        max_tokens: 2500
-                      })
-                    });
-                    if (orRes.ok) {
-                      const orJson: any = await orRes.json();
-                      const rawContent = String(orJson?.choices?.[0]?.message?.content || '').trim();
-                      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-                      if (jsonMatch) {
-                        try {
-                          customBrief = JSON.parse(jsonMatch[0]);
-                        } catch {
-                          try {
-                            let sanitized = '';
-                            let inString = false;
-                            let isEscaped = false;
-                            const src = jsonMatch[0];
-                            for (let i = 0; i < src.length; i++) {
-                              const char = src[i];
-                              if (char === '"' && !isEscaped) {
-                                inString = !inString;
-                                sanitized += char;
-                              } else if (inString) {
-                                if (char === '\n') sanitized += '\\n';
-                                else if (char === '\r') sanitized += '\\r';
-                                else if (char === '\t') sanitized += '\\t';
-                                else sanitized += char;
-                              } else {
-                                sanitized += char;
-                              }
-                              isEscaped = char === '\\' && !isEscaped;
-                            }
-                            customBrief = JSON.parse(sanitized);
-                          } catch {}
+                if (!openRouterKey || openRouterKey.includes('tu-clave-de-openrouter')) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        'No se ha detectado una API Key de OpenRouter. La regeneración del anuncio se ha pausado.'
+                    })
+                  );
+                  return;
+                }
+
+                try {
+                  const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${openRouterKey}`,
+                      'Content-Type': 'application/json',
+                      'HTTP-Referer': 'http://localhost:3000',
+                      'X-Title': 'AutoAds Universal Congruent Ad + Image Regenerator'
+                    },
+                    body: JSON.stringify({
+                      model: 'openai/gpt-4o-mini',
+                      reasoning: { effort: 'low' },
+                      messages: [
+                        {
+                          role: 'system',
+                          content:
+                            `Sos un director creativo experto en Meta Ads Andrómeda y Respuesta Directa COD en Paraguay para CUALQUIER rubro o producto.\n` +
+                            `REGLA ESTRICTA DE CONGRUENCIA 100% (TEXTO ↔ IMAGEN IA):\n` +
+                            `El anuncio #${adIndex + 1} del producto "${prodName}" (${prodDesc}) se va a mostrar con la siguiente ESCENA VISUAL EXACTA adaptada a este producto: "${targetScene.sceneName}".\n` +
+                            `Por lo tanto, el "hookBadge", el "headline" y el "primaryText" DEBEN hablar específicamente de "${prodName}" y de esa misma escena visual ("${targetScene.sceneName}") sin repetir dos veces la misma frase.\n` +
+                            `Precio 1x: Gs. ${p1.toLocaleString('es-PY')} | Pack 2x: Gs. ${p2.toLocaleString('es-PY')} | ${freeShipping ? 'Envío Gratis' : 'Pago en Puerta'}.\n` +
+                            `No repitas el titular anterior ("${currentHeadline}").\n` +
+                            `Devolvé SOLO un objeto JSON con:\n` +
+                            `{ "hookBadge": "MÁX 28 CHARS EN MAYÚSCULAS CONGRUENTE CON LA ESCENA", "headline": "Titular congruente con ${targetScene.sceneName} máx 48 chars", "primaryText": "Copy completo de 5 a 7 líneas que describa exactamente la escena (${targetScene.sceneName}), beneficios de ${prodName}, precios Gs. y pago al recibir", "descriptionText": "Subtítulo corto congruente con la escena", "aiImagePrompt": "${targetScene.enPrompt}" }`
+                        },
+                        {
+                          role: 'user',
+                          content: `Generá la variante congruente #${variationSeed} para la escena "${targetScene.sceneName}" del producto "${prodName}". Respondé solo JSON.`
                         }
+                      ],
+                      temperature: 0.75,
+                      max_tokens: 2500
+                    })
+                  });
+
+                  if (!orRes.ok) {
+                    const errTxt = await orRes.text();
+                    res.statusCode = 400;
+                    res.end(
+                      JSON.stringify({
+                        success: false,
+                        error: `Error de OpenRouter al regenerar anuncio (HTTP ${orRes.status}): ${errTxt || orRes.statusText}`
+                      })
+                    );
+                    return;
+                  }
+
+                  if (orRes.ok) {
+                    const orJson: any = await orRes.json();
+                    const rawContent = String(orJson?.choices?.[0]?.message?.content || '').trim();
+                    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                      try {
+                        customBrief = JSON.parse(jsonMatch[0]);
+                      } catch {
+                        try {
+                          let sanitized = '';
+                          let inString = false;
+                          let isEscaped = false;
+                          const src = jsonMatch[0];
+                          for (let i = 0; i < src.length; i++) {
+                            const char = src[i];
+                            if (char === '"' && !isEscaped) {
+                              inString = !inString;
+                              sanitized += char;
+                            } else if (inString) {
+                              if (char === '\n') sanitized += '\\n';
+                              else if (char === '\r') sanitized += '\\r';
+                              else if (char === '\t') sanitized += '\\t';
+                              else sanitized += char;
+                            } else {
+                              sanitized += char;
+                            }
+                            isEscaped = char === '\\' && !isEscaped;
+                          }
+                          customBrief = JSON.parse(sanitized);
+                        } catch {}
                       }
                     }
-                  } catch {}
+                  }
+                } catch (err: any) {
+                  res.statusCode = 500;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error: `Fallo de red al conectar con OpenRouter: ${err?.message || 'Error de conexión'}`
+                    })
+                  );
+                  return;
                 }
 
                 let finalImagePrompt =
