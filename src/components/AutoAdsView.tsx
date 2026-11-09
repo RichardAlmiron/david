@@ -200,6 +200,20 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // Campañas publicadas
   const [publishedCampaigns, setPublishedCampaigns] = useState<PipeboardPublishedCampaignRecord[]>([]);
 
+  // Helper para recuperar la API Key de OpenRouter desde la bóveda persistente del navegador (sobrevive reinicios del contenedor en la nube)
+  const getVaultOpenRouterKey = (): string => {
+    try {
+      return (
+        openRouterKeyInput.trim() ||
+        localStorage.getItem('autoads_openrouter_api_key_vault') ||
+        localStorage.getItem('noelux_openrouter_api_key') ||
+        ''
+      ).trim();
+    } catch {
+      return openRouterKeyInput.trim();
+    }
+  };
+
   // Cargar configuración de servidor (incluyendo los modelos de imagen y video guardados) y estado CAPI al montar
   useEffect(() => {
     fetch('/api/pipeboard/config')
@@ -234,6 +248,29 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         setOpenRouterKeyPreview(String(data?.openRouterKeyPreview || ''));
         if (Array.isArray(data?.publishedCampaigns)) {
           setPublishedCampaigns(data.publishedCampaigns);
+        }
+
+        // Si el contenedor se reinició pero el navegador tiene la API Key guardada en la bóveda local, restaurarla automáticamente al Backend
+        const vaultKey = getVaultOpenRouterKey();
+        if (vaultKey && vaultKey.startsWith('sk-or-')) {
+          fetch('/api/pipeboard/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...(data?.config || {}),
+              openRouterApiKey: vaultKey,
+              selectedImageModel: backendImgModel || selectedImageModel,
+              selectedVideoModel: backendVidModel || selectedVideoModel
+            })
+          })
+            .then(r => r.json())
+            .then(resyncData => {
+              if (resyncData?.hasOpenRouterKey) {
+                setHasOpenRouterKeyInBackend(true);
+                setOpenRouterKeyPreview(String(resyncData.openRouterKeyPreview || ''));
+              }
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {});
@@ -291,12 +328,18 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     activeProduct?.precioNormal
   ]);
 
-  // Guardar Slot Pipeboard + OpenRouter Key en Backend y autodestruir inmediatamente del navegador
+  // Guardar Slot Pipeboard + OpenRouter Key en Backend + Bóveda Persistente Local
   const handleSaveConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setSavingSettings(true);
     const tokenToSend = pipeboardTokenInput.trim();
     const orKeyToSend = openRouterKeyInput.trim();
+    if (orKeyToSend && orKeyToSend.startsWith('sk-or-')) {
+      try {
+        localStorage.setItem('autoads_openrouter_api_key_vault', orKeyToSend);
+        localStorage.setItem('noelux_openrouter_api_key', orKeyToSend);
+      } catch {}
+    }
     setPipeboardTokenInput('');
     setOpenRouterKeyInput('');
     setPbConfig(prev => ({
@@ -312,7 +355,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         body: JSON.stringify({
           ...pbConfig,
           pipeboardApiToken: tokenToSend,
-          openRouterApiKey: orKeyToSend,
+          openRouterApiKey: orKeyToSend || getVaultOpenRouterKey(),
+          selectedImageModel,
+          selectedVideoModel,
           metaAccessTokenFallback: ''
         })
       });
@@ -324,7 +369,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         setOpenRouterKeyPreview(String(data?.openRouterKeyPreview || ''));
         if (tokenToSend || orKeyToSend) {
           setLastTokenSelfDestructAt(new Date().toLocaleTimeString('es-PY'));
-          showToast('🔒 Credenciales guardadas en el Backend y autodestruidas del navegador.');
+          showToast('🔒 Credenciales guardadas en el Backend y protegidas contra reinicios.');
         } else {
           showToast('Configuración actualizada en el Backend.');
         }
@@ -416,7 +461,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         body: JSON.stringify({
           product: sourceMode === 'catalog' ? selectedCatalogProduct : {},
           externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
-          openRouterModel: AUTOADS_LLM_MODEL
+          openRouterModel: AUTOADS_LLM_MODEL,
+          openRouterApiKey: getVaultOpenRouterKey()
         })
       });
 
@@ -499,6 +545,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       existingCreatives.length > 0 && existingCreatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl);
     const isResumeIncomplete = hasPendingImages || hasPendingVideos;
     const isFullRegenerateAll = existingCreatives.length > 0 && !isResumeIncomplete;
+    const vaultKey = getVaultOpenRouterKey();
 
     setWorkflowStep('generating');
     setGenerationProgressText(
@@ -530,6 +577,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               product: activeProduct,
               externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
               openRouterModel: AUTOADS_LLM_MODEL,
+              openRouterApiKey: vaultKey,
               variationTimestamp: Date.now()
             })
           });
@@ -599,7 +647,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 adIndex: cardIdx,
                 product: activeProduct,
                 prompt: workingAssets[cardIdx]?.aiImagePrompt || '',
-                videoModel: selectedVideoModel
+                videoModel: selectedVideoModel,
+                openRouterApiKey: vaultKey
               })
             });
             if (vidRes.ok) {
@@ -614,10 +663,14 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               }
             } else {
               const errData = await vidRes.json().catch(() => ({}));
-              lastWaveError = errData?.error || `Error al crear el Video Reel #${cardIdx + 1}.`;
+              if (!lastWaveError) {
+                lastWaveError = errData?.error || `Error al crear el Video Reel #${cardIdx + 1}.`;
+              }
             }
           } catch (vidErr: any) {
-            lastWaveError = vidErr?.message || `Error de red al crear Video Reel #${cardIdx + 1}.`;
+            if (!lastWaveError) {
+              lastWaveError = vidErr?.message || `Error de red al crear Video Reel #${cardIdx + 1}.`;
+            }
           }
           continue;
         }
@@ -637,6 +690,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               forceNewGeneration: true,
               imageModel: selectedImageModel,
               videoModel: selectedVideoModel,
+              openRouterApiKey: vaultKey,
               targetIndices: [cardIdx]
             })
           });
@@ -645,7 +699,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           try {
             imgData = JSON.parse(rawText);
           } catch {
-            lastWaveError = `Respuesta inválida al generar Anuncio #${cardIdx + 1} (HTTP ${res.status}).`;
+            if (!lastWaveError) {
+              lastWaveError = `Respuesta inválida al generar Anuncio #${cardIdx + 1} (HTTP ${res.status}).`;
+            }
             continue;
           }
 
@@ -668,7 +724,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             setCreatives([...workingAssets]);
           }
         } catch (cardErr: any) {
-          lastWaveError = cardErr?.message || `Error de red al generar imagen #${cardIdx + 1}.`;
+          if (!lastWaveError) {
+            lastWaveError = cardErr?.message || `Error de red al generar imagen #${cardIdx + 1}.`;
+          }
         }
 
         if (i + 1 < singleCardIndices.length && singleCardIndices[i + 1] < 4) {
@@ -697,7 +755,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   adIndex: missingIdx,
                   product: activeProduct,
                   prompt: workingAssets[missingIdx]?.aiImagePrompt || '',
-                  videoModel: selectedVideoModel
+                  videoModel: selectedVideoModel,
+                  openRouterApiKey: vaultKey
                 })
               });
               if (vidRetry.ok) {
@@ -729,6 +788,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 forceNewGeneration: true,
                 imageModel: selectedImageModel,
                 videoModel: selectedVideoModel,
+                openRouterApiKey: vaultKey,
                 targetIndices: [missingIdx]
               })
             });
@@ -755,14 +815,20 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
       const totalGeneratedImagesCount = workingAssets.slice(0, 4).filter(a => Boolean(a.aiGeneratedImageUrl)).length;
       const totalReelVideosCount = workingAssets.slice(4, 6).filter(a => Boolean(a.aiGeneratedVideoUrl)).length;
-      if (totalGeneratedImagesCount === 0 && totalReelVideosCount === 0 && lastWaveError) {
+      if (totalGeneratedImagesCount === 0 && lastWaveError) {
         clearTimeout(genTimer1);
         setWorkflowStep('researched');
         setGenerationProgressText('');
+        const isContainerKeyReset =
+          lastWaveError.includes('User not found') || lastWaveError.includes('401');
         setApiErrorModal({
           isOpen: true,
-          title: '⚠️ Error en Generación de Anuncios — Trabajo Pausado',
-          errorMessage: lastWaveError,
+          title: isContainerKeyReset
+            ? '🔑 El Servidor se Reinició — Confirmá tu API Key de OpenRouter'
+            : '⚠️ Error en Generación de Anuncios — Trabajo Pausado',
+          errorMessage: isContainerKeyReset
+            ? `El servidor en la nube se reinició por inactividad y necesita que pegues nuevamente tu API Key de OpenRouter (sk-or-v1-...). Al guardarla ahora quedará blindada en la bóveda persistente para que no se borre en futuros reinicios.\n\nDetalle técnico: ${lastWaveError}`
+            : lastWaveError,
           sourceEndpoint: '/api/autoads/generate-ad-images'
         });
         return;
@@ -805,7 +871,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           adIndex,
           product: activeProduct,
           prompt: customPromptOverride || currentAd?.aiImagePrompt || '',
-          videoModel: selectedVideoModel
+          videoModel: selectedVideoModel,
+          openRouterApiKey: getVaultOpenRouterKey()
         })
       });
       const data = await res.json();
@@ -855,6 +922,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           customImagePrompt: customPromptOverride || currentAd?.aiImagePrompt || '',
           imageModel: selectedImageModel,
           videoModel: selectedVideoModel,
+          openRouterApiKey: getVaultOpenRouterKey(),
           imageOnly: true
         })
       });
@@ -922,7 +990,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             adIndex: missingReelIdx,
             product: activeProduct,
             prompt: targetAd?.aiImagePrompt || '',
-            videoModel: selectedVideoModel
+            videoModel: selectedVideoModel,
+            openRouterApiKey: getVaultOpenRouterKey()
           })
         });
         if (cancelled || !res.ok) return;
@@ -968,7 +1037,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           currentHeadline: currentAd?.headline || '',
           customImagePrompt: customPromptOverride || '',
           imageModel: selectedImageModel,
-          videoModel: selectedVideoModel
+          videoModel: selectedVideoModel,
+          openRouterApiKey: getVaultOpenRouterKey()
         })
       });
       const data = await res.json();

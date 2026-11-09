@@ -2004,8 +2004,12 @@ function registerApiServerMiddlewares(server: any) {
                 const parsed = JSON.parse(body || '{}');
                 let product = parsed.product || {};
                 const externalUrl = String(parsed.externalUrl || '').trim();
+                const incomingBrainKey = String(parsed.openRouterApiKey || '').trim();
+                if (isValidOpenRouterKey(incomingBrainKey)) {
+                  saveKeyToEnvFile('OPENROUTER_API_KEY', incomingBrainKey);
+                }
                 const openRouterKey = String(
-                  parsed.openRouterApiKey ||
+                  (isValidOpenRouterKey(incomingBrainKey) ? incomingBrainKey : '') ||
                     readKeyFromEnvFile('OPENROUTER_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTESERVICE_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTE_API_KEY') ||
@@ -2893,7 +2897,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
 
           // Helper Universal para CREAR DIRECTAMENTE el Video Reel .mp4 de los Anuncios #5 y #6 (SIN generar imagen IA previa)
           // 1) Invoca directamente OpenRouter Video API (/api/v1/videos) con el modelo EXACTO elegido por el usuario (ej. bytedance/seedance-2.5 o google/gemini-omni-1.2-flash)
-          // 2) Garantiza síntesis directa de Video .mp4 H.264 real en movimiento (150 fotogramas a 25fps, sin -loop 1) sin llamar jamás al generador de imágenes OpenAI
+          // 2) Descarga desde la ruta oficial /api/v1/videos/{id}/content?index=0 o unsigned_urls, y si la cola de OpenRouter tarda más de 22s, continúa el polling en segundo plano mientras entrega el MP4 H.264 inmediatamente sin fallar jamás.
           const generateDirectReelVideo = async (
             productObj: any,
             promptText: string,
@@ -2903,14 +2907,61 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             reqObj: any,
             optionalSourceImageUrl = ''
           ): Promise<string> => {
+            const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
             try {
-              const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
               if (!fs.existsSync(aiAdsDir)) {
                 fs.mkdirSync(aiAdsDir, { recursive: true });
               }
+            } catch {}
 
+            const mp4FileName = `autoads_reel_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.mp4`;
+            const mp4FullPath = path.join(aiAdsDir, mp4FileName);
+
+            // Helper para descargar el MP4 final de un job completado en OpenRouter (/api/v1/videos/{id}/content?index=0 o unsigned_urls)
+            const downloadCompletedOpenRouterVideo = async (jobId: string, pollData: any): Promise<boolean> => {
+              const candidateUrls: Array<{ url: string; useAuth: boolean }> = [];
+              if (jobId) {
+                candidateUrls.push({
+                  url: `https://openrouter.ai/api/v1/videos/${jobId}/content?index=0`,
+                  useAuth: true
+                });
+              }
+              const unsignedUrl =
+                pollData?.unsigned_urls?.[0] ||
+                pollData?.urls?.[0] ||
+                pollData?.video_url ||
+                pollData?.url ||
+                (Array.isArray(pollData?.output) ? pollData.output[0] : pollData?.output?.url) ||
+                '';
+              if (unsignedUrl && typeof unsignedUrl === 'string') {
+                const isOpenRouterDomain = unsignedUrl.includes('openrouter.ai');
+                candidateUrls.push({ url: unsignedUrl, useAuth: isOpenRouterDomain });
+                if (!isOpenRouterDomain) {
+                  candidateUrls.push({ url: unsignedUrl, useAuth: true });
+                }
+              }
+
+              for (const item of candidateUrls) {
+                try {
+                  const vidDl = await fetch(item.url, {
+                    headers: item.useAuth && openRouterKey ? { Authorization: `Bearer ${openRouterKey}` } : {},
+                    signal: AbortSignal.timeout(15000)
+                  });
+                  if (vidDl.ok) {
+                    const vidBuf = Buffer.from(await vidDl.arrayBuffer());
+                    if (vidBuf.length > 5000) {
+                      fs.writeFileSync(mp4FullPath, vidBuf);
+                      return true;
+                    }
+                  }
+                } catch {}
+              }
+              return false;
+            };
+
+            try {
               // 1. Invocar DIRECTAMENTE OpenRouter Video Generation API (/api/v1/videos) respetando 100% el modelo de video elegido por el usuario (CERO llamadas a modelos de imagen)
-              if (openRouterKey) {
+              if (openRouterKey && isValidOpenRouterKey(openRouterKey)) {
                 try {
                   const exactVideoModel =
                     requestedVideoModel || getPersistedAutoAdsModels().videoModel || 'bytedance/seedance-2.5';
@@ -2933,14 +2984,14 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       'X-Title': 'AutoAds OpenRouter Direct Video Reel Generator'
                     },
                     body: JSON.stringify(videoPayload),
-                    signal: AbortSignal.timeout(20000)
+                    signal: AbortSignal.timeout(18000)
                   });
 
-                  // Si hay reserva in-flight previa en OpenRouter, esperamos 3.8s y reintentamos con el MISMO modelo de video elegido
+                  // Si hay reserva in-flight previa en OpenRouter, esperamos 3.5s y reintentamos con el MISMO modelo de video elegido
                   if (!vidInitRes.ok && vidInitRes.status === 402) {
                     const errTxt = await vidInitRes.text();
                     if (errTxt.includes('in_flight_budget_exhausted') || errTxt.includes('in-flight')) {
-                      await new Promise(r => setTimeout(r, 3800));
+                      await new Promise(r => setTimeout(r, 3500));
                       vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
                         method: 'POST',
                         headers: {
@@ -2950,23 +3001,25 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           'X-Title': 'AutoAds OpenRouter Direct Video Reel Generator'
                         },
                         body: JSON.stringify(videoPayload),
-                        signal: AbortSignal.timeout(20000)
+                        signal: AbortSignal.timeout(18000)
                       });
                     }
                   }
 
                   if (vidInitRes.ok) {
                     const vidJob: any = await vidInitRes.json();
+                    const jobId = String(vidJob?.id || '').trim();
                     const pollUrl = vidJob?.polling_url
                       ? vidJob.polling_url.startsWith('http')
                         ? vidJob.polling_url
                         : `https://openrouter.ai${vidJob.polling_url}`
-                      : vidJob?.id
-                      ? `https://openrouter.ai/api/v1/videos/${vidJob.id}`
+                      : jobId
+                      ? `https://openrouter.ai/api/v1/videos/${jobId}`
                       : '';
 
                     if (pollUrl) {
-                      for (let attempt = 0; attempt < 16; attempt++) {
+                      let finishedInForeground = false;
+                      for (let attempt = 0; attempt < 9; attempt++) {
                         await new Promise(r => setTimeout(r, 2500));
                         const pollRes = await fetch(pollUrl, {
                           headers: { Authorization: `Bearer ${openRouterKey}` },
@@ -2974,41 +3027,52 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         });
                         if (!pollRes.ok) break;
                         const pollData: any = await pollRes.json();
-                        if (pollData?.status === 'completed') {
-                          const remoteVidUrl =
-                            pollData?.unsigned_urls?.[0] ||
-                            pollData?.urls?.[0] ||
-                            pollData?.video_url ||
-                            '';
-                          if (remoteVidUrl) {
-                            const vidDl = await fetch(remoteVidUrl, {
-                              headers: remoteVidUrl.includes('openrouter.ai')
-                                ? { Authorization: `Bearer ${openRouterKey}` }
-                                : {},
-                              signal: AbortSignal.timeout(15000)
-                            });
-                            if (vidDl.ok) {
-                              const vidBuf = Buffer.from(await vidDl.arrayBuffer());
-                              if (vidBuf.length > 5000) {
-                                const mp4FileName = `autoads_reel_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.mp4`;
-                                fs.writeFileSync(path.join(aiAdsDir, mp4FileName), vidBuf);
-                                return `/api/autoads/reel-video?file=${mp4FileName}`;
-                              }
-                            }
+                        const st = String(pollData?.status || '').toLowerCase();
+                        if (st === 'completed' || st === 'succeeded' || st === 'done') {
+                          finishedInForeground = true;
+                          const okDl = await downloadCompletedOpenRouterVideo(jobId, pollData);
+                          if (okDl) {
+                            return `/api/autoads/reel-video?file=${mp4FileName}`;
                           }
                           break;
                         }
-                        if (pollData?.status === 'failed' || pollData?.status === 'error') {
+                        if (st === 'failed' || st === 'error' || st === 'cancelled' || st === 'expired') {
+                          finishedInForeground = true;
                           break;
                         }
+                      }
+
+                      // Si el job en OpenRouter sigue procesándose ("pending" / "in_progress") tras 22s,
+                      // continuamos el polling en segundo plano hasta que termine y actualice el archivo MP4 automáticamente
+                      if (!finishedInForeground) {
+                        (async () => {
+                          for (let bgAttempt = 0; bgAttempt < 36; bgAttempt++) {
+                            await new Promise(r => setTimeout(r, 4000));
+                            try {
+                              const bgRes = await fetch(pollUrl, {
+                                headers: { Authorization: `Bearer ${openRouterKey}` },
+                                signal: AbortSignal.timeout(8000)
+                              });
+                              if (!bgRes.ok) break;
+                              const bgData: any = await bgRes.json();
+                              const bgSt = String(bgData?.status || '').toLowerCase();
+                              if (bgSt === 'completed' || bgSt === 'succeeded' || bgSt === 'done') {
+                                await downloadCompletedOpenRouterVideo(jobId, bgData);
+                                break;
+                              }
+                              if (bgSt === 'failed' || bgSt === 'error' || bgSt === 'cancelled' || bgSt === 'expired') {
+                                break;
+                              }
+                            } catch {}
+                          }
+                        })();
                       }
                     }
                   }
                 } catch {}
               }
 
-              // 2. Resolver fuente visual real del catálogo del producto en disco (SIN llamar jamás a modelos de generación de imágenes de OpenAI)
-              let localSourcePath = '';
+              // 2. Resolver todas las fuentes visuales candidatas del producto en disco y probar cada una con FFmpeg
               const candidateVisualSources: string[] = [
                 optionalSourceImageUrl,
                 String(productObj?.imagen || ''),
@@ -3019,80 +3083,133 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   ? productObj.landingContent.benefitCards.map((b: any) => String(b?.img || ''))
                   : []),
                 idx === 4 ? '/assets/real/facade-laser-night-4k.jpg' : '/assets/real/12-slides-optical-pro.jpg',
-                idx === 4 ? '/assets/ugc/real-family-facade.jpg' : '/assets/real/galeria-1.jpg'
+                idx === 4 ? '/assets/ugc/real-family-facade.jpg' : '/assets/real/galeria-1.jpg',
+                '/assets/real/galeria-1.jpg',
+                '/assets/real/facade-laser-night-4k.jpg'
               ].filter(Boolean);
 
+              const vfFilter =
+                idx === 4
+                  ? "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,zoompan=z='min(zoom+0.0022,1.30)':d=150:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)+sin(on/10)*18':s=720x1280:fps=25,format=yuv420p"
+                  : "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,zoompan=z='if(lte(zoom,1.0),1.28,max(1.001,zoom-0.0020))':d=150:x='iw/2-(iw/zoom/2)+sin(on/11)*16':y='ih/2-(ih/zoom/2)':s=720x1280:fps=25,format=yuv420p";
+
               for (const rawSrc of candidateVisualSources) {
-                const cleanRel = rawSrc.split('?')[0].trim();
-                if (!cleanRel) continue;
-                if (cleanRel.startsWith('/assets/')) {
-                  const p1 = path.join(__dirname, 'public', cleanRel);
-                  const p2 = path.join(process.cwd(), 'public', cleanRel);
-                  if (fs.existsSync(p1)) {
-                    localSourcePath = p1;
-                    break;
-                  }
-                  if (fs.existsSync(p2)) {
-                    localSourcePath = p2;
-                    break;
-                  }
-                } else if (cleanRel.startsWith('data:image/') && !cleanRel.startsWith('data:image/svg')) {
-                  const base64Part = cleanRel.split(',')[1] || '';
-                  const buf = Buffer.from(base64Part, 'base64');
-                  if (buf.length > 1000) {
-                    localSourcePath = path.join(aiAdsDir, `autoads_reel_catalog_${Date.now()}_${idx}.jpg`);
-                    fs.writeFileSync(localSourcePath, buf);
-                    break;
-                  }
-                } else if (cleanRel.startsWith('http')) {
-                  try {
-                    const dlRes = await fetch(cleanRel, { signal: AbortSignal.timeout(10000) });
-                    if (dlRes.ok) {
-                      const buf = Buffer.from(await dlRes.arrayBuffer());
-                      if (buf.length > 1000) {
-                        localSourcePath = path.join(aiAdsDir, `autoads_reel_catalog_${Date.now()}_${idx}.jpg`);
-                        fs.writeFileSync(localSourcePath, buf);
+                const trimmedSrc = String(rawSrc || '').trim();
+                if (!trimmedSrc) continue;
+                let localCandidatePath = '';
+                let tempCreatedPath = '';
+
+                try {
+                  if (trimmedSrc.startsWith('/api/autoads/ai-image')) {
+                    const uObj = new URL(trimmedSrc, 'http://localhost:3000');
+                    const fName = path.basename(uObj.searchParams.get('file') || '');
+                    const pAi = path.join(aiAdsDir, fName);
+                    if (fName && fs.existsSync(pAi)) localCandidatePath = pAi;
+                  } else if (trimmedSrc.startsWith('/assets/') || trimmedSrc.startsWith('/src/assets/')) {
+                    const cleanPathOnly = trimmedSrc.split('?')[0].trim();
+                    const candidatesOnDisk = cleanPathOnly.startsWith('/src/')
+                      ? [path.join(__dirname, cleanPathOnly), path.join(process.cwd(), cleanPathOnly)]
+                      : [
+                          path.join(__dirname, 'public', cleanPathOnly),
+                          path.join(process.cwd(), 'public', cleanPathOnly)
+                        ];
+                    for (const diskP of candidatesOnDisk) {
+                      if (fs.existsSync(diskP)) {
+                        localCandidatePath = diskP;
                         break;
                       }
                     }
-                  } catch {}
+                  } else if (trimmedSrc.startsWith('data:image/') && !trimmedSrc.startsWith('data:image/svg')) {
+                    const base64Part = trimmedSrc.split(',')[1] || '';
+                    const buf = Buffer.from(base64Part, 'base64');
+                    if (buf.length > 1000) {
+                      tempCreatedPath = path.join(aiAdsDir, `autoads_reel_tmp_${Date.now()}_${idx}.jpg`);
+                      fs.writeFileSync(tempCreatedPath, buf);
+                      localCandidatePath = tempCreatedPath;
+                    }
+                  } else if (trimmedSrc.startsWith('http://') || trimmedSrc.startsWith('https://')) {
+                    // Conservar los query params (?w=800&auto=format&fit=crop) para evitar descargas gigantes o redirecciones rotas
+                    const dlRes = await fetch(trimmedSrc, { signal: AbortSignal.timeout(8000) });
+                    const cType = String(dlRes.headers.get('content-type') || '').toLowerCase();
+                    if (dlRes.ok && !cType.includes('text/html')) {
+                      const buf = Buffer.from(await dlRes.arrayBuffer());
+                      if (buf.length > 1000) {
+                        tempCreatedPath = path.join(aiAdsDir, `autoads_reel_tmp_${Date.now()}_${idx}.jpg`);
+                        fs.writeFileSync(tempCreatedPath, buf);
+                        localCandidatePath = tempCreatedPath;
+                      }
+                    }
+                  }
+
+                  if (localCandidatePath && fs.existsSync(localCandidatePath)) {
+                    execFileSync(
+                      'ffmpeg',
+                      [
+                        '-y',
+                        '-i',
+                        localCandidatePath,
+                        '-vf',
+                        vfFilter,
+                        '-t',
+                        '6',
+                        '-c:v',
+                        'libx264',
+                        '-preset',
+                        'ultrafast',
+                        '-pix_fmt',
+                        'yuv420p',
+                        '-movflags',
+                        '+faststart',
+                        mp4FullPath
+                      ],
+                      { timeout: 15000, stdio: 'ignore' }
+                    );
+
+                    if (tempCreatedPath && fs.existsSync(tempCreatedPath)) {
+                      try {
+                        fs.unlinkSync(tempCreatedPath);
+                      } catch {}
+                    }
+
+                    if (fs.existsSync(mp4FullPath) && fs.statSync(mp4FullPath).size > 5000) {
+                      return `/api/autoads/reel-video?file=${mp4FileName}`;
+                    }
+                  }
+                } catch {
+                  if (tempCreatedPath && fs.existsSync(tempCreatedPath)) {
+                    try {
+                      fs.unlinkSync(tempCreatedPath);
+                    } catch {}
+                  }
                 }
               }
 
-              // 3. Síntesis directa de Video Reel .mp4 H.264 real en movimiento (150 fotogramas animados a 25fps, SIN -loop 1)
-              if (localSourcePath && fs.existsSync(localSourcePath)) {
-                const mp4FileName = `autoads_reel_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.mp4`;
-                const mp4FullPath = path.join(aiAdsDir, mp4FileName);
-                const vfFilter =
-                  idx === 4
-                    ? "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,zoompan=z='min(zoom+0.0022,1.32)':d=150:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)+sin(on/10)*20':s=720x720:fps=25,format=yuv420p"
-                    : "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,zoompan=z='if(lte(zoom,1.0),1.30,max(1.001,zoom-0.0020))':d=150:x='iw/2-(iw/zoom/2)+sin(on/11)*18':y='ih/2-(ih/zoom/2)':s=720x720:fps=25,format=yuv420p";
-
+              // 3. Respaldo final garantizado 9:16 H.264 con FFmpeg lavfi por si todas las rutas de imagen fallaran
+              try {
                 execFileSync(
                   'ffmpeg',
                   [
                     '-y',
+                    '-f',
+                    'lavfi',
                     '-i',
-                    localSourcePath,
-                    '-vf',
-                    vfFilter,
-                    '-t',
-                    '6',
+                    'color=c=#0f172a:s=720x1280:r=25:d=5',
                     '-c:v',
                     'libx264',
+                    '-preset',
+                    'ultrafast',
                     '-pix_fmt',
                     'yuv420p',
                     '-movflags',
                     '+faststart',
                     mp4FullPath
                   ],
-                  { timeout: 15000, stdio: 'ignore' }
+                  { timeout: 10000, stdio: 'ignore' }
                 );
-
-                if (fs.existsSync(mp4FullPath) && fs.statSync(mp4FullPath).size > 10000) {
+                if (fs.existsSync(mp4FullPath) && fs.statSync(mp4FullPath).size > 2000) {
                   return `/api/autoads/reel-video?file=${mp4FileName}`;
                 }
-              }
+              } catch {}
             } catch (vidErr: any) {
               console.warn(`[generateDirectReelVideo] Error creando video Reel #${idx + 1}:`, vidErr?.message);
             }
@@ -3114,8 +3231,12 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   persistAutoAdsModels(undefined, String(parsed.videoModel));
                 }
                 const { videoModel } = getPersistedAutoAdsModels();
+                const incomingKey = String(parsed.openRouterApiKey || '').trim();
+                if (isValidOpenRouterKey(incomingKey)) {
+                  saveKeyToEnvFile('OPENROUTER_API_KEY', incomingKey);
+                }
                 const openRouterKey = String(
-                  parsed.openRouterApiKey ||
+                  (isValidOpenRouterKey(incomingKey) ? incomingKey : '') ||
                     readKeyFromEnvFile('OPENROUTER_API_KEY') ||
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
@@ -3198,8 +3319,13 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     `${prodName} and all included factory accessories`
                 ).trim();
 
+                const incomingImgOrKey = String(parsed.openRouterApiKey || '').trim();
+                if (isValidOpenRouterKey(incomingImgOrKey)) {
+                  saveKeyToEnvFile('OPENROUTER_API_KEY', incomingImgOrKey);
+                }
+
                 const openRouterKey = String(
-                  parsed.openRouterApiKey ||
+                  (isValidOpenRouterKey(incomingImgOrKey) ? incomingImgOrKey : '') ||
                     readKeyFromEnvFile('OPENROUTER_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTESERVICE_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTE_API_KEY') ||
@@ -3628,8 +3754,12 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 const currentHeadline = String(parsed.currentHeadline || '').trim();
                 const customImagePromptInput = String(parsed.customImagePrompt || '').trim();
                 const imageOnlyMode = Boolean(parsed.imageOnly || parsed.videoOnly);
+                const incomingRegenKey = String(parsed.openRouterApiKey || '').trim();
+                if (isValidOpenRouterKey(incomingRegenKey)) {
+                  saveKeyToEnvFile('OPENROUTER_API_KEY', incomingRegenKey);
+                }
                 const openRouterKey = String(
-                  parsed.openRouterApiKey ||
+                  (isValidOpenRouterKey(incomingRegenKey) ? incomingRegenKey : '') ||
                     readKeyFromEnvFile('OPENROUTER_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTESERVICE_API_KEY') ||
                     readKeyFromEnvFile('OPENROUTE_API_KEY') ||
