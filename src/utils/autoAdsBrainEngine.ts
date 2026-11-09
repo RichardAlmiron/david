@@ -197,6 +197,7 @@ export interface AutoAdsCreativeBrief {
   themeIndex: number;
   aiImagePrompt?: string;
   aiGeneratedImageUrl?: string;
+  aiGeneratedVideoUrl?: string;
   videoScenes?: Array<{
     durationSec: number;
     badge: string;
@@ -1437,6 +1438,7 @@ export function buildCreativeAssetsFromBrain(
       ctaLabel
     );
     const aiGeneratedImageUrl = brief.aiGeneratedImageUrl || '';
+    const aiGeneratedVideoUrl = brief.aiGeneratedVideoUrl || '';
     const productImage = aiGeneratedImageUrl || product.imagen || '';
 
     const imageDataUrl = buildHighImpactAdSvgDataUrl({
@@ -1469,6 +1471,7 @@ export function buildCreativeAssetsFromBrain(
       visualThemeIndex: themeIdx,
       imageDataUrl,
       aiGeneratedImageUrl,
+      aiGeneratedVideoUrl,
       aiImagePrompt
     };
 
@@ -1606,6 +1609,7 @@ export function regenerateSingleCreativeAssetFromBrain(
     customBriefOverride?.aiImagePrompt ||
     buildAiAdImagePromptForBrief(product, congruentSceneIdx, variationSeed);
   const aiGeneratedImageUrl = customBriefOverride?.aiGeneratedImageUrl || '';
+  const aiGeneratedVideoUrl = customBriefOverride?.aiGeneratedVideoUrl || '';
   const productImage = aiGeneratedImageUrl || product.imagen || '';
 
   const themeIdx = mergedBrief.themeIndex % CREATIVE_COLOR_THEMES.length;
@@ -1652,6 +1656,7 @@ export function regenerateSingleCreativeAssetFromBrain(
     visualThemeIndex: themeIdx,
     imageDataUrl,
     aiGeneratedImageUrl,
+    aiGeneratedVideoUrl,
     aiImagePrompt,
     videoScenes: mergedBrief.videoScenes || baseBrief.videoScenes
   };

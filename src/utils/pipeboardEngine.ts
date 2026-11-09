@@ -44,6 +44,7 @@ export interface GeneratedAdCreativeAsset {
   visualThemeIndex: number;
   imageDataUrl: string; // High-impact rendered SVG/Canvas Data URL for instant preview & upload_ad_image
   aiGeneratedImageUrl?: string; // Real AI-generated advertising photograph URL / Data URL
+  aiGeneratedVideoUrl?: string; // Real AI-generated playable Reel video (.mp4) derived from the AI image
   aiImagePrompt?: string; // Exact prompt used by the AI Image Generator to create this ad visual
   videoScenes?: Array<{
     durationSec: number;

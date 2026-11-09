@@ -5,6 +5,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { execFileSync } from 'child_process';
 import {
   connectWhatsAppEngine,
   disconnectWhatsAppEngine,
@@ -2769,6 +2770,182 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             return;
           }
 
+          // Helper Universal para convertir la Imagen IA generada de los Anuncios #5 y #6 (Reels) en un Video .mp4 real reproducible
+          // Intenta primero OpenRouter Video API (/api/v1/videos con image-to-video frame_images) y garantiza síntesis MP4 H.264 con ffmpeg
+          const synthesizeReelVideoFromImage = async (
+            imageUrl: string,
+            promptText: string,
+            idx: number,
+            requestedVideoModel: string,
+            openRouterKey: string,
+            reqObj: any
+          ): Promise<string> => {
+            if (!imageUrl) return '';
+            try {
+              const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
+              if (!fs.existsSync(aiAdsDir)) {
+                fs.mkdirSync(aiAdsDir, { recursive: true });
+              }
+
+              // 1. Resolver ruta local en disco de la imagen IA recién generada
+              let localImgPath = '';
+              if (imageUrl.startsWith('/assets/ai-ads/')) {
+                const candidate = path.join(__dirname, 'public', imageUrl);
+                if (fs.existsSync(candidate)) {
+                  localImgPath = candidate;
+                }
+              } else if (imageUrl.startsWith('data:image/')) {
+                const base64Part = imageUrl.split(',')[1] || '';
+                const buf = Buffer.from(base64Part, 'base64');
+                if (buf.length > 1000) {
+                  localImgPath = path.join(aiAdsDir, `autoads_reel_src_${Date.now()}_${idx}.png`);
+                  fs.writeFileSync(localImgPath, buf);
+                }
+              } else if (imageUrl.startsWith('http')) {
+                try {
+                  const dlRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10000) });
+                  if (dlRes.ok) {
+                    const buf = Buffer.from(await dlRes.arrayBuffer());
+                    if (buf.length > 1000) {
+                      localImgPath = path.join(aiAdsDir, `autoads_reel_src_${Date.now()}_${idx}.png`);
+                      fs.writeFileSync(localImgPath, buf);
+                    }
+                  }
+                } catch {}
+              }
+
+              // 2. Intentar primero OpenRouter Video Generation API (/api/v1/videos) con la imagen generada como first_frame
+              if (openRouterKey && localImgPath && fs.existsSync(localImgPath)) {
+                try {
+                  const imgBuf = fs.readFileSync(localImgPath);
+                  const mime = localImgPath.endsWith('.jpg') || localImgPath.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
+                  const base64DataUri = `data:${mime};base64,${imgBuf.toString('base64')}`;
+
+                  const normalizedOrVideoModel =
+                    requestedVideoModel === 'bytedance/seedance-2.5' || !requestedVideoModel
+                      ? 'bytedance/seedance-2.0-fast'
+                      : requestedVideoModel;
+
+                  const vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${openRouterKey}`,
+                      'Content-Type': 'application/json',
+                      'HTTP-Referer': getOpenRouterReferer(reqObj),
+                      'X-Title': 'AutoAds OpenRouter Video Reel Generator'
+                    },
+                    body: JSON.stringify({
+                      model: normalizedOrVideoModel,
+                      prompt: `Dynamic commercial Meta Reel video animating this exact product advertisement scene in motion: ${promptText.slice(0, 380)}`,
+                      duration: 5,
+                      resolution: '480p',
+                      aspect_ratio: '1:1',
+                      frame_images: [
+                        {
+                          type: 'image_url',
+                          image_url: { url: base64DataUri },
+                          frame_type: 'first_frame'
+                        }
+                      ]
+                    }),
+                    signal: AbortSignal.timeout(15000)
+                  });
+
+                  if (vidInitRes.ok) {
+                    const vidJob: any = await vidInitRes.json();
+                    const pollUrl = vidJob?.polling_url
+                      ? vidJob.polling_url.startsWith('http')
+                        ? vidJob.polling_url
+                        : `https://openrouter.ai${vidJob.polling_url}`
+                      : vidJob?.id
+                      ? `https://openrouter.ai/api/v1/videos/${vidJob.id}`
+                      : '';
+
+                    if (pollUrl) {
+                      for (let attempt = 0; attempt < 8; attempt++) {
+                        await new Promise(r => setTimeout(r, 3000));
+                        const pollRes = await fetch(pollUrl, {
+                          headers: { Authorization: `Bearer ${openRouterKey}` },
+                          signal: AbortSignal.timeout(8000)
+                        });
+                        if (!pollRes.ok) break;
+                        const pollData: any = await pollRes.json();
+                        if (pollData?.status === 'completed') {
+                          const remoteVidUrl =
+                            pollData?.unsigned_urls?.[0] ||
+                            pollData?.urls?.[0] ||
+                            pollData?.video_url ||
+                            '';
+                          if (remoteVidUrl) {
+                            const vidDl = await fetch(remoteVidUrl, {
+                              headers: remoteVidUrl.includes('openrouter.ai')
+                                ? { Authorization: `Bearer ${openRouterKey}` }
+                                : {},
+                              signal: AbortSignal.timeout(15000)
+                            });
+                            if (vidDl.ok) {
+                              const vidBuf = Buffer.from(await vidDl.arrayBuffer());
+                              if (vidBuf.length > 5000) {
+                                const mp4FileName = `autoads_reel_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.mp4`;
+                                fs.writeFileSync(path.join(aiAdsDir, mp4FileName), vidBuf);
+                                return `/assets/ai-ads/${mp4FileName}`;
+                              }
+                            }
+                          }
+                          break;
+                        }
+                        if (pollData?.status === 'failed' || pollData?.status === 'error') {
+                          break;
+                        }
+                      }
+                    }
+                  }
+                } catch {}
+              }
+
+              // 3. Síntesis directa de Video Reel .mp4 H.264 a partir de la Imagen IA recién generada usando ffmpeg
+              if (localImgPath && fs.existsSync(localImgPath)) {
+                const mp4FileName = `autoads_reel_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.mp4`;
+                const mp4FullPath = path.join(aiAdsDir, mp4FileName);
+                // Movimiento cinematográfico distinto para Reel #5 (zoom-in potente al centro) y Reel #6 (paneo dinámico de kit)
+                const vfFilter =
+                  idx === 4
+                    ? "scale=1080:1080,zoompan=z='min(zoom+0.0018,1.26)':d=150:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x720:fps=25,format=yuv420p"
+                    : "scale=1080:1080,zoompan=z='if(lte(zoom,1.0),1.22,max(1.001,zoom-0.0015))':d=150:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x720:fps=25,format=yuv420p";
+
+                execFileSync(
+                  'ffmpeg',
+                  [
+                    '-y',
+                    '-loop',
+                    '1',
+                    '-i',
+                    localImgPath,
+                    '-vf',
+                    vfFilter,
+                    '-t',
+                    '6',
+                    '-c:v',
+                    'libx264',
+                    '-pix_fmt',
+                    'yuv420p',
+                    '-movflags',
+                    '+faststart',
+                    mp4FullPath
+                  ],
+                  { timeout: 15000, stdio: 'ignore' }
+                );
+
+                if (fs.existsSync(mp4FullPath) && fs.statSync(mp4FullPath).size > 5000) {
+                  return `/assets/ai-ads/${mp4FileName}`;
+                }
+              }
+            } catch (vidErr: any) {
+              console.warn(`[synthesizeReelVideoFromImage] Error creando video Reel #${idx + 1}:`, vidErr?.message);
+            }
+            return '';
+          };
+
           // Motor Universal de Generación de Imágenes (OpenAI GPT Image) + Video Reels (Seedance 2.5 / Gemini Omni) vía OpenRouter
           if (req.method === 'POST' && url === '/api/autoads/generate-ad-images') {
             let body = '';
@@ -3121,9 +3298,37 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
 
                 let lastOpenRouterImgError = '';
 
+                const existingImageUrlsMap: Record<string, string> =
+                  parsed.existingImageUrls && typeof parsed.existingImageUrls === 'object'
+                    ? parsed.existingImageUrls
+                    : {};
+
                 const generateOneCreativeViaOpenRouter = async (promptText: string, idx: number) => {
                   const isReel = idx >= 4;
                   const finalPrompt = sanitizePromptForOpenAiImages(promptText);
+                  const preExistingImgUrl = String(existingImageUrlsMap[idx] || existingImageUrlsMap[String(idx)] || '').trim();
+
+                  // Si el anuncio ya tiene su Imagen IA perfecta y solo necesita crear el Video Reel (Anuncios #5 y #6), reutilizamos su imagen intacta
+                  if (preExistingImgUrl) {
+                    const videoUrl = isReel
+                      ? await synthesizeReelVideoFromImage(
+                          preExistingImgUrl,
+                          finalPrompt,
+                          idx,
+                          validEnvVidModel,
+                          openRouterKey,
+                          req
+                        )
+                      : undefined;
+                    return {
+                      adIndex: idx,
+                      imageUrl: preExistingImgUrl,
+                      videoUrl: videoUrl || undefined,
+                      prompt: finalPrompt,
+                      imageModel: validEnvImgModel,
+                      videoModel: isReel ? validEnvVidModel : undefined
+                    };
+                  }
 
                   for (const imgModel of candidateImageModels) {
                     const { savedUrl, errorText, fatalAuth } = await invokeOpenRouterImageModel(
@@ -3133,9 +3338,20 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       'autoads_img'
                     );
                     if (savedUrl) {
+                      const videoUrl = isReel
+                        ? await synthesizeReelVideoFromImage(
+                            savedUrl,
+                            finalPrompt,
+                            idx,
+                            validEnvVidModel,
+                            openRouterKey,
+                            req
+                          )
+                        : undefined;
                       return {
                         adIndex: idx,
                         imageUrl: savedUrl,
+                        videoUrl: videoUrl || undefined,
                         prompt: finalPrompt,
                         imageModel: imgModel,
                         videoModel: isReel ? validEnvVidModel : undefined
@@ -3166,6 +3382,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 const generatedImages: Array<{
                   adIndex: number;
                   imageUrl: string;
+                  videoUrl?: string;
                   prompt: string;
                   imageModel: string;
                   videoModel?: string;
@@ -3224,7 +3441,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 const variationSeed = Number(parsed.variationSeed || 1);
                 const currentHeadline = String(parsed.currentHeadline || '').trim();
                 const customImagePromptInput = String(parsed.customImagePrompt || '').trim();
-                const imageOnlyMode = Boolean(parsed.imageOnly);
+                const imageOnlyMode = Boolean(parsed.imageOnly || parsed.videoOnly);
                 const openRouterKey = String(
                   parsed.openRouterApiKey ||
                     readKeyFromEnvFile('OPENROUTER_API_KEY') ||
@@ -3563,10 +3780,12 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   .replace(/\bpaying cash\b/gi, 'receiving the package at the door');
 
                 const isReel = adIndex >= 4;
-                let newGeneratedImageUrl = '';
+                const videoOnlyMode = Boolean(parsed.videoOnly);
+                const preExistingImageUrl = String(parsed.existingImageUrl || '').trim();
+                let newGeneratedImageUrl = videoOnlyMode && preExistingImageUrl ? preExistingImageUrl : '';
                 let singleImgError = '';
 
-                if (openRouterKey) {
+                if (openRouterKey && !newGeneratedImageUrl) {
                   const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
                   if (!fs.existsSync(aiAdsDir)) {
                     fs.mkdirSync(aiAdsDir, { recursive: true });
@@ -3708,10 +3927,22 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return;
                 }
 
+                const newGeneratedVideoUrl = isReel
+                  ? await synthesizeReelVideoFromImage(
+                      newGeneratedImageUrl,
+                      finalImagePrompt,
+                      adIndex,
+                      validEnvVidModel,
+                      openRouterKey,
+                      req
+                    )
+                  : '';
+
                 customBrief = {
                   ...(customBrief || {}),
                   aiImagePrompt: finalImagePrompt,
-                  aiGeneratedImageUrl: newGeneratedImageUrl
+                  aiGeneratedImageUrl: newGeneratedImageUrl,
+                  aiGeneratedVideoUrl: newGeneratedVideoUrl || undefined
                 };
 
                 res.end(
