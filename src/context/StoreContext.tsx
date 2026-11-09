@@ -581,9 +581,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   (appliesFallback ? fallbackVoiceName : '') ||
                   localMatch?.vozAgenteNombre ||
                   remoteData.selectedVoiceName;
+                const mergedMetaTracking = {
+                  ...(localMatch?.metaTracking || {}),
+                  ...(p.metaTracking || {}),
+                  pixelId:
+                    p.metaTracking?.pixelId ||
+                    localMatch?.metaTracking?.pixelId ||
+                    '1276031534651377',
+                  capiAccessToken:
+                    p.metaTracking?.capiAccessToken ||
+                    localMatch?.metaTracking?.capiAccessToken ||
+                    '',
+                  testEventCode:
+                    p.metaTracking?.testEventCode ||
+                    localMatch?.metaTracking?.testEventCode ||
+                    ''
+                };
                 return {
                   ...localMatch,
                   ...p,
+                  metaTracking: mergedMetaTracking,
                   wa: formatWaPhone(p.wa || cleanRemoteWa || ''),
                   ...(resolvedVoz ? { vozAgente: resolvedVoz } : {}),
                   ...(resolvedVozNombre ? { vozAgenteNombre: resolvedVozNombre } : {})
@@ -1702,6 +1719,72 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     return true;
   };
+
+  // BÓVEDA PERMANENTE ANTI-DESCONEXIÓN WHATSAPP Y CONFIG (Respaldo y Auto-Restauración tras Deploy en Railway)
+  useEffect(() => {
+    let isMounted = true;
+    const syncRailwayVault = async () => {
+      try {
+        const res = await fetch('/api/system/vault-snapshot');
+        if (!res.ok || !isMounted) return;
+        const snap = await res.json();
+        if (!snap?.success) return;
+
+        const VAULT_KEY = 'noelux_permanent_railway_vault_v1';
+        let localVault: any = null;
+        try {
+          const raw = localStorage.getItem(VAULT_KEY);
+          if (raw) localVault = JSON.parse(raw);
+        } catch {}
+
+        const serverHasWaCreds = Array.isArray(snap.waAuthBundle) && snap.waAuthBundle.length > 0;
+        const localHasWaCreds = Array.isArray(localVault?.waAuthBundle) && localVault.waAuthBundle.length > 0;
+
+        // Verificar si el navegador tiene un CAPI Token guardado que el contenedor recién desplegado aún no tiene
+        const localPages = productPagesRef.current || [];
+        const localHasCapiToken = localPages.some(p => Boolean(p?.metaTracking?.capiAccessToken?.trim()));
+        const serverPages: any[] = Array.isArray(snap.storeConfig?.productPages) ? snap.storeConfig.productPages : [];
+        const serverHasCapiToken = serverPages.some(p => Boolean(p?.metaTracking?.capiAccessToken?.trim()));
+
+        if ((!serverHasWaCreds && localHasWaCreds) || (localHasCapiToken && !serverHasCapiToken)) {
+          // El servidor acaba de iniciar tras un deploy: restaurar credenciales de WhatsApp y configuración al instante
+          await fetch('/api/system/vault-restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              waAuthBundle: localHasWaCreds ? localVault.waAuthBundle : [],
+              storeConfig: {
+                ...(localVault?.storeConfig || {}),
+                ...(snap.storeConfig || {}),
+                productPages: localPages
+              }
+            })
+          }).catch(() => {});
+        } else if (serverHasWaCreds) {
+          // Respaldar las credenciales activas de WhatsApp y configuración en la bóveda permanente del navegador
+          const nextVault = {
+            waAuthBundle: snap.waAuthBundle,
+            connectedPhone: snap.connectedPhone || localVault?.connectedPhone || null,
+            storeConfig: {
+              ...(snap.storeConfig || {}),
+              productPages: localPages.length > 0 ? localPages : snap.storeConfig?.productPages
+            },
+            updatedAt: new Date().toISOString()
+          };
+          try {
+            localStorage.setItem(VAULT_KEY, JSON.stringify(nextVault));
+          } catch {}
+        }
+      } catch {}
+    };
+
+    syncRailwayVault();
+    const timer = setInterval(syncRailwayVault, 20000);
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   return (
     <StoreContext.Provider

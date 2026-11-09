@@ -37,12 +37,14 @@ import {
   Square,
   Info,
   HelpCircle,
-  Lightbulb
+  Lightbulb,
+  Download,
+  Filter
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatGs, formatWaPhone } from '../config';
 import { Order, ProductPage, OrderStatus } from '../types';
-import { ProductConfirmedOrdersPanel } from '../components/ProductConfirmedOrdersPanel';
+import { ProductConfirmedOrdersPanel, downloadConfirmedOrdersExcelCsv } from '../components/ProductConfirmedOrdersPanel';
 import { ProductSellerAgentPanel } from '../components/ProductSellerAgentPanel';
 import { ProductTemplateBuilderModal } from '../components/ProductTemplateBuilderModal';
 import { ProductTemplateBuilderStudio } from '../components/ProductTemplateBuilderStudio';
@@ -157,10 +159,12 @@ export const AdminView: React.FC = () => {
   const [activeMenu, setActiveMenu] = useState<'productos' | 'creador' | 'pipeboard' | 'whatsapp' | 'deepgram' | 'openrouter'>('productos');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // Selected product page and accordion expanded state
+  // Selected product page and accordion expanded state (MANTENER CERRADAS POR DEFECTO)
   const [selectedProductId, setSelectedProductId] = useState<string>(productPages[0]?.id || '');
-  const [expandedProductId, setExpandedProductId] = useState<string | null>(productPages[0]?.id || null);
+  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const [recentlyCreatedProductId, setRecentlyCreatedProductId] = useState<string | null>(null);
+  const [showPageFiltersBar, setShowPageFiltersBar] = useState<boolean>(false);
+  const [showOrderFiltersBar, setShowOrderFiltersBar] = useState<boolean>(false);
 
   // Filtros y Selección Múltiple de Páginas de Productos + Eliminación Masiva
   const [filterProductName, setFilterProductName] = useState('');
@@ -528,13 +532,20 @@ export const AdminView: React.FC = () => {
   const [showConfirmedOrdersPanel, setShowConfirmedOrdersPanel] = useState<boolean>(false);
   const [showSellerAgentPanel, setShowSellerAgentPanel] = useState<boolean>(false);
   const [expandedBottomSummaryOrderId, setExpandedBottomSummaryOrderId] = useState<string | null>(null);
-  const [productSubTabMap, setProductSubTabMap] = useState<Record<string, 'pedidos' | 'precios' | 'pixel' | 'voz'>>({});
+  const [productSubTabMap, setProductSubTabMap] = useState<
+    Record<string, 'pedidos' | 'confirmados' | 'precios' | 'pixel' | 'voz'>
+  >({});
 
-  const getProductSubTab = (productId: string): 'pedidos' | 'precios' | 'pixel' | 'voz' => {
+  const getProductSubTab = (
+    productId: string
+  ): 'pedidos' | 'confirmados' | 'precios' | 'pixel' | 'voz' => {
     return productSubTabMap[productId] || 'pedidos';
   };
 
-  const setProductSubTab = (productId: string, tab: 'pedidos' | 'precios' | 'pixel' | 'voz') => {
+  const setProductSubTab = (
+    productId: string,
+    tab: 'pedidos' | 'confirmados' | 'precios' | 'pixel' | 'voz'
+  ) => {
     setProductSubTabMap(prev => ({ ...prev, [productId]: tab }));
   };
 
@@ -2240,47 +2251,66 @@ export const AdminView: React.FC = () => {
           {/* INTERFAZ 1: PÁGINAS DE PRODUCTOS + CLIENTES (10 EN 10)   */}
           {/* ======================================================== */}
           {activeMenu === 'productos' && (
-            <div className="space-y-4 sm:space-y-5 max-w-7xl mx-auto">
-              {/* Guía Rápida & Explicación de la Sección */}
+            <div className="space-y-2.5 max-w-7xl mx-auto">
+              {/* Cabecera Compacta con Botón de Guía y Botón de Filtros en una sola barra */}
               <AdminSectionGuide
                 id="productos"
-                title="Páginas de Productos & Centro de Ventas"
-                subtitle="Gestioná tus landings de alta conversión para venta contra entrega (COD) en Paraguay"
+                title={`Páginas & Ventas (${filteredProductPages.length})`}
+                subtitle="Tocá cualquier tarjeta horizontal para desplegar sus pedidos, confirmados o Píxel"
                 badge="Guía de Páginas & Ventas"
-                defaultExpanded={true}
+                defaultExpanded={false}
+                extraRightActions={
+                  <button
+                    type="button"
+                    data-testid="toggle-product-pages-filter-btn"
+                    onClick={() => setShowPageFiltersBar(prev => !prev)}
+                    className={`h-8 px-2.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer select-none transition-all ${
+                      showPageFiltersBar ||
+                      filterProductName ||
+                      filterProductPhoneOrPixel ||
+                      filterProductTab !== 'todas' ||
+                      selectedProductPageIds.length > 0
+                        ? 'bg-emerald-950/90 border-emerald-600 text-emerald-200 shadow-xs'
+                        : 'bg-[#0d0d0f] hover:bg-zinc-900 border-zinc-800 text-zinc-300'
+                    }`}
+                    title="Mostrar u ocultar filtros y selección múltiple de páginas"
+                  >
+                    <Filter className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>
+                      🔍 Filtrar / Seleccionar
+                      {selectedProductPageIds.length > 0 ? ` (${selectedProductPageIds.length})` : ''}
+                    </span>
+                  </button>
+                }
                 steps={[
                   {
                     icon: '🤖',
                     title: 'Edición en Tiempo Real con Agente IA',
-                    description: 'Tocá "Editar con Agente IA" para abrir el chat/voz interactivo y pedirle cambios de textos, colores o fotos.'
+                    description: 'Tocá "Editar IA" para abrir el chat/voz interactivo y pedirle cambios de textos, colores o fotos.'
                   },
                   {
-                    icon: '👁️',
-                    title: 'Ver Página en Vivo',
-                    description: 'Abrí la tienda en una pestaña para ver la experiencia que tendrán tus compradores en su teléfono móvil.'
+                    icon: '✅',
+                    title: 'Pestaña de Confirmados + Descarga Excel',
+                    description: 'Dentro de cada producto tenés la pestaña Confirmados para descargar en 1 clic el Excel listo para despacho.'
                   },
                   {
                     icon: '📦',
                     title: 'Gestión y Confirmación de Pedidos',
-                    description: 'Desplegá "Clientes / Ajustes" para ver las compras confirmadas con geolocalización GPS lista para el courier.'
+                    description: 'Tocá la tarjeta del producto para abrir sus pedidos confirmados con geolocalización GPS para el courier.'
                   }
                 ]}
                 proTip="Las páginas con envío gratis y precios psicológicos terminados en 9.000 Gs (ej: 189.000 Gs) tienen hasta un 34% más de conversión en Paraguay."
               />
 
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400 px-1">
-                <span>
-                  💡 Tocá cualquier página para desplegar sus pedidos, configurar su Píxel de Meta o editar sus precios de oferta:
-                </span>
-                <span className="font-bold text-zinc-300">
-                  Mostrando {filteredProductPages.length} de {productPages.length} página(s) activa(s)
-                </span>
-              </div>
-
-              {/* BARRA DE FILTROS + SELECCIÓN MÚLTIPLE Y ELIMINADO DE PÁGINAS DE PRODUCTO */}
+              {/* BARRA DE FILTROS + SELECCIÓN MÚLTIPLE (Oculta por defecto, se despliega al tocar el botón Filtrar) */}
+              {(showPageFiltersBar ||
+                Boolean(filterProductName) ||
+                Boolean(filterProductPhoneOrPixel) ||
+                filterProductTab !== 'todas' ||
+                selectedProductPageIds.length > 0) && (
               <div
                 data-testid="product-pages-filter-bar"
-                className="p-3.5 sm:p-4 rounded-2xl bg-[#0d0d0f] border border-zinc-800/80 shadow-xs space-y-3"
+                className="p-3 rounded-2xl bg-[#0d0d0f] border border-zinc-800/80 shadow-xs space-y-2.5 animate-fadeIn"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-end">
                   <div className="lg:col-span-4">
@@ -2445,6 +2475,7 @@ export const AdminView: React.FC = () => {
                   );
                 })()}
               </div>
+              )}
 
               {recentlyCreatedProductId && (() => {
                 const recentProd = productPages.find(p => p.id === recentlyCreatedProductId);
@@ -2495,8 +2526,8 @@ export const AdminView: React.FC = () => {
                 );
               })()}
 
-              <div className="space-y-4">
-                {filteredProductPages.map(prod => {
+              <div className="space-y-2.5">
+                {filteredProductPages.map((prod, prodIdx) => {
                   const isExpanded = expandedProductId === prod.id;
                   const isProductChecked = selectedProductPageIds.includes(prod.id);
                   const hasPixelConfigured = Boolean(prod.metaTracking?.pixelId?.trim());
@@ -2535,6 +2566,7 @@ export const AdminView: React.FC = () => {
                     allFilteredIdsForProd.every(id => selectedOrderIds.includes(id));
 
                   const isJustCreated = recentlyCreatedProductId === prod.id;
+                  const charLabel = `PÁGINA #${prodIdx + 1}`;
 
                   return (
                     <div
@@ -2550,15 +2582,16 @@ export const AdminView: React.FC = () => {
                               : 'border-zinc-800/80 hover:border-zinc-700'
                       }`}
                     >
-                      {/* Product Row Header - Mobile First & Anti-Overflow */}
+                      {/* TARJETA DE PRODUCTO HORIZONTAL ULTRA-COMPACTA (ADAPTABLE A PANTALLA DE 11" Y MONITOR GRANDE) */}
                       <div
                         onClick={() => toggleProductExpand(prod)}
-                        className="w-full p-3.5 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 cursor-pointer select-none"
+                        className="w-full px-3 py-2.5 min-h-[54px] flex items-center justify-between gap-2.5 cursor-pointer select-none hover:bg-zinc-900/40 transition-colors"
                       >
-                        <div className="flex items-start sm:items-center gap-3 min-w-0">
+                        {/* IZQUIERDA: Checkbox + Miniatura + Etiqueta Característica + Nombre Completo + Badges en Línea */}
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
                           <label
                             onClick={e => e.stopPropagation()}
-                            className="inline-flex items-center justify-center cursor-pointer shrink-0 mt-1 sm:mt-0"
+                            className="inline-flex items-center justify-center cursor-pointer shrink-0"
                             title="Seleccionar esta página de producto"
                           >
                             <input
@@ -2566,60 +2599,68 @@ export const AdminView: React.FC = () => {
                               data-testid={`select-product-checkbox-${prod.id}`}
                               checked={isProductChecked}
                               onChange={() => toggleSelectProductPage(prod.id)}
-                              className="w-4 h-4 rounded accent-[#0b3d2e] cursor-pointer"
+                              className="w-3.5 h-3.5 rounded accent-[#16a34a] cursor-pointer"
                             />
                           </label>
                           <img
                             src={prod.imagen || '/assets/real/galeria-1.jpg'}
                             alt={prod.nombre}
-                            className="w-12 h-12 rounded-xl object-cover border border-zinc-800 shrink-0"
+                            className="w-9 h-9 rounded-lg object-cover border border-zinc-800 shrink-0"
                           />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-sm font-bold text-zinc-100 truncate">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/80 shrink-0">
+                                {charLabel}
+                              </span>
+                              <h3
+                                className="text-xs sm:text-sm font-black text-zinc-100 truncate max-w-[180px] sm:max-w-[260px] md:max-w-[340px] xl:max-w-none"
+                                title={prod.nombre}
+                              >
                                 {prod.nombre}
                               </h3>
-                              <span className="text-[9px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/80 shrink-0">
-                                Activo
-                              </span>
                               <span
-                                className={`text-[9px] font-mono uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                                className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded shrink-0 ${
                                   hasPixelConfigured
-                                    ? 'bg-blue-950 text-blue-300 border border-blue-800/80'
+                                    ? 'bg-blue-950/90 text-blue-300 border border-blue-800/80'
                                     : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
                                 }`}
                               >
                                 {hasPixelConfigured
-                                  ? `🎯 Píxel: ${prod.metaTracking?.pixelId}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
-                                  : '🎯 Sin Píxel'}
+                                  ? `🎯 Píxel ${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? '+CAPI' : ''}`
+                                  : 'Sin Píxel'}
                               </span>
+                              {confirmedProdOrdersCount > 0 && (
+                                <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded bg-[#16a34a] text-white shrink-0">
+                                  ✅ {confirmedProdOrdersCount} Confirmado{confirmedProdOrdersCount === 1 ? '' : 's'}
+                                </span>
+                              )}
                               {isJustCreated && (
-                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-300 text-[#062319] shrink-0">
-                                  ★ Recién Creada
+                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-300 text-[#062319] shrink-0">
+                                  ★ Nueva
                                 </span>
                               )}
                             </div>
-                            {/* Badges de precios y link limpios sin desborde */}
-                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400 mt-1.5">
-                              <span className="font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-800/80">
+
+                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 mt-0.5 overflow-hidden">
+                              <span className="font-mono text-zinc-400 truncate max-w-[130px] sm:max-w-[190px]">
                                 /?p={prod.slug}
                               </span>
-                              <span className="px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-200 border border-zinc-800/80 font-semibold">
+                              <span className="text-zinc-700">·</span>
+                              <span className="text-zinc-200 font-bold whitespace-nowrap">
                                 1x: {formatGs(prod.precios?.[1] || 189000)}
                               </span>
-                              <span className="px-2 py-0.5 rounded-md bg-emerald-950/60 text-emerald-400 border border-emerald-900/60 font-bold">
-                                2x: {formatGs(prod.precios?.[2] || 358000)}
+                              <span className="hidden sm:inline text-emerald-400 font-bold whitespace-nowrap">
+                                · 2x: {formatGs(prod.precios?.[2] || 358000)}
                               </span>
-                              <span className="px-2 py-0.5 rounded-md bg-zinc-900/80 text-zinc-400 border border-zinc-800/60">
-                                {prod.freeShipping === false ? '📦 Con Costo Envío' : '🚚 Envío Gratis'}
+                              <span className="hidden md:inline text-zinc-400 whitespace-nowrap">
+                                · {prod.freeShipping === false ? '📦 Envío Pagado' : '🚚 Envío Gratis'}
                               </span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Botones de Acción: En móvil el botón IA ocupa todo el ancho y los demás van en fila inferior */}
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto shrink-0 pt-2 lg:pt-0 border-t border-zinc-800/60 lg:border-t-0">
-                          {/* Botón Principal: Editar con Agente IA (DeepSeek · GLM-5.3) */}
+                        {/* DERECHA: Botones Compactos Horizontales (Sin aplastar el título en 11 pulgadas) */}
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <button
                             type="button"
                             data-testid={`edit-with-ai-btn-${prod.id}`}
@@ -2628,94 +2669,121 @@ export const AdminView: React.FC = () => {
                               setEditingProductInBuilder(prod);
                               setActiveMenu('creador');
                             }}
-                            className="w-full sm:w-auto h-11 px-4 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-200 text-xs font-bold inline-flex items-center justify-center gap-2 cursor-pointer shadow-xs border border-emerald-600/60 transition-all hover:border-emerald-500 active:scale-98 whitespace-nowrap"
-                            title="Abrir Agente Portavoz IA y DeepSeek para editar esta página en tiempo real"
+                            className="h-8 px-2.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 text-emerald-200 text-[11px] font-bold inline-flex items-center justify-center gap-1 cursor-pointer border border-emerald-600/60 transition-all whitespace-nowrap"
+                            title="Editar esta página con Agente IA (DeepSeek)"
                           >
-                            <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                            <span className="truncate">🤖 Editar con Agente IA (DeepSeek)</span>
+                            <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <span className="hidden sm:inline">Editar IA</span>
                           </button>
 
-                          {/* Fila secundaria de acciones en móviles: Ver Página + Clientes / Ajustes + Eliminar */}
-                          <div className="grid grid-cols-12 gap-1.5 w-full sm:w-auto sm:flex sm:items-center">
-                            <button
-                              type="button"
-                              data-testid={`view-live-product-${prod.id}`}
-                              onClick={e => {
-                                e.stopPropagation();
-                                setCurrentProductPage(prod);
-                                window.history.pushState({}, '', `/?p=${prod.slug}`);
-                                setCurrentView('store');
-                              }}
-                              className="col-span-5 sm:col-auto h-10 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-medium inline-flex items-center justify-center gap-1.5 cursor-pointer border border-zinc-800 transition-colors whitespace-nowrap"
-                              title="Abrir y ver esta página de producto en vivo"
-                            >
-                              <Eye className="w-3.5 h-3.5 shrink-0" />
-                              <span>Ver Página</span>
-                            </button>
+                          <button
+                            type="button"
+                            data-testid={`view-live-product-${prod.id}`}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setCurrentProductPage(prod);
+                              window.history.pushState({}, '', `/?p=${prod.slug}`);
+                              setCurrentView('store');
+                            }}
+                            className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-[11px] font-medium inline-flex items-center justify-center gap-1 cursor-pointer border border-zinc-800 transition-colors whitespace-nowrap"
+                            title="Abrir y ver esta página de producto en vivo"
+                          >
+                            <Eye className="w-3 h-3 shrink-0 text-emerald-400" />
+                            <span className="hidden md:inline">Ver</span>
+                          </button>
 
-                            <button
-                              type="button"
-                              onClick={e => {
-                                e.stopPropagation();
-                                toggleProductExpand(prod);
-                              }}
-                              className={`col-span-5 sm:col-auto h-10 px-3 rounded-xl text-xs font-medium transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer border whitespace-nowrap ${
-                                isExpanded
-                                  ? 'bg-zinc-800 text-white border-zinc-700'
-                                  : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              toggleProductExpand(prod);
+                            }}
+                            className={`h-8 px-2.5 rounded-xl text-[11px] font-bold transition-all inline-flex items-center justify-center gap-1 cursor-pointer border whitespace-nowrap ${
+                              isExpanded
+                                ? 'bg-zinc-800 text-white border-zinc-600'
+                                : 'bg-zinc-900 text-zinc-200 border-zinc-800 hover:bg-zinc-800'
+                            }`}
+                          >
+                            <span>
+                              {isExpanded ? 'Cerrar' : `📦 Pedidos (${activeProdOrdersCount})`}
+                            </span>
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
+                                isExpanded ? 'rotate-180 text-emerald-400' : 'text-zinc-400'
                               }`}
-                            >
-                              <span>{isExpanded ? 'Cerrar' : 'Clientes / Ajustes'}</span>
-                              <ChevronDown
-                                className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
-                                  isExpanded ? 'rotate-180 text-white' : 'text-zinc-400'
-                                }`}
-                              />
-                            </button>
+                            />
+                          </button>
 
-                            <button
-                              type="button"
-                              data-testid={`delete-product-btn-${prod.id}`}
-                              onClick={e => {
-                                e.stopPropagation();
-                                openRedDeleteProductsModal([prod.id]);
-                              }}
-                              className="col-span-2 sm:col-auto h-10 w-full sm:w-10 rounded-xl bg-zinc-900 hover:bg-red-950/40 text-zinc-400 hover:text-red-400 border border-zinc-800 hover:border-red-900/50 flex items-center justify-center cursor-pointer transition-colors"
-                              title="Eliminar esta página de producto"
-                              aria-label="Eliminar página"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            data-testid={`delete-product-btn-${prod.id}`}
+                            onClick={e => {
+                              e.stopPropagation();
+                              openRedDeleteProductsModal([prod.id]);
+                            }}
+                            className="h-8 w-8 rounded-xl bg-zinc-900 hover:bg-red-950/50 text-zinc-400 hover:text-red-400 border border-zinc-800 hover:border-red-900/50 flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                            title="Eliminar esta página de producto"
+                            aria-label="Eliminar página"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
 
-                      {/* Expanded Product Body */}
+                      {/* CUERPO DESPLEGABLE DE LA TARJETA (COMPACTO Y SIN BARULLO) */}
                       {isExpanded && (
-                        <div className="border-t border-zinc-800/90 bg-[#09090b] p-3 sm:p-5 space-y-4 animate-fadeIn">
-                          {/* COMPACT PRODUCT TOOLBAR */}
-                          <div className="space-y-3">
-                            {/* Android Native Segmented Tabs (Vercel Calm) */}
-                            <div className="grid grid-cols-4 gap-1 p-1 bg-zinc-900/90 rounded-xl border border-zinc-800">
+                        <div className="border-t border-zinc-800/90 bg-[#09090b] p-2.5 sm:p-3.5 space-y-3 animate-fadeIn">
+                          {/* BARRA UNIFICADA DE PESTAÑAS + ACCIONES RÁPIDAS */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 p-1.5 rounded-xl bg-[#0d0d0f] border border-zinc-800">
+                            {/* 5 Sub-Pestañas incluyendo ✅ Confirmados */}
+                            <div className="flex items-center gap-1 flex-wrap">
                               <button
                                 type="button"
                                 onClick={() => setProductSubTab(prod.id, 'pedidos')}
-                                className={`py-2 px-1 text-center rounded-lg text-xs font-medium transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                                className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer ${
                                   getProductSubTab(prod.id) === 'pedidos'
-                                    ? 'bg-zinc-800 text-white shadow-xs font-semibold'
+                                    ? 'bg-zinc-800 text-white shadow-xs'
                                     : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                               >
                                 <PackageCheck className="w-3.5 h-3.5 text-emerald-400" />
-                                <span>Pedidos ({allProdOrders.length})</span>
+                                <span>Todos ({allProdOrders.length})</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                data-testid={`tab-confirmed-orders-${prod.id}`}
+                                onClick={() => setProductSubTab(prod.id, 'confirmados')}
+                                className={`h-8 px-2.5 rounded-lg text-[11px] font-black transition-all inline-flex items-center gap-1.5 cursor-pointer ${
+                                  getProductSubTab(prod.id) === 'confirmados'
+                                    ? 'bg-[#16a34a] text-white shadow-xs'
+                                    : 'bg-emerald-950/50 text-emerald-300 border border-emerald-800/60 hover:bg-emerald-900/60'
+                                }`}
+                                title="Ver solo los pedidos ya confirmados por IA listos para preparar y descargar en Excel"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>✅ Confirmados ({confirmedProdOrdersCount})</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                data-testid={`toggle-pixel-config-${prod.id}`}
+                                onClick={() => setProductSubTab(prod.id, 'pixel')}
+                                className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all inline-flex items-center gap-1 cursor-pointer ${
+                                  getProductSubTab(prod.id) === 'pixel'
+                                    ? 'bg-zinc-800 text-white shadow-xs'
+                                    : 'text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                <span>🎯 Píxel & CAPI</span>
                               </button>
 
                               <button
                                 type="button"
                                 onClick={() => setProductSubTab(prod.id, 'precios')}
-                                className={`py-2 px-1 text-center rounded-lg text-xs font-medium transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                                className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all inline-flex items-center gap-1 cursor-pointer ${
                                   getProductSubTab(prod.id) === 'precios'
-                                    ? 'bg-zinc-800 text-white shadow-xs font-semibold'
+                                    ? 'bg-zinc-800 text-white shadow-xs'
                                     : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                               >
@@ -2725,24 +2793,10 @@ export const AdminView: React.FC = () => {
 
                               <button
                                 type="button"
-                                data-testid={`toggle-pixel-config-${prod.id}`}
-                                onClick={() => setProductSubTab(prod.id, 'pixel')}
-                                className={`py-2 px-1 text-center rounded-lg text-xs font-medium transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
-                                  getProductSubTab(prod.id) === 'pixel'
-                                    ? 'bg-zinc-800 text-white shadow-xs font-semibold'
-                                    : 'text-zinc-400 hover:text-zinc-200'
-                                }`}
-                              >
-                                <span className="text-blue-400 text-xs">🎯</span>
-                                <span>Píxel & CAPI</span>
-                              </button>
-
-                              <button
-                                type="button"
                                 onClick={() => setProductSubTab(prod.id, 'voz')}
-                                className={`py-2 px-1 text-center rounded-lg text-xs font-medium transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                                className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all inline-flex items-center gap-1 cursor-pointer ${
                                   getProductSubTab(prod.id) === 'voz'
-                                    ? 'bg-zinc-800 text-white shadow-xs font-semibold'
+                                    ? 'bg-zinc-800 text-white shadow-xs'
                                     : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                               >
@@ -2751,71 +2805,84 @@ export const AdminView: React.FC = () => {
                               </button>
                             </div>
 
-                            {/* Quick Auto/Manual WhatsApp bar */}
-                            <div className="p-2.5 rounded-xl bg-[#0d0d0f] border border-zinc-800 flex items-center justify-between gap-2 flex-wrap">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-zinc-300">Modo de Atención:</span>
-                                <div className="inline-flex items-center bg-zinc-900 p-0.5 rounded-lg border border-zinc-800 gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleToggleAutomationSetting('autoCallOnOrder', true);
-                                      handleToggleAutomationSetting('autoChatOnOrder', true);
-                                    }}
-                                    className={`py-1 px-2.5 rounded-md text-xs font-medium cursor-pointer transition-all ${
-                                      autoCallOnOrder || autoChatOnOrder
-                                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800 shadow-xs'
-                                        : 'text-zinc-400 hover:text-zinc-200'
-                                    }`}
-                                  >
-                                    ⚡ Auto (${preferredChannel === 'audio' ? 'Audio' : 'Texto'})
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleToggleAutomationSetting('autoCallOnOrder', false);
-                                      handleToggleAutomationSetting('autoChatOnOrder', false);
-                                    }}
-                                    className={`py-1 px-2.5 rounded-md text-xs font-medium cursor-pointer transition-all ${
-                                      !autoCallOnOrder && !autoChatOnOrder
-                                        ? 'bg-zinc-800 text-white shadow-xs'
-                                        : 'text-zinc-400 hover:text-zinc-200'
-                                    }`}
-                                  >
-                                    👆 Manual
-                                  </button>
-                                </div>
+                            {/* DERECHA DE LA BARRA: Descargar Excel 1-Clic + Auto/Manual + Herramientas */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                data-testid={`quick-excel-confirmed-${prod.id}`}
+                                onClick={() => {
+                                  const count = downloadConfirmedOrdersExcelCsv(prod, allProdOrders);
+                                  if (count > 0) {
+                                    showToast(`📥 Planilla Excel descargada (${count} pedido(s) para despacho).`);
+                                  } else {
+                                    showToast('⚠️ Aún no hay pedidos activos para exportar en este producto.');
+                                  }
+                                }}
+                                className="h-7 px-2.5 rounded-lg bg-[#16a34a] hover:bg-[#15803d] text-white text-[11px] font-black inline-flex items-center gap-1 cursor-pointer shadow-2xs transition-colors"
+                                title="Descargar en 1 clic planilla Excel (.csv) con todos los pedidos confirmados y sus datos completos para empaquetar"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>📥 Excel Confirmados ({confirmedProdOrdersCount})</span>
+                              </button>
+
+                              <div className="inline-flex items-center bg-zinc-900 p-0.5 rounded-lg border border-zinc-800 gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleToggleAutomationSetting('autoCallOnOrder', true);
+                                    handleToggleAutomationSetting('autoChatOnOrder', true);
+                                  }}
+                                  className={`py-1 px-2 rounded-md text-[10px] font-bold cursor-pointer transition-all ${
+                                    autoCallOnOrder || autoChatOnOrder
+                                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                      : 'text-zinc-400 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  ⚡ Auto ({preferredChannel === 'audio' ? 'Audio' : 'Texto'})
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleToggleAutomationSetting('autoCallOnOrder', false);
+                                    handleToggleAutomationSetting('autoChatOnOrder', false);
+                                  }}
+                                  className={`py-1 px-2 rounded-md text-[10px] font-bold cursor-pointer transition-all ${
+                                    !autoCallOnOrder && !autoChatOnOrder
+                                      ? 'bg-zinc-800 text-white'
+                                      : 'text-zinc-400 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  👆 Manual
+                                </button>
                               </div>
 
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  data-testid={`edit-template-builder-${prod.id}`}
-                                  onClick={() => {
-                                    setEditingProductInBuilder(prod);
-                                    setShowNewProductModal(true);
-                                  }}
-                                  className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 cursor-pointer"
-                                >
-                                  Plantillas
-                                </button>
-                                <button
-                                  type="button"
-                                  data-testid={`quick-autotrain-agent-${prod.id}`}
-                                  onClick={() => handleQuickAutoTrainProductAgent(prod)}
-                                  className="px-2.5 py-1 rounded-lg border border-emerald-900/60 bg-emerald-950/40 hover:bg-emerald-900/40 text-xs text-emerald-300 cursor-pointer"
-                                >
-                                  Entrenar 1000x
-                                </button>
-                                <button
-                                  type="button"
-                                  data-testid={`clone-ab-angle-${prod.id}`}
-                                  onClick={() => handleCloneProductWithNewAngle(prod)}
-                                  className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 cursor-pointer"
-                                >
-                                  Clonar A/B
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                data-testid={`edit-template-builder-${prod.id}`}
+                                onClick={() => {
+                                  setEditingProductInBuilder(prod);
+                                  setShowNewProductModal(true);
+                                }}
+                                className="h-7 px-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[10px] font-bold text-zinc-300 cursor-pointer"
+                              >
+                                Plantillas
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`quick-autotrain-agent-${prod.id}`}
+                                onClick={() => handleQuickAutoTrainProductAgent(prod)}
+                                className="h-7 px-2 rounded-lg border border-emerald-900/60 bg-emerald-950/40 hover:bg-emerald-900/40 text-[10px] font-bold text-emerald-300 cursor-pointer"
+                              >
+                                Entrenar 1000x
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`clone-ab-angle-${prod.id}`}
+                                onClick={() => handleCloneProductWithNewAngle(prod)}
+                                className="h-7 px-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[10px] font-bold text-zinc-300 cursor-pointer"
+                              >
+                                Clonar A/B
+                              </button>
                             </div>
                           </div>
 
@@ -3185,17 +3252,20 @@ export const AdminView: React.FC = () => {
                             </div>
                           )}
 
-                          {/* INTERFAZ 1: Panel Exclusivo de Pedidos Confirmados + Función Universal de Logística */}
-                          {showConfirmedOrdersPanel && (
+                          {/* INTERFAZ 1: Pestaña Exclusiva de Pedidos Confirmados + Descarga Excel 1-Clic + Función Universal de Logística */}
+                          {(getProductSubTab(prod.id) === 'confirmados' || showConfirmedOrdersPanel) && (
                             <ProductConfirmedOrdersPanel
                               product={prod}
-                              orders={prodOrders}
+                              orders={allProdOrders}
                               onUpdateOrderLogistics={async (orderId, updates, toastMsg) => {
                                 await updateOrder(orderId, updates);
                                 if (toastMsg) showToast(toastMsg);
                               }}
                               onRequestDeleteOrders={openRedDeleteConfirmModal}
-                              onClose={() => setShowConfirmedOrdersPanel(false)}
+                              onClose={() => {
+                                setShowConfirmedOrdersPanel(false);
+                                setProductSubTab(prod.id, 'pedidos');
+                              }}
                             />
                           )}
 
@@ -3214,40 +3284,63 @@ export const AdminView: React.FC = () => {
                             />
                           )}
 
-                          {/* TAB PEDIDOS */}
+                          {/* TAB PEDIDOS (Compacto y Sin Barullo) */}
                           {getProductSubTab(prod.id) === 'pedidos' && (
-                          <div className="space-y-3 pt-1">
-                            <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800 flex items-start gap-2.5 text-xs text-zinc-300">
-                              <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                              <div className="leading-relaxed">
-                                <strong className="text-zinc-200 font-bold block text-[11px] uppercase tracking-wide">
-                                  📦 Lista de Clientes y Gestión de Entregas (COD)
-                                </strong>
-                                <span className="text-[11px] text-zinc-400 mt-0.5 block">
-                                  Tocá cualquier pedido para ver los datos cargados por el cliente, abrir el chat de WhatsApp con 1 clic o actualizar el estado de entrega para tu transportadora.
-                                </span>
-                              </div>
-                            </div>
-
+                          <div className="space-y-2.5 pt-0.5">
+                            {/* Barra Superior Compacta de Pedidos: Total Ventas + Botón Rápido a Confirmados + Botón Compacto de Filtros */}
                             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h5 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-100">
-                                  Clientes de este Producto ({prodOrders.length} de {allProdOrders.length})
+                                <h5 className="text-xs font-black uppercase tracking-wider text-zinc-100">
+                                  📦 Clientes ({prodOrders.length} de {allProdOrders.length})
                                 </h5>
-                                <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/80">
-                                  Sincronizado con Base de Datos
+                                <span className="text-[11px] font-mono text-zinc-400">
+                                  Ventas Activas:{' '}
+                                  <strong className="text-emerald-400 font-bold">
+                                    {formatGs(totalVentasProd)}
+                                  </strong>
                                 </span>
                               </div>
-                              <span className="text-xs font-mono text-zinc-400">
-                                Total Ventas Activas:{' '}
-                                <strong className="text-emerald-400 font-bold">
-                                  {formatGs(totalVentasProd)}
-                                </strong>
-                              </span>
+
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setProductSubTab(prod.id, 'confirmados')}
+                                  className="h-7 px-2.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700 text-emerald-200 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                >
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                  <span>Ver Solo Confirmados ({confirmedProdOrdersCount})</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  data-testid={`toggle-order-filters-${prod.id}`}
+                                  onClick={() => setShowOrderFiltersBar(prev => !prev)}
+                                  className={`h-7 px-2.5 rounded-lg border text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-all ${
+                                    showOrderFiltersBar ||
+                                    filterOrderName ||
+                                    filterOrderPhone ||
+                                    filterArchiveMode !== 'activos' ||
+                                    selectedIdsForProd.length > 0
+                                      ? 'bg-emerald-950 border-emerald-600 text-emerald-200'
+                                      : 'bg-[#0d0d0f] hover:bg-zinc-900 border-zinc-800 text-zinc-300'
+                                  }`}
+                                >
+                                  <Filter className="w-3 h-3 text-emerald-400" />
+                                  <span>
+                                    🔍 Filtrar / Seleccionar
+                                    {selectedIdsForProd.length > 0 ? ` (${selectedIdsForProd.length})` : ''}
+                                  </span>
+                                </button>
+                              </div>
                             </div>
 
-                            {/* BARRA DE FILTROS (POR NOMBRE, POR TELÉFONO Y ARCHIVADOS) + SELECCIÓN MÚLTIPLE Y ACCIONES EN LOTE */}
-                            <div className="p-3 sm:p-4 rounded-2xl bg-[#0d0d0f] border border-zinc-800 shadow-xs space-y-3">
+                            {/* BARRA DE FILTROS DE PEDIDOS (Se despliega solo al darle clic al botón Filtrar) */}
+                            {(showOrderFiltersBar ||
+                              Boolean(filterOrderName) ||
+                              Boolean(filterOrderPhone) ||
+                              filterArchiveMode !== 'activos' ||
+                              selectedIdsForProd.length > 0) && (
+                            <div className="p-3 rounded-2xl bg-[#0d0d0f] border border-zinc-800 shadow-xs space-y-2.5 animate-fadeIn">
                               {/* Fila 1: Buscador por Nombre, Buscador por Teléfono y Pestañas Activos / Archivados / Todos */}
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-end">
                                 <div className="lg:col-span-3">
@@ -3449,6 +3542,7 @@ export const AdminView: React.FC = () => {
                                 </div>
                               </div>
                             </div>
+                            )}
 
                             <div className="space-y-1.5">
                               {/* Cabecera Compacta de la Lista de Tarjetas Horizontales */}

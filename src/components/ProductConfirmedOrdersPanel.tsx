@@ -18,7 +18,10 @@ import {
   Save,
   Ban,
   Trash2,
-  X
+  X,
+  Download,
+  Filter,
+  Copy
 } from 'lucide-react';
 import { Order, ProductPage } from '../types';
 import { formatGs } from '../config';
@@ -27,6 +30,100 @@ import {
   buildOrderComparisonSummary,
   filterAdminOrders
 } from '../utils/orderConfirmation';
+
+export function downloadConfirmedOrdersExcelCsv(product: ProductPage, rawOrders: Order[]): number {
+  const confirmed = rawOrders.filter(o => !o.archivado && isOrderConfirmedByAgent(o));
+  const targetList = confirmed.length > 0 ? confirmed : rawOrders.filter(o => !o.archivado);
+  if (targetList.length === 0) return 0;
+
+  const escapeCsv = (val: unknown): string => {
+    const str = String(val ?? '')
+      .replace(/\r?\n|\r/g, ' ')
+      .trim();
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
+  const headers = [
+    'Nro',
+    'ID Reserva',
+    'Fecha y Hora',
+    'Producto',
+    'Unidades (Pack)',
+    'Total a Cobrar (Gs.)',
+    'Cliente Confirmado',
+    'WhatsApp Validado',
+    'Ciudad / Departamento',
+    'Barrio',
+    'Calle / Direccion Exacta',
+    'Tipo Domicilio',
+    'Color Casa / Fachada',
+    'Referencia Exacta Confirmada IA',
+    'Link Mapa GPS',
+    'Estado Logistico'
+  ];
+
+  const rows = targetList.map((ord, idx) => {
+    const comp = buildOrderComparisonSummary(ord);
+    const isConcretado = Boolean(ord.concretadoCobrado || ord.estado === 'entregado_pagado');
+    const isEnviado = Boolean(
+      isConcretado || ord.estadoEnvioProducto === 'enviado' || ord.estado === 'en_camino'
+    );
+    const estadoLog = isConcretado
+      ? 'CONCRETADO (Entregado y Cobrado)'
+      : isEnviado
+        ? 'ENVIADO CON COURIER'
+        : 'LISTO PARA PREPARAR Y ENVIAR';
+
+    const fechaStr = ord.fecha
+      ? new Date(ord.fecha).toLocaleString('es-PY', { hour12: false })
+      : new Date().toLocaleString('es-PY', { hour12: false });
+
+    const gpsLink =
+      comp.gpsLink ||
+      ord.gpsLink ||
+      (typeof ord.gpsLat === 'number' && typeof ord.gpsLng === 'number'
+        ? `https://www.google.com/maps?q=${ord.gpsLat.toFixed(6)},${ord.gpsLng.toFixed(6)}`
+        : '');
+
+    return [
+      idx + 1,
+      ord.reservaid || '',
+      fechaStr,
+      product.nombre || ord.producto || '',
+      `${Number(ord.cantidad) || 1} un.`,
+      Number(ord.monto) || 0,
+      comp.nombreConfirmado || ord.nombre || '',
+      comp.celularConfirmado || ord.celular || '',
+      comp.ubicacionConfirmada || ord.ciudad || '',
+      (ord as any).barrio || '',
+      comp.direccionConfirmada || ord.direccion || '',
+      (ord as any).tipoDomicilio || 'Casa',
+      (ord as any).colorCasa || '',
+      comp.referenciaConfirmada || ord.referenciaCasa || '',
+      gpsLink,
+      estadoLog
+    ]
+      .map(escapeCsv)
+      .join(';');
+  });
+
+  // Usamos BOM UTF-8 (\uFEFF) y punto y coma (;) para que Microsoft Excel en español abra las columnas automáticamente sin desconfigurar acentos
+  const csvContent = '\uFEFF' + [headers.map(escapeCsv).join(';'), ...rows].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const cleanSlug = (product.slug || product.nombre || 'producto')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-');
+  const dateTag = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.setAttribute('download', `pedidos-confirmados-${cleanSlug}-${dateTag}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return targetList.length;
+}
 
 interface ProductConfirmedOrdersPanelProps {
   product: ProductPage;
@@ -37,7 +134,7 @@ interface ProductConfirmedOrdersPanelProps {
     toastMessage?: string
   ) => Promise<void>;
   onRequestDeleteOrders?: (orderIds: string[]) => void;
-  onClose: () => void;
+  onClose?: () => void;
 }
 
 export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelProps> = ({
@@ -52,13 +149,15 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
     return orders.filter(o => isOrderConfirmedByAgent(o));
   }, [orders]);
 
-  // Filtros idénticos a la tabla principal (Nombre/Reserva, Teléfono y Estado Logístico)
+  // Filtros compactos desplegables con un simple botón
+  const [showFiltersBar, setShowFiltersBar] = useState<boolean>(false);
   const [filterName, setFilterName] = useState<string>('');
   const [filterPhone, setFilterPhone] = useState<string>('');
   const [filterLogisticsState, setFilterLogisticsState] = useState<
     'todos' | 'no_enviado' | 'enviado' | 'concretado'
   >('todos');
   const [selectedConfirmedIds, setSelectedConfirmedIds] = useState<string[]>([]);
+  const [copiedSummary, setCopiedSummary] = useState<boolean>(false);
 
   const confirmedOrders = useMemo(() => {
     const byTextAndPhone = filterAdminOrders(allConfirmedOrders, {
@@ -150,6 +249,33 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
     return { total, enviados, noEnviados, concretados };
   }, [allConfirmedOrders]);
 
+  const handleCopyDispatchList = () => {
+    if (confirmedOrders.length === 0) return;
+    const textLines = confirmedOrders.map((ord, idx) => {
+      const comp = buildOrderComparisonSummary(ord);
+      const gps =
+        comp.gpsLink ||
+        ord.gpsLink ||
+        (typeof ord.gpsLat === 'number' && typeof ord.gpsLng === 'number'
+          ? `https://www.google.com/maps?q=${ord.gpsLat.toFixed(6)},${ord.gpsLng.toFixed(6)}`
+          : 'Sin link GPS');
+      return (
+        `📦 PEDIDO CONFIRMADO #${idx + 1} (${ord.reservaid})\n` +
+        `• Producto: ${product.nombre} (${ord.cantidad} un. - ${formatGs(ord.monto)})\n` +
+        `• Cliente: ${comp.nombreConfirmado}\n` +
+        `• WhatsApp: ${comp.celularConfirmado}\n` +
+        `• Ciudad/Dirección: ${comp.ubicacionConfirmada} — ${comp.direccionConfirmada}\n` +
+        `• Referencia Casa: ${comp.referenciaConfirmada}\n` +
+        `• Mapa GPS: ${gps}`
+      );
+    });
+    try {
+      navigator.clipboard.writeText(textLines.join('\n\n────────────────────────\n\n'));
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 2500);
+    } catch {}
+  };
+
   // Función Universal del Producto para marcar los pasos manualmente (No Enviado / Enviado / Concretado)
   const handleUniversalStepMark = async (
     stepAction: 'no_enviado' | 'enviado' | 'concretado'
@@ -203,41 +329,77 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
     }
   };
 
+  const hasActiveFilter = Boolean(filterName || filterPhone || filterLogisticsState !== 'todos' || selectedFilteredIds.length > 0);
+
   return (
-    <div className="p-4 sm:p-5 rounded-2xl bg-[#0d0d0f] border border-emerald-900/60 shadow-md space-y-4 animate-fadeIn text-zinc-100">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-200">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-[#16a34a] text-white flex items-center justify-center shadow-xs shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#16a34a] text-white">
-                ✅ Pedidos Confirmados por IA ({confirmedOrders.length} de {allConfirmedOrders.length})
-              </span>
-              <h4 className="text-xs sm:text-sm font-black text-zinc-100">
-                {product.nombre}
-              </h4>
-            </div>
-            <p className="text-[11px] text-zinc-400 mt-0.5">
-              Filtrá, seleccioná uno o todos los pedidos confirmados de una vez para actualizar logística o eliminarlos.
-            </p>
-          </div>
+    <div className="p-3 sm:p-4 rounded-2xl bg-[#0d0d0f] border border-emerald-900/60 shadow-md space-y-3 animate-fadeIn text-zinc-100">
+      {/* Cabecera Compacta con Descarga 1-Clic en Excel + Copiar p/ Despacho + Botón Compacto de Filtros */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="px-2 py-0.5 rounded-md bg-[#16a34a] text-white text-[10px] font-black uppercase tracking-wider shrink-0">
+            ✅ Confirmados ({confirmedOrders.length})
+          </span>
+          <h4 className="text-xs sm:text-sm font-black text-zinc-100 truncate">
+            {product.nombre}
+          </h4>
+          <span className="hidden xl:inline text-[11px] text-zinc-400 truncate">
+            — Listos para empaquetar y enviar con todos los datos validados
+          </span>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="self-end sm:self-auto px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium text-zinc-300 inline-flex items-center gap-1 cursor-pointer transition-colors"
-        >
-          <X className="w-3.5 h-3.5" />
-          <span>Cerrar Confirmados</span>
-        </button>
+        <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+          <button
+            type="button"
+            data-testid="download-confirmed-excel-btn"
+            disabled={confirmedOrders.length === 0}
+            onClick={() => downloadConfirmedOrdersExcelCsv(product, confirmedOrders)}
+            className="h-8 px-3 rounded-xl bg-[#16a34a] hover:bg-[#15803d] disabled:opacity-40 text-white text-[11px] font-black inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+            title="Descargar planilla Excel (.csv) con todos los pedidos confirmados y datos completos para despacho"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>📥 Descargar Excel ({confirmedOrders.length})</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={confirmedOrders.length === 0}
+            onClick={handleCopyDispatchList}
+            className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 border border-zinc-700 text-zinc-200 text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all"
+            title="Copiar fichas completas en texto para enviar por WhatsApp al empaquetador o courier"
+          >
+            <Copy className="w-3.5 h-3.5 text-emerald-400" />
+            <span>{copiedSummary ? '✓ Copiado' : 'Copiar p/ Courier'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowFiltersBar(prev => !prev)}
+            className={`h-8 px-2.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
+              showFiltersBar || hasActiveFilter
+                ? 'bg-emerald-950/90 border-emerald-600 text-emerald-200'
+                : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300'
+            }`}
+            title="Mostrar u ocultar filtros y selección múltiple"
+          >
+            <Filter className="w-3.5 h-3.5 text-emerald-400" />
+            <span>🔍 Filtrar</span>
+          </button>
+
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-8 px-2.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-medium text-zinc-300 inline-flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* BARRA DE FILTROS + SELECCIÓN MÚLTIPLE + ELIMINADO MASIVO EN CONFIRMADOS */}
-      <div className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800 shadow-xs space-y-3">
+      {/* BARRA DE FILTROS + SELECCIÓN MÚLTIPLE (Se abre solo al tocar el botón Filtrar) */}
+      {(showFiltersBar || hasActiveFilter) && (
+      <div className="p-3 rounded-2xl bg-zinc-900/80 border border-zinc-800 shadow-xs space-y-2.5 animate-fadeIn">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-end">
           <div className="lg:col-span-4">
             <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
@@ -370,20 +532,14 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
           )}
         </div>
       </div>
+      )}
 
-      {/* FUNCIÓN UNIVERSAL SEPARADA DEL PRODUCTO: MARCAR ENVIADO / NO ENVIADO / CONCRETADO */}
-      <div className="p-3.5 rounded-2xl bg-[#062319] text-white border border-[#25D366]/40 shadow-xs space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-[#25D366] flex items-center gap-1.5">
-              <Truck className="w-3.5 h-3.5" />
-              <span>Función Universal de Logística y Cobro — {product.nombre}</span>
-            </div>
-            <p className="text-[11px] text-stone-300 mt-0.5">
-              {selectedFilteredIds.length > 0
-                ? `Aplicando acción sobre los ${selectedFilteredIds.length} pedido(s) marcados con casilla:`
-                : 'Seleccioná el pedido confirmado (o todos los confirmados) para marcar si fue enviado o cobrado:'}
-            </p>
+      {/* FUNCIÓN UNIVERSAL SEPARADA DEL PRODUCTO: MARCAR ENVIADO / NO ENVIADO / CONCRETADO (En 1 fila compacta) */}
+      <div className="p-2.5 sm:p-3 rounded-xl bg-[#062319] text-white border border-[#25D366]/40 shadow-xs space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] font-black uppercase tracking-wider text-[#25D366] flex items-center gap-1.5">
+            <Truck className="w-3.5 h-3.5" />
+            <span>Logística y Despacho ({selectedFilteredIds.length > 0 ? `${selectedFilteredIds.length} seleccionados` : 'Selector Rápido'})</span>
           </div>
 
           <div className="flex items-center gap-2 text-[11px] font-black shrink-0 flex-wrap">

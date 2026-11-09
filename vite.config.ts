@@ -43,7 +43,9 @@ import {
   notifySellerOfOrderEvent,
   syncOrderUpdateToCloud,
   callDeepgramAgentLLM,
-  getDeepgramApiKey
+  getDeepgramApiKey,
+  exportAllWaSessionsAuthBundle,
+  restoreWaSessionsFromVaultBundle
 } from './server/whatsappEngine';
 
 // Único usuario administrador oficial autorizado
@@ -2051,6 +2053,49 @@ function registerApiServerMiddlewares(server: any) {
                   gAny.__META_CAPI_EVENTS_LOG.length = 60;
                 }
 
+                // Auto-persistir pixelId y capiAccessToken en store_config.json cuando llegan desde el cliente para que jamás se borren tras un redeploy
+                if ((parsed.pixelId && String(parsed.pixelId).trim()) || (parsed.capiAccessToken && String(parsed.capiAccessToken).trim())) {
+                  try {
+                    const cfgFile = path.resolve(__dirname, 'store_config.json');
+                    const cfgRaw = fs.existsSync(cfgFile)
+                      ? JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}')
+                      : {};
+                    let updatedCfg = false;
+                    if (Array.isArray(cfgRaw.productPages) && cfgRaw.productPages.length > 0) {
+                      cfgRaw.productPages = cfgRaw.productPages.map((p: any, idx: number) => {
+                        const isMatch =
+                          (parsed.productId && p?.id === parsed.productId) ||
+                          (parsed.productSlug && p?.slug === parsed.productSlug) ||
+                          idx === 0;
+                        if (!isMatch) return p;
+                        const prevTrack = p.metaTracking || {};
+                        const nextPixel = String(parsed.pixelId || prevTrack.pixelId || '').replace(/\D+/g, '');
+                        const nextToken = String(parsed.capiAccessToken || prevTrack.capiAccessToken || '').trim();
+                        const nextTest = String(parsed.testEventCode || prevTrack.testEventCode || '').trim();
+                        if (
+                          nextPixel !== (prevTrack.pixelId || '') ||
+                          nextToken !== (prevTrack.capiAccessToken || '')
+                        ) {
+                          updatedCfg = true;
+                          return {
+                            ...p,
+                            metaTracking: {
+                              ...prevTrack,
+                              pixelId: nextPixel,
+                              capiAccessToken: nextToken,
+                              ...(nextTest ? { testEventCode: nextTest } : {})
+                            }
+                          };
+                        }
+                        return p;
+                      });
+                    }
+                    if (updatedCfg) {
+                      fs.writeFileSync(cfgFile, JSON.stringify(cfgRaw, null, 2), 'utf-8');
+                    }
+                  } catch {}
+                }
+
                 res.end(
                   JSON.stringify({
                     success: true,
@@ -2059,6 +2104,115 @@ function registerApiServerMiddlewares(server: any) {
                     metaGraphForwarded,
                     metaGraphStatus,
                     logEntry
+                  })
+                );
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          // -------------------------------------------------------------
+          // 6C. BÓVEDA PERMANENTE ANTI-DESCONEXIÓN WHATSAPP Y CONFIG (RAILWAY DEPLOY GUARD)
+          // -------------------------------------------------------------
+          if (req.method === 'GET' && url === '/api/system/vault-snapshot') {
+            res.setHeader('Content-Type', 'application/json');
+            try {
+              const waAuthBundle = exportAllWaSessionsAuthBundle();
+              const waState = getWhatsAppEngineState();
+              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              const storeConfig = fs.existsSync(cfgFile)
+                ? JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}')
+                : {};
+              res.end(
+                JSON.stringify({
+                  success: true,
+                  waConnected: waState.status === 'connected',
+                  connectedPhone: waState.connectedPhone || null,
+                  waAuthBundle,
+                  storeConfig,
+                  timestamp: new Date().toISOString()
+                })
+              );
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, error: err?.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/api/system/vault-restore') {
+            let body = '';
+            req.on('data', (chunk: any) => (body += chunk));
+            req.on('end', async () => {
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                const parsed = JSON.parse(body || '{}');
+                let restoredWa = { restoredCount: 0, restoredPhones: [] as string[] };
+                if (Array.isArray(parsed.waAuthBundle) && parsed.waAuthBundle.length > 0) {
+                  restoredWa = await restoreWaSessionsFromVaultBundle(parsed.waAuthBundle);
+                }
+
+                let restoredConfig = false;
+                if (parsed.storeConfig && typeof parsed.storeConfig === 'object') {
+                  try {
+                    const cfgFile = path.resolve(__dirname, 'store_config.json');
+                    const currentCfg = fs.existsSync(cfgFile)
+                      ? JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}')
+                      : {};
+                    const incomingCfg = parsed.storeConfig;
+
+                    // Fusionar sin perder capiAccessToken, pixelId ni metaDirectConfig
+                    const mergedPages = Array.isArray(incomingCfg.productPages) && incomingCfg.productPages.length > 0
+                      ? incomingCfg.productPages.map((incP: any) => {
+                          const curMatch = Array.isArray(currentCfg.productPages)
+                            ? currentCfg.productPages.find((cp: any) => cp?.id === incP?.id)
+                            : null;
+                          return {
+                            ...curMatch,
+                            ...incP,
+                            metaTracking: {
+                              ...(curMatch?.metaTracking || {}),
+                              ...(incP?.metaTracking || {}),
+                              pixelId:
+                                incP?.metaTracking?.pixelId ||
+                                curMatch?.metaTracking?.pixelId ||
+                                '1276031534651377',
+                              capiAccessToken:
+                                incP?.metaTracking?.capiAccessToken ||
+                                curMatch?.metaTracking?.capiAccessToken ||
+                                ''
+                            }
+                          };
+                        })
+                      : currentCfg.productPages;
+
+                    const nextCfg = {
+                      ...currentCfg,
+                      ...incomingCfg,
+                      ...(mergedPages ? { productPages: mergedPages } : {}),
+                      metaDirectConfig: {
+                        ...(currentCfg.metaDirectConfig || {}),
+                        ...(incomingCfg.metaDirectConfig || {}),
+                        accessToken:
+                          incomingCfg?.metaDirectConfig?.accessToken ||
+                          currentCfg?.metaDirectConfig?.accessToken ||
+                          ''
+                      }
+                    };
+                    fs.writeFileSync(cfgFile, JSON.stringify(nextCfg, null, 2), 'utf-8');
+                    restoredConfig = true;
+                  } catch {}
+                }
+
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    restoredWaCount: restoredWa.restoredCount,
+                    restoredPhones: restoredWa.restoredPhones,
+                    restoredConfig
                   })
                 );
               } catch (err: any) {

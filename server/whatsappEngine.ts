@@ -5449,6 +5449,169 @@ function scheduleWaSessionAuthBackup(session: WaSessionRuntime, delayMs = 60000)
   authBackupTimers.set(session.id, timer);
 }
 
+export function exportAllWaSessionsAuthBundle(): Array<{
+  sessionId: string;
+  label: string;
+  connectedPhone: string | null;
+  connectedName: string | null;
+  createdAt: string;
+  filesGzBase64: string;
+  updatedAt: string;
+}> {
+  ensureInitialSessionsLoaded();
+  const bundle: Array<{
+    sessionId: string;
+    label: string;
+    connectedPhone: string | null;
+    connectedName: string | null;
+    createdAt: string;
+    filesGzBase64: string;
+    updatedAt: string;
+  }> = [];
+
+  for (const session of sessionsMap.values()) {
+    try {
+      if (!fs.existsSync(session.authDir)) continue;
+      sanitizeAuthDirectory(session.authDir);
+      const credsPath = path.join(session.authDir, 'creds.json');
+      if (!fs.existsSync(credsPath)) continue;
+      const rawCreds = fs.readFileSync(credsPath, 'utf-8');
+      const parsedCreds = JSON.parse(rawCreds || '{}');
+      if (!parsedCreds?.me?.id) continue;
+
+      const allFiles = fs.readdirSync(session.authDir).filter(f => f.endsWith('.json'));
+      const preKeyFiles = allFiles
+        .filter(f => f.startsWith('pre-key-'))
+        .sort((a, b) => {
+          const numA = parseInt(a.replace(/\D+/g, ''), 10) || 0;
+          const numB = parseInt(b.replace(/\D+/g, ''), 10) || 0;
+          return numB - numA;
+        })
+        .slice(0, 35);
+      const keepPreKeys = new Set(preKeyFiles);
+
+      const filesMap: Record<string, string> = {};
+      for (const fileName of allFiles) {
+        if (fileName.startsWith('pre-key-') && !keepPreKeys.has(fileName)) continue;
+        try {
+          const fullPath = path.join(session.authDir, fileName);
+          const stat = fs.statSync(fullPath);
+          if (stat.isFile() && stat.size >= 2 && stat.size < 250000) {
+            const content = fs.readFileSync(fullPath, 'utf-8');
+            JSON.parse(content);
+            filesMap[fileName] = content;
+          }
+        } catch {}
+      }
+      if (!filesMap['creds.json']) continue;
+
+      const compressedBase64 = zlib
+        .gzipSync(Buffer.from(JSON.stringify(filesMap), 'utf-8'))
+        .toString('base64');
+
+      bundle.push({
+        sessionId: session.id,
+        label: session.label,
+        connectedPhone:
+          session.connectedPhone ||
+          String(parsedCreds?.me?.id || '').split(':')[0].split('@')[0] ||
+          null,
+        connectedName: session.connectedName || parsedCreds?.me?.name || session.label,
+        createdAt: session.createdAt,
+        filesGzBase64: compressedBase64,
+        updatedAt: new Date().toISOString()
+      });
+    } catch {}
+  }
+  return bundle;
+}
+
+export async function restoreWaSessionsFromVaultBundle(
+  vaultSessions: Array<{
+    sessionId?: string;
+    label?: string;
+    connectedPhone?: string | null;
+    connectedName?: string | null;
+    createdAt?: string;
+    filesGzBase64?: string;
+  }>
+): Promise<{ restoredCount: number; restoredPhones: string[] }> {
+  ensureInitialSessionsLoaded();
+  let restoredCount = 0;
+  const restoredPhones: string[] = [];
+  if (!Array.isArray(vaultSessions) || vaultSessions.length === 0) {
+    return { restoredCount: 0, restoredPhones: [] };
+  }
+
+  for (const data of vaultSessions) {
+    try {
+      const sessionId = String(data?.sessionId || 'wa-1');
+      if (!data?.filesGzBase64) continue;
+      const session = getOrCreateSessionRuntime(sessionId, data.label, data.createdAt);
+
+      // Si ya está conectada activamente en este contenedor, no la interrumpimos
+      if (session.status === 'connected' && session.connectedPhone) {
+        continue;
+      }
+
+      const localCredsPath = path.join(session.authDir, 'creds.json');
+      let hasValidLocalCreds = false;
+      if (fs.existsSync(localCredsPath)) {
+        try {
+          const localCreds = JSON.parse(fs.readFileSync(localCredsPath, 'utf-8') || '{}');
+          if (localCreds?.me?.id) {
+            hasValidLocalCreds = true;
+          }
+        } catch {}
+      }
+
+      if (!hasValidLocalCreds) {
+        const decompressed = zlib
+          .gunzipSync(Buffer.from(data.filesGzBase64, 'base64'))
+          .toString('utf-8');
+        const filesMap = JSON.parse(decompressed || '{}');
+        if (filesMap && typeof filesMap === 'object' && filesMap['creds.json']) {
+          await stopSessionSocket(session, false);
+          fs.mkdirSync(session.authDir, { recursive: true });
+          for (const [fileName, fileContent] of Object.entries(filesMap)) {
+            if (
+              typeof fileContent === 'string' &&
+              fileContent.trim().length >= 2 &&
+              !fileName.includes('..') &&
+              !fileName.includes('/')
+            ) {
+              try {
+                JSON.parse(fileContent);
+                const targetFile = path.join(session.authDir, fileName);
+                const tmpFile = targetFile + '.tmp';
+                fs.writeFileSync(tmpFile, fileContent, 'utf-8');
+                fs.renameSync(tmpFile, targetFile);
+              } catch {}
+            }
+          }
+          sanitizeAuthDirectory(session.authDir);
+          if (data.connectedPhone) session.connectedPhone = String(data.connectedPhone);
+          if (data.connectedName) session.connectedName = String(data.connectedName);
+          restoredCount++;
+          if (session.connectedPhone) restoredPhones.push(session.connectedPhone);
+          // Si estamos en producción (Railway), reconectar el socket inmediatamente con las credenciales restauradas
+          if (isProductionRuntime()) {
+            connectWhatsAppEngine(false, session.id).catch(() => {});
+          }
+        }
+      } else if (isProductionRuntime() && session.status !== 'connected' && !session.isConnecting) {
+        connectWhatsAppEngine(false, session.id).catch(() => {});
+      }
+    } catch {}
+  }
+
+  if (restoredCount > 0) {
+    const storage = loadChatsStorage();
+    saveChatsStorage(storage);
+  }
+  return { restoredCount, restoredPhones };
+}
+
 async function restoreCloudStateAndWaSessionsOnBoot(): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_KEY) return;
 

@@ -47,7 +47,7 @@ Cada vez que el Kernel aplica una mutación sobre el borrador (`ProductDraftStat
 
 ---
 
-## 3. Distribución Específica de Modelos de IA vía OpenRouter y Motor AutoAds de Impacto en 0.0 Segundos
+## 3. Distribución Específica de Modelos de IA vía OpenRouter, Cola Estricta Turno por Turno (`Anti-HTTP 402 in-flight`) y Caché Persistente Dual
 
 La plataforma implementa una distribución especializada de modelos de IA en OpenRouter para maximizar la velocidad, la conversión y la congruencia visual/textual en cada área:
 
@@ -58,16 +58,17 @@ La plataforma implementa una distribución especializada de modelos de IA en Ope
    - Modelo Principal: **`z-ai/glm-5.3`** con respaldo automático a **`openai/gpt-4o-mini`** en OpenRouter.
    - **Regla Inquebrantable de los 0.0 Segundos (Palabras 1 a 4)**: Cada anuncio nombra en sus primeras 1 a 4 palabras el **objeto exacto** (`PROYECTOR NAVIDEÑO`, `TALADRO PERCUTOR`, etc., sin marcas desconocidas) junto con el **dolor, solución, placer u oferta irresistible** (`🔥 PROYECTOR NAVIDEÑO EN OFERTA:`, `🛑 PROYECTOR NAVIDEÑO PAGO EN PUERTA:`, `💡 PROYECTOR NAVIDEÑO SIN COMPLICACIONES:`, `🎁 2X PROYECTOR NAVIDEÑO EN OFERTA:`, `⚡ PROYECTOR NAVIDEÑO MÁXIMA POTENCIA:`, `📦 PROYECTOR NAVIDEÑO KIT COMPLETO:`).
    - **Logística Realista COD Paraguay**: Prohibido prometer entregas *"hoy mismo en tu puerta"*; todos los anuncios comunican con transparencia que el comprador reserva sin adelantos y recibe en **2 a 3 días hábiles (48 a 72 horas)** pagando al repartidor en puerta.
-3. **Generación Secuencial 6/6 de Imágenes Publicitarias de Alto Impacto (`/api/autoads/generate-ad-images`)**:
+3. **Generación de Imágenes Publicitarias en Modo Seguro Turno por Turno (`Anti-HTTP 402 in-flight requests`)**:
    - Modelos OpenAI en OpenRouter: **`openai/gpt-image-2.6-flare`** (predeterminado), **`openai/gpt-image-2.6-sunburst`**, **`openai/gpt-5-image-mini`**, **`openai/gpt-image-1-mini`** y **`openai/gpt-5.4-image-2`** en resolución universal `1024x1024`.
-   - **Arquitectura Secuencial 1 a 1 Tolerante a Fallos**: El frontend solicita las 6 imágenes de forma individual (`[0]` a `[5]`) con `try / catch` aislado y pase automático de autorrecuperación para garantizar siempre las **6 de 6 imágenes**.
-   - **Regla Visual de Producto en Uso + Resultado Real + Texto y CTA Congruente**: Cada imagen muestra obligatoriamente el **producto físico funcionando en vivo**, el **resultado real que provoca en las personas o el hogar** y un **titular + botón CTA en español 100% congruente** con el texto de ese anuncio.
+   - **Algoritmo Anti-Bloqueo `in-flight requests` (`HTTP 402`)**:
+     - En el servidor (`invokeOpenRouterImageModel` en `/vite.config.ts`), si OpenRouter reporta `HTTP 402 ("This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle")`, el motor espera **4.5 segundos (`4500ms`)** a que se liquide la reserva en vuelo y reintenta automáticamente el mismo modelo hasta 3 veces sin disparar fallbacks simultáneos.
+     - En el frontend (`AutoAdsView.tsx`), el Paso 2 prepara en 2 segundos los **6 Textos y Prompts** y ofrece dos modos 100% seguros:
+       1. **Modo Individual (`1 por 1` Manual)**: Botón **`⚡ Generar Imagen IA (Solo este anuncio #N)`** en cada tarjeta.
+       2. **Modo Cola Secuencial (`1 a la vez` con Pausa de Liquidación)**: Botón **`🛡️ Generar las 6 Imágenes por Turno (1 a la vez · Espera 3.5s entre turnos)`** con indicador de turno activo y botón **`⏹️ Pausar Cola`**.
+   - **Persistencia Dual Anti-Pérdida (`autoads_creatives_cache_v3_` + `/api/autoads/save-creatives-cache`)**:
+     - Cada imagen generada se guarda como archivo `.png` en `/public/assets/ai-ads/`, como `dataUrl` Base64 en `localStorage` (`autoads_creatives_cache_v3_<productKey>`) y en el backend (`store_config.json` vía `POST /api/autoads/save-creatives-cache`), garantizando que las imágenes jamás desaparezcan al recargar la página, iniciar sesión con Facebook OAuth o redesplegar el contenedor en Railway.
 4. **Creador de Video Reels (`/api/autoads/generate-ad-images` y `AutoAdsView.tsx`)**:
    - Modelos de Video en OpenRouter: **`bytedance/seedance-2.5`** (predeterminado, capaz de animar la foto real del producto y generar video de avatar/demostración) y **`google/gemini-omni-1.2-flash`** / **`google/gemini-omni-1.1-flash`**.
-
-**Detección Automática desde Railway y Panel Admin**:
-- El servidor lee automáticamente la API Key desde `.env`, `store_config.json` o las variables de entorno de Railway (`process.env.OPENROUTER_API_KEY || process.env.OPENROUTESERVICE_API_KEY`).
-- También permite configurar y guardar la clave directamente desde el cajón `OpenRouter & Pipeboard` en `#admin`.
 
 ---
 
@@ -84,26 +85,21 @@ Todas las páginas creadas cuentan con infraestructura de **Doble Canal (Browser
 
 ---
 
-## 5. Creador de Anuncios en Piloto Automático (`Pipeboard · Meta Ads IA` — `src/components/PipeboardAdsManagerView.tsx` y `src/utils/pipeboardEngine.ts`)
+## 5. AutoAds 360: Autenticación OAuth 1-Clic con Facebook, Descubrimiento Dinámico de Nombres en Vivo y Publicación Directa en Meta Graph API v21.0 (`src/components/AutoAdsView.tsx` y `vite.config.ts`)
 
-Rediseñado íntegramente en **100% Negro Puro estilo Vercel / Android Nativo (`#0d0d0f`)**, este módulo automatiza la creación y publicación de campañas publicitarias en Meta Ads:
-
-1. **Guía Paso a Paso Integrada en el Panel**:
-   - Explica en pantalla los 3 pasos simples: elegir la página de producto, seleccionar el comando psicológico del robot y pulsar **`Iniciar Piloto Automático (1 Clic)`**.
-2. **4 Fórmulas Psicológicas Slash del Robot (`AUTOPILOT_STRATEGIES`)**:
-   - `/flash-sale` (**Oferta Relámpago**): Urgencia + Descuento 1x y 2x + Pago Contra Entrega.
-   - `/anti-scam` (**Cero Riesgo**): Revisás el paquete antes de abonar al delivery (`100% Confianza`).
-   - `/duo-pack` (**Pack Ahorro Familiar**): El 80% lleva 2 unidades con envío bonificado.
-   - `/viral-demo` (**Demostración de Impacto**): Problema resuelto en 30 segundos con prueba visual.
-3. **Generación de Suite `3:2:2` + Video Comercial con `GLM-5.3` (`/api/pipeboard/generate-creatives`)**:
-   - Genera automáticamente 4 piezas listas para convertir en Paraguay:
-     1. **🖼️ Feed 1:1 (#1)**: Póster cuadrado de Oferta Directa Contra Entrega.
-     2. **🖼️ Feed 1:1 (#2)**: Póster cuadrado de Garantía y Confianza.
-     3. **📱 Story 9:16**: Póster vertical para Historias y Reels.
-     4. **🎬 Video 9:16**: Video comercial animado de 4 escenas (12 segundos) con reproductor en vivo.
-   - Incluye selector táctil en grilla `2x2` adaptada a celulares sin desbordes de texto, más cuadros oscuros para el *Titular (Headline)* y el *Texto Principal (Copy Persuasivo)*.
-4. **Publicación Directa vía `pipeboard-co/meta-ads-mcp` (`/api/pipeboard/publish-campaign`)**:
-   - Ejecuta la secuencia oficial MCP (`get_ad_accounts` → `upload_ad_image` → `create_campaign` → `create_ad_set` → `create_ad_creative` → `create_ad`) conectada al Píxel y URL del producto (`/?p=slug`), listando las campañas publicadas con acceso directo a **Meta Ads Manager**.
+1. **Estructura Comercial Oficial Fijada por ID + Nombres Reales Dinámicos desde Meta Graph API**:
+   - **Portafolio Comercial (Business)**: `Landingcod`
+   - **Cuenta Publicitaria Oficial (termina en `834`)**: ID bloqueado `act_1048211497774834` (`1048211497774834`). Su nombre real actual (`liveAdAccountName`) se consulta dinámicamente en vivo desde `GET /v21.0/act_1048211497774834?fields=id,account_id,name,currency,account_status,business_name`.
+   - **Píxel Oficial de la Cuenta 834 (termina en `377`)**: ID bloqueado `1276031534651377`. Su nombre real actual (`livePixelName`) se consulta dinámicamente en vivo desde `GET /v21.0/act_1048211497774834/adspixels?fields=id,name` y `GET /v21.0/1276031534651377?fields=id,name`.
+   - **Página Oficial de Facebook (Fanpage)**: `Landingcod Shop` — ID fijo `1050835598123904`.
+   - **Cuenta Personal Excluida y Auto-Pausada**: `act_424711183775699` (`Richard Almiron`) está 100% filtrada y excluida; además, el backend inspecciona automáticamente `act_424711183775699/campaigns` y pausa (`status: 'PAUSED'`) cualquier campaña `[META IA]` que se haya creado allí por error en el pasado.
+2. **Autenticación Facebook OAuth en 1 Clic (`GET /api/meta/auth-url`, `GET /api/meta/callback`, `POST /api/meta/restore-session`, `GET /api/meta/status`)**:
+   - Resolución dinámica de `redirect_uri` según el host real (`https://autoads360.up.railway.app/api/meta/callback`, `https://landingcod.com/api/meta/callback` o `http://localhost:3000/api/meta/callback`).
+   - Intercambio automático por token de larga duración (~60 días) y respaldo en `localStorage` (`autoads_meta_oauth_backup_v1`) con auto-curación vía `POST /api/meta/restore-session` cuando Railway reinicia el contenedor tras un despliegue.
+   - Tarjeta de Referencia Oficial (`data-testid="meta-official-reference-card"`) con botones de copiado en 1 clic y botón **`🔄 Actualizar Nombres Reales desde Meta (834 / 377)`** (`data-testid="btn-discover-live-meta-names"`).
+3. **Publicación Directa en Meta Graph API v21.0 (`POST /api/meta/publish-direct`)**:
+   - Fuerza siempre `adAccountId = 'act_1048211497774834'`, `facebookPageId = '1050835598123904'` y `pixelId = '1276031534651377'`.
+   - Detecta en vivo la moneda de la cuenta (`USD` en centavos vs `PYG` entero en Guaraníes), convierte imágenes locales `/assets/ai-ads/...png` o `data:image/...` a Base64 (`bytes`) para `/act_1048211497774834/adimages`, y ejecuta la cadena completa: **Campaña → Conjunto de Anuncios (`AdSet`) → Subida de Imágenes → Creativos (`object_story_spec`) → Anuncios (`Ads`)**.
 
 ---
 

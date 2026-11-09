@@ -46,26 +46,30 @@ Diseñada desde cero como una aplicación nativa Android con estética monocrom�
 2. **Módulo 2 — Autopilot Studio IA (`creador` — `ProductTemplateBuilderStudio.tsx`)**:
    - Motor **100% Autopiloto de 1 Clic** impulsado por el **Kernel Oficial `deepseek-ai/deepseek-harness` (`src/utils/deepseekHarnessKernel.ts`)** y **`z-ai/glm-5.3`**.
    - 4 plugins activos (`theme-architect`, `cod-pricing-engine`, `physical-truth-shield`, `whatsapp-brain-trainer`), 5 comandos slash (`/autopilot`, `/luxury`, `/flash`, `/pack2-gift`, `/audit`), 33 plantillas diferenciadas y botón `Undo` reversible.
-3. **Módulo 3 — AutoAds: Cerebro Maestro IA + Meta Ads Directo (`autoads` — `AutoAdsView.tsx`)**:
-   - Plataforma de publicidad impulsada por **`openai/gpt-4o-mini`** que investiga competencia, genera **6 creativos genuinamente diversos** (3 Feed 1:1 + 1 Story 9:16 + 2 Reels 9:16) con copy completo en español paraguayo sin *pre-holdings*.
-   - Generación visual con **`openai/gpt-image-2.6`** y animación de video reels con **`minimax/minimax-m3.1-flash`**.
-   - **6 arquetipos creativos Andrómeda**: `hero-transform`, `raw-ugc`, `objection-killer`, `hook-reel`, `social-proof-surge`, `flash-scarcity`.
-   - **Conexión dual**: Meta Ads Directo (cuenta propia del usuario vía OAuth Graph API v21.0) + Pipeboard MCP (para suscriptores).
-   - Flujo 100% autopiloto: seleccionar producto → brain se entrena auto → clic en "Lanzar Piloto Automático" → campaña publicada en Meta Ads.
+3. **Módulo 3 — AutoAds 360: Cerebro Maestro IA + Meta Ads Directo (`autoads` — `AutoAdsView.tsx`)**:
+   - Plataforma de publicidad impulsada por **`z-ai/glm-5.3`** (con respaldo a **`openai/gpt-4o-mini`**) que aplica la **Regla de los 0.0 Segundos** (palabras 1 a 4 = Objeto + Dolor/Solución/Placer/Oferta) y genera **6 creativos de alta conversión** (Feed 1:1, Story 9:16 y Video Reels 9:16) en español paraguayo con tiempos reales de entrega COD (`2 a 3 días hábiles`).
+   - Generación visual con **`openai/gpt-image-2.6-flare`** / **`openai/gpt-image-2.6-sunburst`** en **Modo Seguro Turno por Turno (`1 a la vez` con pausa de liquidación de 3.5s y backoff anti-`HTTP 402 in-flight requests`)**, más caché persistente dual (`localStorage` Base64 + `store_config.json`) para que las imágenes jamás desaparezcan.
+   - **Estructura Oficial Meta Ads Bloqueada por ID + Nombres Reales Dinámicos en Vivo**:
+     - **Portafolio Comercial**: `Landingcod`
+     - **Cuenta Publicitaria Oficial (`834`)**: `act_1048211497774834` (`1048211497774834`) — su nombre real actual se descubre y actualiza dinámicamente en vivo desde Meta Graph API.
+     - **Píxel Oficial de Cuenta 834 (`377`)**: `1276031534651377` — su nombre real actual se descubre y actualiza dinámicamente en vivo desde Meta Graph API.
+     - **Página Oficial de Facebook**: `Landingcod Shop` (`1050835598123904`).
+     - **Bloqueo Total y Auto-Pausa**: La cuenta personal `Richard Almiron` (`act_424711183775699`) está 100% excluida y cualquier campaña accidental en ella se pausa automáticamente.
    - Documentación completa: [`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md).
 4. **Módulo 4 — Conexiones WhatsApp QR (`whatsapp`)**:
    - Centro multi-línea ilimitado por Código QR o Código de 8 dígitos con respaldo GZIP automático en Supabase (`WAAUTH-*`) resistente a redespliegues en Railway.
 5. **Módulo 5 — Voz Neuronal Deepgram Aura-2 (`deepgram`)**:
    - Síntesis de notas de voz nativas OGG/Opus PTT (`Aura-2`) y transcripción ultrarrápida de audios entrantes en español (`Nova-3` + `Nova-2`).
-6. **Módulo 6 — Motor Dual OpenRouter (`openrouter`)**:
-   - `z-ai/glm-5.3` para desarrollo web + `openai/gpt-4o-mini` para redacción de anuncios + `openai/gpt-image-2.6` para imágenes + `minimax/minimax-m3.1-flash` para video reels, con detección automática de la API Key en Railway (`OPENROUTER_API_KEY` / `OPENROUTESERVICE_API_KEY`).
+6. **Módulo 6 — Motor Multi-Modelo OpenRouter (`openrouter`)**:
+   - `z-ai/glm-5.3` para desarrollo web y Cerebro Maestro + `openai/gpt-4o-mini` para respaldo de copywriting + `openai/gpt-image-2.6-flare` / `sunburst` para imágenes + `bytedance/seedance-2.5` para video reels, con detección automática de la API Key en Railway (`OPENROUTER_API_KEY` / `OPENROUTESERVICE_API_KEY`).
 
 ---
 
 ## Documentación Técnica Actualizada del Proyecto
 
-- 📜 **[`CONTEXTO_DE_CHAT.md`](./CONTEXTO_DE_CHAT.md)**: Bitácora cronológica completa de todas las solicitudes y fases del chat (Fases 1 a 44), mapa de archivos, política estricta de cero fallbacks y reglas de arquitectura multi-modelo.
-- 🏗️ **[`ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md`](./ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md)**: Especificación algorítmica del Kernel Oficial `deepseek-ai/deepseek-harness` (Cordis), Estudio Autopiloto 1-Clic, distribución multi-modelo OpenRouter (`GLM-5.3` + `GPT-4o Mini` + `GPT Image 2.6` + `MiniMax M3.1 Flash`), encabezados dinámicos de producción `HTTP-Referer`, Meta CAPI, Pipeboard Ads Autopilot e interfaz móvil Android 100% negro puro.
+- 📜 **[`CONTEXTO_DE_CHAT.md`](./CONTEXTO_DE_CHAT.md)**: Bitácora cronológica completa, píxel por píxel, de todas las solicitudes y fases del chat (**Fases 1 a 55**), mapa de archivos, auditorías en vivo y reglas invariantes para agentes de codificación.
+- 🏗️ **[`ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md`](./ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md)**: Especificación algorítmica del Kernel Oficial `deepseek-ai/deepseek-harness` (Cordis), Estudio Autopiloto 1-Clic, Cola Turno por Turno Anti-`HTTP 402 in-flight`, Caché Persistente Dual de Creativos, Meta OAuth 1-Clic con Descubrimiento Dinámico de Nombres (`834` / `377`) y Publicación Directa en Meta Graph API v21.0.
 - 🎙️ **[`ARQUITECTURA_WHATSAPP_IA_VOZ.md`](./ARQUITECTURA_WHATSAPP_IA_VOZ.md)**: Documentación técnica del motor WhatsApp de 5 pasos, voz Deepgram Aura-2 OGG/Opus, STT Deepgram Nova-3, pronunciación telefónica `4-3-3`, cerebro `GLM-5.3` y aislamiento de Railway.
 - 📲 **[`ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md`](./ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md)**: Especificación de Reportes Ejecutivos Directos al WhatsApp del Vendedor, Panel de Confirmados, Logística Universal y tombstones `DEL-ORD-*` en Supabase.
-- 🎯 **[`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md)**: Guía paso a paso completa para configurar Meta Ads (Facebook Login, Marketing API, permisos, variables de entorno Railway, conexión OAuth, validación de errores sin fallbacks ficticios y pruebas del flujo AutoAds).
+- 🎯 **[`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md)**: Guía paso a paso completa para configurar Meta Ads, estructura oficial bloqueada (`Landingcod`, Cuenta `834`, Píxel `377`, Página `Landingcod Shop`), descubrimiento dinámico de nombres en vivo y auto-restauración de sesión OAuth en Railway.
+

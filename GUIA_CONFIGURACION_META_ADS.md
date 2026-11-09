@@ -1049,6 +1049,32 @@ Usá esta lista de verificación para confirmar que todo está correctamente con
 
 ---
 
+## 11. 🛡️ Estructura Oficial Fijada por ID + Descubrimiento Dinámico de Nombres en Vivo (Actualización Noviembre 2026)
+
+### 11.1 Tabla de Identificadores Oficiales Bloqueados en el Sistema
+
+| Activo de Meta | Identificador Fijo Bloqueado | Obtención del Nombre | Estado en el Sistema |
+|----------------|------------------------------|----------------------|----------------------|
+| **1. Portafolio Comercial (Business)** | `Landingcod` | Fijo (`Landingcod`) | ✅ Activo Principal |
+| **2. Cuenta Publicitaria Oficial (termina en `834`)** | `act_1048211497774834` (`1048211497774834`) | **Dinámico en Vivo** vía `GET /v21.0/act_1048211497774834?fields=name,currency` | ✅ Bloqueada como Única Cuenta de Publicación |
+| **3. Píxel Oficial de Cuenta 834 (termina en `377`)** | `1276031534651377` | **Dinámico en Vivo** vía `GET /v21.0/act_1048211497774834/adspixels?fields=id,name` y `GET /v21.0/1276031534651377?fields=id,name` | ✅ Bloqueado como Píxel Oficial CAPI + Ads |
+| **4. Página Oficial de Facebook (Fanpage)** | `1050835598123904` | `Landingcod Shop` (fijo) | ✅ Bloqueada como Fanpage Oficial |
+| **❌ Cuenta Personal Excluida** | `act_424711183775699` (`424711183775699`) | `Richard Almiron` | 🚫 Excluida al 100% + Auto-Pausa de campañas `[META IA]` |
+
+### 11.2 Nuevos Endpoints y Algoritmos de Resiliencia
+
+1. **Descubrimiento Dinámico en Vivo de Nombres Renombrados (`GET /api/meta/status` y `GET /api/meta/callback`)**:
+   - Cuando el administrador cambia el nombre de la cuenta publicitaria `act_1048211497774834` (`834`) o el nombre del píxel `1276031534651377` (`377`) dentro de Meta Business Suite, el backend consulta directamente la Graph API v21.0, guarda los nuevos nombres reales en `store_config.json` (`adAccountName`, `pixelName`) y `.env` (`META_AD_ACCOUNT_NAME`, `META_PIXEL_NAME`), y actualiza en vivo la **Tarjeta de Referencia Oficial (`data-testid="meta-official-reference-card"`)** tanto en `AutoAdsView.tsx` como en la pestaña `🎯 Píxel & CAPI` de `AdminView.tsx`.
+   - Incluye el botón **`🔄 Actualizar Nombres Reales desde Meta (834 / 377)`** (`data-testid="btn-discover-live-meta-names"`) para refrescar los nombres en 1 clic.
+2. **Auto-Restauración de Sesión OAuth tras Redespliegue en Railway (`POST /api/meta/restore-session`)**:
+   - El navegador guarda una copia cifrada del token OAuth y los nombres descubiertos en `localStorage` (`autoads_meta_oauth_backup_v1`). Si Railway reinicia el contenedor tras un `git push`, `refreshMetaConnectionStatus()` llama automáticamente a `POST /api/meta/restore-session` y restaura la sesión sin pedir nuevo login.
+3. **Persistencia Dual de los 6 Creativos e Imágenes IA (`POST /api/autoads/save-creatives-cache` y `GET /api/autoads/creatives-cache`)**:
+   - Cada imagen generada 1 por 1 se almacena como `.png` en `/public/assets/ai-ads/`, como `dataUrl` Base64 en `localStorage` (`autoads_creatives_cache_v3_<productKey>`) y en el servidor (`store_config.json`), evitando cualquier pérdida de imágenes al recargar o autenticar OAuth.
+4. **Cola Secuencial Turno por Turno Anti-`HTTP 402 ("in-flight requests settle")`**:
+   - Para evitar que OpenRouter bloquee la generación simultánea por reservas de crédito en vuelo (*in-flight credit hold*), el sistema permite generar cada imagen individualmente (`1 por 1`) o mediante la cola automática turno por turno con espera de liquidación de `3.5s` en frontend y backoff automático de `4.5s` en backend.
+
+---
+
 > [!NOTE]
 > 📖 **¿Necesitás ayuda adicional?**  
 > - 📧 Contacto admin: `alterocuatro@gmail.com`  
@@ -1063,3 +1089,4 @@ Usá esta lista de verificación para confirmar que todo está correctamente con
   <em>Creá campañas publicitarias en Meta Ads con un solo clic</em><br><br>
   Desarrollado por el equipo LandingCOD © 2026
 </p>
+
