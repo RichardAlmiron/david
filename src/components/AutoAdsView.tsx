@@ -435,79 +435,84 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // ─────────────────────────────────────────────────────────────────────────────
   const handleStep2GenerateAds = async () => {
     if (!brainProfile || !activeProduct) return;
-    const isRegeneratingAll = creatives.length > 0;
+    const existingCreatives = [...creatives];
+    const hasPendingImages =
+      existingCreatives.length > 0 && existingCreatives.some(c => !c.aiGeneratedImageUrl);
+    const isFullRegenerateAll = existingCreatives.length > 0 && !hasPendingImages;
+
     setWorkflowStep('generating');
-    // Limpiamos los creativos previos mientras OpenRouter genera desde cero los nuevos textos e imágenes
-    setCreatives([]);
     setGenerationProgressText(
-      isRegeneratingAll
-        ? `🧠 Redactando desde cero 6 nuevos anuncios persuasivos con OpenRouter (${AUTOADS_LLM_MODEL}) para "${activeProduct.nombre}"...`
+      hasPendingImages
+        ? `🎨 Completando las imágenes faltantes en OpenRouter (${selectedImageModel}) para "${activeProduct.nombre}"...`
+        : isFullRegenerateAll
+        ? `🧠 Redactando 6 nuevos anuncios persuasivos con OpenRouter (${AUTOADS_LLM_MODEL}) para "${activeProduct.nombre}"...`
         : `🎨 Conectando con OpenRouter (${selectedImageModel}) para sintetizar en vivo las imágenes publicitarias 8K de "${activeProduct.nombre}"...`
     );
 
     const genTimer1 = setTimeout(() => {
       setGenerationProgressText(
-        `🎬 Sintetizando en vivo las 6 imágenes y Reels con ${selectedImageModel} + Video (${selectedVideoModel}) en OpenRouter...`
+        `🎬 Sintetizando en vivo las imágenes y Reels con ${selectedImageModel} + Video (${selectedVideoModel}) en OpenRouter...`
       );
     }, 2200);
 
     try {
       let currentBrain = brainProfile;
 
-      // Si el usuario tocó "Regenerar los 6 Anuncios", primero pedimos 6 textos, titulares y prompts totalmente nuevos
-      if (isRegeneratingAll) {
-        const trainRes = await fetch('/api/autoads/brain-train', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            product: activeProduct,
-            externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
-            openRouterModel: AUTOADS_LLM_MODEL,
-            variationTimestamp: Date.now()
-          })
-        });
-        const trainData = await trainRes.json();
-        if (!trainRes.ok || trainData?.success === false) {
-          clearTimeout(genTimer1);
-          setWorkflowStep('researched');
-          setGenerationProgressText('');
-          setApiErrorModal({
-            isOpen: true,
-            title: '⚠️ Error en la API de OpenRouter — Trabajo Pausado',
-            errorMessage:
-              trainData?.error ||
-              `Error ${trainRes.status}: La API de OpenRouter (${AUTOADS_LLM_MODEL}) retornó un error al generar copys.`,
-            sourceEndpoint: '/api/autoads/brain-train'
+      // Solo pedimos 6 textos nuevos si todas las 6 imágenes previas ya estaban completas y el usuario quiere regenerar todo desde cero
+      if (isFullRegenerateAll) {
+        try {
+          const trainRes = await fetch('/api/autoads/brain-train', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              product: activeProduct,
+              externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
+              openRouterModel: AUTOADS_LLM_MODEL,
+              variationTimestamp: Date.now()
+            })
           });
-          return;
-        }
-        if (trainData?.brainProfile?.creativeBriefs?.length > 0) {
-          currentBrain = {
-            ...currentBrain,
-            trainedAt: new Date().toISOString(),
-            avatars: trainData.brainProfile.avatars || currentBrain.avatars,
-            targeting: trainData.brainProfile.targeting || currentBrain.targeting,
-            creativeBriefs: trainData.brainProfile.creativeBriefs
-          };
-          setBrainProfile(currentBrain);
+          const trainData = await trainRes.json();
+          if (trainRes.ok && trainData?.brainProfile?.creativeBriefs?.length > 0) {
+            currentBrain = {
+              ...currentBrain,
+              trainedAt: new Date().toISOString(),
+              avatars: trainData.brainProfile.avatars || currentBrain.avatars,
+              targeting: trainData.brainProfile.targeting || currentBrain.targeting,
+              creativeBriefs: trainData.brainProfile.creativeBriefs
+            };
+            setBrainProfile(currentBrain);
+          }
+        } catch {
+          // Si brain-train tarda demasiado, continuamos inmediatamente con el perfil ya entrenado para no bloquear las imágenes
         }
       }
 
       const baseAssets = buildCreativeAssetsFromBrain(activeProduct, currentBrain);
-      let workingAssets = [...baseAssets];
+      let workingAssets = hasPendingImages
+        ? baseAssets.map((asset, idx) => ({
+            ...asset,
+            aiGeneratedImageUrl: existingCreatives[idx]?.aiGeneratedImageUrl || '',
+            aiImagePrompt: existingCreatives[idx]?.aiImagePrompt || asset.aiImagePrompt
+          }))
+        : [...baseAssets];
 
-      // Mostrar inmediatamente las 6 tarjetas mientras cada lote de 2 imágenes se sintetiza en vivo
+      // Mostrar inmediatamente las 6 tarjetas en pantalla
       setCreatives(workingAssets);
-      setAdVariationCounters({});
-      setAdPhotoIndexOverride({});
+      if (!hasPendingImages) {
+        setAdVariationCounters({});
+        setAdPhotoIndexOverride({});
+      }
 
-      const singleCardIndices: number[] = [0, 1, 2, 3, 4, 5];
+      // Si había tarjetas pendientes de imagen, generamos solo las que faltan; si no, generamos las 6 en secuencia
+      const singleCardIndices: number[] = hasPendingImages
+        ? workingAssets.map((a, idx) => (!a.aiGeneratedImageUrl ? idx : -1)).filter(idx => idx !== -1)
+        : [0, 1, 2, 3, 4, 5];
       let lastWaveError = '';
 
       for (let i = 0; i < singleCardIndices.length; i++) {
         const cardIdx = singleCardIndices[i];
         setGenerationProgressText(
-          `🎨 Generando Imagen IA ${i + 1}/6 en OpenRouter (Anuncio #${cardIdx + 1}) con ${selectedImageModel}...`
+          `🎨 Generando Imagen IA ${i + 1}/${singleCardIndices.length} en OpenRouter (Anuncio #${cardIdx + 1}) con ${selectedImageModel}...`
         );
 
         try {
