@@ -2623,23 +2623,26 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           }
                         ],
                         temperature: 0.72,
-                        max_tokens: 6500
+                        max_tokens: 3200
                       }),
-                      signal: AbortSignal.timeout(35000)
+                      signal: AbortSignal.timeout(40000)
                     });
                     console.log(`[brain-train] model=${llmModel} status:`, orRes.status);
                     if (!orRes.ok) {
                       openRouterErrorText = await orRes.text();
                       console.error(`[brain-train] OpenRouter error (${llmModel}):`, openRouterErrorText);
-                      if (orRes.status === 401 || orRes.status === 402 || orRes.status === 403) {
+                      if (orRes.status === 401) {
                         res.statusCode = 400;
                         res.end(
                           JSON.stringify({
                             success: false,
-                            error: `Error de Autenticación/Créditos en OpenRouter (HTTP ${orRes.status}): ${openRouterErrorText || orRes.statusText}`
+                            error: `Error de Autenticación en OpenRouter (HTTP 401): ${openRouterErrorText || orRes.statusText}`
                           })
                         );
                         return;
+                      }
+                      if (orRes.status === 402 && openRouterErrorText.includes('in_flight_budget_exhausted')) {
+                        await new Promise(r => setTimeout(r, 3000));
                       }
                       continue;
                     }
@@ -2855,14 +2858,14 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     ? rawVidEnv
                     : 'bytedance/seedance-2.5';
 
-                // Lista priorizada de modelos de imagen de OpenAI en OpenRouter
+                // Lista priorizada de modelos de imagen de OpenAI en OpenRouter (prioriza el elegido y luego modelos de baja reserva en vuelo para evitar HTTP 402 in_flight_budget_exhausted)
                 const candidateImageModels = Array.from(
                   new Set([
                     validEnvImgModel,
                     'openai/gpt-image-2.6-flare',
-                    'openai/gpt-image-2.6-sunburst',
                     'openai/gpt-5-image-mini',
                     'openai/gpt-image-1-mini',
+                    'openai/gpt-image-2.6-sunburst',
                     'openai/gpt-5.4-image-2'
                   ])
                 );
@@ -2999,12 +3002,13 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return '';
                 };
 
-                // Helper unificado y rápido que invoca el endpoint exacto de OpenRouter sin bloqueos ni timeouts largos
+                // Helper unificado que evita abortos prematuros (55s timeout), fija max_tokens bajo para no congelar saldo en vuelo y gestiona in_flight_budget_exhausted
                 const invokeOpenRouterImageModel = async (
                   imgModel: string,
                   prompt: string,
                   idx: number,
-                  prefix: string
+                  prefix: string,
+                  isRetryAfterSettle = false
                 ): Promise<{ savedUrl: string; errorText: string; fatalAuth: boolean }> => {
                   const cleanPrompt = sanitizePromptForOpenAiImages(prompt);
                   const fullPrompt = `Generate a high-converting, hyper-impactful commercial Meta Ad poster photograph showing the product in active use producing its real visible result, with bold, legible Spanish advertising typography: ${cleanPrompt}`;
@@ -3026,16 +3030,24 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           n: 1,
                           size: '1024x1024'
                         }),
-                        signal: AbortSignal.timeout(24000)
+                        signal: AbortSignal.timeout(55000)
                       });
 
                       if (!imgApiRes.ok) {
                         const errBody = await imgApiRes.text();
-                        const fatal = imgApiRes.status === 401 || imgApiRes.status === 402;
+                        const isInFlightHold =
+                          imgApiRes.status === 402 &&
+                          (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'));
+                        if (isInFlightHold && !isRetryAfterSettle) {
+                          console.log(`[generate-ad-images] Esperando 3.5s a que OpenRouter libere reserva in-flight para ${imgModel}...`);
+                          await new Promise(r => setTimeout(r, 3500));
+                          return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, true);
+                        }
+                        // Solo HTTP 401 (API Key inválida) es fatal; HTTP 402 en un modelo caro ($30/M) debe pasar al siguiente modelo más liviano ($2/M)
                         return {
                           savedUrl: '',
                           errorText: `HTTP ${imgApiRes.status} (${imgModel}): ${errBody.slice(0, 220)}`,
-                          fatalAuth: fatal
+                          fatalAuth: imgApiRes.status === 401
                         };
                       }
 
@@ -3069,6 +3081,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       body: JSON.stringify({
                         model: imgModel,
                         modalities: ['image', 'text'],
+                        max_tokens: 1024,
                         messages: [
                           {
                             role: 'user',
@@ -3076,16 +3089,23 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           }
                         ]
                       }),
-                      signal: AbortSignal.timeout(24000)
+                      signal: AbortSignal.timeout(55000)
                     });
 
                     if (!orImgRes.ok) {
                       const errBody = await orImgRes.text();
-                      const fatal = orImgRes.status === 401 || orImgRes.status === 402;
+                      const isInFlightHold =
+                        orImgRes.status === 402 &&
+                        (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'));
+                      if (isInFlightHold && !isRetryAfterSettle) {
+                        console.log(`[generate-ad-images] Esperando 3.5s a que OpenRouter libere reserva in-flight para ${imgModel}...`);
+                        await new Promise(r => setTimeout(r, 3500));
+                        return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, true);
+                      }
                       return {
                         savedUrl: '',
                         errorText: `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 220)}`,
-                        fatalAuth: fatal
+                        fatalAuth: orImgRes.status === 401
                       };
                     }
 
@@ -3131,6 +3151,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     lastOpenRouterImgError = errorText;
                     console.warn(`[generate-ad-images] Ad #${idx + 1} Model ${imgModel} failed:`, lastOpenRouterImgError);
                     if (fatalAuth) break;
+                    // Breve pausa de 1.2s antes de pasar al siguiente modelo para que OpenRouter liquide cualquier reserva en vuelo
+                    await new Promise(r => setTimeout(r, 1200));
                   }
 
                   return {
@@ -3452,22 +3474,25 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                             }
                           ],
                           temperature: 0.72,
-                          max_tokens: 2500
+                          max_tokens: 1400
                         }),
-                        signal: AbortSignal.timeout(25000)
+                        signal: AbortSignal.timeout(30000)
                       });
 
                       if (!orRes.ok) {
                         llmErrorText = await orRes.text();
-                        if (orRes.status === 401 || orRes.status === 402) {
+                        if (orRes.status === 401) {
                           res.statusCode = 400;
                           res.end(
                             JSON.stringify({
                               success: false,
-                              error: `Error de OpenRouter al regenerar anuncio (HTTP ${orRes.status}): ${llmErrorText || orRes.statusText}`
+                              error: `Error de OpenRouter al regenerar anuncio (HTTP 401): ${llmErrorText || orRes.statusText}`
                             })
                           );
                           return;
+                        }
+                        if (orRes.status === 402 && llmErrorText.includes('in_flight_budget_exhausted')) {
+                          await new Promise(r => setTimeout(r, 3000));
                         }
                         continue;
                       }
@@ -3553,9 +3578,9 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     new Set([
                       validEnvImgModel,
                       'openai/gpt-image-2.6-flare',
-                      'openai/gpt-image-2.6-sunburst',
                       'openai/gpt-5-image-mini',
                       'openai/gpt-image-1-mini',
+                      'openai/gpt-image-2.6-sunburst',
                       'openai/gpt-5.4-image-2'
                     ])
                   );
@@ -3580,6 +3605,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         : {
                             model: imgModel,
                             modalities: ['image', 'text'],
+                            max_tokens: 1024,
                             messages: [
                               {
                                 role: 'user',
@@ -3588,7 +3614,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                             ]
                           };
 
-                      const orImgRes = await fetch(endpointUrl, {
+                      let orImgRes = await fetch(endpointUrl, {
                         method: 'POST',
                         headers: {
                           Authorization: `Bearer ${openRouterKey}`,
@@ -3597,13 +3623,36 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           'X-Title': 'AutoAds OpenRouter Single Ad Regenerator'
                         },
                         body: JSON.stringify(reqPayload),
-                        signal: AbortSignal.timeout(26000)
+                        signal: AbortSignal.timeout(55000)
                       });
                       if (!orImgRes.ok) {
-                        const errBody = await orImgRes.text();
-                        singleImgError = `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 200)}`;
-                        if (orImgRes.status === 401 || orImgRes.status === 402) break;
-                        continue;
+                        let errBody = await orImgRes.text();
+                        if (
+                          orImgRes.status === 402 &&
+                          (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))
+                        ) {
+                          await new Promise(r => setTimeout(r, 3500));
+                          orImgRes = await fetch(endpointUrl, {
+                            method: 'POST',
+                            headers: {
+                              Authorization: `Bearer ${openRouterKey}`,
+                              'Content-Type': 'application/json',
+                              'HTTP-Referer': getOpenRouterReferer(req),
+                              'X-Title': 'AutoAds OpenRouter Single Ad Regenerator'
+                            },
+                            body: JSON.stringify(reqPayload),
+                            signal: AbortSignal.timeout(55000)
+                          });
+                          if (!orImgRes.ok) {
+                            errBody = await orImgRes.text();
+                          }
+                        }
+                        if (!orImgRes.ok) {
+                          singleImgError = `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 200)}`;
+                          if (orImgRes.status === 401) break;
+                          await new Promise(r => setTimeout(r, 1200));
+                          continue;
+                        }
                       }
                       const orImgJson: any = await orImgRes.json();
                       const firstImgData = Array.isArray(orImgJson?.data) ? orImgJson.data[0] : null;

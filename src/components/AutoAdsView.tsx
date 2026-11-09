@@ -555,21 +555,23 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         }
 
         if (i + 1 < singleCardIndices.length) {
-          await new Promise(r => setTimeout(r, 650));
+          // Pausa de 1.5s para que OpenRouter libere la reserva de créditos en vuelo ("in-flight hold") antes de la siguiente tarjeta
+          await new Promise(r => setTimeout(r, 1500));
         }
       }
 
-      // Segunda pasada de autorrecuperación automática si alguna de las 6 tarjetas quedó pendiente por límite de ráfaga en OpenRouter
+      // Segunda pasada de autorrecuperación automática si alguna tarjeta quedó pendiente por reserva en vuelo ("in_flight_budget_exhausted") en OpenRouter
       const missingIndices = workingAssets
         .map((asset, idx) => (!asset.aiGeneratedImageUrl ? idx : -1))
         .filter(idx => idx !== -1);
 
-      if (missingIndices.length > 0 && missingIndices.length < 6) {
+      if (missingIndices.length > 0) {
+        await new Promise(r => setTimeout(r, 3000));
         for (const missingIdx of missingIndices) {
           setGenerationProgressText(
-            `🔄 Completando imagen faltante del Anuncio #${missingIdx + 1} en OpenRouter (${selectedImageModel})...`
+            `🔄 Liberando reserva en vuelo y completando Anuncio #${missingIdx + 1} en OpenRouter (${selectedImageModel})...`
           );
-          await new Promise(r => setTimeout(r, 850));
+          await new Promise(r => setTimeout(r, 1500));
           try {
             const retryRes = await fetch('/api/autoads/generate-ad-images', {
               method: 'POST',
