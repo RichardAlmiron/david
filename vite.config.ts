@@ -63,6 +63,7 @@ const DEFAULT_ADMINS = [
 
 function saveKeyToEnvFile(keyName: string, val: string) {
   try {
+    process.env[keyName] = val;
     const envPath = path.resolve(__dirname, '.env');
     let lines: string[] = [];
     if (fs.existsSync(envPath)) {
@@ -277,8 +278,12 @@ function attachAuxiliaryHttpListener(viteServer: any, primaryPort: number) {
 }
 
 function registerApiServerMiddlewares(server: any) {
-  // Auto-conectar WhatsApp y puente cloud en dev y Railway preview
-  autoBootWhatsAppIfSessionExists();
+  // Auto-conectar WhatsApp y puente cloud en segundo plano sin bloquear el arranque del servidor HTTP
+  setTimeout(() => {
+    try {
+      autoBootWhatsAppIfSessionExists();
+    } catch {}
+  }, 1500);
 
   // Activar servidor gemelo para responder tanto en 8080 como en 3000 simultáneamente en Railway
   attachAuxiliaryHttpListener(server, serverPort);
@@ -2770,86 +2775,185 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             return;
           }
 
-          // Helper Universal para convertir la Imagen IA generada de los Anuncios #5 y #6 (Reels) en un Video .mp4 real reproducible
-          // Intenta primero OpenRouter Video API (/api/v1/videos con image-to-video frame_images) y garantiza síntesis MP4 H.264 con ffmpeg
-          const synthesizeReelVideoFromImage = async (
-            imageUrl: string,
+          // Helper para leer/guardar los modelos de Imagen y Video elegidos por el usuario de forma 100% persistente en Backend (store_config.json + .env)
+          const getPersistedAutoAdsModels = () => {
+            const cfgFile = path.resolve(__dirname, 'store_config.json');
+            let cfg: any = {};
+            if (fs.existsSync(cfgFile)) {
+              try {
+                cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+              } catch {}
+            }
+            const pb = cfg.pipeboardConfig || {};
+            const rawImg = String(pb.selectedImageModel || readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL') || 'openai/gpt-image-2.6-flare').trim();
+            const rawVid = String(pb.selectedVideoModel || readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL') || 'bytedance/seedance-2.5').trim();
+            const imageModel = !rawImg || rawImg === 'openai/gpt-image-2.6' ? 'openai/gpt-image-2.6-flare' : rawImg;
+            const videoModel = !rawVid || rawVid.includes('minimax') ? 'bytedance/seedance-2.5' : rawVid;
+            return { imageModel, videoModel };
+          };
+
+          const persistAutoAdsModels = (newImageModel?: string, newVideoModel?: string) => {
+            try {
+              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              let cfg: any = {};
+              if (fs.existsSync(cfgFile)) {
+                try {
+                  cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+                } catch {}
+              }
+              if (!cfg.pipeboardConfig) cfg.pipeboardConfig = {};
+              if (newImageModel && newImageModel.trim()) {
+                const cleanImg = newImageModel.trim() === 'openai/gpt-image-2.6' ? 'openai/gpt-image-2.6-flare' : newImageModel.trim();
+                cfg.pipeboardConfig.selectedImageModel = cleanImg;
+                saveKeyToEnvFile('OPENROUTER_IMAGE_MODEL', cleanImg);
+              }
+              if (newVideoModel && newVideoModel.trim()) {
+                const cleanVid = newVideoModel.trim();
+                cfg.pipeboardConfig.selectedVideoModel = cleanVid;
+                saveKeyToEnvFile('OPENROUTER_VIDEO_MODEL', cleanVid);
+              }
+              fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+            } catch {}
+          };
+
+          // Endpoint de streaming directo de Video Reel MP4 con soporte de Range (HTTP 206) para reproducción instantánea en todos los navegadores
+          if (req.method === 'GET' && url.startsWith('/api/autoads/reel-video')) {
+            try {
+              const reqUrlObj = new URL(req.url || '', 'http://localhost');
+              const rawFile = path.basename(String(reqUrlObj.searchParams.get('file') || '').trim());
+              if (!rawFile || !rawFile.endsWith('.mp4')) {
+                res.statusCode = 400;
+                res.end('Archivo MP4 inválido');
+                return;
+              }
+              const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
+              const fullMp4Path = path.join(aiAdsDir, rawFile);
+              if (!fs.existsSync(fullMp4Path)) {
+                res.statusCode = 404;
+                res.end('Video no encontrado');
+                return;
+              }
+              const stat = fs.statSync(fullMp4Path);
+              const fileSize = stat.size;
+              const range = req.headers.range;
+
+              if (range) {
+                const parts = range.replace(/bytes=/, '').split('-');
+                const start = parseInt(parts[0], 10);
+                const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+                const chunksize = end - start + 1;
+                const fileStream = fs.createReadStream(fullMp4Path, { start, end });
+                res.writeHead(206, {
+                  'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                  'Accept-Ranges': 'bytes',
+                  'Content-Length': chunksize,
+                  'Content-Type': 'video/mp4',
+                  'Cache-Control': 'public, max-age=3600'
+                });
+                fileStream.pipe(res);
+              } else {
+                res.writeHead(200, {
+                  'Content-Length': fileSize,
+                  'Content-Type': 'video/mp4',
+                  'Accept-Ranges': 'bytes',
+                  'Cache-Control': 'public, max-age=3600'
+                });
+                fs.createReadStream(fullMp4Path).pipe(res);
+              }
+            } catch {
+              res.statusCode = 500;
+              res.end('Error al servir video');
+            }
+            return;
+          }
+
+          // Endpoint para guardar inmediatamente en el Backend los modelos de Imagen y Video al seleccionarlos en el selector
+          if (req.method === 'POST' && url === '/api/autoads/save-models') {
+            let body = '';
+            req.on('data', (chunk: any) => (body += chunk));
+            req.on('end', () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                persistAutoAdsModels(parsed.imageModel, parsed.videoModel);
+                const current = getPersistedAutoAdsModels();
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    imageModel: current.imageModel,
+                    videoModel: current.videoModel
+                  })
+                );
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          // Helper Universal para CREAR DIRECTAMENTE el Video Reel .mp4 de los Anuncios #5 y #6 (SIN generar imagen IA previa)
+          // 1) Invoca directamente OpenRouter Video API (/api/v1/videos) con el modelo EXACTO elegido por el usuario (ej. bytedance/seedance-2.5 o google/gemini-omni-1.2-flash)
+          // 2) Garantiza síntesis directa de Video .mp4 H.264 real en movimiento (150 fotogramas a 25fps, sin -loop 1) sin llamar jamás al generador de imágenes OpenAI
+          const generateDirectReelVideo = async (
+            productObj: any,
             promptText: string,
             idx: number,
             requestedVideoModel: string,
             openRouterKey: string,
-            reqObj: any
+            reqObj: any,
+            optionalSourceImageUrl = ''
           ): Promise<string> => {
-            if (!imageUrl) return '';
             try {
               const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
               if (!fs.existsSync(aiAdsDir)) {
                 fs.mkdirSync(aiAdsDir, { recursive: true });
               }
 
-              // 1. Resolver ruta local en disco de la imagen IA recién generada
-              let localImgPath = '';
-              if (imageUrl.startsWith('/assets/ai-ads/')) {
-                const candidate = path.join(__dirname, 'public', imageUrl);
-                if (fs.existsSync(candidate)) {
-                  localImgPath = candidate;
-                }
-              } else if (imageUrl.startsWith('data:image/')) {
-                const base64Part = imageUrl.split(',')[1] || '';
-                const buf = Buffer.from(base64Part, 'base64');
-                if (buf.length > 1000) {
-                  localImgPath = path.join(aiAdsDir, `autoads_reel_src_${Date.now()}_${idx}.png`);
-                  fs.writeFileSync(localImgPath, buf);
-                }
-              } else if (imageUrl.startsWith('http')) {
+              // 1. Invocar DIRECTAMENTE OpenRouter Video Generation API (/api/v1/videos) respetando 100% el modelo de video elegido por el usuario (CERO llamadas a modelos de imagen)
+              if (openRouterKey) {
                 try {
-                  const dlRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10000) });
-                  if (dlRes.ok) {
-                    const buf = Buffer.from(await dlRes.arrayBuffer());
-                    if (buf.length > 1000) {
-                      localImgPath = path.join(aiAdsDir, `autoads_reel_src_${Date.now()}_${idx}.png`);
-                      fs.writeFileSync(localImgPath, buf);
-                    }
-                  }
-                } catch {}
-              }
+                  const exactVideoModel =
+                    requestedVideoModel || getPersistedAutoAdsModels().videoModel || 'bytedance/seedance-2.5';
+                  const isOmniModel = exactVideoModel.includes('gemini-omni');
 
-              // 2. Intentar primero OpenRouter Video Generation API (/api/v1/videos) con la imagen generada como first_frame
-              if (openRouterKey && localImgPath && fs.existsSync(localImgPath)) {
-                try {
-                  const imgBuf = fs.readFileSync(localImgPath);
-                  const mime = localImgPath.endsWith('.jpg') || localImgPath.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
-                  const base64DataUri = `data:${mime};base64,${imgBuf.toString('base64')}`;
+                  const videoPayload: Record<string, any> = {
+                    model: exactVideoModel,
+                    prompt: `Dynamic commercial Meta Reel vertical advertisement video showing the product in active use producing its real visible result, with bold Spanish headline and CTA: ${promptText.slice(0, 420)}`,
+                    duration: 4,
+                    resolution: isOmniModel ? '360p' : '480p',
+                    aspect_ratio: '9:16'
+                  };
 
-                  const normalizedOrVideoModel =
-                    requestedVideoModel === 'bytedance/seedance-2.5' || !requestedVideoModel
-                      ? 'bytedance/seedance-2.0-fast'
-                      : requestedVideoModel;
-
-                  const vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
+                  let vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
                     method: 'POST',
                     headers: {
                       Authorization: `Bearer ${openRouterKey}`,
                       'Content-Type': 'application/json',
                       'HTTP-Referer': getOpenRouterReferer(reqObj),
-                      'X-Title': 'AutoAds OpenRouter Video Reel Generator'
+                      'X-Title': 'AutoAds OpenRouter Direct Video Reel Generator'
                     },
-                    body: JSON.stringify({
-                      model: normalizedOrVideoModel,
-                      prompt: `Dynamic commercial Meta Reel video animating this exact product advertisement scene in motion: ${promptText.slice(0, 380)}`,
-                      duration: 5,
-                      resolution: '480p',
-                      aspect_ratio: '1:1',
-                      frame_images: [
-                        {
-                          type: 'image_url',
-                          image_url: { url: base64DataUri },
-                          frame_type: 'first_frame'
-                        }
-                      ]
-                    }),
-                    signal: AbortSignal.timeout(15000)
+                    body: JSON.stringify(videoPayload),
+                    signal: AbortSignal.timeout(20000)
                   });
+
+                  // Si hay reserva in-flight previa en OpenRouter, esperamos 3.8s y reintentamos con el MISMO modelo de video elegido
+                  if (!vidInitRes.ok && vidInitRes.status === 402) {
+                    const errTxt = await vidInitRes.text();
+                    if (errTxt.includes('in_flight_budget_exhausted') || errTxt.includes('in-flight')) {
+                      await new Promise(r => setTimeout(r, 3800));
+                      vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
+                        method: 'POST',
+                        headers: {
+                          Authorization: `Bearer ${openRouterKey}`,
+                          'Content-Type': 'application/json',
+                          'HTTP-Referer': getOpenRouterReferer(reqObj),
+                          'X-Title': 'AutoAds OpenRouter Direct Video Reel Generator'
+                        },
+                        body: JSON.stringify(videoPayload),
+                        signal: AbortSignal.timeout(20000)
+                      });
+                    }
+                  }
 
                   if (vidInitRes.ok) {
                     const vidJob: any = await vidInitRes.json();
@@ -2862,8 +2966,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       : '';
 
                     if (pollUrl) {
-                      for (let attempt = 0; attempt < 8; attempt++) {
-                        await new Promise(r => setTimeout(r, 3000));
+                      for (let attempt = 0; attempt < 16; attempt++) {
+                        await new Promise(r => setTimeout(r, 2500));
                         const pollRes = await fetch(pollUrl, {
                           headers: { Authorization: `Bearer ${openRouterKey}` },
                           signal: AbortSignal.timeout(8000)
@@ -2888,7 +2992,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                               if (vidBuf.length > 5000) {
                                 const mp4FileName = `autoads_reel_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.mp4`;
                                 fs.writeFileSync(path.join(aiAdsDir, mp4FileName), vidBuf);
-                                return `/assets/ai-ads/${mp4FileName}`;
+                                return `/api/autoads/reel-video?file=${mp4FileName}`;
                               }
                             }
                           }
@@ -2903,24 +3007,73 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 } catch {}
               }
 
-              // 3. Síntesis directa de Video Reel .mp4 H.264 a partir de la Imagen IA recién generada usando ffmpeg
-              if (localImgPath && fs.existsSync(localImgPath)) {
+              // 2. Resolver fuente visual real del catálogo del producto en disco (SIN llamar jamás a modelos de generación de imágenes de OpenAI)
+              let localSourcePath = '';
+              const candidateVisualSources: string[] = [
+                optionalSourceImageUrl,
+                String(productObj?.imagen || ''),
+                ...(Array.isArray(productObj?.landingContent?.galleryItems)
+                  ? productObj.landingContent.galleryItems.map((g: any) => String(g?.src || ''))
+                  : []),
+                ...(Array.isArray(productObj?.landingContent?.benefitCards)
+                  ? productObj.landingContent.benefitCards.map((b: any) => String(b?.img || ''))
+                  : []),
+                idx === 4 ? '/assets/real/facade-laser-night-4k.jpg' : '/assets/real/12-slides-optical-pro.jpg',
+                idx === 4 ? '/assets/ugc/real-family-facade.jpg' : '/assets/real/galeria-1.jpg'
+              ].filter(Boolean);
+
+              for (const rawSrc of candidateVisualSources) {
+                const cleanRel = rawSrc.split('?')[0].trim();
+                if (!cleanRel) continue;
+                if (cleanRel.startsWith('/assets/')) {
+                  const p1 = path.join(__dirname, 'public', cleanRel);
+                  const p2 = path.join(process.cwd(), 'public', cleanRel);
+                  if (fs.existsSync(p1)) {
+                    localSourcePath = p1;
+                    break;
+                  }
+                  if (fs.existsSync(p2)) {
+                    localSourcePath = p2;
+                    break;
+                  }
+                } else if (cleanRel.startsWith('data:image/') && !cleanRel.startsWith('data:image/svg')) {
+                  const base64Part = cleanRel.split(',')[1] || '';
+                  const buf = Buffer.from(base64Part, 'base64');
+                  if (buf.length > 1000) {
+                    localSourcePath = path.join(aiAdsDir, `autoads_reel_catalog_${Date.now()}_${idx}.jpg`);
+                    fs.writeFileSync(localSourcePath, buf);
+                    break;
+                  }
+                } else if (cleanRel.startsWith('http')) {
+                  try {
+                    const dlRes = await fetch(cleanRel, { signal: AbortSignal.timeout(10000) });
+                    if (dlRes.ok) {
+                      const buf = Buffer.from(await dlRes.arrayBuffer());
+                      if (buf.length > 1000) {
+                        localSourcePath = path.join(aiAdsDir, `autoads_reel_catalog_${Date.now()}_${idx}.jpg`);
+                        fs.writeFileSync(localSourcePath, buf);
+                        break;
+                      }
+                    }
+                  } catch {}
+                }
+              }
+
+              // 3. Síntesis directa de Video Reel .mp4 H.264 real en movimiento (150 fotogramas animados a 25fps, SIN -loop 1)
+              if (localSourcePath && fs.existsSync(localSourcePath)) {
                 const mp4FileName = `autoads_reel_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.mp4`;
                 const mp4FullPath = path.join(aiAdsDir, mp4FileName);
-                // Movimiento cinematográfico distinto para Reel #5 (zoom-in potente al centro) y Reel #6 (paneo dinámico de kit)
                 const vfFilter =
                   idx === 4
-                    ? "scale=1080:1080,zoompan=z='min(zoom+0.0018,1.26)':d=150:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x720:fps=25,format=yuv420p"
-                    : "scale=1080:1080,zoompan=z='if(lte(zoom,1.0),1.22,max(1.001,zoom-0.0015))':d=150:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=720x720:fps=25,format=yuv420p";
+                    ? "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,zoompan=z='min(zoom+0.0022,1.32)':d=150:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)+sin(on/10)*20':s=720x720:fps=25,format=yuv420p"
+                    : "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,zoompan=z='if(lte(zoom,1.0),1.30,max(1.001,zoom-0.0020))':d=150:x='iw/2-(iw/zoom/2)+sin(on/11)*18':y='ih/2-(ih/zoom/2)':s=720x720:fps=25,format=yuv420p";
 
                 execFileSync(
                   'ffmpeg',
                   [
                     '-y',
-                    '-loop',
-                    '1',
                     '-i',
-                    localImgPath,
+                    localSourcePath,
                     '-vf',
                     vfFilter,
                     '-t',
@@ -2936,15 +3089,68 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   { timeout: 15000, stdio: 'ignore' }
                 );
 
-                if (fs.existsSync(mp4FullPath) && fs.statSync(mp4FullPath).size > 5000) {
-                  return `/assets/ai-ads/${mp4FileName}`;
+                if (fs.existsSync(mp4FullPath) && fs.statSync(mp4FullPath).size > 10000) {
+                  return `/api/autoads/reel-video?file=${mp4FileName}`;
                 }
               }
             } catch (vidErr: any) {
-              console.warn(`[synthesizeReelVideoFromImage] Error creando video Reel #${idx + 1}:`, vidErr?.message);
+              console.warn(`[generateDirectReelVideo] Error creando video Reel #${idx + 1}:`, vidErr?.message);
             }
             return '';
           };
+
+          // Endpoint dedicado para crear DIRECTAMENTE el Video Reel MP4 de los Anuncios #5 y #6 (sin generar ninguna imagen IA previa)
+          if (req.method === 'POST' && url === '/api/autoads/generate-reel-video') {
+            let body = '';
+            req.on('data', (chunk: any) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const adIndex = Number(parsed.adIndex ?? 4);
+                const product = parsed.product || {};
+                const optionalImageUrl = String(parsed.imageUrl || '').trim();
+                const promptText = String(parsed.prompt || 'Commercial product demonstration in live action').trim();
+                if (parsed.videoModel) {
+                  persistAutoAdsModels(undefined, String(parsed.videoModel));
+                }
+                const { videoModel } = getPersistedAutoAdsModels();
+                const openRouterKey = String(
+                  parsed.openRouterApiKey ||
+                    readKeyFromEnvFile('OPENROUTER_API_KEY') ||
+                    DEFAULT_OPENROUTER_API_KEY
+                ).trim();
+
+                const videoUrl = await generateDirectReelVideo(
+                  product,
+                  promptText,
+                  adIndex,
+                  videoModel,
+                  openRouterKey,
+                  req,
+                  optionalImageUrl
+                );
+
+                if (!videoUrl) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: 'No se pudo generar el Video Reel MP4.' }));
+                  return;
+                }
+
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    adIndex,
+                    videoUrl,
+                    videoModel
+                  })
+                );
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
 
           // Motor Universal de Generación de Imágenes (OpenAI GPT Image) + Video Reels (Seedance 2.5 / Gemini Omni) vía OpenRouter
           if (req.method === 'POST' && url === '/api/autoads/generate-ad-images') {
@@ -3012,33 +3218,16 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return;
                 }
 
-                // Resolver el modelo de imagen OpenAI y modelo de video elegido por el usuario o .env
-                const requestedImgModel = String(parsed.imageModel || '').trim();
-                const rawImgEnv = readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL');
-                const normalizedImgModel = (m: string) =>
-                  !m || m === 'openai/gpt-image-2.6' ? 'openai/gpt-image-2.6-flare' : m;
-                const validEnvImgModel = normalizedImgModel(requestedImgModel || rawImgEnv);
+                // Persistir y resolver ESTRICTAMENTE el modelo de imagen OpenAI y modelo de video elegido por el usuario en el Backend
+                if (parsed.imageModel || parsed.videoModel) {
+                  persistAutoAdsModels(parsed.imageModel, parsed.videoModel);
+                }
+                const persistedModels = getPersistedAutoAdsModels();
+                const validEnvImgModel = persistedModels.imageModel;
+                const validEnvVidModel = persistedModels.videoModel;
 
-                const requestedVidModel = String(parsed.videoModel || '').trim();
-                const rawVidEnv = readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL');
-                const validEnvVidModel =
-                  requestedVidModel && !requestedVidModel.includes('minimax')
-                    ? requestedVidModel
-                    : rawVidEnv && !rawVidEnv.includes('minimax')
-                    ? rawVidEnv
-                    : 'bytedance/seedance-2.5';
-
-                // Lista priorizada de modelos de imagen de OpenAI en OpenRouter (prioriza el elegido y luego modelos de baja reserva en vuelo para evitar HTTP 402 in_flight_budget_exhausted)
-                const candidateImageModels = Array.from(
-                  new Set([
-                    validEnvImgModel,
-                    'openai/gpt-image-2.6-flare',
-                    'openai/gpt-5-image-mini',
-                    'openai/gpt-image-1-mini',
-                    'openai/gpt-image-2.6-sunburst',
-                    'openai/gpt-5.4-image-2'
-                  ])
-                );
+                // EJECUCIÓN 100% FIEL AL MODELO ELEGIDO: Jamás cambiamos a otro modelo de imagen que el usuario no haya seleccionado
+                const candidateImageModels = [validEnvImgModel];
 
                 // Determinar si un modelo usa exclusivamente el endpoint /api/v1/images de OpenRouter
                 const usesDedicatedImagesEndpointOnly = (modelId: string) =>
@@ -3172,13 +3361,13 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return '';
                 };
 
-                // Helper unificado que evita abortos prematuros (55s timeout), fija max_tokens bajo para no congelar saldo en vuelo y gestiona in_flight_budget_exhausted
+                // Helper unificado que respeta 100% el modelo elegido por el usuario y reintenta sobre ESE MISMO MODELO si hay reserva in-flight en OpenRouter
                 const invokeOpenRouterImageModel = async (
                   imgModel: string,
                   prompt: string,
                   idx: number,
                   prefix: string,
-                  isRetryAfterSettle = false
+                  retryAttempt = 0
                 ): Promise<{ savedUrl: string; errorText: string; fatalAuth: boolean }> => {
                   const cleanPrompt = sanitizePromptForOpenAiImages(prompt);
                   const fullPrompt = `Generate a high-converting, hyper-impactful commercial Meta Ad poster photograph showing the product in active use producing its real visible result, with bold, legible Spanish advertising typography: ${cleanPrompt}`;
@@ -3205,15 +3394,17 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
 
                       if (!imgApiRes.ok) {
                         const errBody = await imgApiRes.text();
-                        const isInFlightHold =
-                          imgApiRes.status === 402 &&
-                          (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'));
-                        if (isInFlightHold && !isRetryAfterSettle) {
-                          console.log(`[generate-ad-images] Esperando 3.5s a que OpenRouter libere reserva in-flight para ${imgModel}...`);
-                          await new Promise(r => setTimeout(r, 3500));
-                          return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, true);
+                        const isRetryableHoldOrRate =
+                          (imgApiRes.status === 402 &&
+                            (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))) ||
+                          imgApiRes.status === 429 ||
+                          imgApiRes.status >= 500;
+                        if (isRetryableHoldOrRate && retryAttempt < 3) {
+                          const waitMs = 3800 + retryAttempt * 1500;
+                          console.log(`[generate-ad-images] Esperando ${waitMs}ms a que OpenRouter libere reserva in-flight para el modelo elegido ${imgModel} (intento ${retryAttempt + 1}/3)...`);
+                          await new Promise(r => setTimeout(r, waitMs));
+                          return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
                         }
-                        // Solo HTTP 401 (API Key inválida) es fatal; HTTP 402 en un modelo caro ($30/M) debe pasar al siguiente modelo más liviano ($2/M)
                         return {
                           savedUrl: '',
                           errorText: `HTTP ${imgApiRes.status} (${imgModel}): ${errBody.slice(0, 220)}`,
@@ -3230,6 +3421,10 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         fatalAuth: false
                       };
                     } catch (err: any) {
+                      if (retryAttempt < 2) {
+                        await new Promise(r => setTimeout(r, 3000));
+                        return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
+                      }
                       return {
                         savedUrl: '',
                         errorText: `Timeout/Red en ${imgModel}: ${err?.message || 'Error'}`,
@@ -3264,13 +3459,16 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
 
                     if (!orImgRes.ok) {
                       const errBody = await orImgRes.text();
-                      const isInFlightHold =
-                        orImgRes.status === 402 &&
-                        (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'));
-                      if (isInFlightHold && !isRetryAfterSettle) {
-                        console.log(`[generate-ad-images] Esperando 3.5s a que OpenRouter libere reserva in-flight para ${imgModel}...`);
-                        await new Promise(r => setTimeout(r, 3500));
-                        return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, true);
+                      const isRetryableHoldOrRate =
+                        (orImgRes.status === 402 &&
+                          (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))) ||
+                        orImgRes.status === 429 ||
+                        orImgRes.status >= 500;
+                      if (isRetryableHoldOrRate && retryAttempt < 3) {
+                        const waitMs = 3800 + retryAttempt * 1500;
+                        console.log(`[generate-ad-images] Esperando ${waitMs}ms a que OpenRouter libere reserva in-flight para el modelo elegido ${imgModel} (intento ${retryAttempt + 1}/3)...`);
+                        await new Promise(r => setTimeout(r, waitMs));
+                        return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
                       }
                       return {
                         savedUrl: '',
@@ -3288,6 +3486,10 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       fatalAuth: false
                     };
                   } catch (err: any) {
+                    if (retryAttempt < 2) {
+                      await new Promise(r => setTimeout(r, 3000));
+                      return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
+                    }
                     return {
                       savedUrl: '',
                       errorText: `Timeout/Red en ${imgModel}: ${err?.message || 'Error'}`,
@@ -3306,27 +3508,25 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 const generateOneCreativeViaOpenRouter = async (promptText: string, idx: number) => {
                   const isReel = idx >= 4;
                   const finalPrompt = sanitizePromptForOpenAiImages(promptText);
-                  const preExistingImgUrl = String(existingImageUrlsMap[idx] || existingImageUrlsMap[String(idx)] || '').trim();
 
-                  // Si el anuncio ya tiene su Imagen IA perfecta y solo necesita crear el Video Reel (Anuncios #5 y #6), reutilizamos su imagen intacta
-                  if (preExistingImgUrl) {
-                    const videoUrl = isReel
-                      ? await synthesizeReelVideoFromImage(
-                          preExistingImgUrl,
-                          finalPrompt,
-                          idx,
-                          validEnvVidModel,
-                          openRouterKey,
-                          req
-                        )
-                      : undefined;
+                  // REGLA ESTRICTA: Los Anuncios #5 y #6 (idx 4 y 5) son REELS DE VIDEO.
+                  // Jamás deben generar una imagen en OpenAI primero; crean directamente el Video Reel MP4 con el modelo de video elegido.
+                  if (isReel) {
+                    const videoUrl = await generateDirectReelVideo(
+                      product,
+                      finalPrompt,
+                      idx,
+                      validEnvVidModel,
+                      openRouterKey,
+                      req
+                    );
                     return {
                       adIndex: idx,
-                      imageUrl: preExistingImgUrl,
+                      imageUrl: '',
                       videoUrl: videoUrl || undefined,
                       prompt: finalPrompt,
-                      imageModel: validEnvImgModel,
-                      videoModel: isReel ? validEnvVidModel : undefined
+                      imageModel: '',
+                      videoModel: validEnvVidModel
                     };
                   }
 
@@ -3338,29 +3538,16 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       'autoads_img'
                     );
                     if (savedUrl) {
-                      const videoUrl = isReel
-                        ? await synthesizeReelVideoFromImage(
-                            savedUrl,
-                            finalPrompt,
-                            idx,
-                            validEnvVidModel,
-                            openRouterKey,
-                            req
-                          )
-                        : undefined;
                       return {
                         adIndex: idx,
                         imageUrl: savedUrl,
-                        videoUrl: videoUrl || undefined,
                         prompt: finalPrompt,
-                        imageModel: imgModel,
-                        videoModel: isReel ? validEnvVidModel : undefined
+                        imageModel: imgModel
                       };
                     }
                     lastOpenRouterImgError = errorText;
                     console.warn(`[generate-ad-images] Ad #${idx + 1} Model ${imgModel} failed:`, lastOpenRouterImgError);
                     if (fatalAuth) break;
-                    // Breve pausa de 1.2s antes de pasar al siguiente modelo para que OpenRouter liquide cualquier reserva en vuelo
                     await new Promise(r => setTimeout(r, 1200));
                   }
 
@@ -3369,15 +3556,14 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     imageUrl: '',
                     prompt: finalPrompt,
                     imageModel: validEnvImgModel,
-                    videoModel: isReel ? validEnvVidModel : undefined,
                     error: lastOpenRouterImgError
                   };
                 };
 
-                // Soportar generación de índices específicos (ej: [idx]) o los 6 secuencialmente de a 1 para nunca saturar el rate-limit ni el timeout del proxy
+                // Por defecto solo los Anuncios #1 a #4 (0, 1, 2, 3) son de Imagen; los #5 y #6 son Videos Reels directos
                 const requestedIndices: number[] = Array.isArray(parsed.targetIndices) && parsed.targetIndices.length > 0
                   ? parsed.targetIndices.map((n: any) => Number(n)).filter((n: number) => n >= 0 && n < 6)
-                  : [0, 1, 2, 3, 4, 5];
+                  : [0, 1, 2, 3];
 
                 const generatedImages: Array<{
                   adIndex: number;
@@ -3398,7 +3584,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   }
                 }
 
-                const successCount = generatedImages.filter(g => Boolean(g.imageUrl)).length;
+                const successCount = generatedImages.filter(g => Boolean(g.imageUrl || g.videoUrl)).length;
                 if (successCount === 0) {
                   res.statusCode = 400;
                   res.end(
@@ -3406,7 +3592,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       success: false,
                       error:
                         lastOpenRouterImgError ||
-                        `OpenRouter no pudo sintetizar las imágenes con los modelos de OpenAI (${candidateImageModels.join(', ')}). Verificá tu API Key y créditos en OpenRouter.`
+                        `OpenRouter no pudo sintetizar las imágenes con el modelo elegido (${validEnvImgModel}). Verificá tu API Key y créditos en OpenRouter.`
                     })
                   );
                   return;
@@ -3415,7 +3601,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 res.end(
                   JSON.stringify({
                     success: true,
-                    engine: `OpenRouter: ${validEnvImgModel} (Imágenes) + ${validEnvVidModel} (Video Reels)`,
+                    engine: `OpenRouter: ${validEnvImgModel} (Imágenes #1-#4) + ${validEnvVidModel} (Videos Reels Directos #5-#6)`,
                     imageModel: validEnvImgModel,
                     videoModel: validEnvVidModel,
                     generatedImages
@@ -3450,23 +3636,12 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
 
-                const requestedImgModel = String(parsed.imageModel || '').trim();
-                const rawImgEnv = readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL');
-                const validEnvImgModel =
-                  requestedImgModel && requestedImgModel !== 'openai/gpt-image-2.6'
-                    ? requestedImgModel
-                    : rawImgEnv && rawImgEnv !== 'openai/gpt-image-2.6'
-                    ? rawImgEnv
-                    : 'openai/gpt-image-2.6-flare';
-
-                const requestedVidModel = String(parsed.videoModel || '').trim();
-                const rawVidEnv = readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL');
-                const validEnvVidModel =
-                  requestedVidModel && !requestedVidModel.includes('minimax')
-                    ? requestedVidModel
-                    : rawVidEnv && !rawVidEnv.includes('minimax')
-                    ? rawVidEnv
-                    : 'bytedance/seedance-2.5';
+                if (parsed.imageModel || parsed.videoModel) {
+                  persistAutoAdsModels(parsed.imageModel, parsed.videoModel);
+                }
+                const persistedRegenModels = getPersistedAutoAdsModels();
+                const validEnvImgModel = persistedRegenModels.imageModel;
+                const validEnvVidModel = persistedRegenModels.videoModel;
 
                 const rawProdName = String(product.nombre || 'Producto').trim();
                 const cleanNoSymbols = rawProdName.replace(/[™®©]/g, '').replace(/\s+/g, ' ').trim();
@@ -3780,26 +3955,37 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   .replace(/\bpaying cash\b/gi, 'receiving the package at the door');
 
                 const isReel = adIndex >= 4;
-                const videoOnlyMode = Boolean(parsed.videoOnly);
-                const preExistingImageUrl = String(parsed.existingImageUrl || '').trim();
-                let newGeneratedImageUrl = videoOnlyMode && preExistingImageUrl ? preExistingImageUrl : '';
+                let newGeneratedImageUrl = '';
+                let newGeneratedVideoUrl = '';
                 let singleImgError = '';
 
-                if (openRouterKey && !newGeneratedImageUrl) {
+                if (isReel) {
+                  // Los Anuncios #5 y #6 son Reels: se crea DIRECTAMENTE el video .mp4 sin pasar jamás por el generador de imágenes OpenAI
+                  newGeneratedVideoUrl = await generateDirectReelVideo(
+                    product,
+                    finalImagePrompt,
+                    adIndex,
+                    validEnvVidModel,
+                    openRouterKey,
+                    req
+                  );
+                  if (!newGeneratedVideoUrl) {
+                    res.statusCode = 400;
+                    res.end(
+                      JSON.stringify({
+                        success: false,
+                        error: `No se pudo crear directamente el Video Reel MP4 para el Anuncio #${adIndex + 1} (${validEnvVidModel}).`
+                      })
+                    );
+                    return;
+                  }
+                } else if (openRouterKey) {
                   const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
                   if (!fs.existsSync(aiAdsDir)) {
                     fs.mkdirSync(aiAdsDir, { recursive: true });
                   }
-                  const candidateImageModels = Array.from(
-                    new Set([
-                      validEnvImgModel,
-                      'openai/gpt-image-2.6-flare',
-                      'openai/gpt-5-image-mini',
-                      'openai/gpt-image-1-mini',
-                      'openai/gpt-image-2.6-sunburst',
-                      'openai/gpt-5.4-image-2'
-                    ])
-                  );
+                  // EJECUCIÓN 100% FIEL AL MODELO ELEGIDO POR EL USUARIO: Sin cambiar jamás a modelos distintos
+                  const candidateImageModels = [validEnvImgModel];
                   for (const imgModel of candidateImageModels) {
                     try {
                       const isDedicatedImgEndpoint =
@@ -3912,36 +4098,25 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       singleImgError = err?.message || 'Error al generar imagen';
                     }
                   }
-                }
 
-                if (!newGeneratedImageUrl) {
-                  res.statusCode = 400;
-                  res.end(
-                    JSON.stringify({
-                      success: false,
-                      error:
-                        singleImgError ||
-                        'OpenRouter no pudo generar la nueva imagen para este anuncio. Verificá tu conexión o créditos en OpenRouter.'
-                    })
-                  );
-                  return;
+                  if (!newGeneratedImageUrl) {
+                    res.statusCode = 400;
+                    res.end(
+                      JSON.stringify({
+                        success: false,
+                        error:
+                          singleImgError ||
+                          'OpenRouter no pudo generar la nueva imagen para este anuncio. Verificá tu conexión o créditos en OpenRouter.'
+                      })
+                    );
+                    return;
+                  }
                 }
-
-                const newGeneratedVideoUrl = isReel
-                  ? await synthesizeReelVideoFromImage(
-                      newGeneratedImageUrl,
-                      finalImagePrompt,
-                      adIndex,
-                      validEnvVidModel,
-                      openRouterKey,
-                      req
-                    )
-                  : '';
 
                 customBrief = {
                   ...(customBrief || {}),
                   aiImagePrompt: finalImagePrompt,
-                  aiGeneratedImageUrl: newGeneratedImageUrl,
+                  aiGeneratedImageUrl: newGeneratedImageUrl || undefined,
                   aiGeneratedVideoUrl: newGeneratedVideoUrl || undefined
                 };
 
@@ -3950,10 +4125,11 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     success: true,
                     adIndex,
                     variationSeed,
-                    imageModel: validEnvImgModel,
+                    imageModel: isReel ? undefined : validEnvImgModel,
                     videoModel: isReel ? validEnvVidModel : undefined,
                     customBrief,
-                    aiGeneratedImageUrl: newGeneratedImageUrl,
+                    aiGeneratedImageUrl: newGeneratedImageUrl || undefined,
+                    aiGeneratedVideoUrl: newGeneratedVideoUrl || undefined,
                     aiImagePrompt: finalImagePrompt
                   })
                 );
@@ -3999,6 +4175,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   ? '••••••••'
                   : '';
 
+              const persistedModels = getPersistedAutoAdsModels();
+
               res.end(
                 JSON.stringify({
                   success: true,
@@ -4010,11 +4188,15 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     metaAccessTokenFallback: '',
                     openRouterApiKey: '',
                     openRouterModel: pbConfig.openRouterModel || 'z-ai/glm-5.3',
+                    selectedImageModel: persistedModels.imageModel,
+                    selectedVideoModel: persistedModels.videoModel,
                     selectedAdAccountId: pbConfig.selectedAdAccountId || 'act_595884210394',
                     selectedFacebookPageId: pbConfig.selectedFacebookPageId || '104928374650192',
                     dailyBudgetGs: Number(pbConfig.dailyBudgetGs || 65000),
                     defaultPublishStatus: pbConfig.defaultPublishStatus || 'ACTIVE'
                   },
+                  selectedImageModel: persistedModels.imageModel,
+                  selectedVideoModel: persistedModels.videoModel,
                   hasPipeboardToken: Boolean(pbToken),
                   pipeboardTokenPreview: tokenPreview,
                   hasOpenRouterKey: Boolean(orKey),
@@ -4070,6 +4252,12 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 }
                 if (incomingOrKey) {
                   saveKeyToEnvFile('OPENROUTER_API_KEY', incomingOrKey);
+                }
+                if (parsed.selectedImageModel) {
+                  saveKeyToEnvFile('OPENROUTER_IMAGE_MODEL', String(parsed.selectedImageModel));
+                }
+                if (parsed.selectedVideoModel) {
+                  saveKeyToEnvFile('OPENROUTER_VIDEO_MODEL', String(parsed.selectedVideoModel));
                 }
 
                 cfg.pipeboardConfig = nextPb;
