@@ -812,7 +812,7 @@ export async function callDeepgramAgentLLM(
                     JSON.stringify({
                       reply: assistantText.trim(),
                       locationTextConfirmation: '',
-                      nextStep: 1,
+                      nextStep: 0,
                       congruent: true,
                       orderConfirmed: false
                     })
@@ -834,7 +834,7 @@ export async function callDeepgramAgentLLM(
               JSON.stringify({
                 reply: assistantText.trim(),
                 locationTextConfirmation: '',
-                nextStep: 1,
+                nextStep: 0,
                 congruent: true,
                 orderConfirmed: false
               })
@@ -1861,12 +1861,12 @@ async function pollCloudCommandsAndOrders() {
               });
               const historyInfo = getChatHistory(cleanPhone);
               if (historyInfo.mode === 'automatico') {
-                const { reply, locationTextConfirmation, matchedOrder, convStep } = await generateSmartAiReply(
+                const { reply, locationTextConfirmation, matchedOrder, convStep, forceAudioReply } = await generateSmartAiReply(
                   cleanPhone,
                   String(cmd.text).trim()
                 );
                 if (reply) {
-                  if (historyInfo.channel === 'audio') {
+                  if (historyInfo.channel === 'audio' || forceAudioReply) {
                     await sendWhatsAppVoiceCallTurn(
                       cleanPhone,
                       reply,
@@ -3851,7 +3851,7 @@ export async function startOrAdvanceVoiceCall(
       agentChannel: cleanChannel
     });
 
-    const { reply, locationTextConfirmation, matchedOrder: updatedOrder, convStep } = await generateSmartAiReply(
+    const { reply, locationTextConfirmation, matchedOrder: updatedOrder, convStep, forceAudioReply } = await generateSmartAiReply(
       cleanPhone,
       customerSpokenText.trim()
     );
@@ -3871,13 +3871,14 @@ export async function startOrAdvanceVoiceCall(
       };
     }
 
+    const effectiveChannel: AgentChannel = forceAudioReply && cleanChannel === 'texto' ? 'audio' : cleanChannel;
     const turnRes = await sendWhatsAppVoiceCallTurn(
       cleanPhone,
       reply,
       convStep,
       updatedOrder?.reservaid,
       undefined,
-      cleanChannel,
+      effectiveChannel,
       undefined,
       locationTextConfirmation
     );
@@ -3890,7 +3891,7 @@ export async function startOrAdvanceVoiceCall(
       matchedOrder: updatedOrder,
       message: turnRes.message,
       sentViaSocket: turnRes.sentViaSocket,
-      channel: cleanChannel,
+      channel: effectiveChannel,
       callRung: turnRes.callRung
     };
   }
@@ -3914,6 +3915,9 @@ export async function startOrAdvanceVoiceCall(
         matchedOrder.postConfirmBlocked = false;
         matchedOrder.locationTextSentOnce = false;
         matchedOrder.systemLocationConfirmedSent = false;
+        matchedOrder.promoPagoAdelantadoStage = '';
+        matchedOrder.pagoAdelantadoComprobanteRecibido = false;
+        matchedOrder.pagoAdelantadoEstado = '';
       }
       savePedidos(pedidos);
       syncOrderUpdateToCloud(matchedOrder).catch(() => { });
@@ -3951,7 +3955,7 @@ export async function startOrAdvanceVoiceCall(
 
   // 3. If the last message in history was from the client, advance to the next step and send voice/audio turn
   if (lastMsg && lastMsg.sender === 'client') {
-    const { reply, locationTextConfirmation, matchedOrder: updatedOrder, convStep } = await generateSmartAiReply(
+    const { reply, locationTextConfirmation, matchedOrder: updatedOrder, convStep, forceAudioReply } = await generateSmartAiReply(
       cleanPhone,
       lastMsg.text
     );
@@ -3968,13 +3972,14 @@ export async function startOrAdvanceVoiceCall(
         callRung: false
       };
     }
+    const effectiveChannel: AgentChannel = forceAudioReply && cleanChannel === 'texto' ? 'audio' : cleanChannel;
     const turnRes = await sendWhatsAppVoiceCallTurn(
       cleanPhone,
       reply,
       convStep,
       updatedOrder?.reservaid,
       undefined,
-      cleanChannel,
+      effectiveChannel,
       undefined,
       locationTextConfirmation
     );
@@ -4043,6 +4048,7 @@ export async function generateSmartAiReply(
   matchedOrder: any | null;
   convStep: number;
   error?: string;
+  forceAudioReply?: boolean;
 }> {
   return generateContextualAiReply(phone, incomingText);
 }
@@ -4325,24 +4331,29 @@ function buildLLMSystemPrompt(
   const gpsUrl = extractCanonicalMapUrlFromOrder(order);
   const targetNextStep = Math.min(5, currentStep + 1);
 
+  const rawMontoNum = Number(String(order?.monto || '189000').replace(/\D/g, '')) || 189000;
+  const discountedMontoNum = Math.max(50000, rawMontoNum - 50000);
+  const montoOriginalFormatted = formatGsServer(rawMontoNum);
+  const montoDescuentoFormatted = formatGsServer(discountedMontoNum);
+
   const step3To5Instructions = isBuilding
     ? `  1. Cuando pases al PASO 3 (Enviar por primera y ÚNICA vez el texto descriptivo de su EDIFICIO y mapa):
-     - En "reply" (Audio cortito): NO pronuncies la calle, ni el barrio, ni la ciudad. Decile con calidez a ${firstName}: "Mirá, acá abajo te voy a pasar en texto los datos de tu edificio, el piso, el departamento y el mapa que pusiste en el formulario para que se te entregue tu producto, miralo bien por favor y confirmame si está todo correcto".
+     - En "reply" (Audio cortito): NO pronuncies la calle, ni el barrio, ni la ciudad, y JAMÁS vuelvas a preguntar su teléfono. Decile con calidez a ${firstName}: "Mirá, acá abajo te voy a pasar en texto los datos de tu edificio, el piso, el departamento y el mapa que pusiste en el formulario para que se te entregue tu producto, miralo bien por favor y confirmame si está todo correcto".
      - El sistema adjuntará automáticamente en "locationTextConfirmation" el bloque descriptivo con el nombre del edificio, piso, departamento, recepción, calle y UN SOLO enlace directo de su mapa.
   2. Cuando pases al PASO 4 (Después de que el cliente confirmó los datos de su edificio del texto que le pasaste):
-     - Ya NO envíes nada en texto ("locationTextConfirmation": ""). Todo se dice ÚNICAMENTE EN VOZ.
+     - Ya NO envíes nada en texto ("locationTextConfirmation": "") y JAMÁS vuelvas a pedir confirmación de la calle ni del teléfono. Todo se dice ÚNICAMENTE EN VOZ.
      - En "reply" (Audio cortito): Decile en voz de forma superprofesional que la ubicación de su edificio, el piso y el departamento ya quedaron perfectamente confirmados en nuestro sistema informático, y como vive en un edificio, preguntale de forma congruente para dejar todo anotado para el repartidor: si la recepcionista o guardia de portería está autorizada a recibir el paquete o si prefiere que el repartidor lo llame al llegar a planta baja, y qué comercio o punto conocido hay al lado del edificio. (JAMÁS le preguntes de qué color es el techo o el portón de su casa porque vive en un EDIFICIO).
-  3. Cuando pases al PASO 5 (Cierre y confirmación final tras recibir la confirmación de recepción/acceso a su edificio):
-     - En "reply" (Audio cortito): Agradecéle con calidez por su nombre (${firstName}), decile que todos los detalles de entrega en su edificio y recepción ya quedaron registrados en nuestro sistema informático para el repartidor y que su pedido ya queda cien por ciento confirmado y pasa a empaquetado.
+  3. Cuando pases al PASO 5 (Cierre de confirmación tras recibir la referencia de recepción/edificio + GANCHO VIP DE PAGO ADELANTADO CON 50.000 GS. DE DESCUENTO):
+     - En "reply" (Audio persuasivo, educado y cálido): Agradecéle por su nombre (${firstName}), confirmále que todos los detalles de entrega en su edificio ya quedaron registrados en el sistema informático y su pedido ya está cien por ciento confirmado. Y ahí mismo hacéle esta propuesta exclusiva con mucha educación: "${firstName}, quiero preguntarte algo muy especial: estamos haciendo una promoción exclusiva y solamente las primeras cinco personas que abonan por adelantado su pedido participan de este beneficio donde te descontamos cincuenta mil guaraníes al instante. Es decir, en vez de pagar ${montoOriginalFormatted} al recibir, si decidís abonar ahora por transferencia bancaria te queda en solamente ${montoDescuentoFormatted}. ¿Te gustaría aprovechar uno de los cinco cupos con cincuenta mil guaraníes de descuento?". (IMPORTANTE: NO le pases el alias todavía en este paso, primero preguntale si quiere aprovechar la promo).
      - Dejá "locationTextConfirmation" vacío ("").`
     : `  1. Cuando pases al PASO 3 (Enviar por primera y ÚNICA vez el texto descriptivo de dirección y mapa):
-     - En "reply" (Audio cortito): NO pronuncies la calle, ni el barrio, ni la ciudad. Decile con calidez a ${firstName}: "Mirá, acá abajo te voy a pasar en texto las direcciones y el mapa que pusiste en el formulario para que se te entregue tu producto, miralo bien por favor y confirmame si está todo correcto".
+     - En "reply" (Audio cortito): NO pronuncies la calle, ni el barrio, ni la ciudad, y JAMÁS vuelvas a preguntar su teléfono. Decile con calidez a ${firstName}: "Mirá, acá abajo te voy a pasar en texto las direcciones y el mapa que pusiste en el formulario para que se te entregue tu producto, miralo bien por favor y confirmame si está todo correcto".
      - El sistema adjuntará automáticamente en "locationTextConfirmation" el bloque descriptivo bien explicado con su ciudad, su calle/barrio y UN SOLO enlace directo de su mapa.
   2. Cuando pases al PASO 4 (Después de que el cliente confirmó esas direcciones del texto que le pasaste):
-     - Ya NO envíes nada en texto ("locationTextConfirmation": ""). Todo se dice ÚNICAMENTE EN VOZ.
+     - Ya NO envíes nada en texto ("locationTextConfirmation": "") y JAMÁS vuelvas a pedir confirmación de la calle ni del teléfono. Todo se dice ÚNICAMENTE EN VOZ.
      - En "reply" (Audio cortito): Decile en voz de forma superprofesional que sus ubicaciones fueron perfectamente confirmadas y ya están marcadas dentro de nuestro sistema informático para la entrega de su pedido, y para ir concretando el envío pedile que te cuente brevemente cómo es la fachada de su casa (color de pared o portón y algún comercio cercano de referencia).
-  3. Cuando pases al PASO 5 (Cierre y confirmación final tras recibir cómo es la fachada de su casa):
-     - En "reply" (Audio cortito): Agradecéle con calidez por su nombre (${firstName}), decile que todos los detalles de su casa ya quedaron registrados en nuestro sistema informático para el repartidor y que su pedido ya queda cien por ciento confirmado y pasa a empaquetado. (NO digas que le dejás los datos abajo en texto).
+  3. Cuando pases al PASO 5 (Cierre de confirmación tras recibir cómo es la fachada de su casa + GANCHO VIP DE PAGO ADELANTADO CON 50.000 GS. DE DESCUENTO):
+     - En "reply" (Audio persuasivo, educado y cálido): Agradecéle por su nombre (${firstName}), confirmále que todos los detalles de su casa ya quedaron registrados en nuestro sistema informático para el repartidor y que su pedido ya está cien por ciento confirmado. Y ahí mismo hacéle esta propuesta exclusiva con mucha educación: "${firstName}, quiero preguntarte algo muy especial: estamos haciendo una promoción exclusiva y solamente las primeras cinco personas que abonan por adelantado su pedido participan de este beneficio donde te descontamos cincuenta mil guaraníes al instante. Es decir, en vez de pagar ${montoOriginalFormatted} al recibir, si decidís abonar ahora por transferencia bancaria te queda en solamente ${montoDescuentoFormatted}. ¿Te gustaría aprovechar uno de los cinco cupos con cincuenta mil guaraníes de descuento?". (IMPORTANTE: NO le pases el alias todavía en este paso, primero preguntale si quiere aprovechar la promo).
      - Dejá "locationTextConfirmation" vacío ("").`;
 
   return `Sos un agente humano real de confirmación de envíos de Noelux en Paraguay. Hablás español paraguayo natural, cálido, empático, educado y muy profesional/empresarial (usás "vos", "tenés", "podés", "decime").
@@ -4727,17 +4738,22 @@ function generateEmergencyFallbackStepReply(
     };
   }
 
-  // PASO 4 -> PASO 5: Cliente pasó datos de su casa/edificio -> Cierre sin repetir direcciones en texto
+  // PASO 4 -> PASO 5: Cliente pasó datos de su casa/edificio -> Cierre + Gancho persuasivo VIP de Pago Adelantado (-50.000 Gs. para las primeras 5 personas, sin pasar el alias aún)
   if (currentStep === 4) {
     const houseRef = isBuilding
       ? [buildingDetails, cleanInput.length > 2 ? cleanInput : ''].filter(Boolean).join(' · ') || 'Edificio confirmado'
       : cleanInput.length > 2
         ? cleanInput
         : 'Casa particular';
+    const rawMontoNum = Number(String(matchedOrder?.monto || '189000').replace(/\D/g, '')) || 189000;
+    const discountedMontoNum = Math.max(50000, rawMontoNum - 50000);
+    const montoOriginalFormatted = formatGsServer(rawMontoNum);
+    const montoDescuentoFormatted = formatGsServer(discountedMontoNum);
+    const nameVocative = displayFirstName || 'cliente';
     return {
       reply: isBuilding
-        ? `Muchísimas gracias${displayFirstName ? `, ${displayFirstName}` : ''}. Ya anoté todos los detalles de entrega en tu edificio y recepción en nuestro sistema informático para el repartidor, y tu pedido ya queda cien por ciento confirmado y pasa ahora mismo a empaquetado.`
-        : `Muchísimas gracias${displayFirstName ? `, ${displayFirstName}` : ''}. Ya anoté todos los detalles de tu casa en nuestro sistema informático para el repartidor, y tu pedido ya queda cien por ciento confirmado y pasa ahora mismo a empaquetado.`,
+        ? `Muchísimas gracias, ${nameVocative}. Ya anoté todos los detalles de entrega en tu edificio y recepción en nuestro sistema informático para el repartidor, y tu pedido ya queda cien por ciento confirmado. Antes de sellar tu boleta, ${nameVocative}, quiero preguntarte algo muy especial: ¿sabés que estamos haciendo una promoción exclusiva y solamente las primeras cinco personas que abonan por adelantado su pedido participan de este beneficio donde te descontamos cincuenta mil guaraníes al instante? Es decir, en vez de abonar ${montoOriginalFormatted} al recibir, si decidís abonar ahora por transferencia te queda en solamente ${montoDescuentoFormatted}. ¿Te gustaría aprovechar uno de los cinco cupos con cincuenta mil guaraníes de descuento?`
+        : `Muchísimas gracias, ${nameVocative}. Ya anoté todos los detalles de tu casa en nuestro sistema informático para el repartidor, y tu pedido ya queda cien por ciento confirmado. Antes de sellar tu boleta, ${nameVocative}, quiero preguntarte algo muy especial: ¿sabés que estamos haciendo una promoción exclusiva y solamente las primeras cinco personas que abonan por adelantado su pedido participan de este beneficio donde te descontamos cincuenta mil guaraníes al instante? Es decir, en vez de abonar ${montoOriginalFormatted} al recibir, si decidís abonar ahora por transferencia te queda en solamente ${montoDescuentoFormatted}. ¿Te gustaría aprovechar uno de los cinco cupos con cincuenta mil guaraníes de descuento?`,
       locationTextConfirmation: '',
       nextStep: 5,
       orderConfirmed: true,
@@ -4762,6 +4778,213 @@ function generateEmergencyFallbackStepReply(
   };
 }
 
+// =========================================================================
+// NEGOCIACIÓN VIP DE PAGO POR ADELANTADO (-50.000 GS. · PRIMERAS 5 PERSONAS)
+// BANCO FAMILIAR · ALIAS PARAGUAY (SIPAP / CÉDULA): 3856033 (3.856.033)
+// TITULAR: RICHARD ALMIRÓN
+// =========================================================================
+const VIP_PREPAYMENT_DISCOUNT_GS = 50000;
+const VIP_BANK_NAME = 'Banco Familiar';
+const VIP_BANK_ALIAS_RAW = '3856033';
+const VIP_BANK_ALIAS_DOTTED = '3.856.033';
+const VIP_BANK_HOLDER = 'Richard Almirón';
+
+// Per-phone burst message debounce & serialization locks so rapid customer messages never trigger duplicate parallel confirmations
+const pendingCustomerBurstState = new Map<
+  string,
+  { timer: ReturnType<typeof setTimeout>; texts: string[]; hasAudio: boolean }
+>();
+const inFlightCustomerReplyLocks = new Map<string, Promise<void>>();
+
+export function buildVipPrepaymentAliasCard(order: any): string {
+  const rawMontoNum =
+    Number(String(order?.montoOriginalSinDescuento || order?.monto || '189000').replace(/\D/g, '')) || 189000;
+  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
+  const montoOriginalStr = formatGsServer(rawMontoNum);
+  const montoDescuentoStr = formatGsServer(discountedMontoNum);
+
+  return [
+    `🏦 *DATOS OFICIALES PARA TRANSFERENCIA BANCARIA (PROMO EXCLUSIVA -50.000 Gs.)*`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `🏛️ *Banco:* ${VIP_BANK_NAME}`,
+    `🔑 *Alias (Cédula / SIPAP):* ${VIP_BANK_ALIAS_RAW}`,
+    `*(También figura como: ${VIP_BANK_ALIAS_DOTTED})*`,
+    `👤 *Titular de la cuenta:* ${VIP_BANK_HOLDER}`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `💵 *Precio normal contra entrega:* ~${montoOriginalStr}~`,
+    `🎁 *Descuento exclusivo aplicado:* -Gs. 50.000`,
+    `✅ *MONTO EXACTO A TRANSFERIR AHORA:* *${montoDescuentoStr}*`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `📋 *Alias directo para copiar con un toque:*`,
+    `${VIP_BANK_ALIAS_RAW}`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `📸 *PASO FINAL:* Apenas realices la transferencia de *${montoDescuentoStr}*, enviá por este chat la *captura de pantalla o comprobante del pago* para verificarlo y sellar tu pedido como *PAGADO*.`
+  ].join('\n');
+}
+
+function handleVipPrepaymentNegotiationTurn(
+  cleanPhone: string,
+  matchedOrder: any,
+  cleanInput: string,
+  pedidos: any[]
+): {
+  handled: boolean;
+  reply: string;
+  locationTextConfirmation?: string;
+  forceAudioReply?: boolean;
+} {
+  if (!matchedOrder) return { handled: false, reply: '' };
+
+  const stage: string = matchedOrder.promoPagoAdelantadoStage || '';
+  if (!stage || stage === 'declined_cod') {
+    return { handled: false, reply: '' };
+  }
+
+  const rawName = String(matchedOrder?.nombre || '').trim();
+  const firstName = getNaturalFirstName(rawName);
+  const displayFirstName = firstName && firstName !== 'qué tal' ? firstName : 'cliente';
+  const genderInfo = detectCustomerGender(rawName);
+  const preparadaWord = genderInfo.gender === 'female' ? 'preparada' : 'preparado';
+
+  const rawMontoNum =
+    Number(String(matchedOrder?.montoOriginalSinDescuento || matchedOrder?.monto || '189000').replace(/\D/g, '')) || 189000;
+  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
+  const montoOriginalStr = formatGsServer(rawMontoNum);
+  const montoDescuentoStr = formatGsServer(discountedMontoNum);
+
+  // Detectar si el cliente envió imagen/PDF de comprobante o afirma que ya transfirió
+  const isReceiptImageOrDoc =
+    /COMPROBANTE_PAGO_ADELANTADO|envi[oó] una foto|envi[oó] la imagen|captura|comprobante/i.test(cleanInput);
+  const isVerbalPaymentDone =
+    /\b(ya\s+transfer[ií]|ya\s+pagu[eé]|ya\s+envi[eé]|ya\s+deposit[eé]|ya\s+hice\s+la\s+transferencia|ya\s+te\s+mand[eé]\s+el\s+comprobante|te\s+paso\s+el\s+comprobante|ah[ií]\s+te\s+envi[eé]|ah[ií]\s+envi[eé]|listo\s+el\s+pago|ya\s+est[aá]\s+el\s+pago)\b/i.test(
+      cleanInput
+    );
+
+  // STAGE D: El cliente envió el comprobante (foto/PDF o aviso de transferencia realizada) -> Responder SIEMPRE en AUDIO pidiendo aguardar un ratito mientras confirmamos el pago
+  if (
+    (stage === 'alias_sent_awaiting_receipt' || stage === 'awaiting_ready_for_alias' || stage === 'offered_hook') &&
+    (isReceiptImageOrDoc || (stage === 'alias_sent_awaiting_receipt' && isVerbalPaymentDone))
+  ) {
+    matchedOrder.promoPagoAdelantadoStage = 'receipt_received_verifying';
+    matchedOrder.pagoAdelantadoComprobanteRecibido = true;
+    matchedOrder.pagoAdelantadoEstado = 'comprobante_recibido';
+    matchedOrder.pagoAdelantadoFecha = new Date().toISOString();
+    matchedOrder.modalidadPagoElegida = 'pago_adelantado_promo_50k';
+    matchedOrder.montoOriginalSinDescuento = rawMontoNum;
+    matchedOrder.montoConDescuentoAdelantado = discountedMontoNum;
+
+    const audioReply = `Muchísimas gracias, ${displayFirstName}, acabo de recibir tu comprobante de pago por acá. Aguardame un ratito por favor mientras nuestro sector administrativo verifica e ingresa tu transferencia con los cincuenta mil guaraníes de descuento, y en unos momentos te avisamos apenas quede cien por ciento confirmado tu pago.`;
+    matchedOrder.ultimoMensajeIA = audioReply;
+    savePedidos(pedidos);
+    syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+    notifySellerOfOrderEvent(matchedOrder, 'green').catch(() => {});
+
+    return {
+      handled: true,
+      reply: audioReply,
+      locationTextConfirmation: undefined,
+      forceAudioReply: true
+    };
+  }
+
+  // Si ya envió el comprobante y vuelve a escribir mientras se verifica:
+  if (stage === 'receipt_received_verifying') {
+    if (isReceiptImageOrDoc || isVerbalPaymentDone) {
+      const audioReply = `Muchas gracias de nuevo, ${displayFirstName}, ya tenemos registrado tu comprobante en pantalla. Aguardame unos instantes por favor que ya mismo estamos validando la transferencia con administración central y te confirmamos enseguida.`;
+      matchedOrder.ultimoMensajeIA = audioReply;
+      savePedidos(pedidos);
+      return {
+        handled: true,
+        reply: audioReply,
+        locationTextConfirmation: undefined,
+        forceAudioReply: true
+      };
+    }
+    return { handled: false, reply: '' };
+  }
+
+  // Detectar si el cliente rechaza amablemente la promo y prefiere pagar al recibir (contra entrega)
+  const isDecliningPromo =
+    /\b(no\s+gracias|al\s+recibir|contra\s+entrega|cuando\s+llegue|en\s+efectivo|no\s+tengo\s+para\s+transferir|prefiero\s+pagar\s+al\s+recibir|despu[eé]s\s+nom[aá]s|al\s+entregar)\b/i.test(
+      cleanInput
+    ) || /^(?:no|nop|no\s+puedo\s+ahora)$/i.test(cleanInput.trim());
+
+  if (isDecliningPromo && (stage === 'offered_hook' || stage === 'awaiting_ready_for_alias')) {
+    matchedOrder.promoPagoAdelantadoStage = 'declined_cod';
+    matchedOrder.modalidadPagoElegida = 'contra_entrega';
+    const politeCodReply = `Dale, no te preocupes para nada, ${displayFirstName}, está superbién. Tu pedido queda cien por ciento confirmado con normalidad en modalidad de cobro contra entrega para que abones los ${montoOriginalStr} recién cuando el repartidor te entregue tu paquete en mano. Ya mismo pasa a despacho y muchas gracias por tu compra.`;
+    matchedOrder.ultimoMensajeIA = politeCodReply;
+    savePedidos(pedidos);
+    syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+    return {
+      handled: true,
+      reply: politeCodReply,
+      locationTextConfirmation: undefined
+    };
+  }
+
+  // Detectar si el cliente acepta o pide el alias
+  const isAffirmativeForPromo =
+    /\b(s[ií]|claro|dale|quiero|me\s+interesa|depositar|transferir|transferencia|adelantado|descuento|promo|promoci[oó]n|aprovechar|bueno|ok|okay|listo|lista|preparad[oa]|pasame|p[aá]same|mandame|m[aá]ndame|enviame|env[ií]ame|alias|cuenta|banco|c[oó]mo\s+pago|d[oó]nde\s+trans|de\s+acuerdo|me\s+parece\s+bien|excelente|genial)\b/i.test(
+      cleanInput
+    ) || /👍|👌|✅/.test(cleanInput);
+
+  // STAGE B: Estábamos en 'offered_hook' y el cliente dice "Sí, quiero depositar ahora" ->
+  // REGLA DEL USUARIO: "No le vaya a pasar así al toque, que le felicite, que es una buena decisión y cuando estás de acuerdo y estás preparada para efectuar el pago me avisás y te paso el alias. ¿Qué te parece?"
+  if (stage === 'offered_hook' && isAffirmativeForPromo) {
+    matchedOrder.promoPagoAdelantadoStage = 'awaiting_ready_for_alias';
+    matchedOrder.montoOriginalSinDescuento = rawMontoNum;
+    matchedOrder.montoConDescuentoAdelantado = discountedMontoNum;
+
+    const stageBReply = `Te felicito de corazón, ${displayFirstName}, es una excelente decisión porque te ahorrás cincuenta mil guaraníes al instante y ya te reservé uno de los cinco lugares exclusivos de la promoción, así que en vez de ${montoOriginalStr} vas a abonar solamente ${montoDescuentoStr}. Cuando estés de acuerdo y estés ${preparadaWord} para efectuar el pago ahora, avisame diciéndome pasame el alias y te paso enseguida los datos. ¿Qué te parece?`;
+    matchedOrder.ultimoMensajeIA = stageBReply;
+    savePedidos(pedidos);
+    syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+    return {
+      handled: true,
+      reply: stageBReply,
+      locationTextConfirmation: undefined
+    };
+  }
+
+  // STAGE C: Estábamos en 'awaiting_ready_for_alias' y el cliente responde "Sí, pasame el alias" / "Estoy lista" ->
+  // Ahora sí le pasamos el Alias del Banco Familiar (3856033 · Titular: Richard Almirón) bien diseñado + audio explicativo
+  if (stage === 'awaiting_ready_for_alias' && isAffirmativeForPromo) {
+    matchedOrder.promoPagoAdelantadoStage = 'alias_sent_awaiting_receipt';
+    matchedOrder.montoOriginalSinDescuento = rawMontoNum;
+    matchedOrder.montoConDescuentoAdelantado = discountedMontoNum;
+
+    const stageCAudioReply = `Perfecto, ${displayFirstName}. Acá abajo te paso en texto los datos oficiales de nuestra cuenta del Banco Familiar con el alias tres ocho cinco seis cero tres tres a nombre de Richard Almirón, para que transfieras únicamente ${montoDescuentoStr} con tus cincuenta mil guaraníes de descuento ya aplicados. En cuanto envíes la transferencia, mandame por acá mismo la captura o el comprobante exacto del pago así te lo confirmamos enseguida.`;
+    const aliasCardText = buildVipPrepaymentAliasCard(matchedOrder);
+    matchedOrder.ultimoMensajeIA = stageCAudioReply;
+    savePedidos(pedidos);
+    syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+    return {
+      handled: true,
+      reply: stageCAudioReply,
+      locationTextConfirmation: aliasCardText
+    };
+  }
+
+  // Si ya se le envió el alias ('alias_sent_awaiting_receipt') y el cliente pregunta cómo es el alias o pide que se lo reenvíe:
+  if (
+    stage === 'alias_sent_awaiting_receipt' &&
+    /\b(alias|cuenta|banco|titular|cu[aá]nto|monto|pasame|p[aá]same)\b/i.test(cleanInput)
+  ) {
+    const reminderReply = `Claro que sí, ${displayFirstName}, acá abajo te vuelvo a dejar la tarjeta con el alias tres ocho cinco seis cero tres tres del Banco Familiar a nombre de Richard Almirón por el monto con descuento de ${montoDescuentoStr}. Apenas tengas el comprobante mandame la captura por acá y te lo validamos al instante.`;
+    const aliasCardText = buildVipPrepaymentAliasCard(matchedOrder);
+    matchedOrder.ultimoMensajeIA = reminderReply;
+    savePedidos(pedidos);
+    return {
+      handled: true,
+      reply: reminderReply,
+      locationTextConfirmation: aliasCardText
+    };
+  }
+
+  return { handled: false, reply: '' };
+}
+
 // LLM-powered contextual AI reply — 100% driven by Deepgram Voice Agent LLM reasoning with automatic contingency fallback
 export async function generateContextualAiReply(
   phone: string,
@@ -4772,6 +4995,7 @@ export async function generateContextualAiReply(
   matchedOrder: any | null;
   convStep: number;
   error?: string;
+  forceAudioReply?: boolean;
 }> {
   const cleanPhone = normalizeWaPhone(phone);
   const pedidos = loadPedidos();
@@ -4844,9 +5068,26 @@ export async function generateContextualAiReply(
   );
 
   // =========================================================================
-  // FLUJO POST-CONFIRMACIÓN AMABLE Y DULCE + PROTECCIÓN SILENCIOSA DE CRÉDITOS:
+  // FLUJO POST-CONFIRMACIÓN AMABLE Y DULCE + NEGOCIACIÓN VIP PAGO ADELANTADO:
   // =========================================================================
   if (isAlreadyConfirmed) {
+    // 1. Verificar primero si el cliente está interactuando con la promoción VIP de Pago Adelantado (-50.000 Gs. · Banco Familiar Alias 3856033)
+    const vipNegotiationRes = handleVipPrepaymentNegotiationTurn(
+      cleanPhone,
+      matchedOrder,
+      cleanInput,
+      pedidos
+    );
+    if (vipNegotiationRes.handled) {
+      return {
+        reply: vipNegotiationRes.reply,
+        locationTextConfirmation: vipNegotiationRes.locationTextConfirmation,
+        matchedOrder,
+        convStep: 5,
+        ...(vipNegotiationRes.forceAudioReply ? { forceAudioReply: true } : {})
+      } as any;
+    }
+
     const storage = loadChatsStorage();
     if (!storage.postConfirmStrikes) storage.postConfirmStrikes = {};
     if (!storage.postConfirmBlocked) storage.postConfirmBlocked = {};
@@ -5112,6 +5353,59 @@ export async function generateContextualAiReply(
     extractedHouseRef = fallback.extractedHouseRef;
   }
 
+  // =========================================================================
+  // BARRERA DETERMINÍSTICA ANTI-REPETICIÓN Y AVANCE MONOTÓNICO DE PASOS (1->2->3->4->5)
+  // Evita al 100% que el agente pregunte 2 o 3 veces el teléfono o mande 2 veces la calle.
+  // =========================================================================
+  const isClientAskingToWait =
+    /\b(estoy\s+trabajando|estoy\s+ocupad[oa]|escribime\s+m[aá]s\s+tarde|ahora\s+no\s+puedo|despu[eé]s\s+te\s+escribo|en\s+el\s+trabajo|manejando)\b/i.test(
+      cleanInput
+    );
+
+  if (!isClientAskingToWait && currentStep < 5) {
+    // Garantizar que el paso SIEMPRE avance hacia adelante cuando el cliente responde válidamente
+    if (nextStep <= currentStep) {
+      nextStep = Math.min(5, currentStep + 1);
+    }
+    // Si la tarjeta de calle/mapa (Paso 3) YA se envió antes en esta orden y el cliente no está editando su dirección,
+    // prohibido quedarse en el Paso 3 o volver al Paso 3: avanzar directamente al Paso 4 (o 5 si ya estaba en 4)
+    const addressWasEditedNow = Boolean(correctedCity) || Boolean(correctedAddress);
+    if (nextStep === 3 && matchedOrder?.locationTextSentOnce && !addressWasEditedNow && currentStep >= 3) {
+      nextStep = 4;
+    }
+    if (nextStep === 5) {
+      orderConfirmed = true;
+    }
+
+    // Sanitizar llmReply si el LLM alucinó una pregunta de un paso anterior ya superado:
+    const stepFallback = generateEmergencyFallbackStepReply(matchedOrder, currentStep, cleanInput, cleanPhone);
+
+    if (nextStep === 3) {
+      // En el Paso 3 el teléfono YA fue confirmado. Si el LLM vuelve a preguntar si el número de teléfono está bien, reemplazar por el audio limpio del Paso 3:
+      const repeatsPhoneQuestion =
+        /\b(n[uú]mero\s+de\s+tel[eé]fono|l[ií]nea\s+de\s+contacto|estos\s+datos\s+est[aá]n\s+correctos|tu\s+n[uú]mero\s+es)\b/i.test(
+          llmReply
+        );
+      if (repeatsPhoneQuestion) {
+        llmReply = stepFallback.reply;
+      }
+    } else if (nextStep === 4) {
+      // En el Paso 4 ni el teléfono ni el texto de calle se deben volver a pedir. Se debe preguntar fachada/portón (o recepción de edificio):
+      const repeatsPhoneOrStreetText =
+        /\b(n[uú]mero\s+de\s+tel[eé]fono|ac[aá]\s+abajo\s+te\s+voy\s+a\s+pasar\s+en\s+texto|te\s+paso\s+en\s+texto\s+las\s+direcciones|estos\s+datos\s+est[aá]n\s+correctos)\b/i.test(
+          llmReply
+        );
+      if (repeatsPhoneOrStreetText) {
+        llmReply = stepFallback.reply;
+      }
+    } else if (nextStep === 5) {
+      // En el Paso 5 (cierre de confirmación), asegurarnos de que SIEMPRE incluya la propuesta educativa VIP de -50.000 Gs. de descuento por pago adelantado (para las primeras 5 personas) sin enviar el alias todavía:
+      if (!/cincuenta\s+mil|50\.?000|promoci[oó]n|adelantado/i.test(llmReply)) {
+        llmReply = stepFallback.reply;
+      }
+    }
+  }
+
   llmReply = normalizeParaguayanPhonesInText(llmReply);
 
   if (matchedOrder) {
@@ -5122,11 +5416,10 @@ export async function generateContextualAiReply(
 
     const addressWasEdited = Boolean(correctedCity) || Boolean(correctedAddress);
 
-    // REGLA ESTRICTA DE CONFIRMACIÓN DE UBICACIÓN EN TEXTO:
-    // - ÚNICAMENTE en el PASO 3 se envía en texto el bloque descriptivo con Ciudad, Calle/Barrio (o Edificio/Piso/Dpto) y UN SOLO enlace directo del mapa.
-    // - En el PASO 4 y PASO 5 NO se envía ningún mensaje de texto en el chat (la confirmación del sistema informático se dice SOLO EN VOZ).
+    // REGLA ESTRICTA DE CONFIRMACIÓN DE UBICACIÓN EN TEXTO (UNA SOLA VEZ):
+    // - ÚNICAMENTE en el PASO 3 y SOLO UNA VEZ (cuando !matchedOrder.locationTextSentOnce o si corrigió la calle) se envía el texto con Ciudad, Calle/Barrio y mapa.
     if (nextStep === 3) {
-      if (!matchedOrder.locationTextSentOnce || addressWasEdited || currentStep < 3) {
+      if (!matchedOrder.locationTextSentOnce || addressWasEdited) {
         await ensureShortMapLinkForOrder(matchedOrder);
         locationTextConfirmation = buildLocationTextConfirmationMessage(matchedOrder, 3);
         matchedOrder.locationTextSentOnce = true;
@@ -5156,6 +5449,14 @@ export async function generateContextualAiReply(
       matchedOrder.estado = 'en_camino';
       matchedOrder.estadoEnvioProducto = matchedOrder.estadoEnvioProducto || 'no_enviado';
       matchedOrder.concretadoCobrado = Boolean(matchedOrder.concretadoCobrado);
+
+      // Activar Etapa A ('offered_hook') de la negociación VIP de Pago Adelantado (-50.000 Gs.) al cerrar la confirmación:
+      if (!matchedOrder.promoPagoAdelantadoStage) {
+        const rawMontoNum = Number(String(matchedOrder?.monto || '189000').replace(/\D/g, '')) || 189000;
+        matchedOrder.promoPagoAdelantadoStage = 'offered_hook';
+        matchedOrder.montoOriginalSinDescuento = rawMontoNum;
+        matchedOrder.montoConDescuentoAdelantado = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
+      }
 
       const finalGpsUrl = extractCanonicalMapUrlFromOrder(matchedOrder) || undefined;
       const cleanAddr = cleanStreetAddressText(matchedOrder.direccion || '');
@@ -6238,6 +6539,18 @@ export async function connectWhatsAppEngine(
           const isBlockedPostConfirm = !isFromAdmin && isCustomerPostConfirmBlocked(cleanPhone);
           const matchedOrderForPhone = findActiveOrderForPhone(cleanPhone);
 
+          const isDocumentMsg = Boolean(
+            innerMsg?.documentMessage || innerMsg?.documentWithCaptionMessage
+          );
+          const isAnyImageMsg = Boolean(innerMsg?.imageMessage);
+          const isInPrepaymentPromoFlow = Boolean(
+            matchedOrderForPhone &&
+              (matchedOrderForPhone.promoPagoAdelantadoStage === 'alias_sent_awaiting_receipt' ||
+                matchedOrderForPhone.promoPagoAdelantadoStage === 'awaiting_ready_for_alias' ||
+                matchedOrderForPhone.promoPagoAdelantadoStage === 'offered_hook' ||
+                matchedOrderForPhone.datosConfirmados)
+          );
+
           // If the customer sent a WhatsApp Location Pin (locationMessage / liveLocationMessage), extract exact GPS coordinates!
           if (isLocationMsg && locMsg) {
             const lat = Number(locMsg.degreesLatitude);
@@ -6290,6 +6603,13 @@ export async function connectWhatsAppEngine(
                 matchedOrderForPhone.gpsConfirmado = true;
               }
             }
+          } else if ((isAnyImageMsg || isDocumentMsg) && !isFromAdmin && isInPrepaymentPromoFlow) {
+            const captionExtra =
+              innerMsg?.imageMessage?.caption ||
+              innerMsg?.documentMessage?.caption ||
+              innerMsg?.documentWithCaptionMessage?.message?.documentMessage?.caption ||
+              '';
+            text = `🧾 [COMPROBANTE_PAGO_ADELANTADO: El cliente envió el comprobante de transferencia bancaria${captionExtra ? ` (${captionExtra})` : ''}]`;
           } else if (isImageWithoutCaption && !isFromAdmin) {
             text = '📷 [El cliente envió una foto de la fachada/referencia de su casa]';
           }
@@ -6403,70 +6723,106 @@ export async function connectWhatsAppEngine(
               'texto';
 
             if (isAutoEnabled) {
-              setTimeout(async () => {
-                try {
-                  const inputForLlm =
-                    isAudioMsg && sttFailed
-                      ? '[El cliente envió un audio que no se escuchó con claridad o no se pudo entender lo que dijo]'
-                      : text.trim();
+              const burstInputPiece =
+                isAudioMsg && sttFailed
+                  ? '[El cliente envió un audio que no se escuchó con claridad o no se pudo entender lo que dijo]'
+                  : text.trim();
 
-                  const smartRes = await generateSmartAiReply(cleanPhone, inputForLlm);
-                  if (smartRes.error) {
-                    appendChatMessage(cleanPhone, {
-                      id: `err-${Date.now()}`,
-                      sender: 'agent',
-                      senderName: 'Sistema',
-                      text: smartRes.error,
-                      status: 'error'
-                    });
-                    // CRITICAL: Only abort if there is truly NO reply to send to the customer!
-                    // If reply exists (either from LLM or contingency protocol), NEVER abandon the customer!
-                    if (!smartRes.reply) {
-                      return;
-                    }
-                  }
-                  const reply = smartRes.reply;
-                  const locationTextConfirmation = smartRes.locationTextConfirmation;
-                  const matchedOrder = smartRes.matchedOrder;
-                  const convStep = smartRes.convStep;
+              // Debounce & serialize burst messages per customer phone so 2 rapid messages never trigger duplicate parallel confirmations
+              const prevBurst = pendingCustomerBurstState.get(cleanPhone);
+              if (prevBurst?.timer) {
+                clearTimeout(prevBurst.timer);
+              }
+              const combinedTexts = prevBurst ? [...prevBurst.texts, burstInputPiece] : [burstInputPiece];
+              const combinedHasAudio = Boolean(prevBurst?.hasAudio || isAudioMsg);
 
-                  if (reply) {
-                    // RULE: If the customer sent a Voice Note (isAudioMsg), ALWAYS reply with a Voice Note ('audio')!
-                    // Otherwise, if activeChannel is 'audio', reply with Voice Note ('audio') in chat; if 'texto', reply with Text!
-                    // And when confirming/re-confirming street, neighborhood, or city, send locationTextConfirmation in TEXT!
-                    if (isAudioMsg || activeChannel === 'audio') {
-                      await sendWhatsAppVoiceCallTurn(
-                        cleanPhone,
-                        reply,
-                        convStep,
-                        matchedOrder?.reservaid,
-                        session.id,
-                        'audio',
-                        undefined,
-                        locationTextConfirmation
-                      );
-                    } else {
-                      const fullTextReply = locationTextConfirmation
-                        ? `${reply}\n\n${locationTextConfirmation}`
-                        : reply;
-                      await sendWhatsAppMessage(
-                        cleanPhone,
-                        fullTextReply,
-                        'ai',
-                        matchedOrder?.reservaid,
-                        session.id
-                      );
-                      if (convStep < 5) {
-                        scheduleCustomerInactivityFollowUp(cleanPhone, matchedOrder?.reservaid, session.id);
-                      } else {
-                        cancelCustomerInactivityFollowUp(cleanPhone);
+              const burstTimer = setTimeout(async () => {
+                pendingCustomerBurstState.delete(cleanPhone);
+                const inputForLlm = combinedTexts.join('. ');
+
+                // Wait if a previous turn for this exact phone is still in-flight
+                const existingLock = inFlightCustomerReplyLocks.get(cleanPhone);
+                if (existingLock) {
+                  try {
+                    await existingLock;
+                  } catch {}
+                }
+
+                const turnPromise = (async () => {
+                  try {
+                    const smartRes: any = await generateSmartAiReply(cleanPhone, inputForLlm);
+                    if (smartRes.error) {
+                      appendChatMessage(cleanPhone, {
+                        id: `err-${Date.now()}`,
+                        sender: 'agent',
+                        senderName: 'Sistema',
+                        text: smartRes.error,
+                        status: 'error'
+                      });
+                      if (!smartRes.reply) {
+                        return;
                       }
                     }
+                    const reply = smartRes.reply;
+                    const locationTextConfirmation = smartRes.locationTextConfirmation;
+                    const matchedOrder = smartRes.matchedOrder;
+                    const convStep = smartRes.convStep;
+                    const forceAudioReply = Boolean(smartRes.forceAudioReply);
+
+                    if (reply) {
+                      // RULE:
+                      // 1. If forceAudioReply is true (e.g., customer sent the payment receipt / comprobante), ALWAYS reply with a Voice Note ('audio')!
+                      // 2. If the customer sent a Voice Note (combinedHasAudio) or activeChannel is 'audio', reply with a Voice Note ('audio')!
+                      // 3. And when locationTextConfirmation is present (e.g. Step 3 address card or Stage C Banco Familiar Alias 3856033 card), send it in TEXT!
+                      if (forceAudioReply || combinedHasAudio || activeChannel === 'audio') {
+                        await sendWhatsAppVoiceCallTurn(
+                          cleanPhone,
+                          reply,
+                          convStep,
+                          matchedOrder?.reservaid,
+                          session.id,
+                          'audio',
+                          undefined,
+                          locationTextConfirmation
+                        );
+                      } else {
+                        const fullTextReply = locationTextConfirmation
+                          ? `${reply}\n\n${locationTextConfirmation}`
+                          : reply;
+                        await sendWhatsAppMessage(
+                          cleanPhone,
+                          fullTextReply,
+                          'ai',
+                          matchedOrder?.reservaid,
+                          session.id
+                        );
+                        if (convStep < 5) {
+                          scheduleCustomerInactivityFollowUp(cleanPhone, matchedOrder?.reservaid, session.id);
+                        } else {
+                          cancelCustomerInactivityFollowUp(cleanPhone);
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    console.error('[Auto AI Reply Error]:', e);
                   }
-                } catch (e) {
-                  console.error('[Auto AI Reply Error]:', e);
+                })();
+
+                inFlightCustomerReplyLocks.set(cleanPhone, turnPromise);
+                try {
+                  await turnPromise;
+                } finally {
+                  if (inFlightCustomerReplyLocks.get(cleanPhone) === turnPromise) {
+                    inFlightCustomerReplyLocks.delete(cleanPhone);
+                  }
                 }
-              }, 800);
+              }, 1100);
+
+              pendingCustomerBurstState.set(cleanPhone, {
+                timer: burstTimer,
+                texts: combinedTexts,
+                hasAudio: combinedHasAudio
+              });
             }
           }
         } catch (err) {
