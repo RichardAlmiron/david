@@ -594,7 +594,8 @@ export async function callDeepgramAgentLLM(
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
   userMessage: string,
   jsonMode = false,
-  isPostConfirmMode = false
+  isPostConfirmMode = false,
+  isPromoNegotiationMode = false
 ): Promise<string> {
   const apiKey = getDeepgramApiKey();
   if (!apiKey) {
@@ -611,92 +612,131 @@ export async function callDeepgramAgentLLM(
           .join('\n')
       : '';
 
-  const toolInstruction = isPostConfirmMode
-    ? '\n\nINSTRUCCIÓN TÉCNICA OBLIGATORIA: Debés llamar SIEMPRE e INMEDIATAMENTE a la función "emit_reply" poniendo en "reply" tu respuesta completa, sumamente empática, cálida y conversacional de 3 a 5 oraciones completas (mínimo 35 palabras). ESTÁ TERMINANTEMENTE PROHIBIDO responder con 1, 2 o 3 palabras.'
-    : jsonMode
-      ? '\n\nINSTRUCCIÓN TÉCNICA OBLIGATORIA: Debés llamar SIEMPRE e INMEDIATAMENTE a la función "emit_reply" pasando todos los campos requeridos (reply, locationTextConfirmation, nextStep, congruent, orderConfirmed, extractedHouseReference, correctedName, correctedCity, correctedAddress).'
-      : '\n\nINSTRUCCIÓN TÉCNICA OBLIGATORIA: Llamá SIEMPRE a la función "emit_reply" poniendo tu respuesta final en el campo "reply".';
+  const toolInstruction = isPromoNegotiationMode
+    ? '\n\nINSTRUCCIÓN TÉCNICA OBLIGATORIA: Leé y contextualizá TODAS LAS PALABRAS de la frase completa del cliente (no uses palabras sueltas como gatillo). Llamá SIEMPRE e INMEDIATAMENTE a la función "emit_reply" indicando en "intent" el significado real de toda la frase completa del cliente, en "hasDoubtOrCondition" si el cliente expresó un "pero", pidió explicación o aclaró que aún no aprobó, y en "reply" tu respuesta hablada natural, cálida y completa.'
+    : isPostConfirmMode
+      ? '\n\nINSTRUCCIÓN TÉCNICA OBLIGATORIA: Debés llamar SIEMPRE e INMEDIATAMENTE a la función "emit_reply" poniendo en "reply" tu respuesta completa, sumamente empática, cálida y conversacional de 3 a 5 oraciones completas (mínimo 35 palabras). ESTÁ TERMINANTEMENTE PROHIBIDO responder con 1, 2 o 3 palabras.'
+      : jsonMode
+        ? '\n\nINSTRUCCIÓN TÉCNICA OBLIGATORIA: Debés llamar SIEMPRE e INMEDIATAMENTE a la función "emit_reply" pasando todos los campos requeridos (reply, locationTextConfirmation, nextStep, congruent, orderConfirmed, extractedHouseReference, correctedName, correctedCity, correctedAddress).'
+        : '\n\nINSTRUCCIÓN TÉCNICA OBLIGATORIA: Llamá SIEMPRE a la función "emit_reply" poniendo tu respuesta final en el campo "reply".';
 
   const fullPrompt = `${systemPrompt}${historyBlock}${toolInstruction}`;
 
-  const functionsSpec = isPostConfirmMode
+  const functionsSpec = isPromoNegotiationMode
     ? [
         {
           name: 'emit_reply',
           description:
-            'Obligatorio: Llamar SIEMPRE a esta función para entregar la respuesta post-confirmación amplia, empática y con argumentos potentes.',
+            'Obligatorio: Llamar SIEMPRE a esta función tras analizar y contextualizar TODA la oración completa del cliente sobre la promoción de pago adelantado.',
           parameters: {
             type: 'object',
             properties: {
+              intent: {
+                type: 'string',
+                enum: [
+                  'ASKING_EXPLANATION_OR_DOUBTING',
+                  'CONFIRMING_PARTICIPATION',
+                  'READY_FOR_ALIAS',
+                  'DECLINING_PROMO_COD',
+                  'RECEIPT_OR_PAYMENT_SENT',
+                  'UNRELATED_TOPIC'
+                ],
+                description:
+                  'Significado global de TODA la frase del cliente: ASKING_EXPLANATION_OR_DOUBTING si dice que le gusta/interesa PERO pide que le expliquen mejor de qué se trata, hace una pregunta sobre cómo funciona, tiene dudas o aclara que todavía NO decidió ni aprobó participar; CONFIRMING_PARTICIPATION únicamente si aprueba sin ningún "pero" ni duda participar en la promoción; READY_FOR_ALIAS únicamente si confirma sin dudas que ya está listo ahora para recibir el alias y transferir; DECLINING_PROMO_COD si prefiere pagar al recibir; RECEIPT_OR_PAYMENT_SENT si avisa que ya transfirió; UNRELATED_TOPIC si habla de otro tema ajeno a la promoción.'
+              },
+              hasDoubtOrCondition: {
+                type: 'boolean',
+                description:
+                  'true si en cualquier parte de la frase el cliente puso un "pero", pidió explicación ("explicame", "de qué se trata", "cómo es"), hizo una pregunta o dijo que todavía no confirmó.'
+              },
               reply: {
                 type: 'string',
                 description:
-                  'Tu respuesta hablada AMPLIA, MUY EMPÁTICA, CONVERSACIONAL Y DETALLADA (obligatoriamente de 3 a 5 oraciones completas, mínimo 35 palabras, JAMÁS 1 a 3 palabras), buscando ángulos distintos sin repetir frases previas, sin emojis ni asteriscos.'
+                  'Tu respuesta hablada natural, cálida, persuasiva y muy educada en español paraguayo (3 a 4 oraciones completas, sin emojis ni asteriscos) respondiendo exactamente a lo que planteó el cliente.'
               }
             },
-            required: ['reply']
+            required: ['intent', 'hasDoubtOrCondition', 'reply']
           }
         }
       ]
-    : jsonMode
+    : isPostConfirmMode
       ? [
           {
             name: 'emit_reply',
             description:
-              'Obligatorio: Llamar SIEMPRE a esta función para entregar la respuesta estructurada al cliente.',
+              'Obligatorio: Llamar SIEMPRE a esta función para entregar la respuesta post-confirmación amplia, empática y con argumentos potentes.',
             parameters: {
               type: 'object',
               properties: {
                 reply: {
                   type: 'string',
                   description:
-                    'Tu respuesta hablada natural y cálida (2 a 3 oraciones), SIN pronunciar el nombre de la calle, barrio ni ciudad, sin emojis ni asteriscos.'
-                },
-                locationTextConfirmation: {
-                  type: 'string',
-                  description:
-                    'Texto escrito con la Calle, Barrio y Ciudad/Edificio para que el cliente lo lea en texto (obligatorio en paso 3; vacío en los demás pasos).'
-                },
-                nextStep: {
-                  type: 'number',
-                  description: 'Número de paso actual o siguiente (1 al 5).'
-                },
-                congruent: {
-                  type: 'boolean',
-                  description: 'true si la respuesta del cliente fue congruente con la pregunta.'
-                },
-                orderConfirmed: {
-                  type: 'boolean',
-                  description: 'true cuando el pedido llega al Paso 5 confirmado.'
-                },
-                extractedHouseReference: {
-                  type: 'string',
-                  description: 'Descripción de cómo es la casa / fachada / edificio / recepción / referencia cercana.'
-                },
-                correctedName: { type: 'string' },
-                correctedCity: { type: 'string' },
-                correctedAddress: { type: 'string' }
-              },
-              required: ['reply', 'locationTextConfirmation', 'nextStep', 'congruent', 'orderConfirmed']
-            }
-          }
-        ]
-      : [
-          {
-            name: 'emit_reply',
-            description: 'Obligatorio: Llamar SIEMPRE a esta función para emitir el texto de respuesta.',
-            parameters: {
-              type: 'object',
-              properties: {
-                reply: {
-                  type: 'string',
-                  description: 'Texto completo de tu respuesta sin emojis ni asteriscos si es para voz.'
+                    'Tu respuesta hablada AMPLIA, MUY EMPÁTICA, CONVERSACIONAL Y DETALLADA (obligatoriamente de 3 a 5 oraciones completas, mínimo 35 palabras, JAMÁS 1 a 3 palabras), buscando ángulos distintos sin repetir frases previas, sin emojis ni asteriscos.'
                 }
               },
               required: ['reply']
             }
           }
-        ];
+        ]
+      : jsonMode
+        ? [
+            {
+              name: 'emit_reply',
+              description:
+                'Obligatorio: Llamar SIEMPRE a esta función para entregar la respuesta estructurada al cliente.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  reply: {
+                    type: 'string',
+                    description:
+                      'Tu respuesta hablada natural y cálida (2 a 3 oraciones), SIN pronunciar el nombre de la calle, barrio ni ciudad, sin emojis ni asteriscos.'
+                  },
+                  locationTextConfirmation: {
+                    type: 'string',
+                    description:
+                      'Texto escrito con la Calle, Barrio y Ciudad/Edificio para que el cliente lo lea en texto (obligatorio en paso 3; vacío en los demás pasos).'
+                  },
+                  nextStep: {
+                    type: 'number',
+                    description: 'Número de paso actual o siguiente (1 al 5).'
+                  },
+                  congruent: {
+                    type: 'boolean',
+                    description: 'true si la respuesta del cliente fue congruente con la pregunta.'
+                  },
+                  orderConfirmed: {
+                    type: 'boolean',
+                    description: 'true cuando el pedido llega al Paso 5 confirmado.'
+                  },
+                  extractedHouseReference: {
+                    type: 'string',
+                    description: 'Descripción de cómo es la casa / fachada / edificio / recepción / referencia cercana.'
+                  },
+                  correctedName: { type: 'string' },
+                  correctedCity: { type: 'string' },
+                  correctedAddress: { type: 'string' }
+                },
+                required: ['reply', 'locationTextConfirmation', 'nextStep', 'congruent', 'orderConfirmed']
+              }
+            }
+          ]
+        : [
+            {
+              name: 'emit_reply',
+              description: 'Obligatorio: Llamar SIEMPRE a esta función para emitir el texto de respuesta.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  reply: {
+                    type: 'string',
+                    description: 'Texto completo de tu respuesta sin emojis ni asteriscos si es para voz.'
+                  }
+                },
+                required: ['reply']
+              }
+            }
+          ];
 
   return new Promise<string>((resolve, reject) => {
     let settled = false;
@@ -4872,20 +4912,198 @@ export function buildVipPrepaymentAliasCard(order: any): string {
   ].join('\n');
 }
 
-function handleVipPrepaymentNegotiationTurn(
+// Analizador semántico de oración completa para detectar cláusulas adversativas ("pero", "aunque", "solo que", "nomás que"),
+// pedidos de explicación ("explicame", "de qué se trata", "cómo funciona") y aclaraciones de NO aprobación ("todavía no te dije que quiero", "no aprobé").
+// Garantiza que JAMÁS se use una palabra aislada ("sí", "me gusta", "me interesa", "quiero") como gatillo cuando el sentido total de la frase expresa duda o pide explicación.
+export function analyzeWholeSentencePromoContext(cleanInput: string): {
+  explicitlyNotApprovedYet: boolean;
+  hasAdversativeOrExplanationRequest: boolean;
+  isUnconditionalDeclineCod: boolean;
+  isExplicitAliasRequestWithoutDoubt: boolean;
+  isUnconditionalAffirmativeWithoutDoubt: boolean;
+} {
+  const normalized = String(cleanInput || '').trim();
+
+  // 1. ¿El cliente está aclarando explícitamente que TODAVÍA NO aprobó o que no dijo que sí quería participar?
+  // Ej: "no, yo no te dije todavía que quiero participar, te dije nomás que me gusta, pero quiero que me explique..."
+  const explicitlyNotApprovedYet =
+    /\b(no\s+te\s+dije|no\s+dije\s+que|todav[ií]a\s+no|a[uú]n\s+no|no\s+aprob[eé]|no\s+decid[ií]|no\s+confirm[eé]|te\s+dije\s+no\s*m[aá]s|solo\s+te\s+dije|solamente\s+te\s+dije|solo\s+dije|no\s+quise\s+decir|esper[aá]\s+un\s+poco|no\s+estoy\s+segur[oa])\b/i.test(
+      normalized
+    );
+
+  // 2. ¿La oración contiene un conector adversativo ("pero", "sin embargo", "aunque", "solo que", "nomás que")
+  // o pide que le expliquen mejor de qué se trata / cómo funciona / tiene una duda?
+  // Ej: "Sí me gusta, pero me podría explicar mejor de qué se trata esta promoción"
+  // Ej: "Sí me interesa, pero necesito que me explique un poco mejor"
+  const hasAdversativeConnector =
+    /\b(pero|sin\s+embargo|aunque|solo\s+que|no\s*m[aá]s\s+que|sino\s+que|antes\s+de\s+decidir|primero\s+quiero|primero\s+necesito|primero\s+explic\w*|antes\s+explic\w*)\b/i.test(
+      normalized
+    );
+
+  const hasExplanationOrQuestionClause =
+    /\b(explic[aá]\w*|explicarme|explicame|expl[ií]came|explique|expl[ií]queme|de\s+qu[eé]\s+se\s+trata|qu[eé]\s+se\s+trata|c[oó]mo\s+funciona|c[oó]mo\s+es\s+eso|c[oó]mo\s+es\s+la\s+promo\w*|c[oó]mo\s+ser[ií]a|no\s+entend[ií]|entender\s+mejor|un\s+poco\s+mejor|saber\s+m[aá]s|saber\s+bien|contame\s+m[aá]s|contame\s+mejor|contame\s+bien|qu[eé]\s+significa|duda|pregunta|no\s+me\s+qued[oó]\s+claro|c[oó]mo\s+particip\w*|qu[eé]\s+hay\s+que\s+hacer)\b/i.test(
+      normalized
+    );
+
+  const hasAdversativeOrExplanationRequest =
+    explicitlyNotApprovedYet || hasAdversativeConnector || hasExplanationOrQuestionClause;
+
+  // 3. ¿Rechaza la promoción para pagar contra entrega al recibir (sin estar pidiendo explicación de la promo)?
+  const matchesDeclineCodWords =
+    /\b(no\s+gracias|prefiero\s+pagar\s+al\s+recibir|pago\s+al\s+recibir|contra\s+entrega|cuando\s+llegue|cuando\s+me\s+entreguen|en\s+efectivo\s+al\s+recibir|no\s+tengo\s+para\s+transferir|despu[eé]s\s+nom[aá]s|al\s+entregar|mejor\s+al\s+recibir|no\s+quiero\s+participar|no\s+voy\s+a\s+participar)\b/i.test(
+      normalized
+    ) || /^(?:no|nop|no\s+puedo\s+ahora|no\s+gracias)$/i.test(normalized);
+
+  const isUnconditionalDeclineCod = matchesDeclineCodWords && !hasExplanationOrQuestionClause;
+
+  // 4. ¿Pide explícitamente el alias o cuenta para transferir AHORA y SIN ninguna cláusula de duda, "pero" ni pedido de explicación?
+  const matchesAliasRequest =
+    /\b(pasame\s+el\s+alias|p[aá]same\s+el\s+alias|mandame\s+el\s+alias|m[aá]ndame\s+el\s+alias|enviame\s+el\s+alias|env[ií]ame\s+el\s+alias|pasame\s+la\s+cuenta|pasame\s+los\s+datos|estoy\s+list[oa]\s+para\s+transferir|ya\s+estoy\s+list[oa]|ya\s+estoy\s+preparad[oa]|a\s+qu[eé]\s+cuenta\s+transfiero|cu[aá]l\s+es\s+el\s+alias)\b/i.test(
+      normalized
+    );
+  const isExplicitAliasRequestWithoutDoubt =
+    matchesAliasRequest && !hasAdversativeOrExplanationRequest && !explicitlyNotApprovedYet && !isUnconditionalDeclineCod;
+
+  // 5. ¿Aprueba participar de forma directa, total y SIN ningún "pero", duda, pregunta ni negación en ninguna parte de la frase?
+  const hasNegativeBeforeWant =
+    /\b(no\s+quiero|no\s+puedo|no\s+me\s+interesa|no\s+te\s+dije|todav[ií]a\s+no|a[uú]n\s+no|no\s+voy\s+a)\b/i.test(
+      normalized
+    );
+  const matchesPositiveApproval =
+    /\b(s[ií]\s+quiero|dale\s+quiero|quiero\s+participar|quiero\s+aprovechar|me\s+anoto|acepto|estoy\s+de\s+acuerdo|s[ií]\s+participo|s[ií]\s+me\s+anoto|quiero\s+el\s+descuento|quiero\s+pagar\s+adelantado|quiero\s+transferir)\b/i.test(
+      normalized
+    ) ||
+    /^(?:s[ií]|claro|dale|bueno|ok|okay|de\s+una|s[ií]\s+por\s+favor|claro\s+que\s+s[ií]|dale\s+s[ií]|me\s+encanta|excelente|genial|listo|lista|👍|👌|✅)$/i.test(
+      normalized
+    );
+
+  const isUnconditionalAffirmativeWithoutDoubt =
+    (matchesPositiveApproval || isExplicitAliasRequestWithoutDoubt) &&
+    !hasAdversativeOrExplanationRequest &&
+    !explicitlyNotApprovedYet &&
+    !hasNegativeBeforeWant &&
+    !isUnconditionalDeclineCod;
+
+  return {
+    explicitlyNotApprovedYet,
+    hasAdversativeOrExplanationRequest,
+    isUnconditionalDeclineCod,
+    isExplicitAliasRequestWithoutDoubt,
+    isUnconditionalAffirmativeWithoutDoubt
+  };
+}
+
+function buildPromoNegotiationLLMSystemPrompt(
+  order: any,
+  stage: string,
+  cleanInput: string,
+  explanationCount: number
+): string {
+  const rawName = String(order?.nombre || '').trim();
+  const firstName = getNaturalFirstName(rawName);
+  const displayFirstName = firstName && firstName !== 'qué tal' ? firstName : 'cliente';
+  const genderInfo = detectCustomerGender(rawName);
+  const preparadaWord = genderInfo.gender === 'female' ? 'preparada' : 'preparado';
+  const shortProduct = getNaturalProductName(order?.producto);
+
+  const rawMontoNum =
+    Number(String(order?.montoOriginalSinDescuento || order?.monto || '189000').replace(/\D/g, '')) || 189000;
+  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
+  const montoOriginalStr = formatGsServer(rawMontoNum);
+  const montoDescuentoStr = formatGsServer(discountedMontoNum);
+
+  return `Sos un agente humano real, sumamente inteligente, empático, educado y persuasivo de Noelux en Paraguay. Hablás español paraguayo natural y profesional (usás "vos", "tenés", "podés").
+Tu respuesta en "reply" se convierte directamente a VOZ (Nota de Audio TTS), por lo que NO debés usar emojis, ni asteriscos, ni markdown, ni caracteres especiales.
+
+REGLA SUPREMA DE COMPRENSIÓN CONTEXTUAL DE TODA LA ORACIÓN (PROHIBIDO USAR PALABRAS SUELTAS COMO GATILLO):
+- Debés leer, escuchar y contextualizar TODAS las palabras de la oración completa del cliente antes de deducir si aprobó o no participar.
+- JAMÁS uses la primera o segunda palabra (como "sí", "sí me gusta", "sí me interesa", "quiero") como un gatillo automático de aprobación si en el resto de la frase hay un "pero", una condición, una pregunta ("¿de qué se trata?", "explicame un poco mejor", "¿cómo funciona?") o una aclaración de que todavía NO decidió participar ("no te dije todavía que quiero participar, te dije nomás que me gusta, pero explicame").
+- Si el cliente dice por ejemplo:
+  * "Sí me gusta, pero me podrías explicar mejor de qué se trata esta promoción"
+  * "Sí me interesa, pero necesito que me explique un poco mejor"
+  * "No, yo no te dije todavía que quiero participar, te dije nomás que me gusta, pero quiero que me explique un poco mejor de qué se trata"
+  ESO SIGNIFICA QUE EL CLIENTE TODAVÍA NO APROBÓ PARTICIPAR. Tiene interés, pero pide que primero le expliques bien cómo funciona la promoción para poder tomar una decisión.
+  En todos esos casos, debés clasificar obligatoriamente "intent": "ASKING_EXPLANATION_OR_DOUBTING" y "hasDoubtOrCondition": true.
+  Y en "reply":
+  - PROHIBIDO felicitarlo como si ya hubiera aceptado ("Te felicito por tu decisión" está PROHIBIDO cuando solo pidió explicación).
+  - PROHIBIDO pasarle el alias o los datos bancarios todavía.
+  - Si el cliente te aclaró que todavía no había dicho que sí, pedile disculpas con mucha calidez y educación por haberte adelantado y decile que lo entendés perfectamente.
+  - Explicále con total claridad, transparencia y amabilidad de qué se trata la promoción: contále que su pedido de ${shortProduct} ya está confirmado con normalidad por ${montoOriginalStr} para pagar en efectivo al recibir, pero que la empresa habilitó cinco cupos especiales en el día de hoy donde, si el cliente decide adelantar su pago ahora por transferencia bancaria antes de que salga el camión de reparto, el sistema le descuenta cincuenta mil guaraníes al instante en su boleta, por lo que en lugar de ${montoOriginalStr} abona únicamente ${montoDescuentoStr} y cuando llega el repartidor a su puerta recibe su paquete en mano sin pagar un solo guaraní más.
+  - Cerrá tu explicación preguntándole con mucha educación: "¿Qué te parece cómo funciona, ${displayFirstName}, te gustaría aprovechar uno de los cinco cupos con los cincuenta mil guaraníes de descuento o preferís abonar normalmente al recibir?".
+
+DATOS DE LA PROMOCIÓN Y DEL PEDIDO:
+- Cliente: ${rawName || 'Cliente'} (Primer nombre: ${displayFirstName}, Género: ${genderInfo.gender}, Trato: ${genderInfo.instruccionGenero})
+- Producto: ${shortProduct}
+- Etapa actual de la conversación sobre la promo: ${stage} (Intento de explicación #${explanationCount + 1})
+- Precio normal contra entrega (al recibir): ${montoOriginalStr}
+- Descuento exclusivo por pago adelantado hoy (primeras 5 personas): cincuenta mil guaraníes (-Gs. 50.000)
+- Monto final con descuento si transfiere ahora: ${montoDescuentoStr}
+- Cuenta oficial de la empresa (SOLO mencionar en READY_FOR_ALIAS): Banco Familiar, alias tres ocho cinco seis cero tres tres a nombre de Richard Almirón.
+
+REGLAS DE CLASIFICACIÓN DE "intent" SEGÚN EL SIGNIFICADO TOTAL DE LA FRASE ("${cleanInput}"):
+1. "ASKING_EXPLANATION_OR_DOUBTING":
+   - Usalo SIEMPRE que el cliente diga "sí me gusta pero...", "sí me interesa pero explicame...", pregunte de qué se trata, cómo funciona, por qué hay descuento, si es seguro, o aclare que todavía no dijo que sí quiere participar.
+2. "CONFIRMING_PARTICIPATION":
+   - Usalo ÚNICAMENTE cuando el cliente (estando en la etapa 'offered_hook') exprese de forma 100% afirmativa, decidida y SIN NINGÚN "PERO" ni duda que SÍ quiere participar y aprovechar el descuento.
+   - En "reply": Felicitá a ${displayFirstName} de corazón porque se ahorra cincuenta mil guaraníes al instante, confirmále que ya le reservaste uno de los cinco lugares quedando en solo ${montoDescuentoStr} en vez de ${montoOriginalStr}, y decile que cuando esté de acuerdo y ${preparadaWord} para efectuar el pago ahora te avise diciéndote "pasame el alias" para pasarle enseguida los datos. (No le pases el alias todavía en este paso).
+3. "READY_FOR_ALIAS":
+   - Usalo ÚNICAMENTE cuando el cliente confirme sin dudas ni "peros" que ya está ${preparadaWord}/listo ahora mismo para transferir y te pida explícitamente el alias o los datos de la cuenta bancaria.
+   - En "reply": Decile a ${displayFirstName} que acá abajo le pasás en texto los datos oficiales de nuestra cuenta del Banco Familiar con el alias tres ocho cinco seis cero tres tres a nombre de Richard Almirón para que transfiera únicamente ${montoDescuentoStr} con sus cincuenta mil guaraníes de descuento ya aplicados, y pedile que apenas envíe la transferencia te mande por acá la captura o comprobante del pago.
+4. "DECLINING_PROMO_COD":
+   - Usalo cuando el cliente diga claramente que no desea pagar por adelantado y que prefiere pagar al recibir (contra entrega).
+   - En "reply": Decile con mucha amabilidad que no se preocupe para nada, que su pedido queda cien por ciento confirmado con normalidad en modalidad contra entrega para abonar los ${montoOriginalStr} recién cuando el repartidor le entregue el paquete en mano.
+5. "RECEIPT_OR_PAYMENT_SENT":
+   - Usalo si el cliente dice que ya realizó la transferencia o ya envió el comprobante.
+6. "UNRELATED_TOPIC":
+   - Usalo si el cliente está hablando de otra cosa que no tiene relación con la promoción ni con el pago.`;
+}
+
+function buildContextualPromoExplanationReply(
+  matchedOrder: any,
+  cleanInput: string,
+  explicitlyNotApprovedYet: boolean,
+  explanationCount: number
+): string {
+  const rawName = String(matchedOrder?.nombre || '').trim();
+  const firstName = getNaturalFirstName(rawName);
+  const displayFirstName = firstName && firstName !== 'qué tal' ? firstName : 'cliente';
+  const shortProduct = getNaturalProductName(matchedOrder?.producto);
+
+  const rawMontoNum =
+    Number(String(matchedOrder?.montoOriginalSinDescuento || matchedOrder?.monto || '189000').replace(/\D/g, '')) || 189000;
+  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
+  const montoOriginalStr = formatGsServer(rawMontoNum);
+  const montoDescuentoStr = formatGsServer(discountedMontoNum);
+
+  if (explicitlyNotApprovedYet) {
+    return `Tenés toda la razón, ${displayFirstName}, te pido mil disculpas por haberme adelantado recién; te entendí perfectamente que todavía no tomaste la decisión y que primero querés que te explique bien de qué se trata. Te cuento con total claridad: tu pedido de ${shortProduct} ya está confirmado para pagarse contra entrega por ${montoOriginalStr} al recibir, pero esta promoción especial consiste en que si decidís abonar hoy por adelantado mediante transferencia bancaria antes de que salga el móvil de reparto, la empresa te descuenta cincuenta mil guaraníes al instante, por lo que abonás únicamente ${montoDescuentoStr} y cuando el repartidor llegue a tu puerta te entrega el paquete en mano sin cobrarte absolutamente nada más. Contame con total confianza, ${displayFirstName}, ahora que te detallé cómo funciona, ¿te gustaría participar para aprovechar esos cincuenta mil guaraníes de descuento o preferís mantener el pago normal al recibir?`;
+  }
+
+  const variant = explanationCount % 3;
+  if (variant === 0) {
+    return `Con muchísimo gusto te explico bien en detalle de qué se trata, ${displayFirstName}, qué bueno que me consultás para tener todo claro antes de decidir. Mirá, normalmente tu pedido de ${shortProduct} se abona en efectivo al recibir por el total de ${montoOriginalStr}, pero hoy la empresa habilitó únicamente cinco cupos promocionales donde, a los clientes que eligen adelantar su pago por transferencia bancaria antes de que salga el camión de despacho, les descontamos cincuenta mil guaraníes en el acto. Eso significa que en vez de ${montoOriginalStr} abonás solamente ${montoDescuentoStr} a nuestra cuenta oficial, dejamos tu factura sellada como pagada en el sistema y cuando el repartidor llega a tu domicilio te entrega tu producto en mano sin que tengas que abonar ni un solo guaraní más. ¿Qué opinás, ${displayFirstName}, te gustaría aprovechar uno de los cinco lugares con este descuento o preferís pagar normalmente al recibir?`;
+  }
+  if (variant === 1) {
+    return `Claro que sí, ${displayFirstName}, te explico paso a paso cómo funciona esta promoción para que evalúes tranquilo si te conviene. Como nosotros ahorramos el trámite de recaudación en efectivo del chofer cuando un cliente abona por transferencia antes del despacho, la empresa decidió premiar a las primeras cinco personas del día regalándoles ese ahorro en forma de un descuento directo de cincuenta mil guaraníes sobre su boleta. Por eso, si decidís participar, en lugar de pagar ${montoOriginalStr} cuando llegue el courier, transferís ahora solamente ${montoDescuentoStr} y tu paquete sale con prioridad y con recibo cancelado hasta tu puerta. Decime, ${displayFirstName}, ¿te gustaría que te anote para aprovechar los cincuenta mil guaraníes de descuento o lo dejamos contra entrega normal?`;
+  }
+  return `Me encanta explicarte bien cada detalle, ${displayFirstName}, porque la idea es que estés cien por ciento seguro antes de elegir. La promoción es muy sencilla: tu envío ya está garantizado, y si optás por hacer el pago ahora mediante transferencia bancaria a la cuenta oficial de la empresa, te restamos cincuenta mil guaraníes de tu cuenta total para que pagues únicamente ${montoDescuentoStr} en vez de ${montoOriginalStr}, recibiendo tu ${shortProduct} en casa libre de todo cargo. Contame por favor, ${displayFirstName}, ¿te gustaría participar de este beneficio ahora que conocés bien cómo es, o preferís abonar al momento de la entrega?`;
+}
+
+async function handleVipPrepaymentNegotiationTurn(
   cleanPhone: string,
   matchedOrder: any,
   cleanInput: string,
-  pedidos: any[]
-): {
+  pedidos: any[],
+  conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
+): Promise<{
   handled: boolean;
   reply: string;
   locationTextConfirmation?: string;
   forceAudioReply?: boolean;
-} {
+}> {
   if (!matchedOrder) return { handled: false, reply: '' };
 
-  const stage: string = matchedOrder.promoPagoAdelantadoStage || '';
+  let stage: string = matchedOrder.promoPagoAdelantadoStage || '';
   if (!stage || stage === 'declined_cod') {
     return { handled: false, reply: '' };
   }
@@ -4902,11 +5120,11 @@ function handleVipPrepaymentNegotiationTurn(
   const montoOriginalStr = formatGsServer(rawMontoNum);
   const montoDescuentoStr = formatGsServer(discountedMontoNum);
 
-  // Detectar si el cliente envió imagen/PDF de comprobante o afirma que ya transfirió
+  // Detectar si el cliente envió imagen/PDF de comprobante o afirma inequívocamente que ya transfirió
   const isReceiptImageOrDoc =
     /COMPROBANTE_PAGO_ADELANTADO|envi[oó] una foto|envi[oó] la imagen|captura|comprobante/i.test(cleanInput);
   const isVerbalPaymentDone =
-    /\b(ya\s+transfer[ií]|ya\s+pagu[eé]|ya\s+envi[eé]|ya\s+deposit[eé]|ya\s+hice\s+la\s+transferencia|ya\s+te\s+mand[eé]\s+el\s+comprobante|te\s+paso\s+el\s+comprobante|ah[ií]\s+te\s+envi[eé]|ah[ií]\s+envi[eé]|listo\s+el\s+pago|ya\s+est[aá]\s+el\s+pago)\b/i.test(
+    /\b(ya\s+transfer[ií]|ya\s+pagu[eé]|ya\s+envi[eé]\s+el\s+pago|ya\s+deposit[eé]|ya\s+hice\s+la\s+transferencia|ya\s+te\s+mand[eé]\s+el\s+comprobante|te\s+paso\s+el\s+comprobante|ah[ií]\s+te\s+envi[eé]\s+el\s+comprobante|listo\s+el\s+pago|ya\s+est[aá]\s+el\s+pago)\b/i.test(
       cleanInput
     );
 
@@ -4949,6 +5167,7 @@ function handleVipPrepaymentNegotiationTurn(
     if (isReceiptImageOrDoc || isVerbalPaymentDone) {
       const audioReply = `Muchas gracias de nuevo, ${displayFirstName}, ya tenemos registrado tu comprobante en pantalla. Aguardame unos instantes por favor que ya mismo estamos validando la transferencia con administración central y te confirmamos enseguida.`;
       matchedOrder.ultimoMensajeIA = audioReply;
+      matchedOrder.actualizado_en = new Date().toISOString();
       savePedidos(pedidos);
       return {
         handled: true,
@@ -4960,17 +5179,107 @@ function handleVipPrepaymentNegotiationTurn(
     return { handled: false, reply: '' };
   }
 
-  // Detectar si el cliente rechaza amablemente la promo y prefiere pagar al recibir (contra entrega)
-  const isDecliningPromo =
-    /\b(no\s+gracias|al\s+recibir|contra\s+entrega|cuando\s+llegue|en\s+efectivo|no\s+tengo\s+para\s+transferir|prefiero\s+pagar\s+al\s+recibir|despu[eé]s\s+nom[aá]s|al\s+entregar)\b/i.test(
-      cleanInput
-    ) || /^(?:no|nop|no\s+puedo\s+ahora)$/i.test(cleanInput.trim());
+  // =========================================================================
+  // ANÁLISIS SEMÁNTICO DE LA ORACIÓN COMPLETA + RAZONAMIENTO CONTEXTUAL LLM
+  // Prohibido usar palabras sueltas ("sí", "me gusta", "quiero") como gatillo.
+  // =========================================================================
+  const sentenceAnalysis = analyzeWholeSentencePromoContext(cleanInput);
+  const explanationCount = Number(matchedOrder.promoExplanationCount || 0);
 
-  if (isDecliningPromo && (stage === 'offered_hook' || stage === 'awaiting_ready_for_alias')) {
+  let llmIntent = '';
+  let llmHasDoubtOrCondition = false;
+  let llmReply = '';
+
+  const deepgramKey = getDeepgramApiKey();
+  if (deepgramKey) {
+    try {
+      const promoSystemPrompt = buildPromoNegotiationLLMSystemPrompt(
+        matchedOrder,
+        stage,
+        cleanInput,
+        explanationCount
+      );
+      const rawPromoJson = await callDeepgramAgentLLM(
+        promoSystemPrompt,
+        conversationHistory,
+        cleanInput,
+        true,
+        false,
+        true
+      );
+      if (rawPromoJson) {
+        const cleanedJson = rawPromoJson
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/\s*```$/, '')
+          .trim();
+        const parsed = JSON.parse(cleanedJson);
+        llmIntent = String(parsed.intent || '').trim();
+        llmHasDoubtOrCondition = Boolean(parsed.hasDoubtOrCondition);
+        llmReply = String(parsed.reply || '').trim();
+      }
+    } catch (e: any) {
+      console.warn('[Promo Negotiation LLM Contextualizer Warning]:', e?.message || e);
+    }
+  }
+
+  // Combinar la comprensión del LLM con el analizador semántico de oración completa:
+  // Si en CUALQUIER parte de la frase el cliente puso un "pero", pidió que le expliquen mejor de qué se trata,
+  // hizo una consulta sobre cómo funciona o aclaró que todavía no dijo que sí -> ES ASKING_EXPLANATION_OR_DOUBTING.
+  const isAskingExplanationOrDoubting =
+    sentenceAnalysis.explicitlyNotApprovedYet ||
+    sentenceAnalysis.hasAdversativeOrExplanationRequest ||
+    llmHasDoubtOrCondition ||
+    llmIntent === 'ASKING_EXPLANATION_OR_DOUBTING';
+
+  // CASO 1: El cliente tiene dudas, dice "sí me gusta / me interesa, pero explicame mejor de qué se trata"
+  // o aclara "yo todavía no te dije que quiero participar, solo quiero que me expliques".
+  if (isAskingExplanationOrDoubting) {
+    // Si por algún mensaje previo la etapa se había adelantado y el cliente aclara que todavía no aprobó o pide explicación de la promo,
+    // mantener o regresar la etapa a 'offered_hook' para NO enviarlo al alias sin su aprobación real:
+    if (sentenceAnalysis.explicitlyNotApprovedYet || stage === 'alias_sent_awaiting_receipt' || stage === 'awaiting_ready_for_alias') {
+      matchedOrder.promoPagoAdelantadoStage = 'offered_hook';
+    }
+    matchedOrder.promoExplanationCount = explanationCount + 1;
+
+    // Verificar que la respuesta del LLM sea una explicación real y NO contenga frases de felicitación prematura ni el alias:
+    const llmReplyHasPrematureApprovalOrAlias =
+      /\b(te\s+felicito|excelente\s+decisi[oó]n|ya\s+te\s+reserv[eé]|tres\s+ocho\s+cinco\s+seis|3856033|ac[aá]\s+abajo\s+te\s+paso\s+en\s+texto\s+los\s+datos)\b/i.test(
+        llmReply
+      );
+
+    const finalExplanationReply =
+      llmReply && llmReply.split(/\s+/).length >= 18 && !llmReplyHasPrematureApprovalOrAlias
+        ? normalizeParaguayanPhonesInText(llmReply)
+        : buildContextualPromoExplanationReply(
+            matchedOrder,
+            cleanInput,
+            sentenceAnalysis.explicitlyNotApprovedYet,
+            explanationCount
+          );
+
+    matchedOrder.ultimoMensajeIA = finalExplanationReply;
+    matchedOrder.actualizado_en = new Date().toISOString();
+    savePedidos(pedidos);
+    syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+
+    return {
+      handled: true,
+      reply: finalExplanationReply,
+      locationTextConfirmation: undefined
+    };
+  }
+
+  // CASO 2: El cliente rechaza la promoción y prefiere pagar al recibir (contra entrega)
+  if (sentenceAnalysis.isUnconditionalDeclineCod || llmIntent === 'DECLINING_PROMO_COD') {
     matchedOrder.promoPagoAdelantadoStage = 'declined_cod';
     matchedOrder.modalidadPagoElegida = 'contra_entrega';
-    const politeCodReply = `Dale, no te preocupes para nada, ${displayFirstName}, está superbién. Tu pedido queda cien por ciento confirmado con normalidad en modalidad de cobro contra entrega para que abones los ${montoOriginalStr} recién cuando el repartidor te entregue tu paquete en mano. Ya mismo pasa a despacho y muchas gracias por tu compra.`;
+    const politeCodReply =
+      llmReply && llmReply.split(/\s+/).length >= 15
+        ? normalizeParaguayanPhonesInText(llmReply)
+        : `Dale, no te preocupes para nada, ${displayFirstName}, está superbién. Tu pedido queda cien por ciento confirmado con normalidad en modalidad de cobro contra entrega para que abones los ${montoOriginalStr} recién cuando el repartidor te entregue tu paquete en mano. Ya mismo pasa a despacho y muchas gracias por tu compra.`;
     matchedOrder.ultimoMensajeIA = politeCodReply;
+    matchedOrder.actualizado_en = new Date().toISOString();
     savePedidos(pedidos);
     syncOrderUpdateToCloud(matchedOrder).catch(() => {});
     return {
@@ -4980,21 +5289,23 @@ function handleVipPrepaymentNegotiationTurn(
     };
   }
 
-  // Detectar si el cliente acepta o pide el alias
-  const isAffirmativeForPromo =
-    /\b(s[ií]|claro|dale|quiero|me\s+interesa|depositar|transferir|transferencia|adelantado|descuento|promo|promoci[oó]n|aprovechar|bueno|ok|okay|listo|lista|preparad[oa]|pasame|p[aá]same|mandame|m[aá]ndame|enviame|env[ií]ame|alias|cuenta|banco|c[oó]mo\s+pago|d[oó]nde\s+trans|de\s+acuerdo|me\s+parece\s+bien|excelente|genial)\b/i.test(
-      cleanInput
-    ) || /👍|👌|✅/.test(cleanInput);
+  // Determinar si el significado completo de la frase es una aprobación real, decidida y sin dudas:
+  const isGenuineApprovalWithoutDoubts =
+    !isAskingExplanationOrDoubting &&
+    (sentenceAnalysis.isUnconditionalAffirmativeWithoutDoubt ||
+      llmIntent === 'CONFIRMING_PARTICIPATION' ||
+      llmIntent === 'READY_FOR_ALIAS');
 
-  // STAGE B: Estábamos en 'offered_hook' y el cliente dice "Sí, quiero depositar ahora" ->
+  // STAGE B: Estábamos en 'offered_hook' y el significado completo de la frase del cliente confirma SIN DUDAS NI "PEROS" que SÍ quiere participar ->
   // REGLA DEL USUARIO: "No le vaya a pasar así al toque, que le felicite, que es una buena decisión y cuando estás de acuerdo y estás preparada para efectuar el pago me avisás y te paso el alias. ¿Qué te parece?"
-  if (stage === 'offered_hook' && isAffirmativeForPromo) {
+  if (stage === 'offered_hook' && isGenuineApprovalWithoutDoubts) {
     matchedOrder.promoPagoAdelantadoStage = 'awaiting_ready_for_alias';
     matchedOrder.montoOriginalSinDescuento = rawMontoNum;
     matchedOrder.montoConDescuentoAdelantado = discountedMontoNum;
 
     const stageBReply = `Te felicito de corazón, ${displayFirstName}, es una excelente decisión porque te ahorrás cincuenta mil guaraníes al instante y ya te reservé uno de los cinco lugares exclusivos de la promoción, así que en vez de ${montoOriginalStr} vas a abonar solamente ${montoDescuentoStr}. Cuando estés de acuerdo y estés ${preparadaWord} para efectuar el pago ahora, avisame diciéndome pasame el alias y te paso enseguida los datos. ¿Qué te parece?`;
     matchedOrder.ultimoMensajeIA = stageBReply;
+    matchedOrder.actualizado_en = new Date().toISOString();
     savePedidos(pedidos);
     syncOrderUpdateToCloud(matchedOrder).catch(() => {});
     return {
@@ -5004,9 +5315,16 @@ function handleVipPrepaymentNegotiationTurn(
     };
   }
 
-  // STAGE C: Estábamos en 'awaiting_ready_for_alias' y el cliente responde "Sí, pasame el alias" / "Estoy lista" ->
+  // STAGE C: Estábamos en 'awaiting_ready_for_alias' y el significado completo de la frase del cliente confirma SIN DUDAS NI "PEROS" que está listo y pide el alias ->
   // Ahora sí le pasamos el Alias del Banco Familiar (3856033 · Titular: Richard Almirón) bien diseñado + audio explicativo
-  if (stage === 'awaiting_ready_for_alias' && isAffirmativeForPromo) {
+  if (
+    stage === 'awaiting_ready_for_alias' &&
+    !isAskingExplanationOrDoubting &&
+    (sentenceAnalysis.isExplicitAliasRequestWithoutDoubt ||
+      sentenceAnalysis.isUnconditionalAffirmativeWithoutDoubt ||
+      llmIntent === 'READY_FOR_ALIAS' ||
+      llmIntent === 'CONFIRMING_PARTICIPATION')
+  ) {
     matchedOrder.promoPagoAdelantadoStage = 'alias_sent_awaiting_receipt';
     matchedOrder.montoOriginalSinDescuento = rawMontoNum;
     matchedOrder.montoConDescuentoAdelantado = discountedMontoNum;
@@ -5014,6 +5332,7 @@ function handleVipPrepaymentNegotiationTurn(
     const stageCAudioReply = `Perfecto, ${displayFirstName}. Acá abajo te paso en texto los datos oficiales de nuestra cuenta del Banco Familiar con el alias tres ocho cinco seis cero tres tres a nombre de Richard Almirón, para que transfieras únicamente ${montoDescuentoStr} con tus cincuenta mil guaraníes de descuento ya aplicados. En cuanto envíes la transferencia, mandame por acá mismo la captura o el comprobante exacto del pago así te lo confirmamos enseguida.`;
     const aliasCardText = buildVipPrepaymentAliasCard(matchedOrder);
     matchedOrder.ultimoMensajeIA = stageCAudioReply;
+    matchedOrder.actualizado_en = new Date().toISOString();
     savePedidos(pedidos);
     syncOrderUpdateToCloud(matchedOrder).catch(() => {});
     return {
@@ -5023,14 +5342,16 @@ function handleVipPrepaymentNegotiationTurn(
     };
   }
 
-  // Si ya se le envió el alias ('alias_sent_awaiting_receipt') y el cliente pregunta cómo es el alias o pide que se lo reenvíe:
+  // Si ya se le envió el alias ('alias_sent_awaiting_receipt') y el cliente pide que se lo reenvíe:
   if (
     stage === 'alias_sent_awaiting_receipt' &&
+    !isAskingExplanationOrDoubting &&
     /\b(alias|cuenta|banco|titular|cu[aá]nto|monto|pasame|p[aá]same)\b/i.test(cleanInput)
   ) {
     const reminderReply = `Claro que sí, ${displayFirstName}, acá abajo te vuelvo a dejar la tarjeta con el alias tres ocho cinco seis cero tres tres del Banco Familiar a nombre de Richard Almirón por el monto con descuento de ${montoDescuentoStr}. Apenas tengas el comprobante mandame la captura por acá y te lo validamos al instante.`;
     const aliasCardText = buildVipPrepaymentAliasCard(matchedOrder);
     matchedOrder.ultimoMensajeIA = reminderReply;
+    matchedOrder.actualizado_en = new Date().toISOString();
     savePedidos(pedidos);
     return {
       handled: true,
@@ -5129,11 +5450,12 @@ export async function generateContextualAiReply(
   // =========================================================================
   if (isAlreadyConfirmed) {
     // 1. Verificar primero si el cliente está interactuando con la promoción VIP de Pago Adelantado (-50.000 Gs. · Banco Familiar Alias 3856033)
-    const vipNegotiationRes = handleVipPrepaymentNegotiationTurn(
+    const vipNegotiationRes = await handleVipPrepaymentNegotiationTurn(
       cleanPhone,
       matchedOrder,
       cleanInput,
-      pedidos
+      pedidos,
+      conversationHistory
     );
     if (vipNegotiationRes.handled) {
       return {
@@ -5418,9 +5740,13 @@ export async function generateContextualAiReply(
     /\b(estoy\s+trabajando|estoy\s+ocupad[oa]|escribime\s+m[aá]s\s+tarde|ahora\s+no\s+puedo|despu[eé]s\s+te\s+escribo|en\s+el\s+trabajo|manejando)\b/i.test(
       cleanInput
     );
+  const wholeSentenceContextForStep = analyzeWholeSentencePromoContext(cleanInput);
+  const hasDoubtOrExplanationInStep =
+    wholeSentenceContextForStep.explicitlyNotApprovedYet ||
+    wholeSentenceContextForStep.hasAdversativeOrExplanationRequest;
 
-  if (!isClientAskingToWait && currentStep < 5) {
-    // Garantizar que el paso SIEMPRE avance hacia adelante cuando el cliente responde válidamente
+  if (!isClientAskingToWait && !hasDoubtOrExplanationInStep && currentStep < 5) {
+    // Garantizar que el paso SIEMPRE avance hacia adelante cuando el cliente confirma válidamente sin "peros" ni dudas
     if (nextStep <= currentStep) {
       nextStep = Math.min(5, currentStep + 1);
     }
