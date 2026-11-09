@@ -10,6 +10,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { ViralModal } from './components/ViralModal';
 import { PoliciesModal } from './components/PoliciesModal';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
+import { MapCorrectionModal } from './components/MapCorrectionModal';
 import { Footer } from './components/Footer';
 import { AdminView } from './views/AdminView';
 import { AdminLoginView } from './views/AdminLoginView';
