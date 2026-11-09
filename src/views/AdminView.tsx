@@ -271,6 +271,61 @@ export const AdminView: React.FC = () => {
   // Pagination state (10 by 10) per product ID
   const [productPageMap, setProductPageMap] = useState<Record<string, number>>({});
 
+  // Nombres en vivo de Cuenta Publicitaria 834 y Píxel 377 sincronizados con Meta Graph API
+  const [liveMetaRef, setLiveMetaRef] = useState<{
+    adAccountName: string;
+    pixelName: string;
+    pixelId: string;
+  }>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('autoads_meta_live_names_v1') || '{}');
+      return {
+        adAccountName:
+          saved?.adAccountName && saved.adAccountName !== 'Landingcod PY'
+            ? String(saved.adAccountName)
+            : 'Cuenta Publicitaria (834)',
+        pixelName:
+          saved?.pixelName && saved.pixelName !== 'Auto Ads 360'
+            ? String(saved.pixelName)
+            : 'Píxel Cuenta 834 (377)',
+        pixelId: String(saved?.pixelId || '1276031534651377')
+      };
+    } catch {
+      return {
+        adAccountName: 'Cuenta Publicitaria (834)',
+        pixelName: 'Píxel Cuenta 834 (377)',
+        pixelId: '1276031534651377'
+      };
+    }
+  });
+
+  useEffect(() => {
+    const handleLiveNamesEvent = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      if (detail) {
+        setLiveMetaRef(prev => ({
+          adAccountName: String(detail.adAccountName || prev.adAccountName),
+          pixelName: String(detail.pixelName || prev.pixelName),
+          pixelId: String(detail.pixelId || prev.pixelId || '1276031534651377')
+        }));
+      }
+    };
+    window.addEventListener('meta-live-names-updated', handleLiveNamesEvent);
+    fetch('/api/meta/status')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.selectedAdAccountName || data?.universalPixelName) {
+          setLiveMetaRef(prev => ({
+            adAccountName: String(data.selectedAdAccountName || prev.adAccountName),
+            pixelName: String(data.universalPixelName || prev.pixelName),
+            pixelId: String(data.universalPixelId || prev.pixelId || '1276031534651377')
+          }));
+        }
+      })
+      .catch(() => {});
+    return () => window.removeEventListener('meta-live-names-updated', handleLiveNamesEvent);
+  }, []);
+
   // Filtros de pedidos por Nombre, Teléfono y Estado de Archivado + Selección Múltiple y Pop-up Rojo de Eliminación
   const [filterOrderName, setFilterOrderName] = useState('');
   const [filterOrderPhone, setFilterOrderPhone] = useState('');
@@ -2771,14 +2826,14 @@ export const AdminView: React.FC = () => {
                             data-testid={`product-pixel-token-box-${prod.id}`}
                             className="p-3.5 sm:p-4 rounded-2xl bg-[#0d0d0f] border border-zinc-800 shadow-xs space-y-3"
                           >
-                            {/* Referencia fija oficial para no olvidar ni confundir cuentas/píxeles */}
+                            {/* Referencia oficial en vivo sincronizada con Meta Graph API */}
                             <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/70 space-y-2 text-xs">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <span className="font-black text-emerald-300 text-[11px] uppercase tracking-wider">
-                                  📌 Tu Referencia Oficial de Meta Ads (1 Clic para Copiar o Usar)
+                                  📌 Tu Referencia Oficial de Meta Ads en Vivo (1 Clic para Copiar o Usar)
                                 </span>
                                 <span className="text-[10px] font-mono text-zinc-400">
-                                  Portafolio: <strong className="text-white">Landingcod</strong> · Cuenta (834): <strong className="text-white">Landingcod PY</strong>
+                                  Portafolio: <strong className="text-white">Landingcod</strong> · Cuenta (834): <strong className="text-white">{liveMetaRef.adAccountName}</strong>
                                 </span>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -2801,13 +2856,13 @@ export const AdminView: React.FC = () => {
                                 <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2">
                                   <div>
                                     <span className="text-[10px] text-emerald-300 block">Cuenta Publicitaria (834)</span>
-                                    <strong className="text-white font-mono text-xs">Landingcod PY (1048211497774834)</strong>
+                                    <strong className="text-white font-mono text-xs">{liveMetaRef.adAccountName} (1048211497774834)</strong>
                                   </div>
                                   <button
                                     type="button"
                                     onClick={() => {
                                       try { navigator.clipboard.writeText('1048211497774834'); } catch {}
-                                      showToast('📋 Copiado ID Cuenta 834: 1048211497774834');
+                                      showToast(`📋 Copiado ID Cuenta ${liveMetaRef.adAccountName} (834): 1048211497774834`);
                                     }}
                                     className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
                                   >
@@ -2817,14 +2872,14 @@ export const AdminView: React.FC = () => {
                                 <div className="p-2 rounded-lg bg-zinc-900/90 border border-emerald-700/70 flex items-center justify-between gap-2">
                                   <div>
                                     <span className="text-[10px] text-emerald-300 block">Píxel de Cuenta 834 (377)</span>
-                                    <strong className="text-white font-mono text-xs">Auto Ads 360 (1276031534651377)</strong>
+                                    <strong className="text-white font-mono text-xs">{liveMetaRef.pixelName} ({liveMetaRef.pixelId})</strong>
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        try { navigator.clipboard.writeText('1276031534651377'); } catch {}
-                                        showToast('📋 Copiado ID Píxel Auto Ads 360 (377): 1276031534651377');
+                                        try { navigator.clipboard.writeText(liveMetaRef.pixelId); } catch {}
+                                        showToast(`📋 Copiado ID Píxel ${liveMetaRef.pixelName} (377): ${liveMetaRef.pixelId}`);
                                       }}
                                       className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
                                     >
@@ -2833,8 +2888,8 @@ export const AdminView: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        setEditPixelId('1276031534651377');
-                                        showToast('🎯 Píxel Auto Ads 360 (1276031534651377) colocado en el campo.');
+                                        setEditPixelId(liveMetaRef.pixelId);
+                                        showToast(`🎯 Píxel ${liveMetaRef.pixelName} (${liveMetaRef.pixelId}) colocado en el campo.`);
                                       }}
                                       className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-black cursor-pointer"
                                     >
@@ -2868,6 +2923,7 @@ export const AdminView: React.FC = () => {
                                   type="submit"
                                   disabled={savingToDb}
                                   data-testid={`save-product-pixel-btn-${prod.id}`}
+                                  onClick={undefined}
                                   className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
                                 >
                                   <Save className="w-3.5 h-3.5 text-[#e8b23a]" />
@@ -2879,14 +2935,14 @@ export const AdminView: React.FC = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-start">
                               <div className="sm:col-span-5">
                                 <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-                                  ID del Píxel de Facebook (Auto Ads 360: 1276031534651377)
+                                  ID del Píxel de Facebook ({liveMetaRef.pixelName}: {liveMetaRef.pixelId})
                                 </label>
                                 <input
                                   type="text"
                                   data-testid={`product-pixel-id-input-${prod.id}`}
                                   value={editPixelId}
                                   onChange={e => setEditPixelId(e.target.value)}
-                                  placeholder="1276031534651377 (Píxel Auto Ads 360)"
+                                  placeholder={`${liveMetaRef.pixelId} (Píxel ${liveMetaRef.pixelName})`}
                                   className="w-full px-3 py-2.5 border border-zinc-800 rounded-xl text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
                                 />
                               </div>

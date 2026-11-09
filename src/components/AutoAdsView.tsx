@@ -15,7 +15,8 @@ import {
   MessageCircle,
   Share2,
   Send,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { ProductPage } from '../types';
 import { formatGs } from '../config';
@@ -118,13 +119,34 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [metaPixels, setMetaPixels] = useState<
     Array<{ id: string; name: string; adAccountId: string; adAccountName?: string }>
   >([]);
+  const [activeAdAccountName, setActiveAdAccountName] = useState<string>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('autoads_meta_live_names_v1') || '{}');
+      if (saved?.adAccountName && saved.adAccountName !== 'Landingcod PY') {
+        return String(saved.adAccountName);
+      }
+    } catch {}
+    return 'Cuenta Publicitaria (834)';
+  });
   const [activeMetaPixel, setActiveMetaPixel] = useState<{
     id: string;
     name: string;
-  }>({
-    id: '1276031534651377',
-    name: 'Auto Ads 360'
+  }>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('autoads_meta_live_names_v1') || '{}');
+      if (saved?.pixelName && saved.pixelName !== 'Auto Ads 360') {
+        return {
+          id: String(saved.pixelId || '1276031534651377'),
+          name: String(saved.pixelName)
+        };
+      }
+    } catch {}
+    return {
+      id: '1276031534651377',
+      name: 'Píxel Cuenta 834 (377)'
+    };
   });
+  const [syncingLiveMetaNames, setSyncingLiveMetaNames] = useState<boolean>(false);
   const [copiedRefKey, setCopiedRefKey] = useState<string | null>(null);
   const [hasMetaAppCredentials, setHasMetaAppCredentials] = useState<boolean>(false);
   const [metaAppIdPreview, setMetaAppIdPreview] = useState<string>('');
@@ -289,104 +311,174 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
   };
 
-  // Consultar estado vivo de Meta Ads / Facebook OAuth en el servidor
+  // Consultar estado vivo de Meta Ads / Facebook OAuth en el servidor (con auto-restauración tras redeploy en Railway)
   const refreshMetaConnectionStatus = async () => {
     try {
       const r = await fetch('/api/meta/status');
-      const data = await r.json();
+      let data = await r.json();
+
+      // Si el contenedor de Railway se acaba de reiniciar/redesplegar y perdió store_config.json, auto-restaurar la sesión OAuth desde el respaldo local
+      if (!data?.connected) {
+        try {
+          const rawBackup = localStorage.getItem('autoads_meta_oauth_backup_v1');
+          if (rawBackup) {
+            const parsedBackup = JSON.parse(rawBackup);
+            if (parsedBackup?.accessToken) {
+              await fetch('/api/meta/restore-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(parsedBackup)
+              });
+              const r2 = await fetch('/api/meta/status');
+              data = await r2.json();
+            }
+          }
+        } catch {}
+      }
+
       if (data?.connected) {
         setMetaConnected(true);
+        if (data.oauthBackup?.accessToken) {
+          try {
+            localStorage.setItem('autoads_meta_oauth_backup_v1', JSON.stringify(data.oauthBackup));
+          } catch {}
+        }
         if (data.user) {
           setMetaUser({ id: String(data.user.id || ''), name: String(data.user.name || 'Usuario Meta') });
         }
-        if (Array.isArray(data.adAccounts) && data.adAccounts.length > 0) {
-          setMetaAdAccounts(data.adAccounts);
-          const preferredLandingAcc =
-            data.adAccounts.find(
+        // Filtrar cualquier rastro de la cuenta personal "Richard Almiron" (act_424711183775699)
+        const cleanAccounts = Array.isArray(data.adAccounts)
+          ? data.adAccounts.filter(
               (a: any) =>
-                a.id === 'act_1048211497774834' || /landingcod/i.test(String(a.name || ''))
-            ) || data.adAccounts[0];
-          setPbConfig(prev => ({
-            ...prev,
-            selectedAdAccountId:
-              prev.selectedAdAccountId &&
-              prev.selectedAdAccountId !== 'act_595884210394' &&
-              prev.selectedAdAccountId !== 'act_424711183775699' &&
-              data.adAccounts.some((a: any) => a.id === prev.selectedAdAccountId)
-                ? prev.selectedAdAccountId
-                : preferredLandingAcc.id
-          }));
-        }
+                String(a?.id) !== 'act_424711183775699' &&
+                String(a?.account_id) !== '424711183775699' &&
+                !/richard\s*almiron/i.test(String(a?.name || ''))
+            )
+          : [];
+        const match834 = cleanAccounts.find(
+          (a: any) =>
+            String(a?.id) === 'act_1048211497774834' ||
+            String(a?.account_id) === '1048211497774834'
+        );
+        const discoveredAccName = String(
+          match834?.name ||
+            data.selectedAdAccountName ||
+            cleanAccounts[0]?.name ||
+            activeAdAccountName ||
+            'Cuenta Publicitaria (834)'
+        ).trim();
+        setActiveAdAccountName(discoveredAccName);
+
+        setMetaAdAccounts(
+          cleanAccounts.length > 0
+            ? cleanAccounts
+            : [
+                {
+                  id: 'act_1048211497774834',
+                  account_id: '1048211497774834',
+                  name: discoveredAccName,
+                  currency: 'USD'
+                }
+              ]
+        );
+        setPbConfig(prev => ({
+          ...prev,
+          selectedAdAccountId: 'act_1048211497774834',
+          selectedFacebookPageId: '1050835598123904'
+        }));
         if (Array.isArray(data.pages) && data.pages.length > 0) {
           setMetaPages(data.pages);
-          const preferredLandingPage =
-            data.pages.find(
-              (p: any) =>
-                String(p.id) === '1050835598123904' ||
-                /landingcod\s*shop/i.test(String(p.name || '')) ||
-                /shop|tienda|landingcod/i.test(String(p.name || ''))
-            ) || data.pages[0];
-          setPbConfig(prev => ({
-            ...prev,
-            selectedFacebookPageId:
-              prev.selectedFacebookPageId &&
-              prev.selectedFacebookPageId !== '104928374650192' &&
-              data.pages.some((p: any) => p.id === prev.selectedFacebookPageId)
-                ? prev.selectedFacebookPageId
-                : preferredLandingPage.id
-          }));
         }
-        if (Array.isArray(data.pixels) && data.pixels.length > 0) {
-          setMetaPixels(data.pixels);
-          const landingCodPrincipalPixel =
-            data.pixels.find(
-              (px: any) =>
-                String(px.id) === '1276031534651377' ||
-                String(px.adAccountId) === 'act_1048211497774834' ||
-                /auto\s*ads\s*360|principal.*landingcod/i.test(String(px.name || ''))
-            ) || data.pixels[0];
-          if (landingCodPrincipalPixel) {
-            const rawPxName = String(landingCodPrincipalPixel.name || '').trim();
-            const resolvedPxName =
-              String(landingCodPrincipalPixel.id) === '1276031534651377' &&
-              (!rawPxName || /principal.*landingcod/i.test(rawPxName))
-                ? 'Auto Ads 360'
-                : rawPxName || 'Auto Ads 360';
-            setActiveMetaPixel({
-              id: String(landingCodPrincipalPixel.id),
-              name: resolvedPxName
-            });
-            setCapiAudit(prev => ({
-              ...prev,
-              pixelConfigured: true,
-              pixelId: `${resolvedPxName} (${landingCodPrincipalPixel.id})`
-            }));
-          }
+
+        const rawPixels = Array.isArray(data.pixels) ? data.pixels : [];
+        const match377 =
+          rawPixels.find((p: any) => String(p?.id) === '1276031534651377') || rawPixels[0];
+        const discoveredPxId = String(
+          match377?.id || data.universalPixelId || '1276031534651377'
+        ).trim();
+        const discoveredPxName = String(
+          match377?.name ||
+            data.universalPixelName ||
+            activeMetaPixel.name ||
+            'Píxel Cuenta 834 (377)'
+        ).trim();
+
+        setMetaPixels(
+          rawPixels.length > 0
+            ? rawPixels
+            : [
+                {
+                  id: discoveredPxId,
+                  name: discoveredPxName,
+                  adAccountId: 'act_1048211497774834',
+                  adAccountName: discoveredAccName
+                }
+              ]
+        );
+        setActiveMetaPixel({
+          id: discoveredPxId,
+          name: discoveredPxName
+        });
+        setCapiAudit(prev => ({
+          ...prev,
+          pixelConfigured: true,
+          pixelId: `${discoveredPxName} (${discoveredPxId})`
+        }));
+        try {
+          const liveNamesPayload = {
+            adAccountId: 'act_1048211497774834',
+            adAccountName: discoveredAccName,
+            pixelId: discoveredPxId,
+            pixelName: discoveredPxName,
+            updatedAt: new Date().toISOString()
+          };
+          localStorage.setItem('autoads_meta_live_names_v1', JSON.stringify(liveNamesPayload));
+          window.dispatchEvent(new CustomEvent('meta-live-names-updated', { detail: liveNamesPayload }));
+        } catch {}
+        if (Number(data.pausedWrongCampaignsCount) > 0) {
+          showToast(
+            `🛡️ Se pausó automáticamente ${data.pausedWrongCampaignsCount} campaña(s) que estaba en la cuenta errónea Richard Almiron. Solo queda activa ${discoveredAccName} (834).`
+          );
         }
       } else {
         setMetaConnected(false);
         setMetaUser(null);
-      }
-      if (data?.universalPixelId && (!Array.isArray(data?.pixels) || data.pixels.length === 0)) {
-        const pxId =
-          String(data.universalPixelId) === '1306425611589565'
-            ? '1276031534651377'
-            : String(data.universalPixelId);
-        const rawName = String(data.universalPixelName || '').trim();
-        const pxName =
-          pxId === '1276031534651377' && (!rawName || /principal.*landingcod/i.test(rawName))
-            ? 'Auto Ads 360'
-            : rawName || 'Auto Ads 360';
-        setActiveMetaPixel({ id: pxId, name: pxName });
-        setCapiAudit(prev => ({
-          ...prev,
-          pixelConfigured: true,
-          pixelId: `${pxName} (${pxId})`
-        }));
+        if (data?.selectedAdAccountName) {
+          setActiveAdAccountName(String(data.selectedAdAccountName));
+        }
+        if (data?.universalPixelName) {
+          setActiveMetaPixel({
+            id: String(data.universalPixelId || '1276031534651377'),
+            name: String(data.universalPixelName)
+          });
+        }
       }
       return Boolean(data?.connected);
     } catch {
       return false;
+    }
+  };
+
+  // Botón para descubrir y actualizar en vivo los nuevos nombres de la Cuenta 834 y del Píxel 377 desde Meta Graph API
+  const handleDiscoverLiveMetaNames = async () => {
+    setSyncingLiveMetaNames(true);
+    try {
+      const isConn = await refreshMetaConnectionStatus();
+      if (isConn) {
+        const saved = JSON.parse(localStorage.getItem('autoads_meta_live_names_v1') || '{}');
+        showToast(
+          `✅ ¡Nombres descubiertos y actualizados en vivo desde Meta! Cuenta (834): "${
+            saved.adAccountName || activeAdAccountName
+          }" · Píxel (377): "${saved.pixelName || activeMetaPixel.name}"`
+        );
+      } else {
+        showToast(
+          '🔄 Abriendo autorización rápida de Meta (1 clic) para leer los nuevos nombres de tu Cuenta 834 y Píxel 377...'
+        );
+        await handleConnectFacebookOAuth(false);
+      }
+    } finally {
+      setSyncingLiveMetaNames(false);
     }
   };
 
@@ -395,11 +487,37 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     const handleOAuthPopupMessage = (event: MessageEvent) => {
       if (!event?.data || typeof event.data !== 'object') return;
       if (event.data.type === 'META_AUTH_SUCCESS') {
+        if (event.data.oauthBackup?.accessToken) {
+          try {
+            localStorage.setItem('autoads_meta_oauth_backup_v1', JSON.stringify(event.data.oauthBackup));
+          } catch {}
+        }
+        if (event.data.adAccountName || event.data.pixelName) {
+          const liveAcc = String(event.data.adAccountName || activeAdAccountName).trim();
+          const livePx = String(event.data.pixelName || activeMetaPixel.name).trim();
+          const livePxId = String(event.data.pixelId || '1276031534651377').trim();
+          setActiveAdAccountName(liveAcc);
+          setActiveMetaPixel({ id: livePxId, name: livePx });
+          try {
+            const payload = {
+              adAccountId: 'act_1048211497774834',
+              adAccountName: liveAcc,
+              pixelId: livePxId,
+              pixelName: livePx,
+              updatedAt: new Date().toISOString()
+            };
+            localStorage.setItem('autoads_meta_live_names_v1', JSON.stringify(payload));
+            window.dispatchEvent(new CustomEvent('meta-live-names-updated', { detail: payload }));
+          } catch {}
+        }
         setShowFacebookOAuthModal(false);
         setConnectingFacebookOAuth(false);
         refreshMetaConnectionStatus().then(() => {
+          const saved = JSON.parse(localStorage.getItem('autoads_meta_live_names_v1') || '{}');
           showToast(
-            `✅ ¡Facebook / Meta Ads autorizado con éxito (${event.data.userName || 'Cuenta Conectada'})! Cuenta publicitaria y Píxel listos para publicar.`
+            `✅ ¡Sincronizado con Meta! Portafolio Landingcod · Cuenta (834): "${
+              saved.adAccountName || event.data.adAccountName || activeAdAccountName
+            }" · Píxel (377): "${saved.pixelName || event.data.pixelName || activeMetaPixel.name}"`
           );
         });
       } else if (event.data.type === 'META_AUTH_ERROR') {
@@ -1669,14 +1787,14 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         ? '/api/meta/publish-direct'
         : '/api/pipeboard/publish-campaign';
 
-      const selectedPage = metaPages.find(p => p.id === pbConfig.selectedFacebookPageId);
-      const effectivePixelId =
-        activeMetaPixel?.id ||
-        (activeProduct.metaTracking?.pixelId &&
-        activeProduct.metaTracking.pixelId !== '1306425611589565' &&
-        activeProduct.metaTracking.pixelId !== '129485739201948'
-          ? activeProduct.metaTracking.pixelId
-          : '1276031534651377');
+      const selectedPage = metaPages.find(p => p.id === '1050835598123904') || metaPages[0];
+      let backupAccessToken = '';
+      try {
+        const rawBackup = localStorage.getItem('autoads_meta_oauth_backup_v1');
+        if (rawBackup) {
+          backupAccessToken = String(JSON.parse(rawBackup)?.accessToken || '').trim();
+        }
+      } catch {}
 
       const pubRes = await fetch(publishEndpoint, {
         method: 'POST',
@@ -1685,21 +1803,15 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           product: activeProduct,
           creatives,
           brainProfile,
-          adAccountId:
-            pbConfig.selectedAdAccountId === 'act_424711183775699' ||
-            pbConfig.selectedAdAccountId === 'act_595884210394'
-              ? 'act_1048211497774834'
-              : pbConfig.selectedAdAccountId,
-          facebookPageId:
-            pbConfig.selectedFacebookPageId === '104928374650192'
-              ? '1050835598123904'
-              : pbConfig.selectedFacebookPageId,
+          adAccountId: 'act_1048211497774834',
+          facebookPageId: '1050835598123904',
           pageAccessToken: selectedPage?.access_token || '',
+          accessToken: backupAccessToken || undefined,
           dailyBudgetGs: pbConfig.dailyBudgetGs,
           publishStatus: pbConfig.defaultPublishStatus,
           pipeboardMcpEndpoint: pbConfig.pipeboardMcpEndpoint,
           landingUrl,
-          pixelId: effectivePixelId
+          pixelId: '1276031534651377'
         })
       });
 
@@ -1791,7 +1903,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             )}
             <span>
               {metaConnected
-                ? `✅ Meta Ads: Landingcod (Cta. 834) · Píxel Auto Ads 360 (377)`
+                ? `✅ Meta Ads: ${activeAdAccountName} (834) · Píxel ${activeMetaPixel.name} (377)`
                 : 'Conectar Meta Ads (Facebook OAuth)'}
             </span>
           </button>
@@ -1852,15 +1964,35 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black text-[10px] uppercase tracking-wider">
-              📌 Referencia Oficial Fija (No Olvidar)
+              📌 Referencia Oficial en Vivo (Sincronizada con Meta Graph API)
             </span>
             <span className="text-xs font-bold text-zinc-100">
               Estructura Exacta de tu Meta Ads conectada a esta Herramienta (Copiá con 1 Clic)
             </span>
           </div>
-          <span className="text-[11px] font-mono text-zinc-400">
-            ❌ Cuenta personal Richard Almiron (699) y su píxel viejo (565) están desactivados aquí
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleDiscoverLiveMetaNames}
+              disabled={syncingLiveMetaNames}
+              data-testid="btn-discover-live-meta-names"
+              className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-black text-[11px] inline-flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+            >
+              {syncingLiveMetaNames ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {metaConnected
+                  ? '🔄 Actualizar Nombres Reales desde Meta (834 / 377)'
+                  : '🔍 Conectar y Descubrir Nuevos Nombres en Meta (834 / 377)'}
+              </span>
+            </button>
+            <span className="text-[11px] font-mono text-zinc-400">
+              ❌ Cuenta personal Richard Almiron (699) bloqueada
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
@@ -1884,7 +2016,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             </button>
           </div>
 
-          {/* 2. Cuenta Publicitaria Principal (834) */}
+          {/* 2. Cuenta Publicitaria Principal (834) — Nombre Real Dinámico */}
           <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
             <div>
               <div className="flex items-center justify-between gap-1">
@@ -1895,16 +2027,24 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   Termina en 834 · USD
                 </span>
               </div>
-              <div className="text-sm font-black text-white mt-0.5">Landingcod PY</div>
+              <div
+                data-testid="live-ad-account-name-834"
+                className="text-sm font-black text-white mt-0.5"
+              >
+                {activeAdAccountName}
+              </div>
               <div className="text-[11px] font-mono text-emerald-300 mt-0.5">
                 ID: 1048211497774834
               </div>
+              <span className="text-[10px] text-zinc-400 block">
+                Nombre sincronizado en vivo desde Meta Graph API
+              </span>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <button
                 type="button"
                 onClick={() =>
-                  handleCopyMetaRef('acc_num', 'ID Cuenta Publicitaria (834)', '1048211497774834')
+                  handleCopyMetaRef('acc_num', `ID Cuenta ${activeAdAccountName} (834)`, '1048211497774834')
                 }
                 className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-black flex items-center justify-center cursor-pointer transition-colors"
               >
@@ -1913,16 +2053,16 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               <button
                 type="button"
                 onClick={() =>
-                  handleCopyMetaRef('acc_act', 'Cuenta act_ (834)', 'act_1048211497774834')
+                  handleCopyMetaRef('acc_name', 'Nombre Cuenta Publicitaria (834)', activeAdAccountName)
                 }
                 className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold flex items-center justify-center cursor-pointer transition-colors"
               >
-                {copiedRefKey === 'acc_act' ? '✅ Copiado' : '📋 Copiar act_...834'}
+                {copiedRefKey === 'acc_name' ? '✅ Copiado' : '📋 Copiar Nombre'}
               </button>
             </div>
           </div>
 
-          {/* 3. Píxel Oficial de esta Cuenta 834 (Termina en 377) */}
+          {/* 3. Píxel Oficial de esta Cuenta 834 (Termina en 377) — Nombre Real Dinámico */}
           <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
             <div>
               <div className="flex items-center justify-between gap-1">
@@ -1933,19 +2073,24 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   Termina en 377
                 </span>
               </div>
-              <div className="text-sm font-black text-white mt-0.5">Auto Ads 360</div>
+              <div
+                data-testid="live-pixel-name-377"
+                className="text-sm font-black text-white mt-0.5"
+              >
+                {activeMetaPixel.name}
+              </div>
               <div className="text-[11px] font-mono text-emerald-300 mt-0.5">
-                ID: 1276031534651377
+                ID: {activeMetaPixel.id}
               </div>
               <span className="text-[10px] text-zinc-400 block">
-                Pertenece a la cuenta Landingcod 834
+                Pertenece a la cuenta {activeAdAccountName} (834)
               </span>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <button
                 type="button"
                 onClick={() =>
-                  handleCopyMetaRef('pixel_id', 'ID Píxel Auto Ads 360 (377)', '1276031534651377')
+                  handleCopyMetaRef('pixel_id', `ID Píxel ${activeMetaPixel.name} (377)`, activeMetaPixel.id)
                 }
                 className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-black flex items-center justify-center cursor-pointer transition-colors"
               >
@@ -1954,7 +2099,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               <button
                 type="button"
                 onClick={() =>
-                  handleCopyMetaRef('pixel_name', 'Nombre del Píxel', 'Auto Ads 360')
+                  handleCopyMetaRef('pixel_name', 'Nombre del Píxel (377)', activeMetaPixel.name)
                 }
                 className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold flex items-center justify-center cursor-pointer transition-colors"
               >
@@ -2118,7 +2263,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     type="text"
                     value={pbConfig.selectedAdAccountId}
                     onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
-                    placeholder="act_1048211497774834 (Landingcod PY)"
+                    placeholder={`act_1048211497774834 (${activeAdAccountName})`}
                     className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
                   />
                 )}
@@ -2135,12 +2280,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               </div>
             </div>
 
-            {/* Resumen claro de Cuenta Publicitaria + Página FB + Píxel Principal de Landingcod PY */}
+            {/* Resumen claro de Cuenta Publicitaria + Página FB + Píxel Principal de la cuenta 834 */}
             <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-bold text-emerald-300">
                   {metaConnected
-                    ? `🟢 Activo: Cuenta "Landingcod PY" (act_1048211497774834)`
+                    ? `🟢 Activo: Cuenta "${activeAdAccountName}" (act_1048211497774834)`
                     : '🔵 Autenticación OAuth de Meta Ads:'}
                 </span>
                 {metaPages.length > 0 && (
@@ -2168,7 +2313,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   </div>
                 )}
                 <div className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700/80 text-emerald-200 font-mono text-[11px]">
-                  🎯 Píxel de Landingcod PY: <strong>{activeMetaPixel.name}</strong> ({activeMetaPixel.id})
+                  🎯 Píxel Cuenta 834: <strong>{activeMetaPixel.name}</strong> ({activeMetaPixel.id})
                 </div>
               </div>
               <button

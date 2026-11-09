@@ -5022,102 +5022,117 @@ setTimeout(()=>window.close(),5000);
               const userId = meJson.id || 'unknown';
               const userName = meJson.name || 'Usuario Meta';
 
-              // Paso 4: Auto-descubrir Cuenta Funcional (Landingcod PY), Página (Landingcod Shop) y Píxel Principal de esa cuenta
-              let discoveredPixelId =
-                cfg.metaDirectConfig?.pixelId || cfg.pixelId || readKeyFromEnvFile('META_PIXEL_ID') || '';
-              let discoveredPixelName = '';
-              let discoveredAdAccountId = '';
-              let discoveredPageId = '';
+              // Paso 4: Bloquear estrictamente los IDs oficiales (Cuenta 834, Página Landingcod Shop, Píxel 377) y descubrir sus NOMBRES REALES ACTUALES en vivo desde Meta Graph API
+              const discoveredAdAccountId = 'act_1048211497774834';
+              const discoveredPageId = '1050835598123904';
+              let discoveredPixelId = '1276031534651377';
+              let discoveredAdAccountName =
+                cfg.metaDirectConfig?.adAccountName ||
+                readKeyFromEnvFile('META_AD_ACCOUNT_NAME') ||
+                'Cuenta Publicitaria 834';
+              let discoveredPixelName =
+                cfg.metaDirectConfig?.pixelName ||
+                readKeyFromEnvFile('META_PIXEL_NAME') ||
+                'Píxel Cuenta 834 (377)';
+
+              // 4.1 Consultar el nombre real actual de la cuenta act_1048211497774834 directamente en Meta Graph API
               try {
-                const accRes = await fetch(
-                  `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name&access_token=${encodeURIComponent(longLivedToken)}`
+                const directAccRes = await fetch(
+                  `https://graph.facebook.com/v21.0/act_1048211497774834?fields=id,account_id,name,currency,account_status,business_name&access_token=${encodeURIComponent(longLivedToken)}`
                 );
-                const accJson: any = await accRes.json();
-                const rawAccounts: any[] = Array.isArray(accJson?.data) ? accJson.data : [];
-                // Ordenar priorizando la cuenta funcional "Landingcod PY" (act_1048211497774834) por encima de "Richard Almiron"
-                const accounts = [...rawAccounts].sort((a, b) => {
-                  const aIsLanding =
-                    a?.id === 'act_1048211497774834' || /landingcod/i.test(String(a?.name || '')) ? 1 : 0;
-                  const bIsLanding =
-                    b?.id === 'act_1048211497774834' || /landingcod/i.test(String(b?.name || '')) ? 1 : 0;
-                  return bIsLanding - aIsLanding;
-                });
-                if (accounts[0]?.id) {
-                  discoveredAdAccountId = String(accounts[0].id);
-                }
-                for (const acc of accounts) {
-                  if (!acc?.id) continue;
-                  const pixRes = await fetch(
-                    `https://graph.facebook.com/v21.0/${encodeURIComponent(acc.id)}/adspixels?fields=id,name&access_token=${encodeURIComponent(longLivedToken)}`
+                const directAccJson: any = await directAccRes.json();
+                if (directAccJson?.name && !directAccJson.error) {
+                  discoveredAdAccountName = String(directAccJson.name).trim();
+                } else {
+                  const listAccRes = await fetch(
+                    `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name,business_name&access_token=${encodeURIComponent(longLivedToken)}`
                   );
-                  const pixJson: any = await pixRes.json();
-                  if (Array.isArray(pixJson?.data) && pixJson.data.length > 0 && pixJson.data[0]?.id) {
-                    const preferredPx =
-                      pixJson.data.find(
-                        (p: any) =>
-                          String(p?.id) === '1276031534651377' ||
-                          /auto\s*ads\s*360|principal.*landingcod/i.test(String(p?.name || ''))
-                      ) || pixJson.data[0];
-                    discoveredPixelId = String(preferredPx.id);
-                    discoveredPixelName = String(preferredPx.name || 'Auto Ads 360');
-                    break;
+                  const listAccJson: any = await listAccRes.json();
+                  const match834 = (listAccJson?.data || []).find(
+                    (a: any) =>
+                      String(a?.id) === 'act_1048211497774834' ||
+                      String(a?.account_id) === '1048211497774834'
+                  );
+                  if (match834?.name) {
+                    discoveredAdAccountName = String(match834.name).trim();
                   }
                 }
               } catch {}
 
+              // 4.2 Consultar el nombre real actual del Píxel de la cuenta act_1048211497774834 (1276031534651377) directamente en Meta Graph API
               try {
-                const pagesRes = await fetch(
-                  `https://graph.facebook.com/v21.0/me/accounts?fields=id,name&access_token=${encodeURIComponent(longLivedToken)}`
+                const accPxRes = await fetch(
+                  `https://graph.facebook.com/v21.0/act_1048211497774834/adspixels?fields=id,name&access_token=${encodeURIComponent(longLivedToken)}`
                 );
-                const pagesJson: any = await pagesRes.json();
-                const pageList: any[] = Array.isArray(pagesJson?.data) ? pagesJson.data : [];
-                const preferredPage =
-                  pageList.find(
-                    (p: any) =>
-                      String(p?.id) === '1050835598123904' ||
-                      /landingcod\s*shop/i.test(String(p?.name || '')) ||
-                      /shop|tienda|landingcod/i.test(String(p?.name || ''))
-                  ) || pageList[0];
-                if (preferredPage?.id) {
-                  discoveredPageId = String(preferredPage.id);
+                const accPxJson: any = await accPxRes.json();
+                const pxList: any[] = Array.isArray(accPxJson?.data) ? accPxJson.data : [];
+                const match377 = pxList.find((p: any) => String(p?.id) === '1276031534651377') || pxList[0];
+                if (match377?.name) {
+                  discoveredPixelName = String(match377.name).trim();
+                  if (match377?.id) discoveredPixelId = String(match377.id).trim();
+                } else {
+                  const directPxRes = await fetch(
+                    `https://graph.facebook.com/v21.0/1276031534651377?fields=id,name&access_token=${encodeURIComponent(longLivedToken)}`
+                  );
+                  const directPxJson: any = await directPxRes.json();
+                  if (directPxJson?.name && !directPxJson.error) {
+                    discoveredPixelName = String(directPxJson.name).trim();
+                  }
                 }
               } catch {}
 
-              // Guardar token, Cuenta Funcional (Landingcod PY), Página (Landingcod Shop) y Píxel Principal en store_config.json
+              // Auto-pausar cualquier campaña accidental que haya quedado en la cuenta personal errónea "Richard Almiron" (act_424711183775699)
+              try {
+                const wrongCampRes = await fetch(
+                  `https://graph.facebook.com/v21.0/act_424711183775699/campaigns?fields=id,name,status&access_token=${encodeURIComponent(longLivedToken)}`
+                );
+                const wrongCampJson: any = await wrongCampRes.json();
+                const wrongCamps: any[] = Array.isArray(wrongCampJson?.data) ? wrongCampJson.data : [];
+                for (const wc of wrongCamps) {
+                  if (wc?.id && wc.status === 'ACTIVE' && /\[META IA\]|\[PIPEBOARD IA\]/i.test(String(wc.name || ''))) {
+                    await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(wc.id)}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: 'PAUSED', access_token: longLivedToken })
+                    }).catch(() => {});
+                  }
+                }
+              } catch {}
+
+              // Guardar token, Cuenta Funcional (834 con nombre real), Página (Landingcod Shop) y Píxel (377 con nombre real) en store_config.json
               if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
               cfg.metaDirectConfig.accessToken = longLivedToken;
               cfg.metaDirectConfig.userId = userId;
               cfg.metaDirectConfig.userName = userName;
               cfg.metaDirectConfig.connectedAt = new Date().toISOString();
+              cfg.metaDirectConfig.adAccountId = discoveredAdAccountId;
+              cfg.metaDirectConfig.adAccountName = discoveredAdAccountName;
               if (!cfg.pipeboardConfig) cfg.pipeboardConfig = {};
-              if (discoveredAdAccountId) {
-                cfg.pipeboardConfig.selectedAdAccountId = discoveredAdAccountId;
-              }
-              if (discoveredPageId) {
-                cfg.pipeboardConfig.selectedFacebookPageId = discoveredPageId;
-              }
-              if (discoveredPixelId) {
-                cfg.metaDirectConfig.pixelId = discoveredPixelId;
-                cfg.metaDirectConfig.pixelName = discoveredPixelName;
-                cfg.pixelId = discoveredPixelId;
-                saveKeyToEnvFile('META_PIXEL_ID', discoveredPixelId);
-              }
+              cfg.pipeboardConfig.selectedAdAccountId = discoveredAdAccountId;
+              cfg.pipeboardConfig.selectedAdAccountName = discoveredAdAccountName;
+              cfg.pipeboardConfig.selectedFacebookPageId = discoveredPageId;
+              cfg.metaDirectConfig.pixelId = discoveredPixelId;
+              cfg.metaDirectConfig.pixelName = discoveredPixelName;
+              cfg.pixelId = discoveredPixelId;
+              saveKeyToEnvFile('META_PIXEL_ID', discoveredPixelId);
+              saveKeyToEnvFile('META_PIXEL_NAME', discoveredPixelName);
+              saveKeyToEnvFile('META_AD_ACCOUNT_NAME', discoveredAdAccountName);
               fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
 
               // Guardar token también en .env (sirve tanto para Meta Ads Directo como para Servidor CAPI Universal)
               saveKeyToEnvFile('META_ACCESS_TOKEN', longLivedToken);
               saveKeyToEnvFile('META_CAPI_TOKEN', longLivedToken);
 
-              // Responder con HTML que notifica a la ventana padre y se auto-cierra
+              // Responder con HTML que notifica a la ventana padre (incluyendo los nombres reales descubiertos y respaldo para Railway)
               res.setHeader('Content-Type', 'text/html; charset=utf-8');
               res.end(`<!DOCTYPE html><html><body style="background:#000;color:#10b981;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
 <div style="text-align:center">
-<h1>✅ Meta Ads + Píxel CAPI Conectados</h1>
-<p>Cuenta: ${userName} (${userId})</p>
-${discoveredPixelId ? `<p>🎯 Píxel Principal Activo: ${discoveredPixelName || 'Auto Ads 360'} (${discoveredPixelId})</p>` : ''}
+<h1>✅ Meta Ads + Píxel CAPI Sincronizados</h1>
+<p>Portafolio: Landingcod · Cuenta (834): ${discoveredAdAccountName} (${discoveredAdAccountId})</p>
+<p>🎯 Píxel Oficial Activo (377): ${discoveredPixelName} (${discoveredPixelId})</p>
 <p>Podés cerrar esta ventana.</p>
 <script>
-window.opener && window.opener.postMessage({type:'META_AUTH_SUCCESS',userId:'${userId}',userName:'${userName.replace(/'/g, "\\'")}',pixelId:'${discoveredPixelId}'},'*');
+window.opener && window.opener.postMessage({type:'META_AUTH_SUCCESS',userId:'${userId}',userName:'${userName.replace(/'/g, "\\'")}',pixelId:'${discoveredPixelId}',pixelName:'${discoveredPixelName.replace(/'/g, "\\'")}',adAccountId:'${discoveredAdAccountId}',adAccountName:'${discoveredAdAccountName.replace(/'/g, "\\'")}',facebookPageId:'1050835598123904',oauthBackup:{accessToken:'${longLivedToken}',appId:'${appId}',appSecret:'${appSecret}',userId:'${userId}',userName:'${userName.replace(/'/g, "\\'")}',adAccountName:'${discoveredAdAccountName.replace(/'/g, "\\'")}',pixelName:'${discoveredPixelName.replace(/'/g, "\\'")}'}},'*');
 setTimeout(()=>window.close(),2500);
 </script>
 </div></body></html>`);
@@ -5137,7 +5152,67 @@ setTimeout(()=>window.close(),5000);
             return;
           }
 
-          // Endpoint 3: Estado de conexión con Meta Ads directo
+          // Endpoint 2.B: Auto-restaurar sesión OAuth en el servidor tras un redeploy de contenedor en Railway
+          if (req.method === 'POST' && url === '/api/meta/restore-session') {
+            let body = '';
+            req.on('data', (chunk: any) => (body += chunk));
+            req.on('end', () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const incomingToken = String(parsed.accessToken || '').trim();
+                if (!incomingToken) {
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: false }));
+                  return;
+                }
+                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                let cfg: any = {};
+                if (fs.existsSync(cfgFile)) {
+                  try {
+                    cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+                  } catch {}
+                }
+                if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
+                cfg.metaDirectConfig.accessToken = incomingToken;
+                if (parsed.appId) {
+                  cfg.metaDirectConfig.appId = String(parsed.appId).trim();
+                  saveKeyToEnvFile('META_APP_ID', String(parsed.appId).trim());
+                }
+                if (parsed.appSecret) {
+                  cfg.metaDirectConfig.appSecret = String(parsed.appSecret).trim();
+                  saveKeyToEnvFile('META_APP_SECRET', String(parsed.appSecret).trim());
+                }
+                if (parsed.userId) cfg.metaDirectConfig.userId = String(parsed.userId);
+                if (parsed.userName) cfg.metaDirectConfig.userName = String(parsed.userName);
+                if (parsed.adAccountName) {
+                  cfg.metaDirectConfig.adAccountName = String(parsed.adAccountName).trim();
+                  saveKeyToEnvFile('META_AD_ACCOUNT_NAME', String(parsed.adAccountName).trim());
+                }
+                if (parsed.pixelName) {
+                  cfg.metaDirectConfig.pixelName = String(parsed.pixelName).trim();
+                  saveKeyToEnvFile('META_PIXEL_NAME', String(parsed.pixelName).trim());
+                }
+                cfg.metaDirectConfig.pixelId = '1276031534651377';
+                cfg.pixelId = '1276031534651377';
+                if (!cfg.pipeboardConfig) cfg.pipeboardConfig = {};
+                cfg.pipeboardConfig.selectedAdAccountId = 'act_1048211497774834';
+                cfg.pipeboardConfig.selectedFacebookPageId = '1050835598123904';
+                fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                saveKeyToEnvFile('META_ACCESS_TOKEN', incomingToken);
+                saveKeyToEnvFile('META_CAPI_TOKEN', incomingToken);
+                saveKeyToEnvFile('META_PIXEL_ID', '1276031534651377');
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          // Endpoint 3: Estado de conexión con Meta Ads directo (descubre en vivo el nombre actual de Cuenta 834 y Píxel 377)
           if (req.method === 'GET' && url === '/api/meta/status') {
             (async () => { try {
               const cfgFile = path.resolve(__dirname, 'store_config.json');
@@ -5152,6 +5227,16 @@ setTimeout(()=>window.close(),5000);
                 readKeyFromEnvFile('META_ACCESS_TOKEN') ||
                 '';
 
+              const storedAdAccountName =
+                cfg.metaDirectConfig?.adAccountName ||
+                cfg.pipeboardConfig?.selectedAdAccountName ||
+                readKeyFromEnvFile('META_AD_ACCOUNT_NAME') ||
+                '';
+              const storedPixelName =
+                cfg.metaDirectConfig?.pixelName ||
+                readKeyFromEnvFile('META_PIXEL_NAME') ||
+                '';
+
               if (!accessToken) {
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({
@@ -5161,8 +5246,11 @@ setTimeout(()=>window.close(),5000);
                   adAccounts: [],
                   pages: [],
                   pixels: [],
-                  universalPixelId: cfg.pixelId || cfg.metaDirectConfig?.pixelId || readKeyFromEnvFile('META_PIXEL_ID') || '1276031534651377',
-                  universalPixelName: cfg.metaDirectConfig?.pixelName || 'Auto Ads 360',
+                  universalPixelId: '1276031534651377',
+                  universalPixelName: storedPixelName || null,
+                  selectedAdAccountId: 'act_1048211497774834',
+                  selectedAdAccountName: storedAdAccountName || null,
+                  selectedFacebookPageId: '1050835598123904',
                   tokenExpiresIn: null,
                   connectedAt: cfg.metaDirectConfig?.connectedAt || null
                 }));
@@ -5184,6 +5272,11 @@ setTimeout(()=>window.close(),5000);
                   adAccounts: [],
                   pages: [],
                   pixels: [],
+                  universalPixelId: '1276031534651377',
+                  universalPixelName: storedPixelName || null,
+                  selectedAdAccountId: 'act_1048211497774834',
+                  selectedAdAccountName: storedAdAccountName || null,
+                  selectedFacebookPageId: '1050835598123904',
                   error: meJson.error.message,
                   tokenExpiresIn: null,
                   connectedAt: cfg.metaDirectConfig?.connectedAt || null
@@ -5191,24 +5284,102 @@ setTimeout(()=>window.close(),5000);
                 return;
               }
 
-              // Obtener cuentas publicitarias y ordenar priorizando siempre "Landingcod PY" (act_1048211497774834)
-              let adAccounts: any[] = [];
+              // Auto-pausar en segundo plano cualquier campaña accidental que se haya creado antes en "Richard Almiron" (act_424711183775699)
+              let pausedWrongCampaignsCount = 0;
               try {
-                const accRes = await fetch(
-                  `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name,currency,account_status,timezone_name,business_name&access_token=${encodeURIComponent(accessToken)}`
+                const wrongCampRes = await fetch(
+                  `https://graph.facebook.com/v21.0/act_424711183775699/campaigns?fields=id,name,status&access_token=${encodeURIComponent(accessToken)}`
                 );
-                const accJson: any = await accRes.json();
-                const rawAccounts: any[] = accJson.data || [];
-                adAccounts = [...rawAccounts].sort((a, b) => {
-                  const aScore =
-                    a?.id === 'act_1048211497774834' || /landingcod/i.test(String(a?.name || '')) ? 10 : 0;
-                  const bScore =
-                    b?.id === 'act_1048211497774834' || /landingcod/i.test(String(b?.name || '')) ? 10 : 0;
-                  return bScore - aScore;
-                });
+                const wrongCampJson: any = await wrongCampRes.json();
+                const wrongCamps: any[] = Array.isArray(wrongCampJson?.data) ? wrongCampJson.data : [];
+                for (const wc of wrongCamps) {
+                  if (wc?.id && wc.status === 'ACTIVE' && /\[META IA\]|\[PIPEBOARD IA\]/i.test(String(wc.name || ''))) {
+                    await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(wc.id)}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: 'PAUSED', access_token: accessToken })
+                    }).catch(() => {});
+                    pausedWrongCampaignsCount++;
+                  }
+                }
               } catch {}
 
-              // Obtener páginas de Facebook y ordenar priorizando siempre "Landingcod Shop" (1050835598123904)
+              // 1. Consultar directamente act_1048211497774834 y /me/adaccounts en Meta Graph API para obtener su NOMBRE REAL ACTUAL
+              let liveAdAccountName = storedAdAccountName || 'Cuenta Publicitaria (834)';
+              let adAccounts: any[] = [];
+              try {
+                const [directAccRes, accRes] = await Promise.all([
+                  fetch(
+                    `https://graph.facebook.com/v21.0/act_1048211497774834?fields=id,account_id,name,currency,account_status,timezone_name,business_name&access_token=${encodeURIComponent(accessToken)}`
+                  ).catch(() => null),
+                  fetch(
+                    `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name,currency,account_status,timezone_name,business_name&access_token=${encodeURIComponent(accessToken)}`
+                  ).catch(() => null)
+                ]);
+
+                let directAccObj: any = null;
+                if (directAccRes) {
+                  const dj: any = await directAccRes.json().catch(() => null);
+                  if (dj && !dj.error && dj.id) {
+                    directAccObj = dj;
+                    if (dj.name) liveAdAccountName = String(dj.name).trim();
+                  }
+                }
+
+                let rawAccounts: any[] = [];
+                if (accRes) {
+                  const aj: any = await accRes.json().catch(() => null);
+                  if (Array.isArray(aj?.data)) rawAccounts = aj.data;
+                }
+
+                // Excluir siempre la cuenta personal errónea Richard Almiron (act_424711183775699)
+                const filteredAccounts = rawAccounts.filter(
+                  (a: any) =>
+                    String(a?.id) !== 'act_424711183775699' &&
+                    String(a?.account_id) !== '424711183775699' &&
+                    !/richard\s*almiron/i.test(String(a?.name || ''))
+                );
+
+                const match834 = filteredAccounts.find(
+                  (a: any) =>
+                    String(a?.id) === 'act_1048211497774834' ||
+                    String(a?.account_id) === '1048211497774834'
+                );
+                if (match834?.name) {
+                  liveAdAccountName = String(match834.name).trim();
+                }
+
+                if (directAccObj && !match834) {
+                  filteredAccounts.unshift(directAccObj);
+                }
+
+                adAccounts =
+                  filteredAccounts.length > 0
+                    ? filteredAccounts
+                    : [
+                        {
+                          id: 'act_1048211497774834',
+                          account_id: '1048211497774834',
+                          name: liveAdAccountName,
+                          currency: directAccObj?.currency || 'USD',
+                          account_status: 1,
+                          business_name: directAccObj?.business_name || 'Landingcod'
+                        }
+                      ];
+              } catch {
+                adAccounts = [
+                  {
+                    id: 'act_1048211497774834',
+                    account_id: '1048211497774834',
+                    name: liveAdAccountName,
+                    currency: 'USD',
+                    account_status: 1,
+                    business_name: 'Landingcod'
+                  }
+                ];
+              }
+
+              // 2. Obtener páginas de Facebook y priorizar siempre "Landingcod Shop" (1050835598123904)
               let pages: any[] = [];
               try {
                 const pagesRes = await fetch(
@@ -5233,97 +5404,83 @@ setTimeout(()=>window.close(),5000);
                 });
               } catch {}
 
-              // Obtener Píxeles de las cuentas publicitarias (empezando por Landingcod PY act_1048211497774834)
-              let pixels: Array<{
-                id: string;
-                name: string;
-                adAccountId: string;
-                adAccountName: string;
-                isFunctionalAccountPixel: boolean;
-              }> = [];
+              // 3. Consultar en vivo en Meta Graph API los píxeles de act_1048211497774834 y el nodo 1276031534651377 para descubrir su NOMBRE REAL ACTUAL
+              let livePixelId = '1276031534651377';
+              let livePixelName = storedPixelName || 'Píxel Cuenta 834 (377)';
+              let pixels: any[] = [];
               try {
-                for (const acc of adAccounts.slice(0, 5)) {
-                  if (!acc?.id) continue;
-                  const isFunctionalAcc =
-                    acc.id === 'act_1048211497774834' || /landingcod/i.test(String(acc.name || ''));
-                  const pixRes = await fetch(
-                    `https://graph.facebook.com/v21.0/${encodeURIComponent(acc.id)}/adspixels?fields=id,name&access_token=${encodeURIComponent(accessToken)}`
-                  );
-                  const pixJson: any = await pixRes.json();
-                  if (Array.isArray(pixJson?.data)) {
-                    for (const px of pixJson.data) {
-                      if (px?.id && !pixels.some(existing => existing.id === String(px.id))) {
-                        pixels.push({
-                          id: String(px.id),
-                          name: String(px.name || `Píxel ${px.id}`),
-                          adAccountId: String(acc.id),
-                          adAccountName: String(acc.name || acc.id),
-                          isFunctionalAccountPixel: Boolean(isFunctionalAcc)
-                        });
-                      }
+                const [accPxRes, directPxRes] = await Promise.all([
+                  fetch(
+                    `https://graph.facebook.com/v21.0/act_1048211497774834/adspixels?fields=id,name&access_token=${encodeURIComponent(accessToken)}`
+                  ).catch(() => null),
+                  fetch(
+                    `https://graph.facebook.com/v21.0/1276031534651377?fields=id,name&access_token=${encodeURIComponent(accessToken)}`
+                  ).catch(() => null)
+                ]);
+
+                if (directPxRes) {
+                  const dpj: any = await directPxRes.json().catch(() => null);
+                  if (dpj && !dpj.error && dpj.name) {
+                    livePixelName = String(dpj.name).trim();
+                  }
+                }
+
+                if (accPxRes) {
+                  const apj: any = await accPxRes.json().catch(() => null);
+                  const rawPx: any[] = Array.isArray(apj?.data) ? apj.data : [];
+                  if (rawPx.length > 0) {
+                    const match377 = rawPx.find((p: any) => String(p?.id) === '1276031534651377') || rawPx[0];
+                    if (match377?.name) {
+                      livePixelName = String(match377.name).trim();
+                      if (match377?.id) livePixelId = String(match377.id).trim();
                     }
+                    pixels = rawPx.map((p: any) => ({
+                      id: String(p.id),
+                      name: String(p.name || livePixelName).trim(),
+                      adAccountId: 'act_1048211497774834',
+                      adAccountName: liveAdAccountName,
+                      isFunctionalAccountPixel: true
+                    }));
                   }
                 }
               } catch {}
 
-              // Seleccionar el Píxel que pertenece a la cuenta funcional "Landingcod PY" (1276031534651377 "Auto Ads 360")
-              const functionalPixel =
-                pixels.find(
-                  p =>
-                    p.id === '1276031534651377' ||
-                    p.isFunctionalAccountPixel ||
-                    /auto\s*ads\s*360|principal.*landingcod/i.test(p.name)
-                ) || pixels[0];
-
-              let universalPixelId =
-                cfg.pixelId ||
-                cfg.metaDirectConfig?.pixelId ||
-                readKeyFromEnvFile('META_PIXEL_ID') ||
-                '';
-
-              let configChanged = false;
-              // Si no había píxel o había quedado el píxel 1306425611589565 de la cuenta inactiva "Richard Almiron", corregir al Píxel de Landingcod PY (1276031534651377 "Auto Ads 360")
-              if (
-                functionalPixel &&
-                (!universalPixelId ||
-                  universalPixelId === '1306425611589565' ||
-                  universalPixelId === '129485739201948')
-              ) {
-                universalPixelId = functionalPixel.id;
-                if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
-                cfg.metaDirectConfig.pixelId = universalPixelId;
-                cfg.metaDirectConfig.pixelName = functionalPixel.name;
-                cfg.pixelId = universalPixelId;
-                saveKeyToEnvFile('META_PIXEL_ID', universalPixelId);
-                configChanged = true;
+              if (pixels.length === 0) {
+                pixels = [
+                  {
+                    id: livePixelId,
+                    name: livePixelName,
+                    adAccountId: 'act_1048211497774834',
+                    adAccountName: liveAdAccountName,
+                    isFunctionalAccountPixel: true
+                  }
+                ];
               }
 
-              const universalPixelName =
-                pixels.find(p => p.id === universalPixelId)?.name ||
-                functionalPixel?.name ||
-                'Auto Ads 360';
+              const universalPixelId = livePixelId;
+              const universalPixelName = livePixelName;
 
-              // Auto-persistir la Cuenta Publicitaria funcional "Landingcod PY" (act_1048211497774834) y Página "Landingcod Shop" (1050835598123904)
+              if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
               if (!cfg.pipeboardConfig) cfg.pipeboardConfig = {};
               if (
-                adAccounts.length > 0 &&
-                (!cfg.pipeboardConfig.selectedAdAccountId ||
-                  cfg.pipeboardConfig.selectedAdAccountId === 'act_595884210394' ||
-                  cfg.pipeboardConfig.selectedAdAccountId === 'act_424711183775699')
+                cfg.pipeboardConfig.selectedAdAccountId !== 'act_1048211497774834' ||
+                cfg.pipeboardConfig.selectedAdAccountName !== liveAdAccountName ||
+                cfg.pipeboardConfig.selectedFacebookPageId !== '1050835598123904' ||
+                cfg.pixelId !== universalPixelId ||
+                cfg.metaDirectConfig.pixelName !== universalPixelName ||
+                cfg.metaDirectConfig.adAccountName !== liveAdAccountName
               ) {
-                cfg.pipeboardConfig.selectedAdAccountId = String(adAccounts[0].id);
-                configChanged = true;
-              }
-              if (
-                pages.length > 0 &&
-                (!cfg.pipeboardConfig.selectedFacebookPageId ||
-                  cfg.pipeboardConfig.selectedFacebookPageId === '104928374650192')
-              ) {
-                cfg.pipeboardConfig.selectedFacebookPageId = String(pages[0].id);
-                configChanged = true;
-              }
-
-              if (configChanged) {
+                cfg.pipeboardConfig.selectedAdAccountId = 'act_1048211497774834';
+                cfg.pipeboardConfig.selectedAdAccountName = liveAdAccountName;
+                cfg.pipeboardConfig.selectedFacebookPageId = '1050835598123904';
+                cfg.metaDirectConfig.adAccountId = 'act_1048211497774834';
+                cfg.metaDirectConfig.adAccountName = liveAdAccountName;
+                cfg.metaDirectConfig.pixelId = universalPixelId;
+                cfg.metaDirectConfig.pixelName = universalPixelName;
+                cfg.pixelId = universalPixelId;
+                saveKeyToEnvFile('META_PIXEL_ID', universalPixelId);
+                saveKeyToEnvFile('META_PIXEL_NAME', universalPixelName);
+                saveKeyToEnvFile('META_AD_ACCOUNT_NAME', liveAdAccountName);
                 try {
                   fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
                 } catch {}
@@ -5339,8 +5496,19 @@ setTimeout(()=>window.close(),5000);
                 pixels,
                 universalPixelId,
                 universalPixelName,
-                selectedAdAccountId: cfg.pipeboardConfig.selectedAdAccountId || (adAccounts[0]?.id ?? 'act_1048211497774834'),
-                selectedFacebookPageId: cfg.pipeboardConfig.selectedFacebookPageId || (pages[0]?.id ?? '1050835598123904'),
+                selectedAdAccountId: 'act_1048211497774834',
+                selectedAdAccountName: liveAdAccountName,
+                selectedFacebookPageId: '1050835598123904',
+                pausedWrongCampaignsCount,
+                oauthBackup: {
+                  accessToken,
+                  appId: cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || '',
+                  appSecret: cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || '',
+                  userId: meJson.id,
+                  userName: meJson.name,
+                  adAccountName: liveAdAccountName,
+                  pixelName: universalPixelName
+                },
                 capiTokenAutoConnected: true,
                 tokenExpiresIn: 'long-lived (~60 days)',
                 connectedAt: cfg.metaDirectConfig?.connectedAt || null
@@ -5354,7 +5522,7 @@ setTimeout(()=>window.close(),5000);
             return;
           }
 
-          // Endpoint 4: Publicar campaña directamente vía Meta Graph API (sin Pipeboard)
+          // Endpoint 4: Publicar campaña directamente vía Meta Graph API (BLOQUEADO ESTRICTAMENTE A LANDINGCOD PY 834 + PÍXEL 377)
           if (req.method === 'POST' && url === '/api/meta/publish-direct') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
@@ -5370,22 +5538,15 @@ setTimeout(()=>window.close(),5000);
                 const landingUrl = String(
                   parsed.landingUrl || `http://localhost:3000/?p=${product.slug || 'producto'}`
                 );
-                // Leer credenciales desde store_config o .env
+                // Leer credenciales desde store_config, body.oauthBackup o .env
                 const cfgFile = path.resolve(__dirname, 'store_config.json');
                 let cfg: any = {};
                 if (fs.existsSync(cfgFile)) {
                   cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
                 }
-                const pixelId = String(
-                  parsed.pixelId ||
-                    product.metaTracking?.pixelId ||
-                    cfg.pixelId ||
-                    cfg.metaDirectConfig?.pixelId ||
-                    readKeyFromEnvFile('META_PIXEL_ID') ||
-                    ''
-                ).trim();
                 const accessToken = String(
-                  cfg.metaDirectConfig?.accessToken ||
+                  parsed.accessToken ||
+                    cfg.metaDirectConfig?.accessToken ||
                     readKeyFromEnvFile('META_ACCESS_TOKEN') ||
                     (String(cfg.pipeboardConfig?.pipeboardApiToken || '').startsWith('EAA')
                       ? cfg.pipeboardConfig.pipeboardApiToken
@@ -5403,59 +5564,51 @@ setTimeout(()=>window.close(),5000);
                     JSON.stringify({
                       success: false,
                       error:
-                        'No hay Token de Meta Ads ni de Pipeboard configurado en el Backend. Abrí el botón "OpenRouter & Pipeboard" arriba a la derecha y pegá tu Token para publicar en vivo.'
+                        'No hay Token de Meta Ads configurado en el Backend. Tocá el botón azul "Conectar Meta Ads (Facebook OAuth)" arriba a la derecha para autorizar en 1 clic.'
                     })
                   );
                   return;
                 }
 
-                let adAccountId = String(parsed.adAccountId || cfg.pipeboardConfig?.selectedAdAccountId || '').trim();
-                let facebookPageId = String(parsed.facebookPageId || cfg.pipeboardConfig?.selectedFacebookPageId || '').trim();
-                let resolvedPixelId =
-                  pixelId && pixelId !== '129485739201948' && pixelId !== '1306425611589565' ? pixelId : '';
+                // CANDADO ABSOLUTO: Jamás publicar en "Richard Almiron" (act_424711183775699).
+                // Siempre publicar en Portafolio Comercial "Landingcod" -> Cuenta Publicitaria "Landingcod PY" (act_1048211497774834) + Píxel "Auto Ads 360" (1276031534651377) + Página "Landingcod Shop" (1050835598123904)
+                const adAccountId = 'act_1048211497774834';
+                const facebookPageId = '1050835598123904';
+                const resolvedPixelId = '1276031534651377';
+                const pixelId = '1276031534651377';
                 let accountCurrency = 'USD';
 
-                // Auto-descubrir Cuenta Publicitaria funcional ("Landingcod PY" act_1048211497774834) y su Moneda
+                // Pausar de inmediato cualquier campaña accidental que haya quedado activa en la cuenta errónea "Richard Almiron" (act_424711183775699)
                 try {
-                  const accRes = await fetch(
-                    `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name,currency,account_status&access_token=${encodeURIComponent(
-                      accessToken
-                    )}`
+                  const wrongCampRes = await fetch(
+                    `https://graph.facebook.com/v21.0/act_424711183775699/campaigns?fields=id,name,status&access_token=${encodeURIComponent(accessToken)}`
                   );
-                  const accJson: any = await accRes.json();
-                  const accList: any[] = Array.isArray(accJson?.data) ? accJson.data : [];
-                  if (accList.length > 0) {
-                    const preferredLandingAcc = accList.find(
-                      (a: any) =>
-                        a.id === 'act_1048211497774834' || /landingcod/i.test(String(a.name || ''))
-                    );
-                    const matchedAcc =
-                      (adAccountId &&
-                        adAccountId !== 'act_595884210394' &&
-                        adAccountId !== 'act_424711183775699' &&
-                        accList.find((a: any) => a.id === adAccountId)) ||
-                      preferredLandingAcc ||
-                      accList.find((a: any) => a.account_status === 1) ||
-                      accList[0];
-                    if (
-                      !adAccountId ||
-                      adAccountId === 'act_595884210394' ||
-                      adAccountId === 'act_424711183775699' ||
-                      !accList.some((a: any) => a.id === adAccountId)
-                    ) {
-                      adAccountId = String(matchedAcc.id);
-                    }
-                    if (matchedAcc?.currency) {
-                      accountCurrency = String(matchedAcc.currency).toUpperCase();
+                  const wrongCampJson: any = await wrongCampRes.json();
+                  const wrongCamps: any[] = Array.isArray(wrongCampJson?.data) ? wrongCampJson.data : [];
+                  for (const wc of wrongCamps) {
+                    if (wc?.id && wc.status === 'ACTIVE' && /\[META IA\]|\[PIPEBOARD IA\]/i.test(String(wc.name || ''))) {
+                      await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(wc.id)}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'PAUSED', access_token: accessToken })
+                      }).catch(() => {});
                     }
                   }
                 } catch {}
 
-                if (!adAccountId.startsWith('act_')) {
-                  adAccountId = `act_${adAccountId.replace(/^act_/, '')}`;
-                }
+                // Confirmar moneda de la cuenta oficial Landingcod PY (act_1048211497774834)
+                try {
+                  const accRes = await fetch(
+                    `https://graph.facebook.com/v21.0/${encodeURIComponent(
+                      adAccountId
+                    )}?fields=id,name,currency&access_token=${encodeURIComponent(accessToken)}`
+                  );
+                  const accJson: any = await accRes.json();
+                  if (accJson?.currency) {
+                    accountCurrency = String(accJson.currency).toUpperCase();
+                  }
+                } catch {}
 
-                // Auto-descubrir Página de Facebook funcional ("Landingcod Shop" 1050835598123904)
                 let pageAccessToken = String(parsed.pageAccessToken || '').trim();
                 try {
                   const pagesRes = await fetch(
@@ -5465,58 +5618,11 @@ setTimeout(()=>window.close(),5000);
                   );
                   const pagesJson: any = await pagesRes.json();
                   const pageList: any[] = Array.isArray(pagesJson?.data) ? pagesJson.data : [];
-                  if (pageList.length > 0) {
-                    const preferredLandingPage = pageList.find(
-                      (p: any) =>
-                        String(p.id) === '1050835598123904' ||
-                        /landingcod\s*shop/i.test(String(p.name || '')) ||
-                        /shop|tienda|landingcod/i.test(String(p.name || ''))
-                    );
-                    const matchedPage =
-                      (facebookPageId &&
-                        facebookPageId !== '104928374650192' &&
-                        pageList.find((p: any) => String(p.id) === facebookPageId)) ||
-                      preferredLandingPage ||
-                      pageList[0];
-                    if (
-                      !facebookPageId ||
-                      facebookPageId === '104928374650192' ||
-                      !pageList.some((p: any) => String(p.id) === facebookPageId)
-                    ) {
-                      facebookPageId = String(matchedPage.id);
-                    }
-                    if (!pageAccessToken && matchedPage?.access_token) {
-                      pageAccessToken = String(matchedPage.access_token);
-                    }
+                  const matchedPage = pageList.find((p: any) => String(p.id) === facebookPageId);
+                  if (!pageAccessToken && matchedPage?.access_token) {
+                    pageAccessToken = String(matchedPage.access_token);
                   }
                 } catch {}
-
-                // Verificar siempre los Píxeles propios de la cuenta publicitaria seleccionada (ej. Landingcod PY -> 1276031534651377 "Pixel Principal LandingCOD")
-                if (adAccountId) {
-                  try {
-                    const pixRes = await fetch(
-                      `https://graph.facebook.com/v21.0/${encodeURIComponent(
-                        adAccountId
-                      )}/adspixels?fields=id,name&access_token=${encodeURIComponent(accessToken)}`
-                    );
-                    const pixJson: any = await pixRes.json();
-                    const accountPixels: any[] = Array.isArray(pixJson?.data) ? pixJson.data : [];
-                    if (accountPixels.length > 0) {
-                      // Si el pixel actual no pertenece a esta cuenta publicitaria (ej. pertenecía a Richard Almiron), usar el Píxel propio de esta cuenta
-                      const matchingAccountPixel =
-                        accountPixels.find((p: any) => String(p.id) === resolvedPixelId) ||
-                        accountPixels.find(
-                          (p: any) =>
-                            String(p.id) === '1276031534651377' ||
-                            /principal.*landingcod/i.test(String(p.name || ''))
-                        ) ||
-                        accountPixels[0];
-                      if (matchingAccountPixel?.id) {
-                        resolvedPixelId = String(matchingAccountPixel.id);
-                      }
-                    }
-                  } catch {}
-                }
 
                 const nowIso = new Date().toISOString();
                 const mcpStepLogs: any[] = [];
@@ -5954,11 +6060,13 @@ setTimeout(()=>window.close(),5000);
 
                 // 3. Cuentas listas en Slot Partner para operar y previsualizar sin bloqueos
                 if (accounts.length === 0) {
+                  const fallbackAccName =
+                    readKeyFromEnvFile('META_AD_ACCOUNT_NAME') || 'Cuenta Publicitaria (834)';
                   accounts = [
                     {
                       id: 'act_1048211497774834',
                       accountId: '1048211497774834',
-                      name: 'Landingcod PY',
+                      name: fallbackAccName,
                       currency: 'USD',
                       status: 'ACTIVE',
                       timezoneName: 'America/Asuncion',
