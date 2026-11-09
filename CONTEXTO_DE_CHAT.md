@@ -656,3 +656,38 @@ Exigencias expresas:
 4. **Botón `"⚡ Generar Imagen IA ahora"` (`handleGenerateImageOnlyForAd` con `imageOnly: true`)**:
    - Permite sintetizar o regenerar únicamente la imagen IA de una tarjeta específica en OpenRouter sin sobreescribir el texto persuasivo actual de ese anuncio.
 
+---
+
+## 9. Fase 47 y Fase 48 — Regla de los 0.0 Segundos (Palabras 1 a 4 = Objeto + Dolor/Solución/Placer/Oferta), Tiempos Reales COD (2 a 3 Días Hábiles), Generación Secuencial 1 a 1 Tolerante a Fallos (6/6 Imágenes) y Creativos Hiper-Impactantes con Producto en Uso + Resultado Real + Texto y CTA Congruente
+
+### A. Regla de los 0.0 Segundos en Copywriting (Palabras 1 a 4 de la Primera Línea)
+1. **Identificación Instantánea del Objeto + Oferta/Dolor/Solución (`enforceZeroSecondFirstWordsHook` y `sanitizeDirectResponseCopy` en `/src/utils/autoAdsBrainEngine.ts` y `/vite.config.ts`)**:
+   - Se eliminaron todas las aperturas lentas o de relleno (*"¿Te imaginás..."*, *"¿Alguna vez te pasó..."*, *"¿Hasta cuándo vas a seguir..."*, *"Mirá la imagen: una sola Noelux™..."*).
+   - Ahora, en **menos de 0.0 segundos (en la 1ª, 2ª, 3ª o 4ª palabra)**, cada uno de los 6 anuncios nombra directamente **el objeto real** (`PROYECTOR NAVIDEÑO`, `TALADRO PERCUTOR`, `HIDROLAVADORA PORTÁTIL`, etc., mediante `ultraShortObjectLabel`) junto con el **dolor, solución, placer u oferta irresistible**:
+     - **Anuncio #1 (Oferta Directa COD)**: `🔥 PROYECTOR NAVIDEÑO EN OFERTA: iluminá toda tu fachada con 12 figuras HD en movimiento por solo Gs. 189.000 pagando al recibir.`
+     - **Anuncio #2 (Confianza Anti-Estafa)**: `🛑 PROYECTOR NAVIDEÑO PAGO EN PUERTA: cero giros previos ni riesgo de estafa; recibís en 2 a 3 días hábiles y pagás recién frente al repartidor.`
+     - **Anuncio #3 (Dolor → Solución)**: `💡 PROYECTOR NAVIDEÑO SIN COMPLICACIONES: olvidate para siempre de desenredar guirnaldas quemadas o subirte a escaleras peligrosas.`
+     - **Anuncio #4 (Pack Familiar 2x)**: `🎁 2X PROYECTOR NAVIDEÑO EN OFERTA: llevate 2 unidades completas por Gs. 358.000 (ahorrás Gs. 20.000 directo) con envío gratis.`
+     - **Anuncio #5 (Potencia y Verdad Física)**: `⚡ PROYECTOR NAVIDEÑO MÁXIMA POTENCIA: alcance real de 70 m² y carcasa sellada IP65 resistente a lluvia intensa y calor.`
+     - **Anuncio #6 (Kit Completo Sellado)**: `📦 PROYECTOR NAVIDEÑO KIT COMPLETO: recibís en tu puerta la caja sellada de fábrica con sus 12 tarjetas HD, estaca y base listas para usar.`
+2. **Prohibición Estricta de Promesas Falsas de Entrega (*"Hoy Mismo en tu Puerta"*) y Marcas Desconocidas**:
+   - El sanitizador automático reemplaza cualquier mención a *"hoy mismo en tu puerta"* o *"entrega al instante"* por el tiempo real de logística Contra Entrega en Paraguay: **entrega en 2 a 3 días hábiles (48 a 72 horas)**, reservando hoy sin adelantos y abonando recién al recibir.
+   - Se filtra automáticamente cualquier marca comercial desconocida (`Noelux™`) del cuerpo y titulares de los anuncios para que el comprador entienda al instante qué producto físico se le ofrece.
+
+### B. Solución Definitiva para Generar las 6 de 6 Imágenes sin Quedarse Trabado en 2
+1. **Peticiones Individuales Secuenciales (`1 por 1`: `[0]`, `[1]`, `[2]`, `[3]`, `[4]`, `[5]`) con `try / catch` Aislado (`/src/components/AutoAdsView.tsx`)**:
+   - Anteriormente, al pedir lotes de 2 imágenes por llamada HTTP (`[0, 1]`, `[2, 3]`, `[4, 5]`), si el lote 2 sufría demora en OpenRouter y superaba el timeout del proxy o devolvía texto no-JSON, `await res.json()` lanzaba una excepción que abortaba el bucle justo después de las primeras 2 imágenes.
+   - Ahora `handleStep2GenerateAds` dispara **6 peticiones individuales secuenciales (`targetIndices: [cardIdx]`)**, cada una protegida con su propio `try / catch` y parseo seguro (`res.text()` → `JSON.parse()`), más una pausa de `650ms` entre tarjetas y una segunda pasada automática de autorrecuperación para cualquier tarjeta pendiente.
+2. **Optimización de `invokeOpenRouterImageModel` en `/vite.config.ts`**:
+   - Se eliminó el doble bucle lento de reintentos internos para que cada llamada individual responda en menos de `24s` y jamás provoque un corte de gateway (`502/504`).
+
+### C. Imágenes Hiper-Impactantes con Producto Usándose + Resultado Visible + Texto y CTA Congruente
+1. **Prompts Fotográficos Universales de Producto en Acción + Resultado Real (`/src/utils/autoAdsBrainEngine.ts` y `/vite.config.ts`)**:
+   - Se eliminó la restricción `"with NO text written on the image"` / `"zero text overlays"`.
+   - Ahora los 6 arquetipos exigen obligatoriamente mostrar:
+     - **(A) El producto físico usándose activamente en primer plano**,
+     - **(B) El resultado real y dramático que provoca en las personas o en el hogar** (ej. el proyector encendido proyectando figuras navideñas HD sobre los 70 m² de una casa de 2 plantas de noche mientras una familia sonriente disfruta el resultado; o la persona utilizando el producto y experimentando el beneficio/alivio real),
+     - **(C) Titular publicitario en español en tipografía grande de alto contraste + botón CTA congruente** con el ángulo exacto de ese anuncio.
+2. **Zócalo y Cinta Publicitaria Congruente de Alto Impacto en Cada Creativo (`/src/components/AutoAdsView.tsx`)**:
+   - Además del diseño generado por OpenRouter, cada tarjeta renderiza sobre la imagen una **Cinta Superior de Impacto 0.0s** (`ad.hookBadge` + `🚚 ENVÍO GRATIS PY`) y un **Zócalo Inferior de Conversión Directa** con el `ad.headline` congruente, el precio oficial (`💰 1x Gs. 189.000 · Pagás al Recibir` o `Pack 2x Gs. 358.000`) y el botón CTA de alto impacto (`👇 PEDIR CONTRA ENTREGA`, `👇 VER GARANTÍA Y COMPRAR`, `👇 QUIERO LA SOLUCIÓN`, `👇 QUIERO MI PACK 2 HOY`, `👇 COMPRAR AHORA`, `👇 PEDIR KIT COMPLETO`).
+

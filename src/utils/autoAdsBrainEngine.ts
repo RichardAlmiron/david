@@ -265,7 +265,7 @@ export const ANDROMEDA_CREATIVE_ARCHETYPES = [
       'Ángulo: oferta irresistible con cero riesgo financiero. El precio y la conveniencia son el protagonista.',
     angleType: 'offer' as const,
     ctaType: 'ORDER_NOW' as const,
-    ctaLabel: 'PEDIR CONTRA ENTREGA'
+    ctaLabel: 'PAGÁS CUANDO RECIBÍS'
   },
   {
     index: 1,
@@ -352,6 +352,7 @@ export function extractProductCoreIdentity(product: Partial<ProductPage>): {
   genericProductName: string;
   brandTokenRemoved: string;
   shortCategoryNoun: string;
+  ultraShortObjectLabel: string;
 } {
   const rawName = String(product?.nombre || 'Producto').trim();
   const cleanNoSymbols = rawName.replace(/[™®©]/g, '').replace(/\s+/g, ' ').trim();
@@ -385,12 +386,93 @@ export function extractProductCoreIdentity(product: Partial<ProductPage>): {
     }
   }
 
-  const shortWords = genericProductName.split(' ').slice(0, 3).join(' ');
+  const genWords = genericProductName.split(' ').filter(Boolean);
+  const connectors = /^(de|del|para|con|en|a|por|sin|contra|al)$/i;
+  const twoWordObject =
+    genWords.length >= 3 && connectors.test(genWords[1])
+      ? genWords.slice(0, 3).join(' ')
+      : genWords.slice(0, 2).join(' ') || genericProductName || 'Equipo';
+  // Evitar que shortCategoryNoun termine en un número suelto (ej. "Taladro Percutor 21")
+  const threeWordCandidate = genWords.slice(0, 3).join(' ');
+  const shortCategoryNoun =
+    genWords.length >= 3 && /^\d+$/.test(genWords[2])
+      ? twoWordObject
+      : threeWordCandidate || twoWordObject;
+
   return {
     genericProductName: genericProductName || cleanNoSymbols,
     brandTokenRemoved,
-    shortCategoryNoun: shortWords || genericProductName || 'este equipo'
+    shortCategoryNoun: shortCategoryNoun || 'este equipo',
+    ultraShortObjectLabel: twoWordObject
   };
+}
+
+/**
+ * Garantiza que en las primeras 1 a 4 palabras (0.0 segundos) de un texto publicitario
+ * el espectador ya sepa QUÉ OBJETO ES y qué DOLOR, SOLUCIÓN, PLACER u OFERTA tiene enfrente,
+ * eliminando introducciones lentas o redundantes antes de hablar del producto.
+ */
+export function enforceZeroSecondFirstWordsHook(
+  rawText: string,
+  product: Partial<ProductPage>,
+  angleIdx = 0
+): string {
+  if (!rawText) return '';
+  const { ultraShortObjectLabel } = extractProductCoreIdentity(product);
+  const objUpper = ultraShortObjectLabel.toUpperCase();
+  const rootNoun = (ultraShortObjectLabel.split(' ')[0] || '').toLowerCase();
+
+  const lines = String(rawText).split('\n');
+  let firstLine = (lines[0] || '').trim();
+  if (!firstLine) return rawText;
+
+  // Extraer emoji inicial si existe
+  const leadingEmojiMatch = firstLine.match(/^([🔥✨💡🤝⚡📦🛑🎁🎄✅⭐]+\s*)/);
+  const defaultEmojis = ['🔥 ', '🛑 ', '💡 ', '🎁 ', '⚡ ', '📦 '];
+  const leadingEmoji = leadingEmojiMatch ? leadingEmojiMatch[1] : defaultEmojis[angleIdx % defaultEmojis.length];
+  let bodyLine = leadingEmojiMatch ? firstLine.slice(leadingEmojiMatch[0].length).trim() : firstLine;
+
+  // Eliminar rellenos lentos al inicio que desperdician los primeros segundos
+  bodyLine = bodyLine
+    .replace(/^(?:¿\s*)?(?:te imagin[aá]s|alguna vez (?:te pas[oó] que|compraste)|hasta cu[aá]ndo vas a seguir|sab[ií]as que|te preocupa pedir algo y que|quer[eé]s saber exactamente)\s+/i, '¿')
+    .replace(/^¿\s*¿/, '¿')
+    .trim();
+
+  // Verificar si el objeto ya encabeza las primeras palabras (Palabra 1 o 2, ej: "PROYECTOR NAVIDEÑO..." o "2X PROYECTOR...")
+  const firstFourWords = bodyLine
+    .replace(/[¿?¡!:.,—\-()]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 4)
+    .join(' ')
+    .toLowerCase();
+
+  const rootSlice = rootNoun.slice(0, Math.min(rootNoun.length, 6));
+  const startsWithObjectHeader =
+    rootSlice.length >= 3 &&
+    new RegExp(`^(?:2x\\s+)?${rootSlice}`, 'i').test(firstFourWords);
+
+  if (!startsWithObjectHeader && bodyLine.length > 12) {
+    const instantPrefixes = [
+      `${objUpper} EN OFERTA:`,
+      `${objUpper} PAGO EN PUERTA:`,
+      `${objUpper} SIN COMPLICACIONES:`,
+      `2X ${objUpper} EN OFERTA:`,
+      `${objUpper} MÁXIMA POTENCIA:`,
+      `${objUpper} KIT COMPLETO:`
+    ];
+    const prefix = instantPrefixes[angleIdx % instantPrefixes.length];
+    const normalizedRest =
+      bodyLine.startsWith('¿') || bodyLine.startsWith('¡')
+        ? bodyLine
+        : bodyLine.charAt(0).toLowerCase() + bodyLine.slice(1);
+    firstLine = `${leadingEmoji}${prefix} ${normalizedRest}`;
+    lines[0] = firstLine;
+  } else {
+    lines[0] = `${leadingEmoji}${bodyLine}`;
+  }
+
+  return lines.join('\n');
 }
 
 /**
@@ -398,10 +480,12 @@ export function extractProductCoreIdentity(product: Partial<ProductPage>): {
  * 1) Promesas falsas de tiempo de entrega ("hoy mismo en tu puerta") que causan cancelaciones en COD Paraguay (el tiempo real es 2 a 3 días hábiles / 48 a 72 hs).
  * 2) Frases débiles de apertura ("Mirá la imagen:", "Mirá bien esta comparación:", "Tal como ves en la imagen:").
  * 3) Menciones huérfanas o mal conjugadas de marcas desconocidas ("una sola Noelux", "Con Noelux es al revés").
+ * 4) Si es un copy multilínea (primaryText), garantiza que en las palabras 1 a 4 (0.0 segundos) ya hable directamente del objeto + dolor/solución/placer/oferta.
  */
 export function sanitizeAdCopyForParaguayCod(
   rawText: string,
-  product: Partial<ProductPage>
+  product: Partial<ProductPage>,
+  angleIdx = 0
 ): string {
   if (!rawText) return '';
   const { genericProductName, brandTokenRemoved, shortCategoryNoun } = extractProductCoreIdentity(product);
@@ -409,7 +493,7 @@ export function sanitizeAdCopyForParaguayCod(
 
   // 1. Eliminar promesas falsas de entrega en el mismo día ("HOY mismo en tu puerta")
   text = text
-    .replace(/vos pod[eé]s tener esto hoy mismo en tu puerta\.?/gi, 'Pedilo sin pagar nada por adelantado y recibilo en 2 a 3 días hábiles en la puerta de tu casa.')
+    .replace(/vos pod[eé]s tener esto hoy mismo en tu puerta\.?/gi, 'Reservás sin adelantos y lo recibís en 2 a 3 días hábiles en la puerta de tu casa.')
     .replace(/pod[eé]s tener(?:lo)? hoy mismo en tu puerta/gi, 'lo recibís en 2 a 3 días hábiles en la puerta de tu casa')
     .replace(/recib[ií](?:lo)? hoy mismo en tu (?:puerta|casa|domicilio)/gi, 'recibilo en 48 a 72 hs en la puerta de tu casa')
     .replace(/tener hoy mismo en tu puerta/gi, 'recibir en 2 a 3 días hábiles en tu puerta')
@@ -428,14 +512,43 @@ export function sanitizeAdCopyForParaguayCod(
     text = text
       .replace(new RegExp(`\\buna sola\\s+${escapedBrand}[™®©]?\\b`, 'gi'), `un solo ${shortCategoryNoun}`)
       .replace(new RegExp(`\\bun solo\\s+${escapedBrand}[™®©]?\\b`, 'gi'), `un solo ${shortCategoryNoun}`)
-      .replace(new RegExp(`\\bcon\\s+${escapedBrand}[™®©]?\\s+es al rev[eé]s\\b`, 'gi'), `con nuestro sistema de cobro contra entrega es al revés`)
+      .replace(new RegExp(`\\bcon\\s+${escapedBrand}[™®©]?\\s+es al rev[eé]s\\b`, 'gi'), `con nosotros pagás recién cuando te entregamos`)
       .replace(new RegExp(`\\b${escapedBrand}[™®©]?\\s+${genericProductName.split(' ')[0]}\\b`, 'gi'), genericProductName.split(' ')[0])
       .replace(new RegExp(`\\bde\\s+${escapedBrand}[™®©]?\\b`, 'gi'), `de este ${shortCategoryNoun}`)
       .replace(new RegExp(`\\bcon\\s+${escapedBrand}[™®©]?\\b`, 'gi'), `con este ${shortCategoryNoun}`)
       .replace(new RegExp(`\\b${escapedBrand}[™®©]?\\b`, 'gi'), shortCategoryNoun);
   }
 
-  return text.replace(/[™®©]/g, '').replace(/  +/g, ' ').trim();
+  // 4. Eliminar la jerga de comerciante "contra entrega" y reemplazarla por lenguaje claro de cliente ("pagás cuando recibís" / "pagás cuando te entregamos")
+  text = text
+    .replace(/\bPEDIR CONTRA ENTREGA\b/g, 'PAGÁS CUANDO RECIBÍS')
+    .replace(/\bpedir contra entrega\b/gi, 'PAGÁS CUANDO RECIBÍS')
+    .replace(/\bcobro contra entrega\b/gi, 'pagás cuando recibís en tu puerta')
+    .replace(/\bpago contra entrega\b/gi, 'pagás cuando te entregamos')
+    .replace(/\benv[ií]o contra entrega\b/gi, 'envío y pagás cuando recibís')
+    .replace(/\bmodalidad contra entrega\b/gi, 'pagás recién cuando recibís')
+    .replace(/\bcontra entrega\b/gi, 'pagando cuando recibís');
+
+  text = text.replace(/[™®©]/g, '').replace(/  +/g, ' ').trim();
+
+  // 5. Si es un bloque de anuncio multilínea, aplicar la regla de 0.0 segundos (Palabras 1 a 4 = Objeto + Dolor/Solución/Placer/Oferta)
+  if (text.includes('\n')) {
+    text = enforceZeroSecondFirstWordsHook(text, product, angleIdx);
+  }
+
+  return text;
+}
+
+/**
+ * Sanitiza la etiqueta del botón CTA para que jamás diga "PEDIR CONTRA ENTREGA" (jerga comercial)
+ * y use siempre lenguaje directo que el comprador entienda al instante ("PAGÁS CUANDO RECIBÍS").
+ */
+export function sanitizeCtaLabelForCustomer(rawCta: string): string {
+  const clean = String(rawCta || '').trim();
+  if (!clean || /contra\s*entrega/i.test(clean)) {
+    return 'PAGÁS CUANDO RECIBÍS';
+  }
+  return clean;
 }
 
 // ────────────────────────────────────────────────────────────────────────────────
@@ -444,8 +557,8 @@ export function sanitizeAdCopyForParaguayCod(
 
 /**
  * Crea un perfil de Cerebro Maestro inicial con estado 'idle' para un producto dado.
- * Habla 100% del PRODUCTO, la necesidad, la solución y el placer (cero marcas desconocidas,
- * cero promesas falsas de entrega en el mismo día, y ganchos de impacto en las primeras palabras).
+ * Habla 100% del PRODUCTO, la necesidad, la solución y el placer desde la PALABRA 1 A 4 (0.0 segundos),
+ * sin marcas desconocidas y con tiempos reales de entrega COD en Paraguay (2 a 3 días hábiles / 48 a 72 hs).
  */
 export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainProfile {
   const p1 = Number(product.precios?.[1] || 189000);
@@ -453,8 +566,9 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
   const p3 = Number(product.precios?.[3] || Math.round(p1 * 2.65));
   const pNormal = Number(product.precioNormal || Math.round(p1 * 1.35));
   const freeShipping = product.freeShipping !== false;
-  const { genericProductName, shortCategoryNoun } = extractProductCoreIdentity(product);
+  const { genericProductName, shortCategoryNoun, ultraShortObjectLabel } = extractProductCoreIdentity(product);
   const nombre = genericProductName;
+  const objUpper = ultraShortObjectLabel.toUpperCase();
 
   // Avatares por defecto
   const defaultAvatars: AutoAdsAvatar[] = [
@@ -468,8 +582,8 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
         'Prefiere revisar su pedido en la puerta de su casa antes de pagar'
       ],
       angles: [
-        { id: 'angle-a1', type: 'offer' as const, hook: `🔥 Transformá tu casa con este ${nombre} sin pagar nada por adelantado`, emotionalTrigger: 'placer y seguridad' },
-        { id: 'angle-a2', type: 'trust' as const, hook: '🛑 ¿Desconfiás de comprar por internet? Acá pagás recién cuando te entregan en mano', emotionalTrigger: 'confianza' }
+        { id: 'angle-a1', type: 'offer' as const, hook: `🔥 ${objUpper} EN OFERTA: transformá tu casa en minutos por ${formatGs(p1)} y pagá recién al recibir`, emotionalTrigger: 'placer y oferta irresistible' },
+        { id: 'angle-a2', type: 'trust' as const, hook: `🛑 ${objUpper} PAGO EN PUERTA: cero giros previos, pagás al repartidor en tu casa`, emotionalTrigger: 'confianza inmediata' }
       ]
     },
     {
@@ -482,8 +596,8 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
         'Busca potencia, durabilidad real y garantía escrita'
       ],
       angles: [
-        { id: 'angle-b1', type: 'social_proof' as const, hook: `⚡ Por qué cientos de familias en Paraguay ya eligieron este ${shortCategoryNoun}`, emotionalTrigger: 'validación' },
-        { id: 'angle-b2', type: 'transformation' as const, hook: '💡 Olvidate de renegar horas: solucioná todo en menos de 2 minutos', emotionalTrigger: 'alivio' }
+        { id: 'angle-b1', type: 'social_proof' as const, hook: `⚡ ${objUpper} MÁXIMA POTENCIA: rendimiento real y materiales resistentes para uso continuo`, emotionalTrigger: 'potencia y autoridad' },
+        { id: 'angle-b2', type: 'transformation' as const, hook: `💡 ${objUpper} SIN COMPLICACIONES: olvidate de renegar horas y resolvelo en 90 segundos`, emotionalTrigger: 'alivio del dolor' }
       ]
     },
     {
@@ -496,8 +610,8 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
         'Quiere que la caja llegue sellada y con todos los accesorios listos para usar'
       ],
       angles: [
-        { id: 'angle-c1', type: 'urgency' as const, hook: `🎁 Llevá el Pack de 2 Unidades con ahorro directo y envío gratis`, emotionalTrigger: 'ahorro inteligente' },
-        { id: 'angle-c2', type: 'unboxing' as const, hook: '📦 Abrís tu caja sellada frente al repartidor y verificás todo el kit antes de pagar', emotionalTrigger: 'transparencia' }
+        { id: 'angle-c1', type: 'urgency' as const, hook: `🎁 2X ${objUpper} CON DESCUENTO: llevá 2 unidades completas con ahorro directo y envío gratis`, emotionalTrigger: 'oferta familiar irresistible' },
+        { id: 'angle-c2', type: 'unboxing' as const, hook: `📦 ${objUpper} KIT COMPLETO: recibís caja sellada en tu puerta y verificás todo antes de pagar`, emotionalTrigger: 'certeza total' }
       ]
     }
   ];
@@ -537,25 +651,22 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
 
   const savingsPack2 = Math.max(20000, p1 * 2 - p2);
 
-  // 6 Briefs de Respuesta Directa (Schwartz + Hormozi + Suby):
-  // - Hablan del PRODUCTO, la necesidad, la solución y el placer (NUNCA de una marca desconocida).
-  // - Arranque (Línea 1) magnético que atrapa en los primeros 2 segundos (CERO "Mirá la imagen").
-  // - Tiempos logísticos reales de Cobro Contra Entrega en Paraguay (entrega en 2 a 3 días hábiles / 48 a 72 hs, NUNCA "hoy mismo").
+  // 6 Briefs de Respuesta Directa con Regla 0.0 Segundos (Palabras 1 a 4 = Objeto + Dolor/Solución/Placer/Oferta):
   const defaultBriefs: AutoAdsCreativeBrief[] = [
     {
       index: 0,
       type: 'feed_1x1',
       format: '1:1',
-      archetypeName: 'Oferta Directa COD · Deseo y Placer Inmediato',
+      archetypeName: 'Oferta Directa COD · Placer y Solución en 0.0s',
       avatarTarget: 'avatar-a',
       angleType: 'offer',
-      hook3s: `🔥 ¿Querés disfrutar de ${mainBenefit.toLowerCase()} en tu casa sin complicarte la vida?`,
-      hookBadge: '🔥 PAGO AL RECIBIR · ENVÍO GRATIS',
-      headline: `🔥 ${nombre} — Pagás al Recibir`,
-      primaryText: `🔥 ¿Te imaginás transformar tu casa en minutos con este ${nombre} sin esfuerzo ni instalaciones complicadas?\n\n✨ Disfrutá la tranquilidad y el placer de ver resultados reales desde la primera noche: ${desc}.\n\n📌 Beneficio clave: ${mainBenefit}\n🛠️ Calidad real: ${techSpecs}\n📦 Incluye: ${boxItems}\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades (MÁS ELEGIDO): ${formatGs(p2)} (Ahorrás ${formatGs(savingsPack2)})\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)' : 'Entrega en 2 a 3 días hábiles en todo Paraguay'}\n💵 No pagás nada ahora: abonás en efectivo, QR o POS recién cuando el repartidor te entrega en tu puerta.\n👇 Tocá en PEDIR CONTRA ENTREGA y dejá reservado tu pedido en 30 segundos.`,
-      descriptionText: `⭐ Entrega en 48 a 72 hs en todo Paraguay · Pagás al recibir`,
+      hook3s: `🔥 ${objUpper} EN OFERTA: ${mainBenefit} por solo ${formatGs(p1)} (pagás cuando recibís)`,
+      hookBadge: `🔥 ${objUpper} · PAGÁS CUANDO RECIBÍS`,
+      headline: `🔥 ${ultraShortObjectLabel}: ${formatGs(p1)} · Pagás Cuando Recibís`,
+      primaryText: `🔥 ${objUpper} EN OFERTA: disfrutá ${mainBenefit.toLowerCase()} en tu casa sin esfuerzo por solo ${formatGs(p1)} (antes ${formatGs(pNormal)}) y pagá recién cuando recibís.\n\n✨ Sentí el placer de ver tu hogar renovado desde el primer minuto: ${desc}.\n\n📌 Solución inmediata: ${mainBenefit}\n🛠️ Calidad real: ${techSpecs}\n📦 Kit incluido: ${boxItems}\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades (MÁS ELEGIDO): ${formatGs(p2)} (Ahorrás ${formatGs(savingsPack2)})\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)' : 'Entrega en 2 a 3 días hábiles en todo Paraguay'}\n💵 Cero adelantos: pagás en efectivo, QR o POS recién cuando te entregamos en tu puerta.\n👇 Tocá en PAGÁS CUANDO RECIBÍS y reservá el tuyo antes de que se agote.`,
+      descriptionText: `⭐ Entrega en 48 a 72 hs en todo Paraguay · Pagás cuando recibís`,
       ctaType: 'ORDER_NOW',
-      ctaLabel: 'PEDIR CONTRA ENTREGA',
+      ctaLabel: 'PAGÁS CUANDO RECIBÍS',
       themeIndex: 0,
       aiGeneratedImageUrl: '',
       aiImagePrompt: buildAiAdImagePromptForBrief(product, 0, 0)
@@ -567,10 +678,10 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       archetypeName: 'Trust / Cero Riesgo Anti-Estafa',
       avatarTarget: 'avatar-b',
       angleType: 'trust',
-      hook3s: '🛑 ¿Desconfiás de pagar por adelantado en internet? Nosotros tampoco te pedimos un solo Guaraní antes.',
+      hook3s: `🛑 ${objUpper} PAGO EN PUERTA: recibilo en tu casa y pagá recién al verificarlo`,
       hookBadge: '✅ PAGÁS AL REPARTIDOR EN PUERTA',
-      headline: `🤝 Recibís en tu Puerta y Pagás al Verificar`,
-      primaryText: `🛑 ¿Te da miedo pedir por internet, girar plata antes y que nunca te llegue? Por eso con nuestro sistema de cobro contra entrega el riesgo para vos es CERO.\n\n🤝 Vos hacés tu reserva hoy sin poner tarjeta ni hacer giros previos. Nuestro equipo confirma tu dirección por WhatsApp y en 2 a 3 días hábiles el repartidor llega hasta tu puerta con tu ${nombre}.\n\n✅ Recibís tu caja sellada en tus propias manos antes de pagar\n📦 Verificás que traiga todo el kit: ${boxItems}\n🛡️ Garantía real de funcionamiento y soporte directo por WhatsApp\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades Ahorro: ${formatGs(p2)}\n\n🚚 ${freeShipping ? 'Envío GRATIS hasta tu casa o trabajo en todo Paraguay' : 'Entrega directa en tu casa o trabajo'}\n💵 Abonás recién al recibir en efectivo, QR o POS.\n👇 Tocá en VER GARANTÍA Y COMPRAR para reservar sin pagar nada por adelantado.`,
+      headline: `🛑 ${ultraShortObjectLabel}: Pagás Recién al Recibir`,
+      primaryText: `🛑 ${objUpper} PAGO EN PUERTA: no arriesgues ni un solo Guaraní por adelantado; recibís tu pedido en 2 a 3 días hábiles y pagás recién frente al repartidor.\n\n🤝 Olvidate del miedo a las estafas en internet: reservás hoy con tu nombre y WhatsApp, y abonás únicamente cuando tenés tu ${nombre} en tus manos.\n\n✅ Caja sellada entregada en la puerta de tu casa o trabajo\n📦 Kit completo garantizado: ${boxItems}\n🛡️ Respaldo directo por WhatsApp y garantía real\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades Ahorro: ${formatGs(p2)} (Te ahorrás ${formatGs(savingsPack2)})\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay (48 a 72 hs)' : 'Entrega directa en 48 a 72 hs'}\n💵 Pagás al recibir en efectivo, QR o POS.\n👇 Tocá en VER GARANTÍA Y COMPRAR y pedí el tuyo con riesgo cero.`,
       descriptionText: '🛡️ Cero pagos adelantados · Recibís en 2 a 3 días hábiles y pagás en puerta',
       ctaType: 'SHOP_NOW',
       ctaLabel: 'VER GARANTÍA Y COMPRAR',
@@ -582,13 +693,13 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       index: 2,
       type: 'feed_1x1',
       format: '1:1',
-      archetypeName: 'Dolor Cotidiano → Solución Definitiva',
+      archetypeName: 'Dolor Agudo → Solución Inmediata',
       avatarTarget: 'avatar-c',
       angleType: 'transformation',
-      hook3s: `💡 ¿Cansado de perder tiempo, paciencia y plata con opciones viejas que siempre fallan?`,
-      hookBadge: '💡 LA SOLUCIÓN PRÁCTICA PARA TU HOGAR',
-      headline: `💡 Olvidate de Renegar: Solución en Minutos`,
-      primaryText: `💡 ¿Hasta cuándo vas a seguir perdiendo tiempo y paciencia con métodos viejos que se rompen, dan trabajo y no cubren lo que necesitás?\n\n✨ Este ${nombre} fue diseñado exactamente para darte el resultado que buscás sin esfuerzo: lo colocás en minutos y disfrutás del cambio al instante (${desc}).\n\n❌ Dejás atrás las complicaciones, pérdidas de tiempo y gastos repetidos\n✅ Lográs ${mainBenefit.toLowerCase()} con un solo equipo confiable\n🛠️ Construcción sólida: ${techSpecs}\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades: ${formatGs(p2)} (Ahorro directo de ${formatGs(savingsPack2)})\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo el país (llega en 48 a 72 hs)' : 'Despacho en 48 a 72 hs a todo el país'}\n💵 Pagás recién cuando el repartidor te entrega en puerta.\n👇 Tocá en QUIERO LA SOLUCIÓN y asegurá el tuyo.`,
+      hook3s: `💡 ${objUpper} SIN COMPLICACIONES: dejá de perder tiempo y resolvelo en minutos`,
+      hookBadge: `💡 ${objUpper} · SOLUCIÓN RÁPIDA`,
+      headline: `💡 ${ultraShortObjectLabel}: Solución sin Esfuerzo`,
+      primaryText: `💡 ${objUpper} SIN COMPLICACIONES: dejá de renegar con métodos viejos que fallan y solucioná todo en minutos (${desc}).\n\n✨ Pasá de la frustración a la comodidad total con un solo equipo diseñado para darte resultados visibles desde el primer encendido.\n\n❌ Cero pérdidas de tiempo, esfuerzo ni gastos repetidos\n✅ Resultado inmediato: ${mainBenefit}\n🛠️ Durabilidad real: ${techSpecs}\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades: ${formatGs(p2)} (Ahorro directo de ${formatGs(savingsPack2)})\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo el país (llega en 48 a 72 hs)' : 'Despacho en 48 a 72 hs a todo el país'}\n💵 Pagás recién cuando el repartidor te entrega en puerta.\n👇 Tocá en QUIERO LA SOLUCIÓN y asegurá tu unidad hoy.`,
       descriptionText: `✨ Solución práctica y duradera · Pagás al recibir en tu casa`,
       ctaType: 'ORDER_NOW',
       ctaLabel: 'QUIERO LA SOLUCIÓN',
@@ -603,10 +714,10 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       archetypeName: 'Pack Familiar Ahorro (2 Unidades)',
       avatarTarget: 'avatar-a',
       angleType: 'urgency',
-      hook3s: `🎁 ¿Por qué 8 de cada 10 familias en Paraguay eligen llevar el Pack de 2 Unidades?`,
+      hook3s: `🎁 2X ${objUpper} EN OFERTA: llevá 2 unidades ahorrando ${formatGs(savingsPack2)} + envío gratis`,
       hookBadge: '⚡ PACK DÚO 2 UNIDADES CON DESCUENTO',
-      headline: `🎁 Pack 2 Unidades con Ahorro Directo`,
-      primaryText: `🎁 ¿Querés cubrir el doble de espacio en tu casa o regalarle una segunda unidad a tus padres ahorrando plata?\n\n⚡ Por eso el Pack Dúo de 2 Unidades de este ${nombre} es el más pedido en todo Paraguay: recibís dos equipos completos en un solo envío y con descuento directo.\n\n📌 2x ${nombre} completos con todos sus accesorios\n✅ Doble rendimiento: ${mainBenefit}\n🛠️ Durabilidad comprobada: ${techSpecs}\n\n💰 1 Unidad sola: ${formatGs(p1)}\n🔥 Pack 2 Unidades (OFERTA FAMILIAR): ${formatGs(p2)} (Te ahorrás ${formatGs(savingsPack2)})\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)' : 'Entrega en 2 a 3 días hábiles en puerta'}\n💵 Pagás recién al recibir en efectivo, QR o POS.\n👇 Tocá en QUIERO MI PACK 2 y reservá tu promoción ahora.`,
+      headline: `🎁 2x ${ultraShortObjectLabel}: Ahorrá ${formatGs(savingsPack2)}`,
+      primaryText: `🎁 2X ${objUpper} EN OFERTA: llevate 2 unidades completas por solo ${formatGs(p2)} (ahorrás ${formatGs(savingsPack2)} directo) y cubrí el doble de espacio o regalá una a tu familia.\n\n⚡ Es la promoción preferida por 8 de cada 10 compradores en Paraguay porque aprovechás dos equipos en un mismo envío gratis.\n\n📌 2x ${nombre} completos con todos sus accesorios\n✅ Doble cobertura y placer: ${mainBenefit}\n🛠️ Construcción resistente: ${techSpecs}\n\n💰 1 Unidad sola: ${formatGs(p1)}\n🔥 Pack 2 Unidades (PROMO FAMILIAR): ${formatGs(p2)} (Ahorrás ${formatGs(savingsPack2)})\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)' : 'Entrega en 2 a 3 días hábiles en puerta'}\n💵 Pagás recién al recibir en efectivo, QR o POS.\n👇 Tocá en QUIERO MI PACK 2 HOY antes de que termine el cupo promocional.`,
       descriptionText: `🎁 Pack Familiar 2 Unidades · Entrega en 48 a 72 hs con pago en puerta`,
       ctaType: 'ORDER_NOW',
       ctaLabel: 'QUIERO MI PACK 2 HOY',
@@ -621,18 +732,18 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       archetypeName: 'Demostración de Potencia y Verdad Física',
       avatarTarget: 'avatar-b',
       angleType: 'social_proof',
-      hook3s: `⚡ ¿Pensás que todos son iguales o de juguete? Conocé la verdadera potencia de este ${shortCategoryNoun}`,
+      hook3s: `⚡ ${objUpper} MÁXIMA POTENCIA: calidad superior que rinde de verdad en tu hogar`,
       hookBadge: '🔥 POTENCIA Y CALIDAD COMPROBADA',
-      headline: `⚡ Potencia Real y Materiales de Primera`,
-      primaryText: `⚡ ¿Alguna vez compraste algo barato que no tenía potencia o dejó de funcionar a los pocos días?\n\n🔥 Este ${nombre} sobresale por su calidad de construcción real: ${desc}. Pensado para soportar el uso real en Paraguay y darte resultados visibles desde el primer encendido.\n\n🛠️ Ficha técnica real: ${techSpecs}\n✅ Rendimiento superior: ${mainBenefit}\n📦 Kit completo incluido: ${boxItems}\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades: ${formatGs(p2)}\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay (llega en 2 a 3 días hábiles)' : 'Entrega en 2 a 3 días hábiles en tu puerta'}\n💵 Pagás recién al repartidor cuando lo tenés en tus manos.\n👇 Tocá en COMPRAR AHORA y pedilo sin riesgo.`,
-      descriptionText: `🔥 Calidad verificada · Entrega en 48 a 72 hs con cobro contra entrega`,
+      headline: `⚡ ${ultraShortObjectLabel}: Potencia Real Comprobada`,
+      primaryText: `⚡ ${objUpper} MÁXIMA POTENCIA: olvidate de imitaciones débiles; este equipo sobresale por su rendimiento real (${desc}).\n\n🔥 Diseñado con materiales de primera para soportar el uso exigente en Paraguay y entregarte máxima satisfacción desde el primer día.\n\n🛠️ Ficha técnica real: ${techSpecs}\n✅ Desempeño superior: ${mainBenefit}\n📦 Incluye todo el kit: ${boxItems}\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades: ${formatGs(p2)} (Ahorrás ${formatGs(savingsPack2)})\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay (llega en 2 a 3 días hábiles)' : 'Entrega en 2 a 3 días hábiles en tu puerta'}\n💵 Pagás recién al repartidor cuando lo tenés en tus manos.\n👇 Tocá en COMPRAR AHORA y reservá el tuyo sin adelantos.`,
+      descriptionText: `🔥 Calidad verificada · Entrega en 48 a 72 hs · Pagás cuando recibís`,
       ctaType: 'SHOP_NOW',
       ctaLabel: 'COMPRAR AHORA',
       themeIndex: 0,
       aiGeneratedImageUrl: '',
       aiImagePrompt: buildAiAdImagePromptForBrief(product, 4, 0),
       videoScenes: [
-        { durationSec: 3, badge: 'ESCENA 1 · POTENCIA REAL (0-3s)', title: `⚡ La verdadera potencia de este ${shortCategoryNoun}`, subtitle: mainBenefit.slice(0, 65), priceTag: '🔥 CALIDAD SUPERIOR', bgGradient: 'from-[#041a12] via-[#0b3d2e] to-[#041a12]' },
+        { durationSec: 3, badge: 'ESCENA 1 · POTENCIA REAL (0-3s)', title: `⚡ ${objUpper} MÁXIMA POTENCIA`, subtitle: mainBenefit.slice(0, 65), priceTag: `🔥 SOLO ${formatGs(p1)}`, bgGradient: 'from-[#041a12] via-[#0b3d2e] to-[#041a12]' },
         { durationSec: 3, badge: 'ESCENA 2 · MATERIALES (3-6s)', title: 'Construcción Sólida y Duradera', subtitle: techSpecs.slice(0, 65), priceTag: freeShipping ? '🚚 ENVÍO GRATIS (2-3 DÍAS)' : '🚚 ENTREGA EN 48-72 HS', bgGradient: 'from-[#0f172a] via-[#1e3a8a] to-[#0f172a]' },
         { durationSec: 3, badge: 'ESCENA 3 · OFERTA COD (6-9s)', title: `1 Unidad: ${formatGs(p1)}`, subtitle: `🔥 Pack Dúo 2x: ${formatGs(p2)}`, priceTag: `Antes: ${formatGs(pNormal)}`, bgGradient: 'from-[#3b0764] via-[#581c87] to-[#1e1b4b]' },
         { durationSec: 3, badge: 'ESCENA 4 · CTA FINAL (9-12s)', title: 'Pagás Recién al Recibir en Puerta', subtitle: 'Entrega en 2 a 3 días hábiles en todo Paraguay', priceTag: '✅ EFECTIVO, QR O POS', bgGradient: 'from-[#064e3b] via-[#15803d] to-[#041a12]' }
@@ -645,10 +756,10 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       archetypeName: 'Unboxing Real · Qué Recibís en tu Caja',
       avatarTarget: 'avatar-c',
       angleType: 'unboxing',
-      hook3s: `📦 ¿Querés saber exactamente qué trae la caja cuando el repartidor llega a tu casa?`,
+      hook3s: `📦 ${objUpper} KIT COMPLETO: recibís caja sellada con todos los accesorios listos para usar`,
       hookBadge: '📦 UNBOXING REAL · KIT COMPLETO',
-      headline: `📦 Caja Sellada con Todos sus Accesorios`,
-      primaryText: `📦 ¿Te preocupa pedir algo y que te llegue incompleto o sin los accesorios necesarios para usarlo?\n\n👀 Con tu pedido de este ${nombre}, recibís en tu domicilio (en 2 a 3 días hábiles) la caja sellada de fábrica con el kit 100% completo y listo para enchufar y usar.\n\n✔️ Contenido exacto de la caja: ${boxItems}\n✔️ Especificaciones reales: ${techSpecs}\n🛡️ Revisás tu paquete frente al repartidor antes de abonar\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades: ${formatGs(p2)}\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay (48 a 72 hs)' : 'Despacho en 48 a 72 hs a domicilio'}\n💵 Pagás al recibir en efectivo, QR o POS.\n👇 Tocá en PEDIR KIT COMPLETO y reservá el tuyo sin adelantos.`,
+      headline: `📦 ${ultraShortObjectLabel}: Kit Completo Sellado`,
+      primaryText: `📦 ${objUpper} KIT COMPLETO: recibís en tu puerta la caja sellada de fábrica con todos los accesorios originales listos para usar desde el primer minuto.\n\n👀 Sin sorpresas ni faltantes: en 2 a 3 días hábiles llega el repartidor a tu domicilio y vos revisás tu ${nombre} antes de abonar.\n\n✔️ Contenido exacto en caja: ${boxItems}\n✔️ Especificaciones reales: ${techSpecs}\n🛡️ Verificación en puerta antes de pagar\n\n💰 1 Unidad: ${formatGs(p1)} (Antes ${formatGs(pNormal)})\n🔥 Pack 2 Unidades: ${formatGs(p2)} (Ahorrás ${formatGs(savingsPack2)})\n\n🚚 ${freeShipping ? 'Envío GRATIS a todo Paraguay (48 a 72 hs)' : 'Despacho en 48 a 72 hs a domicilio'}\n💵 Pagás al recibir en efectivo, QR o POS.\n👇 Tocá en PEDIR KIT COMPLETO y asegurá el tuyo hoy.`,
       descriptionText: '📦 Kit completo en caja sellada · Entrega en 2 a 3 días y pago al recibir',
       ctaType: 'LEARN_MORE',
       ctaLabel: 'PEDIR KIT COMPLETO',
@@ -656,7 +767,7 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       aiGeneratedImageUrl: '',
       aiImagePrompt: buildAiAdImagePromptForBrief(product, 5, 0),
       videoScenes: [
-        { durationSec: 3, badge: 'ESCENA 1 · UNBOXING REAL (0-3s)', title: `📦 Qué trae la caja de tu ${shortCategoryNoun}`, subtitle: 'Todo lo que recibís en tu casa en 2 a 3 días hábiles', priceTag: '👀 VERIFICÁS AL RECIBIR', bgGradient: 'from-[#1f0808] via-[#7f1d1d] to-[#450a0a]' },
+        { durationSec: 3, badge: 'ESCENA 1 · UNBOXING REAL (0-3s)', title: `📦 ${objUpper} KIT COMPLETO`, subtitle: 'Todo lo que recibís en tu casa en 2 a 3 días hábiles', priceTag: '👀 VERIFICÁS AL RECIBIR', bgGradient: 'from-[#1f0808] via-[#7f1d1d] to-[#450a0a]' },
         { durationSec: 3, badge: 'ESCENA 2 · KIT COMPLETO (3-6s)', title: boxItems.slice(0, 52), subtitle: 'Listo para instalar y disfrutar desde el primer minuto', priceTag: '📦 CAJA 100% COMPLETA', bgGradient: 'from-[#0f172a] via-[#1e3a8a] to-[#0f172a]' },
         { durationSec: 3, badge: 'ESCENA 3 · OFERTA HOY (6-9s)', title: `1 Unidad por ${formatGs(p1)}`, subtitle: `O el Pack Dúo 2x por ${formatGs(p2)}`, priceTag: `Antes: ${formatGs(pNormal)}`, bgGradient: 'from-[#3b0764] via-[#581c87] to-[#1e1b4b]' },
         { durationSec: 3, badge: 'ESCENA 4 · CTA FINAL (9-12s)', title: 'Pagás Recién al Recibir en tu Puerta', subtitle: 'Reservá hoy sin pagar nada por adelantado', priceTag: '✅ EFECTIVO, QR O POS', bgGradient: 'from-[#064e3b] via-[#15803d] to-[#041a12]' }
@@ -691,19 +802,19 @@ export function createDefaultBrainProfile(product: ProductPage): AutoAdsBrainPro
       searchQuery: `${nombre} Paraguay + LATAM COD`,
       activeAdsFound: 24,
       winningPatterns: [
-        `Gancho emocional en las primeras 5 palabras enfocado en el placer y beneficio real del ${shortCategoryNoun} (cero marcas desconocidas)`,
+        `Impacto en 0.0 Segundos (Palabras 1 a 4): Objeto (${objUpper}) + Dolor/Solución/Placer/Oferta de entrada sin preámbulos`,
         'Transparencia logística COD Paraguay: reserva sin adelantos, entrega en 2 a 3 días hábiles (48-72 hs) y pago al recibir en puerta',
         'Anclaje de Pack 2 Familiar con ahorro explícito en Guaraníes'
       ],
       commonHooks: [
-        `🔥 ¿Querés disfrutar de ${mainBenefit.toLowerCase()} en tu casa sin complicarte ni pagar por adelantado?`,
-        `🛑 ¿Te da desconfianza pedir por internet? Recibí tu ${shortCategoryNoun} en 2 a 3 días y pagá recién en tu puerta`,
-        `🎁 Por qué 8 de cada 10 familias en Paraguay eligen el Pack de 2 Unidades de este ${shortCategoryNoun}`
+        `🔥 ${objUpper} EN OFERTA: ${mainBenefit.toLowerCase()} por solo ${formatGs(p1)} (pagás recién al recibir)`,
+        `🛑 ${objUpper} PAGO EN PUERTA: recibilo en 2 a 3 días hábiles y pagá recién al verificarlo`,
+        `🎁 2X ${objUpper} CON DESCUENTO: llevate 2 unidades ahorrando ${formatGs(savingsPack2)} con envío gratis`
       ],
       commonAngles: [
-        'Oferta Grand Slam (Hormozi) + Cero Riesgo COD (Entrega en 48-72 hs)',
+        'Oferta Grand Slam en 0.0s (Objeto + Beneficio + Precio en Palabras 1 a 4)',
         'Confianza Total Anti-Estafa: "No girás nada antes, pagás al repartidor en tu puerta"',
-        'Dolor Cotidiano Agudo → Solución y Placer para toda la Familia'
+        'Dolor Cotidiano Agudo → Solución y Placer Inmediato desde la primera palabra'
       ],
       dominantFormats: ['Feed 1:1 (1080×1080)', 'Story 9:16', 'Video Reel 9:16 (4 Escenas)'],
       avgLongevityDays: 34
@@ -1126,43 +1237,92 @@ REGLAS FINALES OBLIGATORIAS PARA LA POTENCIA DEL COPY Y RESPUESTA:
 export const AI_GENERATED_AD_ARCHETYPE_IMAGES: string[] = [];
 
 /**
- * Construye el prompt publicitario de Generación de Imagen IA específico para cada arquetipo Andrómeda.
+ * Construye el prompt publicitario 100% UNIVERSAL de Generación de Imagen IA para CUALQUIER producto,
+ * sincronizado con la PRIMERA ESTROFA exacta de ese anuncio, el titular y el botón CTA.
  */
 export function buildAiAdImagePromptForBrief(
   product: ProductPage,
   briefIndex: number,
-  variationSeed = 0
+  variationSeed = 0,
+  firstStanzaText?: string,
+  headlineText?: string,
+  ctaLabelText?: string
 ): string {
-  const name = product?.nombre || 'Producto Premium';
-  const desc = (product?.descripcion || '').slice(0, 110);
-  const mainBenefit =
+  const { genericProductName, ultraShortObjectLabel } = extractProductCoreIdentity(product);
+  const objUpper = ultraShortObjectLabel.toUpperCase();
+  const name = genericProductName || product?.nombre || 'Producto Premium';
+  const desc = sanitizeAdCopyForParaguayCod(product?.descripcion || '', product).slice(0, 140);
+  const mainBenefit = sanitizeAdCopyForParaguayCod(
     product?.landingContent?.benefitCards?.[0]?.title ||
-    product?.agentBrain?.usageSummarySpoken ||
-    desc;
-  const techSpecs = product?.physicalTruth?.materialMain
-    ? `${product.physicalTruth.materialMain}${
-        product.physicalTruth.powerSourceLabel ? `, ${product.physicalTruth.powerSourceLabel}` : ''
-      }`
-    : product?.agentBrain?.technicalSpecsSpoken || desc;
-  const boxItems =
+      product?.agentBrain?.usageSummarySpoken ||
+      desc,
+    product
+  );
+  const techSpecs = sanitizeAdCopyForParaguayCod(
+    product?.physicalTruth?.materialMain
+      ? `${product.physicalTruth.materialMain}${
+          product.physicalTruth.powerSourceLabel ? `, ${product.physicalTruth.powerSourceLabel}` : ''
+        }`
+      : product?.agentBrain?.technicalSpecsSpoken || desc,
+    product
+  );
+  const boxItems = sanitizeAdCopyForParaguayCod(
     product?.physicalTruth?.boxContents ||
-    product?.agentBrain?.boxContentsSpoken ||
-    `${name} and all original factory accessories`;
+      product?.agentBrain?.boxContentsSpoken ||
+      `${name} and all original factory accessories`,
+    product
+  );
+  const p1 = Number(product?.precios?.[1] || 189000);
+  const p2 = Number(product?.precios?.[2] || Math.round(p1 * 1.85));
+
+  const cleanFirstStanza = String(firstStanzaText || '')
+    .split(/\n\s*\n/)[0]
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 190);
+
+  const stanzaVisualDirective = cleanFirstStanza
+    ? `Scene must visually depict the exact offer, pain relief, or pleasure stated in this ad's opening stanza: "${cleanFirstStanza}". `
+    : '';
 
   const styles = [
-    '8k ultra-detailed commercial Meta Ads studio photography, dramatic lighting, high CTR advertising visual, zero text overlays',
-    'photorealistic Latin American lifestyle commercial advertisement, warm golden hour lighting, Sony A7R V 85mm lens, zero text overlays',
-    'cinematic high-contrast direct-response e-commerce ad creative, crisp commercial lighting, ultra sharp focus, zero text overlays'
+    '8k ultra-detailed high-converting Meta Ads poster photography, vibrant commercial contrast, razor-sharp focus',
+    'photorealistic Latin American direct-response advertising poster, dramatic lighting, Sony A7R V 85mm lens',
+    'cinematic high-impact e-commerce ad poster, vivid colors, ultra-clear product action and visible human result'
   ];
   const styleSuffix = styles[variationSeed % styles.length];
 
+  const defaultHeadlines = [
+    `${objUpper} EN OFERTA - Gs. ${p1.toLocaleString('es-PY')}`,
+    `${objUpper} PAGO EN PUERTA - CERO RIESGO`,
+    `${objUpper} SIN COMPLICACIONES`,
+    `2X ${objUpper} EN OFERTA - Gs. ${p2.toLocaleString('es-PY')}`,
+    `${objUpper} MÁXIMA POTENCIA`,
+    `${objUpper} KIT COMPLETO SELLADO`
+  ];
+  const defaultCtas = [
+    'PAGÁS CUANDO RECIBÍS',
+    'VER GARANTÍA Y COMPRAR',
+    'QUIERO LA SOLUCIÓN',
+    'QUIERO MI PACK 2 HOY',
+    'COMPRAR AHORA',
+    'PEDIR KIT COMPLETO'
+  ];
+
+  const topHeadline = String(headlineText || defaultHeadlines[briefIndex % defaultHeadlines.length])
+    .replace(/[🔥🛑💡🎁⚡📦✨✅]/g, '')
+    .trim();
+  const bottomCta = sanitizeCtaLabelForCustomer(
+    String(ctaLabelText || defaultCtas[briefIndex % defaultCtas.length]).trim()
+  );
+
   const promptsByArchetype = [
-    `Commercial Facebook Ad Hero Poster for "${name}" (${desc}): product showcased in dramatic foreground in real-world action demonstrating its main benefit (${mainBenefit}), luxury e-commerce advertisement composition, ${styleSuffix}`,
-    `Authentic UGC Cash-on-Delivery Trust Ad in Paraguay for "${name}": friendly delivery courier in uniform handing the "${name}" package at the front door of a modern house to a smiling buyer inspecting it before paying cash in Guaraníes, ${styleSuffix}`,
-    `Split-screen BEFORE vs AFTER commercial advertisement for "${name}" (${desc}): left side shows the frustrating everyday problem before having "${name}"; right side shows the instant transformation and solution using "${name}" (${mainBenefit}), high-CTR visual hook, ${styleSuffix}`,
-    `Vertical 9:16 Instagram Story Bundle Promotion Ad: two identical units of "${name}" (Pack 2x Savings Bundle) displayed side by side on a sleek modern podium with warm lifestyle background, ${styleSuffix}`,
-    `Vertical 9:16 Reels Macro Action Demonstration Ad for "${name}" (${techSpecs}): close-up dynamic macro shot of "${name}" operating at peak performance showing its build quality and materials, ${styleSuffix}`,
-    `Vertical 9:16 First-Person POV Unboxing Ad for "${name}": hands opening a newly delivered shipping box on a wooden home table revealing the authentic "${name}" and its included contents (${boxItems}) neatly arranged, ${styleSuffix}`
+    `High-Impact Direct-Response Facebook Ad Poster for "${name}" (${desc}): ${stanzaVisualDirective}Clearly show the authentic physical "${name}" in the foreground ACTIVELY BEING USED and visibly producing its real-world result and immediate pleasure/benefit (${mainBenefit}) for a delighted user/family. Include bold, legible Spanish advertising headline text at the top reading "${topHeadline}" and a high-contrast CTA button at the bottom reading "${bottomCta}", ${styleSuffix}`,
+    `High-Impact Cash-on-Delivery Trust Ad Poster for "${name}" (${desc}): ${stanzaVisualDirective}In the foreground a smiling customer at their front door receives and tests the "${name}" from a friendly delivery courier while the "${name}" is actively working in real use showing its visible result (${mainBenefit}) before paying. Include bold Spanish ad headline text "${topHeadline}" and a CTA button badge "${bottomCta}", ${styleSuffix}`,
+    `High-Impact BEFORE vs AFTER Split-Screen Ad Poster for "${name}" (${desc}): ${stanzaVisualDirective}Left side ("ANTES") shows a person struggling with the problem before having "${name}"; right side ("DESPUÉS") shows the person actively using "${name}" and experiencing the immediate solution and visible result (${mainBenefit}). Include bold Spanish header text "${topHeadline}" and CTA button badge "${bottomCta}", ${styleSuffix}`,
+    `High-Impact Pack 2x Bundle Ad Poster for "${name}" (${desc}): ${stanzaVisualDirective}Two identical units of "${name}" prominently shown in active use producing double the real-world benefit (${mainBenefit}) for a happy family. Include bold Spanish ad header text "${topHeadline}" and CTA button badge "${bottomCta}", ${styleSuffix}`,
+    `High-Impact Power & Performance Demonstration Ad Poster for "${name}" (${techSpecs}): ${stanzaVisualDirective}Dynamic close-up of "${name}" actively operating at 100% capacity, visibly demonstrating its real physical result (${mainBenefit}) in front of a satisfied user. Include bold Spanish ad header text "${topHeadline}" and CTA button badge "${bottomCta}", ${styleSuffix}`,
+    `High-Impact Complete Kit in Action Ad Poster for "${name}": ${stanzaVisualDirective}Foreground shows the unboxed "${name}" with all its included factory accessories (${boxItems}) while the "${name}" is switched ON and actively producing its visible real-world result (${mainBenefit}). Include bold Spanish ad header text "${topHeadline}" and CTA button badge "${bottomCta}", ${styleSuffix}`
   ];
 
   return promptsByArchetype[briefIndex % promptsByArchetype.length];
@@ -1203,10 +1363,29 @@ export function buildCreativeAssetsFromBrain(
   product: ProductPage,
   brain: AutoAdsBrainProfile
 ): GeneratedAdCreativeAsset[] {
-  const p1 = brain.productAnalysis.pricesPack1;
-  const p2 = brain.productAnalysis.pricesPack2;
-  const pNormal = brain.productAnalysis.pricesNormal;
-  const freeShipping = brain.productAnalysis.freeShipping;
+  // Respetar SIEMPRE el precio en tiempo real del producto actual (product.precios) por encima de cualquier caché previa
+  const p1 = Number(product.precios?.[1] || brain.productAnalysis.pricesPack1 || 189000);
+  const p2 = Number(product.precios?.[2] || brain.productAnalysis.pricesPack2 || Math.round(p1 * 1.85));
+  const pNormal = Number(product.precioNormal || brain.productAnalysis.pricesNormal || Math.round(p1 * 1.35));
+  const freeShipping = product.freeShipping !== undefined ? product.freeShipping !== false : brain.productAnalysis.freeShipping;
+
+  const oldP1 = brain.productAnalysis.pricesPack1;
+  const oldP2 = brain.productAnalysis.pricesPack2;
+  const oldPNormal = brain.productAnalysis.pricesNormal;
+
+  const syncRealTimePricesInText = (txt: string): string => {
+    let out = txt;
+    if (oldP1 && oldP1 !== p1) {
+      out = out.split(oldP1.toLocaleString('es-PY')).join(p1.toLocaleString('es-PY'));
+    }
+    if (oldP2 && oldP2 !== p2) {
+      out = out.split(oldP2.toLocaleString('es-PY')).join(p2.toLocaleString('es-PY'));
+    }
+    if (oldPNormal && oldPNormal !== pNormal) {
+      out = out.split(oldPNormal.toLocaleString('es-PY')).join(pNormal.toLocaleString('es-PY'));
+    }
+    return out;
+  };
 
   if (!brain.creativeBriefs || brain.creativeBriefs.length === 0) {
     return [];
@@ -1227,16 +1406,38 @@ export function buildCreativeAssetsFromBrain(
   return brain.creativeBriefs.map((brief, idx) => {
     const aspectRatio = brief.format || (brief.type === 'feed_1x1' ? '1:1' : '9:16');
     const themeIdx = (brief.themeIndex ?? idx) % CREATIVE_COLOR_THEMES.length;
-    const aiImagePrompt = brief.aiImagePrompt || buildAiAdImagePromptForBrief(product, idx, 0);
+
+    const cleanHeadline = syncRealTimePricesInText(
+      sanitizeAdCopyForParaguayCod(brief.headline || product.nombre, product, idx)
+    );
+    const cleanPrimaryText = syncRealTimePricesInText(
+      sanitizeAdCopyForParaguayCod(brief.primaryText || '', product, idx)
+    );
+    const cleanDescText = syncRealTimePricesInText(
+      sanitizeAdCopyForParaguayCod(
+        brief.descriptionText || 'Entrega en 2 a 3 días hábiles · Pagás cuando recibís',
+        product,
+        idx
+      )
+    );
+    const ctaLabel = sanitizeCtaLabelForCustomer(brief.ctaLabel || 'PAGÁS CUANDO RECIBÍS');
+    const cleanHookBadge = sanitizeAdCopyForParaguayCod(
+      brief.hookBadge || '🔥 OFERTA · PAGÁS CUANDO RECIBÍS',
+      product,
+      idx
+    );
+
+    // Construir o enriquecer el aiImagePrompt para que siempre sea 100% congruente con la PRIMERA ESTROFA de este anuncio específico
+    const aiImagePrompt = buildAiAdImagePromptForBrief(
+      product,
+      idx,
+      0,
+      cleanPrimaryText,
+      cleanHeadline,
+      ctaLabel
+    );
     const aiGeneratedImageUrl = brief.aiGeneratedImageUrl || '';
     const productImage = aiGeneratedImageUrl || product.imagen || '';
-
-    const cleanHeadline = sanitizeAdCopyForParaguayCod(brief.headline || product.nombre, product);
-    const cleanPrimaryText = sanitizeAdCopyForParaguayCod(brief.primaryText || '', product);
-    const cleanDescText = sanitizeAdCopyForParaguayCod(
-      brief.descriptionText || 'Entrega en 2 a 3 días hábiles · Pagás al recibir en puerta',
-      product
-    );
 
     const imageDataUrl = buildHighImpactAdSvgDataUrl({
       productName: product.nombre,
@@ -1246,10 +1447,10 @@ export function buildCreativeAssetsFromBrain(
       normalPriceGs: pNormal,
       freeShipping,
       aspectRatio,
-      hookBadge: brief.hookBadge || '🔥 OFERTA HOY · PAGO EN PUERTA',
+      hookBadge: cleanHookBadge,
       headline: cleanHeadline,
       subHeadline: cleanDescText.slice(0, 70),
-      ctaLabel: brief.ctaLabel || 'PEDIR CONTRA ENTREGA',
+      ctaLabel,
       themeIndex: themeIdx
     });
 
@@ -1259,12 +1460,12 @@ export function buildCreativeAssetsFromBrain(
       formatLabel: `${formatLabelMapping[brief.type] || 'Imagen IA Feed 1:1'} · ${brief.archetypeName || 'Andrómeda'}`,
       aspectRatio,
       angleTitle: `Ángulo #${(brief.index ?? idx) + 1} · ${brief.archetypeName || 'Andrómeda'} (${brief.angleType || 'offer'})`,
-      hookBadge: brief.hookBadge || '🔥 OFERTA HOY · PAGO EN PUERTA',
+      hookBadge: cleanHookBadge,
       headline: cleanHeadline,
       primaryText: cleanPrimaryText,
       descriptionText: cleanDescText,
       ctaType: brief.ctaType || 'ORDER_NOW',
-      ctaLabel: brief.ctaLabel || 'PEDIR CONTRA ENTREGA',
+      ctaLabel,
       visualThemeIndex: themeIdx,
       imageDataUrl,
       aiGeneratedImageUrl,
@@ -1275,25 +1476,26 @@ export function buildCreativeAssetsFromBrain(
       asset.videoScenes = brief.videoScenes.map((scene) => ({
         durationSec: scene.durationSec,
         badge: scene.badge,
-        title: scene.title,
-        subtitle: scene.subtitle,
-        priceTag: scene.priceTag,
+        title: syncRealTimePricesInText(sanitizeAdCopyForParaguayCod(scene.title, product, idx)),
+        subtitle: syncRealTimePricesInText(sanitizeAdCopyForParaguayCod(scene.subtitle, product, idx)),
+        priceTag: syncRealTimePricesInText(scene.priceTag),
         bgGradient: scene.bgGradient
       }));
     } else if (brief.type === 'reel_9x16') {
       const archetype = ANDROMEDA_CREATIVE_ARCHETYPES[brief.index ?? idx];
       const isUnboxing = archetype?.angleType === 'unboxing';
-      const { shortCategoryNoun } = extractProductCoreIdentity(product);
+      const { shortCategoryNoun, ultraShortObjectLabel } = extractProductCoreIdentity(product);
+      const objUpper = ultraShortObjectLabel.toUpperCase();
 
       asset.videoScenes = [
         {
           durationSec: 3,
           badge: isUnboxing ? 'ESCENA 1 · GANCHO DUDA (0-3s)' : 'ESCENA 1 · HOOK (0-3s)',
-          title: sanitizeAdCopyForParaguayCod(brief.hook3s || `¿Ya viste este ${shortCategoryNoun} en acción?`, product),
+          title: sanitizeAdCopyForParaguayCod(brief.hook3s || `${objUpper} EN OFERTA`, product, idx),
           subtitle: isUnboxing
-            ? 'Pedí contra entrega y mirá todo lo que trae la caja'
+            ? 'Pagás cuando recibís y mirá todo lo que trae la caja'
             : 'La solución práctica que cientos de familias en Paraguay eligen',
-          priceTag: isUnboxing ? '🤔 Mirá la prueba en vivo' : 'Descuento Especial COD',
+          priceTag: isUnboxing ? '🤔 Mirá la prueba en vivo' : 'Pagás Cuando Recibís',
           bgGradient: 'from-[#041a12] via-[#0b3d2e] to-[#041a12]'
         },
         {
@@ -1301,7 +1503,7 @@ export function buildCreativeAssetsFromBrain(
           badge: isUnboxing ? 'ESCENA 2 · APERTURA (3-6s)' : 'ESCENA 2 · DEMO (3-6s)',
           title: isUnboxing
             ? 'Revisás tu caja sellada al recibir...'
-            : sanitizeAdCopyForParaguayCod(product.descripcion || 'Calidad verificada', product).slice(0, 62),
+            : sanitizeAdCopyForParaguayCod(product.descripcion || 'Calidad verificada', product, idx).slice(0, 62),
           subtitle: isUnboxing
             ? 'Materiales sólidos y todo el kit completo incluido'
             : 'Entrega en 2 a 3 días hábiles en todo Paraguay',
@@ -1364,30 +1566,36 @@ export function regenerateSingleCreativeAssetFromBrain(
     hookBadge: customBriefOverride?.hookBadge || congruentSceneBrief.hookBadge,
     headline: sanitizeAdCopyForParaguayCod(
       customBriefOverride?.headline || congruentSceneBrief.headline,
-      product
+      product,
+      congruentSceneIdx
     ),
     primaryText: sanitizeAdCopyForParaguayCod(
       customBriefOverride?.primaryText || congruentSceneBrief.primaryText,
-      product
+      product,
+      congruentSceneIdx
     ),
     descriptionText: sanitizeAdCopyForParaguayCod(
       customBriefOverride?.descriptionText || congruentSceneBrief.descriptionText,
-      product
+      product,
+      congruentSceneIdx
     ),
     ...(customBriefOverride
       ? {
           ...customBriefOverride,
           headline: sanitizeAdCopyForParaguayCod(
             customBriefOverride.headline || congruentSceneBrief.headline,
-            product
+            product,
+            congruentSceneIdx
           ),
           primaryText: sanitizeAdCopyForParaguayCod(
             customBriefOverride.primaryText || congruentSceneBrief.primaryText,
-            product
+            product,
+            congruentSceneIdx
           ),
           descriptionText: sanitizeAdCopyForParaguayCod(
             customBriefOverride.descriptionText || congruentSceneBrief.descriptionText,
-            product
+            product,
+            congruentSceneIdx
           )
         }
       : {}),

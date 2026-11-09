@@ -741,7 +741,7 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
   assert.notEqual(regeneratedAd0.primaryText, assets[0].primaryText);
   assert.equal(regeneratedAd0.aiGeneratedImageUrl, '/assets/ai-ads/gpt_imagen_regen_test.png');
 
-  // Verify 100% Universal Product Adaptation (ZERO projector hardcoding when the product is a Drill)
+  // Verify 100% Universal Product Adaptation & 0.0-Second Rule (Words 1 to 4 = Object + Offer/Solution/Pain)
   for (const ad of assets) {
     const combined = `${ad.headline} ${ad.primaryText} ${ad.aiImagePrompt || ''}`.toLowerCase();
     assert.equal(combined.includes('fachada'), false);
@@ -751,24 +751,78 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
     assert.equal(combined.includes('estaca'), false);
     assert.equal(combined.includes('mirá la imagen'), false);
     assert.equal(combined.includes('hoy mismo en tu puerta'), false);
-    assert.ok(combined.includes('taladro percutor 21v industrial'));
+    assert.ok(combined.includes('taladro percutor'));
+
+    // Verify 0.0-second rule: the object ("taladro") MUST be present within the first 4 words of primaryText and headline
+    const firstFourPrimaryWords = ad.primaryText
+      .split('\n')[0]
+      .replace(/[🔥✨💡🤝⚡📦🛑🎁🎄✅⭐¿?¡!:.,—\-()]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 4)
+      .join(' ')
+      .toLowerCase();
+    assert.ok(
+      firstFourPrimaryWords.includes('taladro'),
+      `Expected 'taladro' in first 4 words of primaryText, got: "${firstFourPrimaryWords}"`
+    );
+
+    // Verify that the image prompt for this ad directly includes the exact opening stanza (primera estrofa) of this ad
+    const firstStanza = ad.primaryText.split(/\n\s*\n/)[0].replace(/\s+/g, ' ').trim().slice(0, 80);
+    assert.ok(
+      (ad.aiImagePrompt || '').includes(firstStanza),
+      `Expected aiImagePrompt to include the ad's first stanza "${firstStanza}"`
+    );
   }
 
-  // Verify Product-First Identity extraction & COD Paraguay copy sanitization (strips unknown brand like Noelux™, fixes "hoy mismo en tu puerta", strips "Mirá la imagen:")
+  // Verify 3-word prepositional product names (e.g. "BioFlex™ Crema para Dolor Articular" -> "Crema para Dolor")
+  const remedyIdentity = extractProductCoreIdentity({
+    nombre: 'BioFlex™ Crema para Dolor Articular 100ml'
+  });
+  assert.equal(remedyIdentity.brandTokenRemoved, 'BioFlex');
+  assert.equal(remedyIdentity.ultraShortObjectLabel, 'Crema para Dolor');
+
+  // Verify Product-First Identity extraction & COD Paraguay copy sanitization (strips unknown brand like Noelux™, fixes "hoy mismo en tu puerta", strips "Mirá la imagen:", enforces 0.0s hook in words 1-4)
   const brandedProduct: Partial<ProductPage> = {
     nombre: 'Noelux™ Proyector Navideño 12 Diseños'
   };
   const identity = extractProductCoreIdentity(brandedProduct);
   assert.equal(identity.brandTokenRemoved, 'Noelux');
   assert.equal(identity.genericProductName, 'Proyector Navideño 12 Diseños');
+  assert.equal(identity.ultraShortObjectLabel, 'Proyector Navideño');
+  assert.equal(identity.shortCategoryNoun, 'Proyector Navideño');
 
   const dirtyCopy =
-    '🔥 Mirá la imagen: una sola Noelux™ proyectando 70 m². Vos podés tener esto HOY mismo en tu puerta.';
-  const cleanCopy = sanitizeAdCopyForParaguayCod(dirtyCopy, brandedProduct);
+    '🔥 Mirá la imagen: una sola Noelux™ proyectando 70 m². Vos podés tener esto HOY mismo en tu puerta. Tocá en PEDIR CONTRA ENTREGA con cobro contra entrega.\n\n✨ Pedilo hoy.';
+  const cleanCopy = sanitizeAdCopyForParaguayCod(dirtyCopy, brandedProduct, 0);
   assert.equal(cleanCopy.toLowerCase().includes('noelux'), false);
   assert.equal(cleanCopy.toLowerCase().includes('mirá la imagen'), false);
   assert.equal(cleanCopy.toLowerCase().includes('hoy mismo en tu puerta'), false);
+  assert.equal(cleanCopy.toLowerCase().includes('contra entrega'), false);
+  assert.ok(cleanCopy.includes('PAGÁS CUANDO RECIBÍS'));
+  assert.ok(cleanCopy.includes('pagás cuando recibís en tu puerta'));
   assert.ok(cleanCopy.includes('2 a 3 días hábiles'));
-  assert.ok(cleanCopy.includes('Proyector Navideño'));
+  assert.ok(cleanCopy.includes('PROYECTOR NAVIDEÑO EN OFERTA:'));
+
+  // Verify default CTA and ad copy never contain merchant jargon "contra entrega"
+  assert.equal(assets[0].ctaLabel, 'PAGÁS CUANDO RECIBÍS');
+  for (const ad of assets) {
+    assert.equal(ad.ctaLabel.toLowerCase().includes('contra entrega'), false);
+    assert.equal(ad.primaryText.toLowerCase().includes('contra entrega'), false);
+  }
+
+  // Verify Real-Time Price Synchronization: changing product.precios[1] and [2] updates ad texts and headlines immediately even over an existing brainProfile
+  const liveUpdatedProduct: ProductPage = {
+    ...productWithGallery,
+    precios: { 1: 159000, 2: 299000, 3: 429000 },
+    precioNormal: 229000
+  };
+  const liveUpdatedAssets = buildCreativeAssetsFromBrain(liveUpdatedProduct, brain);
+  assert.ok(liveUpdatedAssets[0].headline.includes('159.000'));
+  assert.ok(liveUpdatedAssets[0].primaryText.includes('159.000'));
+  assert.ok(liveUpdatedAssets[0].primaryText.includes('299.000'));
+  assert.equal(liveUpdatedAssets[0].primaryText.includes('249.000'), false);
 });
+
+
 

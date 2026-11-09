@@ -212,6 +212,28 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       .catch(() => {});
   }, []);
 
+  // Sincronización en tiempo real de precios si el usuario edita los precios del producto en el panel Admin
+  useEffect(() => {
+    if (!activeProduct || !brainProfile || creatives.length === 0) return;
+    const syncedAssets = buildCreativeAssetsFromBrain(activeProduct, brainProfile);
+    setCreatives(prev =>
+      prev.map((oldAsset, idx) => {
+        const fresh = syncedAssets[idx];
+        if (!fresh) return oldAsset;
+        return {
+          ...fresh,
+          aiGeneratedImageUrl: oldAsset.aiGeneratedImageUrl || fresh.aiGeneratedImageUrl,
+          videoScenes: fresh.videoScenes || oldAsset.videoScenes
+        };
+      })
+    );
+  }, [
+    activeProduct?.precios?.[1],
+    activeProduct?.precios?.[2],
+    activeProduct?.precios?.[3],
+    activeProduct?.precioNormal
+  ]);
+
   // Guardar Slot Pipeboard + OpenRouter Key en Backend y autodestruir inmediatamente del navegador
   const handleSaveConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -479,53 +501,65 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       setAdVariationCounters({});
       setAdPhotoIndexOverride({});
 
-      const waves: number[][] = [
-        [0, 1],
-        [2, 3],
-        [4, 5]
-      ];
+      const singleCardIndices: number[] = [0, 1, 2, 3, 4, 5];
       let lastWaveError = '';
 
-      for (let waveIdx = 0; waveIdx < waves.length; waveIdx++) {
-        const targetIndices = waves[waveIdx];
+      for (let i = 0; i < singleCardIndices.length; i++) {
+        const cardIdx = singleCardIndices[i];
         setGenerationProgressText(
-          `🎨 Generando lote ${waveIdx + 1}/3 en OpenRouter (Anuncios #${targetIndices[0] + 1} y #${targetIndices[1] + 1}) con ${selectedImageModel}...`
+          `🎨 Generando Imagen IA ${i + 1}/6 en OpenRouter (Anuncio #${cardIdx + 1}) con ${selectedImageModel}...`
         );
 
-        const res = await fetch('/api/autoads/generate-ad-images', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            product: activeProduct,
-            creativeBriefs: currentBrain.creativeBriefs,
-            forceNewGeneration: true,
-            imageModel: selectedImageModel,
-            videoModel: selectedVideoModel,
-            targetIndices
-          })
-        });
-        const imgData = await res.json();
-        if (!res.ok || imgData?.success === false) {
-          lastWaveError =
-            imgData?.error ||
-            `Error ${res.status}: Fallo en la API de ${selectedImageModel} en OpenRouter.`;
-          continue;
-        }
-        if (Array.isArray(imgData?.generatedImages) && imgData.generatedImages.length > 0) {
-          workingAssets = workingAssets.map((asset, idx) => {
-            const match = imgData.generatedImages.find((g: any) => g.adIndex === idx);
-            if (!match?.imageUrl) return asset;
-            return {
-              ...asset,
-              aiGeneratedImageUrl: match.imageUrl,
-              aiImagePrompt: match.prompt || asset.aiImagePrompt
-            };
+        try {
+          const res = await fetch('/api/autoads/generate-ad-images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              product: activeProduct,
+              creativeBriefs: currentBrain.creativeBriefs,
+              forceNewGeneration: true,
+              imageModel: selectedImageModel,
+              videoModel: selectedVideoModel,
+              targetIndices: [cardIdx]
+            })
           });
-          setCreatives([...workingAssets]);
+          const rawText = await res.text();
+          let imgData: any = null;
+          try {
+            imgData = JSON.parse(rawText);
+          } catch {
+            lastWaveError = `Respuesta inválida al generar Anuncio #${cardIdx + 1} (HTTP ${res.status}).`;
+            continue;
+          }
+
+          if (!res.ok || imgData?.success === false) {
+            lastWaveError =
+              imgData?.error ||
+              `Error ${res.status}: Fallo en la API de ${selectedImageModel} en OpenRouter.`;
+            continue;
+          }
+          if (Array.isArray(imgData?.generatedImages) && imgData.generatedImages.length > 0) {
+            workingAssets = workingAssets.map((asset, idx) => {
+              const match = imgData.generatedImages.find((g: any) => g.adIndex === idx);
+              if (!match?.imageUrl) return asset;
+              return {
+                ...asset,
+                aiGeneratedImageUrl: match.imageUrl,
+                aiImagePrompt: match.prompt || asset.aiImagePrompt
+              };
+            });
+            setCreatives([...workingAssets]);
+          }
+        } catch (cardErr: any) {
+          lastWaveError = cardErr?.message || `Error de red al generar imagen #${cardIdx + 1}.`;
+        }
+
+        if (i + 1 < singleCardIndices.length) {
+          await new Promise(r => setTimeout(r, 650));
         }
       }
 
-      // Verificación final de autorrecuperación: si alguna de las 6 tarjetas quedó sin imagen por límite de ráfaga, reintentarla individualmente
+      // Segunda pasada de autorrecuperación automática si alguna de las 6 tarjetas quedó pendiente por límite de ráfaga en OpenRouter
       const missingIndices = workingAssets
         .map((asset, idx) => (!asset.aiGeneratedImageUrl ? idx : -1))
         .filter(idx => idx !== -1);
@@ -535,6 +569,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           setGenerationProgressText(
             `🔄 Completando imagen faltante del Anuncio #${missingIdx + 1} en OpenRouter (${selectedImageModel})...`
           );
+          await new Promise(r => setTimeout(r, 850));
           try {
             const retryRes = await fetch('/api/autoads/generate-ad-images', {
               method: 'POST',
@@ -548,7 +583,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 targetIndices: [missingIdx]
               })
             });
-            const retryData = await retryRes.json();
+            const retryRaw = await retryRes.text();
+            const retryData = JSON.parse(retryRaw || '{}');
             if (retryRes.ok && Array.isArray(retryData?.generatedImages)) {
               const recovered = retryData.generatedImages.find((g: any) => g.adIndex === missingIdx);
               if (recovered?.imageUrl) {
@@ -757,10 +793,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     const updatedSvgUrl = buildHighImpactAdSvgDataUrl({
       productName: activeProduct.nombre,
       productImage: congruentAsset.aiGeneratedImageUrl || allPhotos[nextPhotoIdx],
-      pricePack1Gs: brainProfile.productAnalysis.pricesPack1,
-      pricePack2Gs: brainProfile.productAnalysis.pricesPack2,
-      normalPriceGs: brainProfile.productAnalysis.pricesNormal,
-      freeShipping: brainProfile.productAnalysis.freeShipping,
+      pricePack1Gs: Number(activeProduct.precios?.[1] || brainProfile.productAnalysis.pricesPack1),
+      pricePack2Gs: Number(activeProduct.precios?.[2] || brainProfile.productAnalysis.pricesPack2),
+      normalPriceGs: Number(activeProduct.precioNormal || brainProfile.productAnalysis.pricesNormal),
+      freeShipping: activeProduct.freeShipping ?? brainProfile.productAnalysis.freeShipping,
       aspectRatio: congruentAsset.aspectRatio,
       hookBadge: congruentAsset.hookBadge,
       headline: congruentAsset.headline,
@@ -1514,18 +1550,49 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                       </div>
                     </div>
 
-                    {/* 3. Creativo Visual Limpio (Cero capas de texto rotando encima de la imagen, tal cual se publica en Facebook Ads) */}
+                    {/* 3. Creativo Visual de Alto Impacto Persuasivo (Producto en Uso + Resultado Real + Titular y CTA Congruente en la Imagen) */}
                     <div>
                       <div className="relative bg-zinc-950 border-y border-zinc-800 overflow-hidden aspect-square flex items-center justify-center">
                         {aiGeneratedPhotoUrl ? (
-                          <img
-                            src={aiGeneratedPhotoUrl}
-                            alt={ad.headline}
-                            referrerPolicy="no-referrer"
-                            className={`w-full h-full object-cover transition-opacity duration-300 ${
-                              isRegeneratingThis ? 'opacity-30' : 'opacity-100'
-                            }`}
-                          />
+                          <>
+                            <img
+                              src={aiGeneratedPhotoUrl}
+                              alt={ad.headline}
+                              referrerPolicy="no-referrer"
+                              className={`w-full h-full object-cover transition-opacity duration-300 ${
+                                isRegeneratingThis ? 'opacity-30' : 'opacity-100'
+                              }`}
+                            />
+                            {/* Cinta Superior de Impacto 0.0s Congruente con las Primeras Palabras de la 1ª Estrofa */}
+                            <div className="absolute top-0 inset-x-0 p-2 bg-gradient-to-b from-black/90 via-black/60 to-transparent flex items-center justify-between gap-1.5 pointer-events-none">
+                              <span className="px-2 py-0.5 rounded bg-amber-400 text-black text-[10px] font-black uppercase tracking-tight shadow-md truncate">
+                                {((ad.primaryText || '').split('\n')[0] || '').split(':')[0] ||
+                                  ad.hookBadge ||
+                                  `🔥 ${extractProductCoreIdentity(activeProduct).ultraShortObjectLabel.toUpperCase()} EN OFERTA`}
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-emerald-500 text-black text-[9px] font-black uppercase tracking-tight shadow-md shrink-0">
+                                🚚 ENVÍO GRATIS PY
+                              </span>
+                            </div>
+
+                            {/* Zócalo Inferior 100% Congruente con la Primera Estrofa + CTA de Alto Impacto */}
+                            <div className="absolute bottom-0 inset-x-0 p-2.5 bg-gradient-to-t from-black/95 via-black/85 to-transparent flex flex-col gap-1.5 pointer-events-none">
+                              <div className="text-[11px] font-black text-white leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] line-clamp-2">
+                                {((ad.primaryText || '').split(/\n\s*\n/)[0] || ad.headline).trim()}
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="px-2 py-0.5 rounded bg-zinc-900/95 border border-emerald-500/60 text-emerald-300 text-[10px] font-extrabold truncate">
+                                  💰 {idx === 3
+                                    ? `Pack 2x Gs. ${Number(activeProduct.precios?.[2] || 358000).toLocaleString('es-PY')}`
+                                    : `1x Gs. ${Number(activeProduct.precios?.[1] || 189000).toLocaleString('es-PY')}`}{' '}
+                                  · Pagás Cuando Recibís
+                                </span>
+                                <span className="px-2.5 py-1 rounded-md bg-emerald-500 text-black text-[10px] font-black uppercase tracking-wide shadow-[0_0_15px_rgba(16,185,129,0.65)] shrink-0">
+                                  👇 {ad.ctaLabel}
+                                </span>
+                              </div>
+                            </div>
+                          </>
                         ) : workflowStep === 'generating' ? (
                           <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-emerald-300 bg-zinc-950 gap-2.5">
                             <Loader2 className="w-7 h-7 animate-spin text-emerald-400" />

@@ -47,26 +47,27 @@ Cada vez que el Kernel aplica una mutación sobre el borrador (`ProductDraftStat
 
 ---
 
-## 3. Distribución Específica de Modelos de IA vía OpenRouter y Variables de Railway
+## 3. Distribución Específica de Modelos de IA vía OpenRouter y Motor AutoAds de Impacto en 0.0 Segundos
 
-La plataforma implementa una distribución especializada de modelos de IA para maximizar la velocidad y la calidad en cada área:
+La plataforma implementa una distribución especializada de modelos de IA en OpenRouter para maximizar la velocidad, la conversión y la congruencia visual/textual en cada área:
 
 1. **Desarrollo Web & Agente de Código (`ProductTemplateBuilderStudio.tsx` / `/api/builder/coding-agent`)**:
    - Modelo: **`z-ai/glm-5.3` (GLM 5.3)** en OpenRouter.
    - Utilizado para razonamiento estructural profundo, mutación de componentes y plugins del Kernel Harness Cordis.
-2. **AutoAds Cerebro Maestro, Contexto & Director de Prompts (`AutoAdsView.tsx` / `/api/autoads/brain-train` / `/api/autoads/regenerate-ad`)**:
-   - Modelo: **`openai/gpt-4o-mini`** (GPT-4o Mini) en OpenRouter.
-   - Es el cerebro central de donde nace todo el contexto de generación, redacción de copy y orquestación de prompts para imágenes y videos.
-3. **Generación Única de Imágenes**:
-   - Modelo: **`openai/gpt-image-2.6`** (GPT Image 2.6) exclusivamente en OpenRouter.
-   - Generación de imágenes 8K fotorrealistas en tiempo real sin *pre-holdings*.
-4. **Creador de Video Reels**:
-   - Modelo: **`minimax/minimax-m3.1-flash`** (MiniMax M3.1 Flash) exclusivamente en OpenRouter.
-   - Generador y director de video reels animados de 4 escenas.
+2. **AutoAds Cerebro Maestro 0.0s, Contexto & Director de Prompts (`AutoAdsView.tsx` / `/api/autoads/brain-train` / `/api/autoads/regenerate-ad`)**:
+   - Modelo Principal: **`z-ai/glm-5.3`** con respaldo automático a **`openai/gpt-4o-mini`** en OpenRouter.
+   - **Regla Inquebrantable de los 0.0 Segundos (Palabras 1 a 4)**: Cada anuncio nombra en sus primeras 1 a 4 palabras el **objeto exacto** (`PROYECTOR NAVIDEÑO`, `TALADRO PERCUTOR`, etc., sin marcas desconocidas) junto con el **dolor, solución, placer u oferta irresistible** (`🔥 PROYECTOR NAVIDEÑO EN OFERTA:`, `🛑 PROYECTOR NAVIDEÑO PAGO EN PUERTA:`, `💡 PROYECTOR NAVIDEÑO SIN COMPLICACIONES:`, `🎁 2X PROYECTOR NAVIDEÑO EN OFERTA:`, `⚡ PROYECTOR NAVIDEÑO MÁXIMA POTENCIA:`, `📦 PROYECTOR NAVIDEÑO KIT COMPLETO:`).
+   - **Logística Realista COD Paraguay**: Prohibido prometer entregas *"hoy mismo en tu puerta"*; todos los anuncios comunican con transparencia que el comprador reserva sin adelantos y recibe en **2 a 3 días hábiles (48 a 72 horas)** pagando al repartidor en puerta.
+3. **Generación Secuencial 6/6 de Imágenes Publicitarias de Alto Impacto (`/api/autoads/generate-ad-images`)**:
+   - Modelos OpenAI en OpenRouter: **`openai/gpt-image-2.6-flare`** (predeterminado), **`openai/gpt-image-2.6-sunburst`**, **`openai/gpt-5-image-mini`**, **`openai/gpt-image-1-mini`** y **`openai/gpt-5.4-image-2`** en resolución universal `1024x1024`.
+   - **Arquitectura Secuencial 1 a 1 Tolerante a Fallos**: El frontend solicita las 6 imágenes de forma individual (`[0]` a `[5]`) con `try / catch` aislado y pase automático de autorrecuperación para garantizar siempre las **6 de 6 imágenes**.
+   - **Regla Visual de Producto en Uso + Resultado Real + Texto y CTA Congruente**: Cada imagen muestra obligatoriamente el **producto físico funcionando en vivo**, el **resultado real que provoca en las personas o el hogar** y un **titular + botón CTA en español 100% congruente** con el texto de ese anuncio.
+4. **Creador de Video Reels (`/api/autoads/generate-ad-images` y `AutoAdsView.tsx`)**:
+   - Modelos de Video en OpenRouter: **`bytedance/seedance-2.5`** (predeterminado, capaz de animar la foto real del producto y generar video de avatar/demostración) y **`google/gemini-omni-1.2-flash`** / **`google/gemini-omni-1.1-flash`**.
 
-**Detección Automática desde Railway**:
-- El servidor lee automáticamente la API Key desde las variables de entorno de Railway (`process.env.OPENROUTER_API_KEY || process.env.OPENROUTESERVICE_API_KEY`).
-- También permite verificar el estado o ingresar una clave desde el menú de la aplicación administrativa (`#admin`).
+**Detección Automática desde Railway y Panel Admin**:
+- El servidor lee automáticamente la API Key desde `.env`, `store_config.json` o las variables de entorno de Railway (`process.env.OPENROUTER_API_KEY || process.env.OPENROUTESERVICE_API_KEY`).
+- También permite configurar y guardar la clave directamente desde el cajón `OpenRouter & Pipeboard` en `#admin`.
 
 ---
 
