@@ -324,6 +324,68 @@ function registerApiServerMiddlewares(server: any) {
       return;
     }
 
+    // Servidor binario directo y auto-reparable para /assets/ai-ads/* (evita que Vite devuelva index.html text/html cuando un contenedor en Railway se reinicia)
+    if (req.method === 'GET' && rawUrl && rawUrl.startsWith('/assets/ai-ads/')) {
+      try {
+        const cleanFileName = path.basename(decodeURIComponent(rawUrl.slice('/assets/ai-ads/'.length)));
+        const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
+        const targetPath = path.join(aiAdsDir, cleanFileName);
+
+        // Si el archivo no existe en disco tras un redeploy en Railway, intentar reconstruirlo desde el respaldo Base64 en autoads_workspaces.json
+        if (!fs.existsSync(targetPath)) {
+          try {
+            const wsFile = path.resolve(__dirname, 'autoads_workspaces.json');
+            if (fs.existsSync(wsFile)) {
+              const wsRaw = JSON.parse(fs.readFileSync(wsFile, 'utf-8') || '{}');
+              const workspaces = wsRaw?.workspaces || {};
+              for (const wsKey of Object.keys(workspaces)) {
+                const crs = workspaces[wsKey]?.creatives;
+                if (!Array.isArray(crs)) continue;
+                for (const cr of crs) {
+                  if (
+                    String(cr?.aiGeneratedImageUrl || '').endsWith(cleanFileName) &&
+                    String(cr?.aiGeneratedImageDataUrl || '').startsWith('data:image/')
+                  ) {
+                    const b64 = String(cr.aiGeneratedImageDataUrl).split(',')[1] || '';
+                    const buf = Buffer.from(b64, 'base64');
+                    if (buf.length > 1000) {
+                      if (!fs.existsSync(aiAdsDir)) fs.mkdirSync(aiAdsDir, { recursive: true });
+                      fs.writeFileSync(targetPath, buf);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          } catch {}
+        }
+
+        if (fs.existsSync(targetPath)) {
+          const ext = path.extname(cleanFileName).toLowerCase();
+          const mime =
+            ext === '.png'
+              ? 'image/png'
+              : ext === '.webp'
+              ? 'image/webp'
+              : ext === '.mp4'
+              ? 'video/mp4'
+              : 'image/jpeg';
+          const fileBuf = fs.readFileSync(targetPath);
+          res.statusCode = 200;
+          res.setHeader('Content-Type', mime);
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          res.end(fileBuf);
+          return;
+        } else {
+          // Devolver 404 real en lugar de caer al SPA fallback (index.html text/html)
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Asset not found on container disk', file: cleanFileName }));
+          return;
+        }
+      } catch {}
+    }
+
     // Ruta corta personalizada de Mapa Exacto de Casa (/mapa/:codigo)
     if (rawUrl && rawUrl.startsWith('/mapa/')) {
       const codeParam = decodeURIComponent(rawUrl.slice('/mapa/'.length)).trim();
@@ -2894,6 +2956,31 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
             workspaces: Record<string, any>;
           }) => {
             try {
+              // Auto-reconstruir archivos físicos en public/assets/ai-ads/ si el contenedor se reinició pero el workspace trae aiGeneratedImageDataUrl
+              const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
+              if (!fs.existsSync(aiAdsDir)) fs.mkdirSync(aiAdsDir, { recursive: true });
+              const workspaces = nextState?.workspaces || {};
+              for (const k of Object.keys(workspaces)) {
+                const crs = workspaces[k]?.creatives;
+                if (!Array.isArray(crs)) continue;
+                for (const cr of crs) {
+                  const imgUrl = String(cr?.aiGeneratedImageUrl || '');
+                  const dataUrl = String(cr?.aiGeneratedImageDataUrl || '');
+                  if (imgUrl.startsWith('/assets/ai-ads/') && dataUrl.startsWith('data:image/')) {
+                    const fName = path.basename(imgUrl);
+                    const fPath = path.join(aiAdsDir, fName);
+                    if (!fs.existsSync(fPath)) {
+                      const b64 = dataUrl.split(',')[1] || '';
+                      const buf = Buffer.from(b64, 'base64');
+                      if (buf.length > 1000) {
+                        fs.writeFileSync(fPath, buf);
+                      }
+                    }
+                  }
+                }
+              }
+            } catch {}
+            try {
               fs.writeFileSync(autoAdsWorkspacesFile, JSON.stringify(nextState, null, 2), 'utf-8');
             } catch {}
             try {
@@ -2912,7 +2999,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
           const patchAutoAdsWorkspaceMedia = (
             productObj: any,
             adIndex: number,
-            patch: { imageUrl?: string; videoUrl?: string; prompt?: string }
+            patch: { imageUrl?: string; imageDataUrl?: string; videoUrl?: string; prompt?: string }
           ) => {
             try {
               const prodId = String(productObj?.id || productObj?.slug || '').trim();
@@ -2929,6 +3016,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                 return {
                   ...item,
                   ...(patch.imageUrl ? { aiGeneratedImageUrl: patch.imageUrl } : {}),
+                  ...(patch.imageDataUrl ? { aiGeneratedImageDataUrl: patch.imageDataUrl } : {}),
                   ...(patch.videoUrl ? { aiGeneratedVideoUrl: patch.videoUrl, aiGeneratedImageUrl: '' } : {}),
                   ...(patch.prompt ? { aiImagePrompt: patch.prompt } : {})
                 };
@@ -3878,9 +3966,23 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                       'autoads_img'
                     );
                     if (savedUrl) {
+                      let b64DataUrl = '';
+                      try {
+                        if (savedUrl.startsWith('/assets/ai-ads/')) {
+                          const fPath = path.join(aiAdsDir, path.basename(savedUrl));
+                          if (fs.existsSync(fPath)) {
+                            const ext = path.extname(fPath).toLowerCase();
+                            const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+                            b64DataUrl = `data:${mime};base64,${fs.readFileSync(fPath).toString('base64')}`;
+                          }
+                        } else if (savedUrl.startsWith('data:image/')) {
+                          b64DataUrl = savedUrl;
+                        }
+                      } catch {}
                       return {
                         adIndex: idx,
                         imageUrl: savedUrl,
+                        imageDataUrl: b64DataUrl || undefined,
                         prompt: finalPrompt,
                         imageModel: imgModel
                       };
@@ -3893,6 +3995,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   return {
                     adIndex: idx,
                     imageUrl: '',
+                    imageDataUrl: undefined,
                     prompt: finalPrompt,
                     imageModel: validEnvImgModel,
                     error: lastOpenRouterImgError
@@ -3913,6 +4016,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   if (oneResult.imageUrl || oneResult.videoUrl) {
                     patchAutoAdsWorkspaceMedia(product, idx, {
                       imageUrl: oneResult.imageUrl || undefined,
+                      imageDataUrl: oneResult.imageDataUrl || undefined,
                       videoUrl: oneResult.videoUrl || undefined,
                       prompt: oneResult.prompt
                     });
@@ -4453,6 +4557,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                           const fileName = `autoads_regen_${Date.now()}_${adIndex}_v${variationSeed}.${ext}`;
                           fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
                           newGeneratedImageUrl = `/assets/ai-ads/${fileName}`;
+                          (customBrief as any).__savedDataUrl = dataUrl;
                           break;
                         }
                       } else if (dataUrl.startsWith('http')) {
@@ -4464,9 +4569,11 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                             if (buf.length > 2000) {
                               const cType = dlRes.headers.get('content-type') || '';
                               const ext = cType.includes('png') ? 'png' : cType.includes('webp') ? 'webp' : 'jpg';
+                              const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
                               const fileName = `autoads_regen_${Date.now()}_${adIndex}_v${variationSeed}.${ext}`;
                               fs.writeFileSync(path.join(aiAdsDir, fileName), buf);
                               newGeneratedImageUrl = `/assets/ai-ads/${fileName}`;
+                              (customBrief as any).__savedDataUrl = `data:${mime};base64,${buf.toString('base64')}`;
                               break;
                             }
                           }
@@ -4493,16 +4600,23 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   }
                 }
 
+                const savedDataUrl: string | undefined = (customBrief as any)?.__savedDataUrl;
+                if (customBrief && (customBrief as any).__savedDataUrl) {
+                  delete (customBrief as any).__savedDataUrl;
+                }
+
                 customBrief = {
                   ...(customBrief || {}),
                   aiImagePrompt: finalImagePrompt,
                   aiGeneratedImageUrl: newGeneratedImageUrl || undefined,
+                  aiGeneratedImageDataUrl: savedDataUrl || undefined,
                   aiGeneratedVideoUrl: newGeneratedVideoUrl || undefined
                 };
 
                 if (newGeneratedImageUrl || newGeneratedVideoUrl) {
                   patchAutoAdsWorkspaceMedia(product, adIndex, {
                     imageUrl: newGeneratedImageUrl || undefined,
+                    imageDataUrl: savedDataUrl || undefined,
                     videoUrl: newGeneratedVideoUrl || undefined,
                     prompt: finalImagePrompt
                   });
@@ -4517,6 +4631,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     videoModel: isReel ? validEnvVidModel : undefined,
                     customBrief,
                     aiGeneratedImageUrl: newGeneratedImageUrl || undefined,
+                    aiGeneratedImageDataUrl: savedDataUrl || undefined,
                     aiGeneratedVideoUrl: newGeneratedVideoUrl || undefined,
                     aiImagePrompt: finalImagePrompt
                   })
@@ -5067,14 +5182,41 @@ setTimeout(()=>window.close(),5000);
                 readKeyFromEnvFile('META_PIXEL_ID') ||
                 '';
 
+              let configChanged = false;
               if (!universalPixelId && pixels.length > 0) {
                 universalPixelId = pixels[0].id;
                 if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
                 cfg.metaDirectConfig.pixelId = universalPixelId;
                 cfg.pixelId = universalPixelId;
+                saveKeyToEnvFile('META_PIXEL_ID', universalPixelId);
+                configChanged = true;
+              }
+
+              // Auto-persistir la primera Cuenta Publicitaria real y Página de Facebook real si aún tenía el ID de ejemplo
+              if (!cfg.pipeboardConfig) cfg.pipeboardConfig = {};
+              if (
+                adAccounts.length > 0 &&
+                (!cfg.pipeboardConfig.selectedAdAccountId ||
+                  cfg.pipeboardConfig.selectedAdAccountId === 'act_595884210394')
+              ) {
+                cfg.pipeboardConfig.selectedAdAccountId = String(adAccounts[0].id);
+                configChanged = true;
+              }
+              if (
+                pages.length > 0 &&
+                (!cfg.pipeboardConfig.selectedFacebookPageId ||
+                  cfg.pipeboardConfig.selectedFacebookPageId === '104928374650192')
+              ) {
+                // Preferir página de tienda/e-commerce (ej. Landingcod Shop) si existe
+                const preferredPage =
+                  pages.find((p: any) => /shop|tienda|landingcod/i.test(String(p.name || ''))) || pages[0];
+                cfg.pipeboardConfig.selectedFacebookPageId = String(preferredPage.id);
+                configChanged = true;
+              }
+
+              if (configChanged) {
                 try {
                   fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
-                  saveKeyToEnvFile('META_PIXEL_ID', universalPixelId);
                 } catch {}
               }
 
@@ -5237,8 +5379,15 @@ setTimeout(()=>window.close(),5000);
                 const mcpStepLogs: any[] = [];
                 const prodName = product.nombre || 'Producto';
 
-                // Helper para resolver la imagen IA real desde el disco (/public/assets/ai-ads/...) en Base64 puro para Meta Graph API
+                // Helper para resolver la imagen IA real desde el disco (/public/assets/ai-ads/...) o respaldo Base64 para Meta Graph API
                 const resolveCreativeImagePayload = async (cr: any) => {
+                  const rawDataUrl = String(cr?.aiGeneratedImageDataUrl || '').trim();
+                  if (rawDataUrl.startsWith('data:image/') && !rawDataUrl.startsWith('data:image/svg')) {
+                    const b64Part = rawDataUrl.split(',')[1] || '';
+                    if (b64Part.length > 500) {
+                      return { bytes: b64Part, url: '' };
+                    }
+                  }
                   const rawImgPath = String(
                     cr?.aiGeneratedImageUrl || cr?.imageUrl || product?.imagen || ''
                   ).trim();

@@ -350,6 +350,19 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           setPbConfig(prev => ({
             ...prev,
             ...data.config,
+            // No permitir que el ID de ejemplo pise una Cuenta Publicitaria o Página real ya detectada por Facebook OAuth
+            selectedAdAccountId:
+              prev.selectedAdAccountId &&
+              prev.selectedAdAccountId !== 'act_595884210394' &&
+              data.config.selectedAdAccountId === 'act_595884210394'
+                ? prev.selectedAdAccountId
+                : data.config.selectedAdAccountId || prev.selectedAdAccountId,
+            selectedFacebookPageId:
+              prev.selectedFacebookPageId &&
+              prev.selectedFacebookPageId !== '104928374650192' &&
+              data.config.selectedFacebookPageId === '104928374650192'
+                ? prev.selectedFacebookPageId
+                : data.config.selectedFacebookPageId || prev.selectedFacebookPageId,
             pipeboardApiToken: '',
             openRouterApiKey: '',
             metaAccessTokenFallback: ''
@@ -1032,6 +1045,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             ctaLabel: existingCreatives[idx]?.ctaLabel || asset.ctaLabel,
             aiGeneratedImageUrl:
               idx < imageSliceEnd ? existingCreatives[idx]?.aiGeneratedImageUrl || '' : '',
+            aiGeneratedImageDataUrl:
+              idx < imageSliceEnd ? existingCreatives[idx]?.aiGeneratedImageDataUrl || '' : '',
             aiGeneratedVideoUrl:
               !onlyImagesMode && idx >= 4 ? existingCreatives[idx]?.aiGeneratedVideoUrl || '' : '',
             aiImagePrompt: existingCreatives[idx]?.aiImagePrompt || asset.aiImagePrompt
@@ -1041,6 +1056,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             type: onlyImagesMode && idx >= 4 ? ('image_story_9x16' as const) : asset.type,
             primaryText: sanitizeAdCopyForParaguayCod(asset.primaryText, activeProduct, idx),
             aiGeneratedImageUrl: idx < imageSliceEnd ? asset.aiGeneratedImageUrl || '' : '',
+            aiGeneratedImageDataUrl: idx < imageSliceEnd ? asset.aiGeneratedImageDataUrl || '' : '',
             aiGeneratedVideoUrl: !onlyImagesMode && idx >= 4 ? asset.aiGeneratedVideoUrl || '' : ''
           }));
 
@@ -1135,6 +1151,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               workingAssets[cardIdx] = {
                 ...workingAssets[cardIdx],
                 aiGeneratedImageUrl: match.imageUrl,
+                aiGeneratedImageDataUrl: match.imageDataUrl || workingAssets[cardIdx]?.aiGeneratedImageDataUrl,
                 aiImagePrompt: match.prompt || workingAssets[cardIdx]?.aiImagePrompt
               };
               completedCardsCount += 1;
@@ -1144,6 +1161,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     ? {
                         ...item,
                         aiGeneratedImageUrl: match.imageUrl,
+                        aiGeneratedImageDataUrl: match.imageDataUrl || item.aiGeneratedImageDataUrl,
                         aiImagePrompt: match.prompt || item.aiImagePrompt
                       }
                     : item
@@ -1392,6 +1410,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             ? {
                 ...item,
                 aiGeneratedImageUrl: data.customBrief.aiGeneratedImageUrl,
+                aiGeneratedImageDataUrl:
+                  data.aiGeneratedImageDataUrl ||
+                  data.customBrief.aiGeneratedImageDataUrl ||
+                  item.aiGeneratedImageDataUrl,
                 aiImagePrompt: data.customBrief.imagePrompt || item.aiImagePrompt
               }
             : item
@@ -1472,6 +1494,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       nextSeed,
       customBrief || undefined
     );
+    if (customBrief?.aiGeneratedImageDataUrl) {
+      freshAsset.aiGeneratedImageDataUrl = customBrief.aiGeneratedImageDataUrl;
+    }
     if (onlyImagesMode && adIndex >= 4) {
       freshAsset.type = 'image_story_9x16';
     }
@@ -2296,7 +2321,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {creatives.map((ad, idx) => {
               const isReel = !onlyImagesMode && (ad.type === 'video_reel_9x16' || idx >= 4);
-              const aiGeneratedPhotoUrl = !isReel ? ad.aiGeneratedImageUrl || '' : '';
+              const aiGeneratedPhotoUrl = !isReel
+                ? ad.aiGeneratedImageDataUrl || ad.aiGeneratedImageUrl || ''
+                : '';
               const isEditingThis = editingAdIdx === idx;
               const isRegeneratingThis = regeneratingAdIdx === idx;
 
@@ -2495,6 +2522,16 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                               src={aiGeneratedPhotoUrl}
                               alt={ad.headline}
                               referrerPolicy="no-referrer"
+                              onError={() => {
+                                // Si un contenedor anterior en Railway se reinició antes del respaldo Base64 y el archivo físico .png dio 404, limpiar la ruta huérfana para mostrar el botón limpio de regeneración en lugar de un ícono roto
+                                setCreatives(prev =>
+                                  prev.map((item, i) =>
+                                    i === idx
+                                      ? { ...item, aiGeneratedImageUrl: '', aiGeneratedImageDataUrl: '' }
+                                      : item
+                                  )
+                                );
+                              }}
                               className={`w-full h-full object-cover transition-opacity duration-300 ${
                                 isRegeneratingThis ? 'opacity-30' : 'opacity-100'
                               }`}
