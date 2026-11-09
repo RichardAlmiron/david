@@ -2862,6 +2862,187 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             return;
           }
 
+          // ============================================================================
+          // PERSISTENCIA TOTAL EN BACKEND DE AUTOADS (INVESTIGACIÓN + IMÁGENES + VIDEOS + PASO EXACTA DONDE QUEDÓ)
+          // Garantiza que al actualizar la página (F5) o cerrar el navegador jamás se pierda el trabajo ni los créditos invertidos.
+          // ============================================================================
+          const autoAdsWorkspacesFile = path.resolve(__dirname, 'autoads_workspaces.json');
+
+          const readAutoAdsWorkspacesFromDisk = (): {
+            lastActive: {
+              sourceMode: 'catalog' | 'external_url';
+              selectedProductId: string;
+              externalUrlInput: string;
+              onlyImagesMode: boolean;
+              activeWorkspaceKey: string;
+            };
+            workspaces: Record<string, any>;
+          } => {
+            const defaultState = {
+              lastActive: {
+                sourceMode: 'catalog' as const,
+                selectedProductId: '',
+                externalUrlInput: '',
+                onlyImagesMode: false,
+                activeWorkspaceKey: ''
+              },
+              workspaces: {} as Record<string, any>
+            };
+            try {
+              if (fs.existsSync(autoAdsWorkspacesFile)) {
+                const raw = JSON.parse(fs.readFileSync(autoAdsWorkspacesFile, 'utf-8') || '{}');
+                return {
+                  lastActive: { ...defaultState.lastActive, ...(raw.lastActive || {}) },
+                  workspaces: raw.workspaces && typeof raw.workspaces === 'object' ? raw.workspaces : {}
+                };
+              }
+              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              if (fs.existsSync(cfgFile)) {
+                const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+                if (cfg.autoAdsWorkspaces) {
+                  return {
+                    lastActive: { ...defaultState.lastActive, ...(cfg.autoAdsWorkspaces.lastActive || {}) },
+                    workspaces:
+                      cfg.autoAdsWorkspaces.workspaces && typeof cfg.autoAdsWorkspaces.workspaces === 'object'
+                        ? cfg.autoAdsWorkspaces.workspaces
+                        : {}
+                  };
+                }
+              }
+            } catch {}
+            return defaultState;
+          };
+
+          const writeAutoAdsWorkspacesToDisk = (nextState: {
+            lastActive: any;
+            workspaces: Record<string, any>;
+          }) => {
+            try {
+              fs.writeFileSync(autoAdsWorkspacesFile, JSON.stringify(nextState, null, 2), 'utf-8');
+            } catch {}
+            try {
+              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              let cfg: any = {};
+              if (fs.existsSync(cfgFile)) {
+                try {
+                  cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+                } catch {}
+              }
+              cfg.autoAdsWorkspaces = nextState;
+              fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+            } catch {}
+          };
+
+          const patchAutoAdsWorkspaceMedia = (
+            productObj: any,
+            adIndex: number,
+            patch: { imageUrl?: string; videoUrl?: string; prompt?: string }
+          ) => {
+            try {
+              const prodId = String(productObj?.id || productObj?.slug || '').trim();
+              if (!prodId) return;
+              const current = readAutoAdsWorkspacesFromDisk();
+              const wsKey = Object.keys(current.workspaces).find(
+                k => k === prodId || current.workspaces[k]?.productId === prodId
+              ) || prodId;
+              const ws = current.workspaces[wsKey];
+              if (!ws || !Array.isArray(ws.creatives) || !ws.creatives[adIndex]) return;
+
+              const updatedCreatives = ws.creatives.map((item: any, idx: number) => {
+                if (idx !== adIndex) return item;
+                return {
+                  ...item,
+                  ...(patch.imageUrl ? { aiGeneratedImageUrl: patch.imageUrl } : {}),
+                  ...(patch.videoUrl ? { aiGeneratedVideoUrl: patch.videoUrl, aiGeneratedImageUrl: '' } : {}),
+                  ...(patch.prompt ? { aiImagePrompt: patch.prompt } : {})
+                };
+              });
+
+              current.workspaces[wsKey] = {
+                ...ws,
+                creatives: updatedCreatives,
+                workflowStep: ws.workflowStep === 'published' ? 'published' : 'generated',
+                updatedAt: new Date().toISOString()
+              };
+              writeAutoAdsWorkspacesToDisk(current);
+            } catch {}
+          };
+
+          if (req.method === 'GET' && url === '/api/autoads/workspace') {
+            res.setHeader('Content-Type', 'application/json');
+            const state = readAutoAdsWorkspacesFromDisk();
+            res.end(
+              JSON.stringify({
+                success: true,
+                lastActive: state.lastActive,
+                workspaces: state.workspaces
+              })
+            );
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/api/autoads/workspace') {
+            let body = '';
+            req.on('data', (chunk: any) => (body += chunk));
+            req.on('end', () => {
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const current = readAutoAdsWorkspacesFromDisk();
+
+                if (parsed.lastActive && typeof parsed.lastActive === 'object') {
+                  current.lastActive = {
+                    ...current.lastActive,
+                    ...parsed.lastActive
+                  };
+                }
+
+                const wsKey = String(parsed.workspaceKey || '').trim();
+                if (wsKey) {
+                  if (parsed.clearWorkspace) {
+                    delete current.workspaces[wsKey];
+                  } else if (parsed.workspace && typeof parsed.workspace === 'object') {
+                    const prevWs = current.workspaces[wsKey] || {};
+                    const incomingStep = String(parsed.workspace.workflowStep || prevWs.workflowStep || 'idle');
+                    // Si el usuario recargó en medio de 'generating' o 'researching', normalizar a un paso estable reanudable
+                    const normalizedStep =
+                      incomingStep === 'generating'
+                        ? Array.isArray(parsed.workspace.creatives) && parsed.workspace.creatives.length > 0
+                          ? 'generated'
+                          : 'researched'
+                        : incomingStep === 'researching'
+                        ? parsed.workspace.brainProfile
+                          ? 'researched'
+                          : 'idle'
+                        : incomingStep === 'publishing'
+                        ? 'generated'
+                        : incomingStep;
+
+                    current.workspaces[wsKey] = {
+                      ...prevWs,
+                      ...parsed.workspace,
+                      workspaceKey: wsKey,
+                      workflowStep: normalizedStep,
+                      updatedAt: new Date().toISOString()
+                    };
+                  }
+                }
+
+                writeAutoAdsWorkspacesToDisk(current);
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    updatedAt: new Date().toISOString()
+                  })
+                );
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
           // Motor EXCLUSIVO de Video IA Real de 15 Segundos con Avatar Hablando + Producto Real en Acción vía OpenRouter (google/gemini-omni-1.2-flash)
           // PROHIBIDO simular videos moviendo imágenes estáticas (cero FFmpeg zoompan/lavfi) y PROHIBIDO usar modelos de ByteDance/Seedance.
           const requestOpenRouterReelVideoJob = async (params: {
@@ -3255,6 +3436,12 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   );
                   return;
                 }
+
+                // Guardar inmediatamente el Video Reel terminado en el workspace del Backend por si el usuario actualizó la página
+                patchAutoAdsWorkspaceMedia(product, adIndex, {
+                  videoUrl: jobResult.videoUrl,
+                  prompt: promptText
+                });
 
                 res.end(
                   JSON.stringify({
@@ -3711,6 +3898,13 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 for (let i = 0; i < requestedIndices.length; i++) {
                   const idx = requestedIndices[i];
                   const oneResult = await generateOneCreativeViaOpenRouter(universalArchetypePrompts[idx], idx);
+                  if (oneResult.imageUrl || oneResult.videoUrl) {
+                    patchAutoAdsWorkspaceMedia(product, idx, {
+                      imageUrl: oneResult.imageUrl || undefined,
+                      videoUrl: oneResult.videoUrl || undefined,
+                      prompt: oneResult.prompt
+                    });
+                  }
                   generatedImages.push(oneResult);
                   if (i + 1 < requestedIndices.length) {
                     await new Promise(r => setTimeout(r, 400));
@@ -4255,6 +4449,14 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   aiGeneratedImageUrl: newGeneratedImageUrl || undefined,
                   aiGeneratedVideoUrl: newGeneratedVideoUrl || undefined
                 };
+
+                if (newGeneratedImageUrl || newGeneratedVideoUrl) {
+                  patchAutoAdsWorkspaceMedia(product, adIndex, {
+                    imageUrl: newGeneratedImageUrl || undefined,
+                    videoUrl: newGeneratedVideoUrl || undefined,
+                    prompt: finalImagePrompt
+                  });
+                }
 
                 res.end(
                   JSON.stringify({

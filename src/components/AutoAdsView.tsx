@@ -174,8 +174,59 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [adPhotoIndexOverride, setAdPhotoIndexOverride] = useState<Record<number, number>>({});
   const [editingAdIdx, setEditingAdIdx] = useState<number | null>(null);
 
+  // Estado de Persistencia en Backend (para no perder jamás investigación, imágenes ni videos al actualizar la página)
+  const [workspacesCache, setWorkspacesCache] = useState<Record<string, any>>({});
+  const [workspaceHydrated, setWorkspaceHydrated] = useState<boolean>(false);
+  const [lastBackendSavedAt, setLastBackendSavedAt] = useState<string>('');
+
   // Campañas publicadas
   const [publishedCampaigns, setPublishedCampaigns] = useState<PipeboardPublishedCampaignRecord[]>([]);
+
+  const computeWorkspaceKey = (
+    mode: 'catalog' | 'external_url',
+    prodId: string,
+    extUrl: string
+  ): string => {
+    if (mode === 'external_url') {
+      const cleanUrl = extUrl.trim();
+      return cleanUrl ? `ext_${cleanUrl}` : 'ext_default';
+    }
+    return prodId || productPages[0]?.id || 'default_product';
+  };
+
+  const applySavedWorkspaceToState = (ws: any | undefined) => {
+    if (ws && (ws.brainProfile || (Array.isArray(ws.creatives) && ws.creatives.length > 0))) {
+      setBrainProfile(ws.brainProfile || null);
+      const savedCreatives = Array.isArray(ws.creatives) ? ws.creatives : [];
+      setCreatives(savedCreatives);
+      if (ws.scrapedExternalProduct) {
+        setScrapedExternalProduct(ws.scrapedExternalProduct);
+      }
+      setAdVariationCounters(ws.adVariationCounters || {});
+      setAdPhotoIndexOverride(ws.adPhotoIndexOverride || {});
+      const rawStep = String(ws.workflowStep || 'idle');
+      const safeStep =
+        rawStep === 'published'
+          ? 'published'
+          : savedCreatives.length > 0
+          ? 'generated'
+          : ws.brainProfile
+          ? 'researched'
+          : 'idle';
+      setWorkflowStep(safeStep);
+      if (ws.updatedAt) {
+        try {
+          setLastBackendSavedAt(new Date(ws.updatedAt).toLocaleTimeString('es-PY'));
+        } catch {}
+      }
+    } else {
+      setBrainProfile(null);
+      setCreatives([]);
+      setAdVariationCounters({});
+      setAdPhotoIndexOverride({});
+      setWorkflowStep('idle');
+    }
+  };
 
   // Helper para recuperar la API Key de OpenRouter desde la bóveda persistente del navegador (sobrevive reinicios del contenedor en la nube)
   const getVaultOpenRouterKey = (): string => {
@@ -266,7 +317,147 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         }
       })
       .catch(() => {});
+
+    // Restaurar automáticamente desde el Backend todo el trabajo previo (Investigación + Imágenes + Videos + Paso exacto)
+    fetch('/api/autoads/workspace')
+      .then(r => r.json())
+      .then(wsData => {
+        let loadedWorkspaces: Record<string, any> =
+          wsData?.workspaces && typeof wsData.workspaces === 'object' ? wsData.workspaces : {};
+        let loadedLastActive = wsData?.lastActive || null;
+
+        // Si el contenedor se reinició en la nube y el backend aún está vacío, recuperar del espejo local y sincronizar al backend
+        if (Object.keys(loadedWorkspaces).length === 0) {
+          try {
+            const localBackupRaw = localStorage.getItem('autoads_workspace_backup_v1');
+            if (localBackupRaw) {
+              const localBackup = JSON.parse(localBackupRaw);
+              if (localBackup?.workspaces && Object.keys(localBackup.workspaces).length > 0) {
+                loadedWorkspaces = localBackup.workspaces;
+                loadedLastActive = localBackup.lastActive || loadedLastActive;
+              }
+            }
+          } catch {}
+        }
+
+        setWorkspacesCache(loadedWorkspaces);
+
+        const resolvedMode: 'catalog' | 'external_url' =
+          loadedLastActive?.sourceMode === 'external_url' ? 'external_url' : 'catalog';
+        const resolvedProdId =
+          loadedLastActive?.selectedProductId &&
+          productPages.some(p => p.id === loadedLastActive.selectedProductId)
+            ? String(loadedLastActive.selectedProductId)
+            : productPages[0]?.id || '';
+        const resolvedExtUrl = String(loadedLastActive?.externalUrlInput || '');
+
+        setSourceMode(resolvedMode);
+        if (resolvedProdId) setSelectedProductId(resolvedProdId);
+        if (resolvedExtUrl) setExternalUrlInput(resolvedExtUrl);
+        if (typeof loadedLastActive?.onlyImagesMode === 'boolean') {
+          setOnlyImagesMode(loadedLastActive.onlyImagesMode);
+        }
+
+        const targetKey = computeWorkspaceKey(resolvedMode, resolvedProdId, resolvedExtUrl);
+        const savedWs = loadedWorkspaces[targetKey] || loadedWorkspaces[resolvedProdId];
+        if (savedWs) {
+          applySavedWorkspaceToState(savedWs);
+        }
+        setWorkspaceHydrated(true);
+      })
+      .catch(() => {
+        setWorkspaceHydrated(true);
+      });
   }, []);
+
+  // Guardado automático en tiempo real en el Backend cada vez que avanza un paso, se investiga o se genera una imagen o video
+  useEffect(() => {
+    if (!workspaceHydrated) return;
+    const wsKey = computeWorkspaceKey(
+      sourceMode,
+      selectedCatalogProduct?.id || selectedProductId,
+      externalUrlInput
+    );
+    const stableStep =
+      workflowStep === 'generating'
+        ? creatives.length > 0
+          ? 'generated'
+          : brainProfile
+          ? 'researched'
+          : 'idle'
+        : workflowStep === 'researching'
+        ? brainProfile
+          ? 'researched'
+          : 'idle'
+        : workflowStep === 'publishing'
+        ? 'generated'
+        : workflowStep;
+
+    const currentWorkspacePayload = {
+      workspaceKey: wsKey,
+      productId: activeProduct?.id || selectedProductId,
+      productName: activeProduct?.nombre || '',
+      workflowStep: stableStep,
+      brainProfile,
+      creatives,
+      scrapedExternalProduct,
+      adVariationCounters,
+      adPhotoIndexOverride,
+      onlyImagesMode,
+      updatedAt: new Date().toISOString()
+    };
+
+    const nextLastActive = {
+      sourceMode,
+      selectedProductId: selectedCatalogProduct?.id || selectedProductId,
+      externalUrlInput,
+      onlyImagesMode,
+      activeWorkspaceKey: wsKey
+    };
+
+    setWorkspacesCache(prev => {
+      const updated = {
+        ...prev,
+        [wsKey]: currentWorkspacePayload
+      };
+      try {
+        localStorage.setItem(
+          'autoads_workspace_backup_v1',
+          JSON.stringify({ lastActive: nextLastActive, workspaces: updated })
+        );
+      } catch {}
+      return updated;
+    });
+
+    fetch('/api/autoads/workspace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lastActive: nextLastActive,
+        workspaceKey: wsKey,
+        workspace: currentWorkspacePayload
+      })
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res?.success) {
+          setLastBackendSavedAt(new Date().toLocaleTimeString('es-PY'));
+        }
+      })
+      .catch(() => {});
+  }, [
+    workspaceHydrated,
+    brainProfile,
+    creatives,
+    workflowStep,
+    sourceMode,
+    selectedProductId,
+    externalUrlInput,
+    onlyImagesMode,
+    scrapedExternalProduct,
+    adVariationCounters,
+    adPhotoIndexOverride
+  ]);
 
   // Sincronización en tiempo real de precios si el usuario edita los precios del producto en el panel Admin
   useEffect(() => {
@@ -1473,8 +1664,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               type="button"
               onClick={() => {
                 setSourceMode('catalog');
-                setWorkflowStep('idle');
-                setCreatives([]);
+                const key = computeWorkspaceKey('catalog', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
+                applySavedWorkspaceToState(workspacesCache[key]);
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 sourceMode === 'catalog'
@@ -1488,8 +1679,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               type="button"
               onClick={() => {
                 setSourceMode('external_url');
-                setWorkflowStep('idle');
-                setCreatives([]);
+                const key = computeWorkspaceKey('external_url', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
+                applySavedWorkspaceToState(workspacesCache[key]);
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
                 sourceMode === 'external_url'
@@ -1502,10 +1693,13 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             </button>
           </div>
 
-          <div className="text-[11px] text-zinc-400 font-mono">
-            Flujo Manos Libres: <strong className="text-zinc-200">1. Investigar</strong> →{' '}
-            <strong className="text-zinc-200">2. Generar Anuncios</strong> →{' '}
-            <strong className="text-zinc-200">3. Publicar</strong>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-700/70 text-[11px] font-mono text-emerald-300 inline-flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>
+                💾 Guardado en Backend{lastBackendSavedAt ? ` (${lastBackendSavedAt})` : ''} · No perdés nada al actualizar
+              </span>
+            </span>
           </div>
         </div>
 
@@ -1517,9 +1711,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 data-testid="autoads-product-select"
                 value={selectedCatalogProduct?.id || ''}
                 onChange={e => {
-                  setSelectedProductId(e.target.value);
-                  setWorkflowStep('idle');
-                  setCreatives([]);
+                  const newId = e.target.value;
+                  setSelectedProductId(newId);
+                  const key = computeWorkspaceKey('catalog', newId, externalUrlInput);
+                  applySavedWorkspaceToState(workspacesCache[key]);
                 }}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-sm font-bold text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
               >
@@ -1548,9 +1743,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 type="url"
                 value={externalUrlInput}
                 onChange={e => {
-                  setExternalUrlInput(e.target.value);
-                  setWorkflowStep('idle');
-                  setCreatives([]);
+                  const nextUrl = e.target.value;
+                  setExternalUrlInput(nextUrl);
+                  const key = computeWorkspaceKey('external_url', selectedProductId, nextUrl);
+                  applySavedWorkspaceToState(workspacesCache[key]);
                 }}
                 placeholder="https://... Pegá la URL de cualquier página de producto (de Paraguay o del extranjero)"
                 className="flex-1 px-3.5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-sm text-zinc-100 placeholder-zinc-500 font-mono outline-none focus:border-emerald-500"
@@ -1689,8 +1885,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               <>
                 <Sparkles className="w-4 h-4 shrink-0" />
                 <span>
-                  {!onlyImagesMode && creatives.length > 0 && creatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl)
-                    ? '🎬 2. Crear Videos Reels (#5 y #6)'
+                  {creatives.length > 0 &&
+                  creatives.slice(0, onlyImagesMode ? 6 : 4).some(c => !c.aiGeneratedImageUrl)
+                    ? '⚡ 2. Continuar donde quedó (Completar Faltantes)'
+                    : !onlyImagesMode && creatives.length > 0 && creatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl)
+                    ? '🎬 2. Continuar donde quedó (Crear Reels #5 y #6)'
                     : creatives.length > 0
                     ? `✓ 2. Regenerar los ${creatives.length} Anuncios`
                     : onlyImagesMode
