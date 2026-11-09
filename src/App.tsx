@@ -186,6 +186,7 @@ export const AppContent: React.FC = () => {
       <ViralModal />
       <PoliciesModal />
       <FloatingWhatsApp />
+      <MapCorrectionModal />
     </div>
   );
 };

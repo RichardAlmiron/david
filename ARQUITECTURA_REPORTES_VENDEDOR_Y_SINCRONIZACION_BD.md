@@ -172,4 +172,30 @@ Para que el Agente IA pueda generar el **Reporte Ejecutivo Verde al Vendedor** a
 3. **Respaldo Ininterrumpido de Credenciales en Supabase:**
    - La inclusión de la clave pública `anonKey` por defecto en el código del servidor garantiza que las lecturas y escrituras hacia `codigos` (`ORD-*`, `DEL-ORD-*`, `WAENG-*`, `CFG-*`) jamás se interrumpan en Railway, aun ante reinicios o despliegues continuos.
 
+---
 
+## 9. Arquitectura de Comprobantes Bancarios, Interruptor de Verificación y Pestaña Exclusiva `💎 Pago Adelantado`
+
+Cuando un comprador participa de la promoción de **Pago Adelantado (-Gs. 50.000)** y envía su comprobante de transferencia por WhatsApp:
+
+### 9.1. Dos Estados Diferenciados con Brillo Característico (No Verde)
+1. **Estado 1 — `⚡ PAGO ENVIADO (VERIFICAR)` (`isOrderPrepaymentSentPendingVerification`):**
+   - Se activa automáticamente apenas el comprador envía la imagen o PDF del comprobante por WhatsApp (`pagoAdelantadoComprobanteRecibido = true`, `pagoAdelantadoVerificadoAdmin = false`, `pagoAdelantadoEstado = 'pago_enviado_por_verificar'`).
+   - **Jamás dice "Pagado" todavía:** muestra la insignia **`⚡ PAGO ENVIADO (VERIFICAR)`** y resalta toda la tarjeta del pedido con un **brillo Ámbar/Dorado-Fucsia pulsante** (claramente distinto al verde de los confirmados normales) para que el vendedor lo identifique al instante.
+2. **Estado 2 — `💎 PAGO ADELANTADO` (`isOrderPrepaymentVerifiedAndPaid`):**
+   - Se activa únicamente cuando el vendedor verifica en su app bancaria que el dinero ingresó y enciende el **Interruptor (`Confirmar Pago Adelantado`)** dentro del pedido (`pagoAdelantadoVerificadoAdmin = true`, `pagoAdelantadoEstado = 'pagado_adelantado_confirmado'`).
+   - Resalta con un **brillo Cian/Oro VIP** y mueve el pedido automáticamente a la nueva pestaña exclusiva **`💎 Pago Adelantado`**.
+
+### 9.2. Bloque Desplegable de Verificación Bancaria (`PrepaymentVerificationSection` en `src/components/ProductConfirmedOrdersPanel.tsx`)
+Al desplegar un pedido, el vendedor visualiza en un solo panel:
+- **Titular / Cliente que Transfiere:** Nombre completo (`ord.nombre`) y WhatsApp (`ord.celular`) para cotejar el remitente en la app del banco.
+- **Cuenta y Banco Destino:** `Banco Familiar` · Alias `3856033 (3.856.033)` · Titular `Richard Almirón` y el monto exacto con descuento (`Gs. 139.000` / `monto - 50.000`).
+- **Comprobante del Pago (`comprobantePagoDataUrl`):** Miniatura interactiva con visor modal en pantalla completa y botón para subir/reemplazar captura manualmente.
+- **Interruptor (`switch-verify-prepayment-<reservaid>`):** Al activarlo, marca el pedido como `pagado_adelantado_confirmado` y lo traslada de pestaña.
+
+### 9.3. Nueva Pestaña Exclusiva `💎 Pago Adelantado (N)` y Exclusión de `✅ Confirmados`
+- Dentro de cada producto en `/admin` (`AdminView.tsx` y `ProductConfirmedOrdersPanel.tsx`), junto a `✅ Confirmados (N)` existe la pestaña **`💎 Pago Adelantado (N)`** (`panelMode = 'pagos_adelantados'`).
+- **Regla de Exclusividad Estricta:**
+  - La pestaña `✅ Confirmados` filtra `orders.filter(o => isOrderConfirmedByAgent(o) && !isOrderPrepaymentVerifiedAndPaid(o))`.
+  - La pestaña `💎 Pago Adelantado` filtra `orders.filter(o => isOrderPrepaymentVerifiedAndPaid(o))`.
+  - De este modo, **una vez que un pedido confirmado pasa a `💎 Pago Adelantado`, deja de figurar en `✅ Confirmados`** y vive exclusivamente en su pestaña de pagos adelantados verificados.

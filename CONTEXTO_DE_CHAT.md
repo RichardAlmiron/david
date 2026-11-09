@@ -832,3 +832,76 @@ Exigencias expresas:
 3. **Sincronización Reactiva en Vivo en `AutoAdsView.tsx` y `AdminView.tsx` + Botón de 1 Clic**:
    - La Tarjeta de Referencia Oficial (`data-testid="meta-official-reference-card"`) en `AutoAdsView.tsx` y la tarjeta de referencia en la pestaña `🎯 Píxel & CAPI` de `AdminView.tsx` ahora están vinculadas dinámicamente a `activeAdAccountName` (`data-testid="live-ad-account-name-834"`) y `activeMetaPixel.name` (`data-testid="live-pixel-name-377"`), persistidos en `localStorage` (`autoads_meta_live_names_v1`) y sincronizados entre vistas mediante el evento `CustomEvent('meta-live-names-updated')`.
    - Se incorporó en la cabecera de la Tarjeta de Referencia el botón **`🔄 Actualizar Nombres Reales desde Meta (834 / 377)`** (`handleDiscoverLiveMetaNames`, `data-testid="btn-discover-live-meta-names"`): al pulsarlo, consulta en vivo Meta Graph API (o abre el popup OAuth de 1 clic si el contenedor recién reinició) y actualiza instantáneamente los nuevos nombres de la Cuenta `834` y del Píxel `377` en todo el panel.
+
+---
+
+## 17. Fase 56 — Persistencia Ininterrumpida de WhatsApp tras Redeploys y Rediseño Compacto de Tarjetas de Producto y Pedidos para Pantallas de 11"
+
+### A. Solicitud del Usuario
+- Asegurar que el WhatsApp conectado nunca se desconecte ni se elimine al hacer deploy, y compactar la interfaz administrativa (`AdminView.tsx` y `ProductConfirmedOrdersPanel.tsx`) para pantallas chicas de 11 pulgadas: tarjetas de producto horizontales cerradas por defecto, filtros compactos en barra colapsable, y filas de pedidos horizontales compactas que al desplegarse muestran la dirección, mapa y detalles completos.
+
+### B. Implementación
+1. **Persistencia de Sesión WhatsApp (`server/whatsappEngine.ts`)**:
+   - Respaldo automático GZIP de `creds.json` y llaves Signal en Supabase (`WAAUTH-*`), desconexión benigna en código `440` (`connectionReplaced`) sin purgar credenciales en contenedores de previsualización, y reconexión automática en el servidor primario.
+2. **Interfaz Compacta Horizontal (`src/views/AdminView.tsx` y `src/components/ProductConfirmedOrdersPanel.tsx`)**:
+   - Tarjetas de producto iniciadas cerradas (`selectedProductForOrders = null`) en una sola fila horizontal adaptable a 11".
+   - Filtros compactados con panel desplegable `SlidersHorizontal`.
+   - Pedidos en filas horizontales de una sola línea que solo se expanden cuando el vendedor les hace clic.
+
+---
+
+## 18. Fase 57 — Auditoría Anti-Repetición en Confirmación de Pedidos y Flujo de 4 Etapas de Negociación VIP de Pago Adelantado (-Gs. 50.000 · Banco Familiar Alias `3856033`)
+
+### A. Solicitud del Usuario
+- Corregir que el agente pregunte 2 o 3 veces el teléfono o mande 2 veces la calle, e incorporar una negociación educada al confirmar el pedido ofreciendo **Gs. 50.000 de descuento** a las primeras 5 personas que paguen por adelantado mediante transferencia al **Banco Familiar**, Alias **`3856033` (`3.856.033`)**, Titular **`Richard Almirón`**, pasando el alias recién después de que el cliente confirme estar preparado y respondiendo en **Audio** al recibir el comprobante.
+
+### B. Implementación (`server/whatsappEngine.ts`)
+1. **Eliminación de las 3 Causas de Repetición**:
+   - `callDeepgramAgentLLM` emite `nextStep: 0` en fallback de texto; `generateContextualAiReply` aplica avance monotónico `1 -> 2 -> 3 -> 4 -> 5` con `locationTextSentOnce = true`; y `messages.upsert` agrupa ráfagas de mensajes (`1800ms`) con mutex por teléfono (`inFlightCustomerReplyLocks`).
+2. **Negociación VIP de Pago Adelantado en 4 Etapas**:
+   - Etapa A (`offered_hook`): Al cerrar el Paso 5 presenta el gancho de `-Gs. 50.000` sin enviar el alias aún.
+   - Etapa B (`awaiting_ready_for_alias`): Felicita al cliente y le pregunta si está listo para recibir el alias.
+   - Etapa C (`alias_sent_awaiting_receipt`): Envía audio + tarjeta `buildVipPrepaymentAliasCard` (`Banco Familiar`, Alias `3856033 (3.856.033)`, Titular `Richard Almirón`).
+   - Etapa D (`receipt_received_verifying`): Al recibir el comprobante, responde siempre en **Audio (`forceAudioReply: true`)** pidiendo aguardar mientras administración verifica la transferencia.
+
+---
+
+## 19. Fase 58 — Guardado de Comprobante, Estado `⚡ PAGO ENVIADO (VERIFICAR)` con Brillo No-Verde, Interruptor de Verificación Bancaria y Pestaña Exclusiva `💎 Pago Adelantado`
+
+### A. Solicitud del Usuario
+- Guardar el comprobante del pago en el pedido, marcar inicialmente como **Pago Enviado** (no "Pagado" todavía) con un brillo característico no verde, mostrar al desplegar el pedido el comprobante + nombre completo del cliente + banco y cuenta destino + un **Interruptor** para confirmar el pago adelantado una vez verificado en el banco, y mover automáticamente los pagos adelantados verificados a una nueva pestaña exclusiva **`💎 Pago Adelantado`** dentro del producto, quitándolos de **`✅ Confirmados`**.
+
+### B. Implementación (`server/whatsappEngine.ts`, `src/types.ts`, `src/utils/orderConfirmation.ts`, `src/components/ProductConfirmedOrdersPanel.tsx`, `src/views/AdminView.tsx`)
+1. **Descarga y Almacenamiento del Comprobante (`downloadWhatsAppReceiptMedia`)**:
+   - Descarga la imagen/PDF enviada por WhatsApp como Data URL Base64 (`comprobantePagoDataUrl`) y registra `pagoAdelantadoBanco = 'Banco Familiar'`, `pagoAdelantadoAlias = '3856033 (3.856.033)'`, `pagoAdelantadoTitular = 'Richard Almirón'` y `pagoAdelantadoEstado = 'pago_enviado_por_verificar'`.
+2. **Brillos Característicos y Interruptor (`PrepaymentVerificationSection`)**:
+   - Mientras espera verificación del vendedor, muestra **`⚡ PAGO ENVIADO (VERIFICAR)`** con brillo **Ámbar/Dorado-Fucsia pulsante** (no verde).
+   - Al activar el interruptor (`switch-verify-prepayment-<reservaid>`), pasa a **`💎 PAGO ADELANTADO`** (`pagoAdelantadoVerificadoAdmin = true`), deja de figurar en la pestaña `✅ Confirmados` (`!isOrderPrepaymentVerifiedAndPaid(o)`) y pasa exclusivamente a la pestaña **`💎 Pago Adelantado (N)`**.
+
+---
+
+## 20. Fase 59 — Entrenamiento de Comprensión Contextual de Oración Completa por LLM en la Promoción (Eliminación Total de Palabras Gatillo)
+
+### A. Solicitud del Usuario
+- *"Yo le dije sí me gusta, pero decime de qué se trata, explícame un poco mejor. Pero no entendió todo el contexto de todo lo que yo le dije, sino que aprobó la primera y segunda palabra que le dije, que sí me gusta... entrenarle al agente a contextualizar todas las palabras que dice el cliente y no usar una palabra como gatillo."*
+
+### B. Implementación (`server/whatsappEngine.ts`)
+1. **Eliminación de `isAffirmativeForPromo` por palabra clave** y reemplazo por **`callDeepgramAgentLLM(..., isPromoNegotiationMode = true)`** + **`analyzeWholeSentencePromoContext(cleanInput)`**.
+2. **Contextualización Completa de la Oración**:
+   - Si en cualquier parte de la frase el cliente incluye un conector adversativo (`"pero"`, `"aunque"`, `"solo que"`, `"nomás que"`), pide explicación (`"explicame"`, `"de qué se trata"`, `"cómo funciona"`) o aclara que todavía no aprobó (`"no, yo no te dije todavía que quiero participar"`), se clasifica como **`ASKING_EXPLANATION_OR_DOUBTING`**.
+   - El agente **no avanza de etapa**, **no felicita prematuramente** y **no envía el alias**: mantiene (o regresa) la etapa a `'offered_hook'`, explica detalladamente la promoción de los Gs. 50.000 de descuento y pregunta amablemente si desea participar.
+
+---
+
+## 21. Fase 60 — Corrección Interactiva de Mapa con el Mismo Botón Localizador Satelital del Formulario (`/?corregir-mapa=NX-XXXXXX`) y Reemplazo Automático de URL Errónea
+
+### A. Solicitud del Usuario
+- *"En el caso de que el mapa esté mal, si yo le digo que el mapa está mal, que no está totalmente confirmado, o que está mal el mapa, por ejemplo, me tiene que dar la posibilidad de que este agente me pregunte si me puede pasar el mapa entonces. Le paso otra vez el botón que está en el formulario, ese que le da click para llevarle directamente en el mapa para mostrar su casa, para localizar... que le dé las instrucciones que tiene que hacer, que le tiene que dar click, marcar, copiar y traerle, algo así. Que le traiga y que el agente tenga la capacidad de modificar el que estaba mal y reemplazar por esta que el usuario ya está confirmando la URL que ya está bien. Y después de allí, cuando confirma, sigue al siguiente paso de la confirmación de la compra."*
+
+### B. Implementación (`server/whatsappEngine.ts`, `src/components/MapCorrectionModal.tsx`, `src/App.tsx`)
+1. **Detección de Mapa Erróneo (`isCustomerReportingWrongMap`) y Envío del Botón Localizador (`buildMapCorrectionHelperCard`)**:
+   - Cuando el comprador dice que el mapa está mal o no está bien confirmado, el agente mantiene el pedido en el Paso 3 (`matchedOrder.awaitingMapCorrection = true`), le explica en voz que no hay ningún problema y le envía en texto el enlace directo **`/?corregir-mapa=NX-XXXXXX`** junto con las instrucciones paso a paso (1. Dar clic al botón localizador, 2. Localizar su casa/edificio en el mapa satelital y copiar la nueva URL, 3. Pegarla y traerla al chat de WhatsApp).
+2. **Modal Localizador Satelital Idéntico al Formulario (`src/components/MapCorrectionModal.tsx`)**:
+   - Al abrir `/?corregir-mapa=NX-XXXXXX`, se despliega el mismo botón 1-clic de geolocalización y el mapa satelital híbrido 3x3 arrastrable de `OrderForm.tsx`, con botones para **Copiar Nueva URL del Mapa** y **Enviar al Agente en WhatsApp**.
+3. **Reemplazo Automático del Mapa Erróneo y Avance al Paso 4 (`applyNewMapUrlAndCoordinatesToOrder`)**:
+   - Cuando el cliente trae y pega la nueva URL en el chat de WhatsApp, el agente elimina el mapa anterior que estaba mal, guarda el nuevo `gpsLink`, `gpsLat` y `gpsLng` (`mapaCorregidoPorCliente = true`) en `pedidos.json` y Supabase, confirma el reemplazo y avanza inmediatamente al **Paso 4** (solicitando la referencia de fachada/edificio para concluir la compra).

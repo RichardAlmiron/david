@@ -222,4 +222,58 @@ Para blindar el sistema al 100%:
 3. **No Abortar el Envío en `messages.upsert`:**
    - Si `smartRes.reply` contiene la respuesta generada, el flujo continúa siempre y envía la nota de voz OGG/Opus (`Deepgram Aura-2`) a WhatsApp.
 
+---
 
+## 11. Blindaje Anti-Repetición de Preguntas y Avance Monotónico Determinístico (Pasos 1 → 2 → 3 → 4 → 5)
+
+Para eliminar al 100% cualquier repetición de la pregunta del número de teléfono (Paso 2) o el envío duplicado de la dirección/calle en texto (Paso 3), el motor `server/whatsappEngine.ts` incorpora tres defensas coordinadas:
+
+1. **Extracción Estructurada en `callDeepgramAgentLLM` (`nextStep: 0` en fallback de texto):**
+   - Cuando `emit_reply` se invoca como `FunctionCallRequest`, devuelve el JSON completo con `nextStep`. Si el socket entrega solo `ConversationText`, asigna `nextStep: 0` para que el motor aplique el avance monotónico sin anclar el paso en `1`.
+2. **Avance Monotónico y Sanitización en `generateContextualAiReply`:**
+   - Una vez que el cliente confirma válidamente un paso (sin expresar dudas, `"pero"` ni pedir explicaciones), `nextStep` avanza de forma estrictamente monotónica (`Math.min(5, currentStep + 1)`).
+   - La tarjeta de texto con la calle y el enlace del mapa (`buildLocationTextConfirmationMessage`) se envía **una única vez en el Paso 3** (`matchedOrder.locationTextSentOnce = true`).
+   - En los Pasos 3, 4 y 5, si el texto generado por el LLM intentara volver a preguntar el teléfono o re-enviar la calle, se reemplaza automáticamente por el audio limpio correspondiente al paso actual.
+3. **Debounce de Ráfagas (`pendingCustomerBurstState`) y Mutex por Teléfono (`inFlightCustomerReplyLocks`):**
+   - Si un comprador envía 2 o 3 mensajes seguidos en pocos segundos (ej. *"Hola"*, *"Sí está bien"*), el motor agrupa los mensajes en una ventana de `1800ms` y serializa la ejecución con `inFlightCustomerReplyLocks` para que jamás corran dos respuestas de IA en paralelo para el mismo número.
+
+---
+
+## 12. Corrección Interactiva de Mapa en Vivo (`/?corregir-mapa=NX-XXXXXX`) y Reemplazo Automático de URL Errónea
+
+Cuando en el Paso 3 (o en cualquier momento posterior) el cliente revisa el enlace del mapa que se le envió y responde que **el mapa está mal, marca otro lado o no está totalmente confirmado**:
+
+1. **Detección Inteligente (`isCustomerReportingWrongMap`):**
+   - Detecta expresiones como *"el mapa está mal"*, *"la ubicación del mapa no está bien"*, *"marca otra cuadra"*, *"no está confirmado el mapa"*, *"la URL del mapa está mal"* o *"quiero corregir el mapa"*.
+2. **Envío del Mismo Botón Localizador Satelital del Formulario (`buildMapCorrectionHelperCard`):**
+   - El agente **mantiene el pedido en el Paso 3** (`matchedOrder.awaitingMapCorrection = true`) sin saltar prematuramente al Paso 4.
+   - En **Voz (Audio)** le transmite tranquilidad al comprador y le indica que abajo en el chat le deja el botón del localizador satelital con los pasos a seguir.
+   - En **Texto (`locationTextConfirmation`)** le envía la tarjeta interactiva con el enlace directo **`/?corregir-mapa=NX-XXXXXX`** (que abre el componente `src/components/MapCorrectionModal.tsx` con **exactamente el mismo botón y algoritmo de mapa satelital híbrido 3x3 arrastrable de `OrderForm.tsx`**) junto con las instrucciones paso a paso:
+     1. Dar clic al enlace del localizador satelital.
+     2. Tocar el botón para localizar su casa/edificio y ajustar el pin sobre su techo.
+     3. Copiar la nueva URL confirmada y pegarla en el chat de WhatsApp (o pulsar *"Enviar al Agente en WhatsApp"*).
+3. **Sobrescritura y Reemplazo de la URL Errónea (`applyNewMapUrlAndCoordinatesToOrder`):**
+   - Apenas el cliente pega y envía la nueva URL del mapa (`https://www.google.com/maps?q=LAT,LNG`, `maps.app.goo.gl/...` o coordenadas GPS), el motor extrae las nuevas coordenadas, **elimina y reemplaza** el `gpsLink`, `gpsLat`, `gpsLng` y `comparativaDatos.gpsLink` que estaban mal por la nueva ubicación confirmada (`mapaCorregidoPorCliente = true`), sincroniza con `pedidos.json` y Supabase (`syncOrderUpdateToCloud`), y **avanza automáticamente al Paso 4** (solicitando la fachada/referencia de su casa o recepción de edificio para cerrar la confirmación).
+
+---
+
+## 13. Negociación VIP de Pago Adelantado (`-Gs. 50.000`) con Comprensión Contextual de Oración Completa por LLM (Cero Palabras Gatillo)
+
+Al completar la confirmación del pedido en el Paso 5, el Agente IA presenta educadamente una promoción exclusiva para las **primeras 5 personas** que deseen abonar por adelantado mediante transferencia bancaria, otorgándoles **Gs. 50.000 de descuento directo** (`montoConDescuentoAdelantado = monto - 50000`).
+
+### 13.1. Prohibición de Palabras Clave como Gatillo (`callDeepgramAgentLLM` en modo `isPromoNegotiationMode` + `analyzeWholeSentencePromoContext`)
+- **Regla Inquebrantable:** El agente **jamás** utiliza palabras aisladas como `"sí"`, `"me gusta"`, `"me interesa"` o `"quiero"` como detonante automático de aprobación.
+- Cada mensaje del cliente es analizado en su **totalidad semántica** combinando el LLM (`callDeepgramAgentLLM` con `isPromoNegotiationMode = true` y el historial completo de la conversación) junto con el analizador de cláusulas `analyzeWholeSentencePromoContext(cleanInput)`:
+  1. **Intención `ASKING_EXPLANATION_OR_DOUBTING` (Interés con `"pero"`, solicitud de explicación o aclaración de NO aprobación):**
+     - Si el cliente dice *"Sí me gusta, pero me podrías explicar mejor de qué se trata esta promoción"*, *"Sí me interesa, pero necesito que me explique un poco mejor"* o *"No, yo no te dije todavía que quiero participar, te dije nomás que me gusta, pero quiero que me explique de qué se trata"*, el sistema detecta los conectores adversativos (`pero`, `aunque`, `solo que`, `nomás que`), las cláusulas interrogativas/explicativas (`explicame`, `de qué se trata`, `cómo funciona`) y las aclaraciones de no aprobación (`no te dije todavía que quiero`).
+     - El agente **NO avanza de etapa**, **NO felicita prematuramente** y **NO envía el alias**. En su lugar, mantiene (o regresa) la etapa a `'offered_hook'`, le explica con calidez y detalle cómo funciona el descuento de Gs. 50.000 frente al pago contra entrega normal, y al final le pregunta si le gustaría participar.
+  2. **Intención `CONFIRMING_PARTICIPATION` (Etapa B — `'awaiting_ready_for_alias'`):**
+     - Únicamente cuando el significado completo de la oración confirma **sin ningún `"pero"` ni duda** que el cliente sí desea participar, el agente pasa a `'awaiting_ready_for_alias'`, lo felicita por ahorrar Gs. 50.000, le reserva su cupo y le pide que avise cuando esté listo/preparado para transferir así le pasa el alias.
+  3. **Intención `READY_FOR_ALIAS` (Etapa C — `'alias_sent_awaiting_receipt'`):**
+     - Cuando el cliente confirma sin dudas que ya está listo y pide el alias, el agente envía el audio explicativo + la tarjeta formateada (`buildVipPrepaymentAliasCard`) con los datos oficiales:
+       - **Banco:** `Banco Familiar`
+       - **Alias (Cédula / SIPAP):** `3856033` *(También figura como `3.856.033`)*
+       - **Titular:** `Richard Almirón`
+       - **Monto con descuento (-Gs. 50.000):** `Gs. 139.000` (para pack 1x de Gs. 189.000).
+  4. **Intención `RECEIPT_OR_PAYMENT_SENT` (Etapa D — `'receipt_received_verifying'`):**
+     - Cuando el cliente envía la foto/captura o PDF del comprobante, `downloadWhatsAppReceiptMedia(msg)` descarga el archivo en Base64 (`comprobantePagoDataUrl`), marca el pedido como **`pago_enviado_por_verificar`** (`⚡ PAGO ENVIADO (VERIFICAR)`, **nunca "Pagado"** hasta que el vendedor lo verifique con su interruptor) y responde **obligatoriamente en Audio (`forceAudioReply: true`)** agradeciendo y pidiendo aguardar unos instantes mientras administración verifica la transferencia.

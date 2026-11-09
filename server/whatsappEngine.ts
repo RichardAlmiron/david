@@ -4154,9 +4154,17 @@ export function cleanStreetAddressText(rawAddress: string): string {
   return cleaned || 'Por confirmar';
 }
 
-// Extract the direct raw Google Maps URL from an order (never using external shorteners that can fail or redirect to broken pages)
+// Extract the direct raw Google Maps URL from an order (prioritizing an explicit gpsLink when corrected by the customer)
 export function extractCanonicalMapUrlFromOrder(order: any): string {
   if (!order) return '';
+  if (
+    order.mapaCorregidoPorCliente &&
+    order.gpsLink &&
+    String(order.gpsLink).trim().startsWith('http') &&
+    !/tinyurl\.com|is\.gd/i.test(String(order.gpsLink))
+  ) {
+    return String(order.gpsLink).trim();
+  }
   if (typeof order.gpsLat === 'number' && typeof order.gpsLng === 'number') {
     return `https://www.google.com/maps?q=${Number(order.gpsLat).toFixed(6)},${Number(order.gpsLng).toFixed(6)}`;
   }
@@ -4174,6 +4182,147 @@ export function extractCanonicalMapUrlFromOrder(order: any): string {
     return embeddedMatch[0].replace(/[\])]+$/, '').trim();
   }
   return '';
+}
+
+export function getPublicAppBaseUrl(order?: any): string {
+  const fromOrder = String(order?.originUrl || '').trim().replace(/\/+$/, '');
+  if (fromOrder && /^https?:\/\//i.test(fromOrder) && !/localhost/i.test(fromOrder)) {
+    return fromOrder;
+  }
+  const fromEnv = String(process.env.APP_URL || process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  if (fromEnv && /^https?:\/\//i.test(fromEnv)) {
+    return fromEnv;
+  }
+  return 'https://ais-pre-xkbo5ig6qtdnoqvylrohce-196392939008.us-east5.run.app';
+}
+
+// Detect when the customer says the map URL / location pin is wrong, inaccurate, or not confirmed
+export function isCustomerReportingWrongMap(cleanInput: string): boolean {
+  const text = String(cleanInput || '').trim();
+  if (!text) return false;
+  // If they are already sending a new URL in the same message, it's a replacement, not a request for the button
+  if (/https?:\/\/(?:www\.)?(?:google\.com\/maps\S+|maps\.google\.com\S+|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)/i.test(text)) {
+    return false;
+  }
+  const mentionsMapOrUrl =
+    /\b(mapa|ubicaci[oó]n|url|enlace|link|punto\s+gps|pin)\b/i.test(text);
+  const mentionsWrongOrUnconfirmed =
+    /\b(mal|equivocad[oa]|incorrect[oa]|err[oó]ne[oa]|no\s+est[aá]\s+bien|no\s+es\s+mi\s+casa|no\s+es\s+mi\s+edificio|no\s+es\s+ah[ií]|no\s+es\s+all[ií]|marca\s+otro|otro\s+lado|otra\s+calle|otra\s+cuadra|lejos|no\s+est[aá]\s+confirmad[oa]|no\s+est[aá]\s+totalmente\s+confirmad[oa]|cambiar|corregir|modificar|arreglar)\b/i.test(
+      text
+    );
+  return mentionsMapOrUrl && mentionsWrongOrUnconfirmed;
+}
+
+// Parse a new map URL or coordinates sent by the customer and overwrite the old wrong map on the order
+export function applyNewMapUrlAndCoordinatesToOrder(
+  order: any,
+  rawInputText: string
+): { updated: boolean; newMapUrl: string } {
+  if (!order || !rawInputText) return { updated: false, newMapUrl: '' };
+  const text = String(rawInputText).trim();
+
+  const urlMatch = text.match(
+    /https?:\/\/(?:www\.)?(?:google\.com\/maps\S+|maps\.google\.com\S+|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)/i
+  );
+
+  // Also check if the user pasted raw coordinates like "-25.286700, -57.647000"
+  const rawCoordsOnlyMatch = !urlMatch
+    ? text.match(/(-2[0-9]\.\d{4,})\s*,\s*(-5[0-9]\.\d{4,})/)
+    : null;
+
+  if (!urlMatch && !rawCoordsOnlyMatch) {
+    return { updated: false, newMapUrl: '' };
+  }
+
+  let extractedLat: number | null = null;
+  let extractedLng: number | null = null;
+  let finalMapUrl = '';
+
+  if (rawCoordsOnlyMatch) {
+    extractedLat = Number(rawCoordsOnlyMatch[1]);
+    extractedLng = Number(rawCoordsOnlyMatch[2]);
+    finalMapUrl = `https://www.google.com/maps?q=${extractedLat.toFixed(6)},${extractedLng.toFixed(6)}`;
+  } else if (urlMatch) {
+    const rawUrl = urlMatch[0].replace(/[.,;)\]]+$/, '').trim();
+    // Try extracting lat,lng from ?q=lat,lng or @lat,lng or !3dlat!4dlng
+    const qMatch =
+      rawUrl.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/i) ||
+      rawUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/i) ||
+      rawUrl.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/i) ||
+      rawUrl.match(/viewpoint=(-?\d+\.\d+),(-?\d+\.\d+)/i);
+
+    if (qMatch) {
+      const latNum = Number(qMatch[1]);
+      const lngNum = Number(qMatch[2]);
+      if (!Number.isNaN(latNum) && !Number.isNaN(lngNum)) {
+        extractedLat = Number(latNum.toFixed(6));
+        extractedLng = Number(lngNum.toFixed(6));
+        finalMapUrl = `https://www.google.com/maps?q=${extractedLat.toFixed(6)},${extractedLng.toFixed(6)}`;
+      }
+    }
+    if (!finalMapUrl) {
+      finalMapUrl = rawUrl;
+    }
+  }
+
+  if (!finalMapUrl) {
+    return { updated: false, newMapUrl: '' };
+  }
+
+  // Overwrite old wrong map URL and coordinates on the order
+  order.gpsLink = finalMapUrl;
+  order.gpsConfirmado = true;
+  order.mapaCorregidoPorCliente = true;
+  order.awaitingMapCorrection = false;
+
+  if (extractedLat !== null && extractedLng !== null) {
+    order.gpsLat = extractedLat;
+    order.gpsLng = extractedLng;
+  } else {
+    // If customer pasted a short link (maps.app.goo.gl) without embedded coords, clear old wrong coords so old coords never override new gpsLink
+    delete order.gpsLat;
+    delete order.gpsLng;
+  }
+
+  if (order.comparativaDatos && typeof order.comparativaDatos === 'object') {
+    order.comparativaDatos.gpsLink = finalMapUrl;
+    order.comparativaDatos.gpsConfirmado = true;
+    if (extractedLat !== null && extractedLng !== null) {
+      order.comparativaDatos.gpsLat = extractedLat;
+      order.comparativaDatos.gpsLng = extractedLng;
+    } else {
+      delete order.comparativaDatos.gpsLat;
+      delete order.comparativaDatos.gpsLng;
+    }
+  }
+
+  return { updated: true, newMapUrl: finalMapUrl };
+}
+
+// Build the step-by-step interactive card with the exact same satellite locator button from the checkout form
+export function buildMapCorrectionHelperCard(order: any): string {
+  const isBuilding = isBuildingOrderServer(order);
+  const placeLabel = isBuilding ? 'tu edificio' : 'tu casa';
+  const baseUrl = getPublicAppBaseUrl(order);
+  const reservaId = String(order?.reservaid || order?.id || 'pedido').trim();
+  const locatorUrl = `${baseUrl}/?corregir-mapa=${encodeURIComponent(reservaId)}`;
+
+  return [
+    `📍 *BOTÓN LOCALIZADOR PARA CORREGIR EL MAPA DE ${placeLabel.toUpperCase()}*`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `No hay ningún problema, vamos a reemplazar el mapa que estaba mal por la ubicación exacta de ${placeLabel}:`,
+    ``,
+    `🔘 *[ TOCÁ AQUÍ PARA ABRIR EL LOCALIZADOR DE ${placeLabel.toUpperCase()} ]* 👇`,
+    `${locatorUrl}`,
+    ``,
+    `📝 *Instrucciones paso a paso (muy fácil):*`,
+    `1️⃣ *Dale clic* al enlace de arriba para abrir el mismo botón localizador satelital del formulario.`,
+    `2️⃣ *Tocá el botón para localizar ${placeLabel}* (podés mover el mapa con el dedo hasta que el pin quede exacto sobre tu techo).`,
+    `3️⃣ *Dale clic en "Copiar y Confirmar mi Nuevo Mapa"* y *pegá acá en el chat la nueva URL* (o tocá "Enviar por WhatsApp" ahí mismo).`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `🗺️ *Opción alternativa (Google Maps directo):*`,
+    `También podés abrir https://www.google.com/maps , mantener apretado con el dedo sobre ${placeLabel}, copiar el enlace y pegarlo acá en este chat.`
+  ].join('\n');
 }
 
 // Ensure the order has the clean direct raw Google Maps URL and a clean street address without duplicate embedded links
@@ -4228,7 +4377,7 @@ export function buildLocationTextConfirmationMessage(
         ? `\n\n🗺️ *Este es el mapa que se ha guardado de la ubicación exacta de tu edificio:*\n` +
           `🔘 *[ TOCÁ AQUÍ PARA ABRIR TU MAPA ]* 👇\n` +
           `${directMapUrl}\n\n` +
-          `👉 *Cómo revisarlo paso a paso:* Podés darle clic al enlace de arriba y se te va a abrir en tu navegador. Visualizá bien que marque tu edificio, y después volvé otra vez acá al chat y confirmame si el nombre del edificio, tu piso, departamento y recepción están todos correctos para que sigamos en el siguiente paso.`
+          `👉 *Cómo revisarlo paso a paso:* Podés darle clic al enlace de arriba y se te va a abrir en tu navegador. Visualizá bien que marque tu edificio, y después volvé otra vez acá al chat y confirmame si el nombre del edificio, tu piso, departamento y recepción están todos correctos para que sigamos en el siguiente paso (o avisame si el mapa está mal para pasarte el botón localizador y corregirlo).`
         : `\n\n👉 *Por favor revisá bien estos datos de tu edificio que pusiste en el formulario y confirmame acá en el chat si está todo correcto para que sigamos en el siguiente paso (o decime si querés corregir calle, edificio, piso o departamento).*`;
 
       return (
@@ -4246,7 +4395,7 @@ export function buildLocationTextConfirmationMessage(
       ? `\n\n🗺️ *Este es el mapa que se ha guardado de la dirección exacta de tu casa:*\n` +
         `🔘 *[ TOCÁ AQUÍ PARA ABRIR TU MAPA ]* 👇\n` +
         `${directMapUrl}\n\n` +
-        `👉 *Cómo revisarlo paso a paso:* Podés darle clic al enlace de arriba y se te va a abrir en tu navegador. Visualizá bien que marque tu casa, y después volvé otra vez acá al chat y confirmame si está todo correcto para que sigamos en el siguiente paso.`
+        `👉 *Cómo revisarlo paso a paso:* Podés darle clic al enlace de arriba y se te va a abrir en tu navegador. Visualizá bien que marque tu casa, y después volvé otra vez acá al chat y confirmame si está todo correcto para que sigamos en el siguiente paso (o avisame si el mapa está mal para pasarte el botón localizador y corregirlo).`
       : `\n\n👉 *Por favor revisá bien estos datos que pusiste en el formulario y confirmame acá en el chat si está todo correcto para que sigamos en el siguiente paso (o decime si querés corregir tu calle o barrio).*`;
 
     return (
@@ -5414,12 +5563,11 @@ export async function generateContextualAiReply(
   const conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   const cleanInput = incomingText.replace(/^🎤\s*/, '').trim();
 
-  // Extract any Google Maps link sent in text by the customer and save it directly onto matchedOrder
-  const mapsUrlMatch = cleanInput.match(/https?:\/\/(?:www\.)?(?:google\.com\/maps\S+|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)/i);
-  if (mapsUrlMatch && matchedOrder) {
-    matchedOrder.gpsLink = mapsUrlMatch[0];
-    matchedOrder.gpsConfirmado = true;
-  }
+  // Extract any Google Maps link or GPS coordinates sent by the customer and overwrite the old map on matchedOrder
+  const mapReplacementRes = matchedOrder
+    ? applyNewMapUrlAndCoordinatesToOrder(matchedOrder, cleanInput)
+    : { updated: false, newMapUrl: '' };
+  const customerReportedWrongMap = isCustomerReportingWrongMap(cleanInput);
 
   const recentMsgs = chatHistory.slice(-30);
   for (let i = 0; i < recentMsgs.length; i++) {
@@ -5434,6 +5582,90 @@ export async function generateContextualAiReply(
     } else if (msg.sender === 'ai' || (msg.sender === 'agent' && msg.status !== 'error')) {
       conversationHistory.push({ role: 'assistant', content: msg.text });
     }
+  }
+
+  // =========================================================================
+  // CORRECCIÓN INTERACTIVA DEL MAPA CUANDO EL CLIENTE DICE QUE EL MAPA ESTÁ MAL
+  // O CUANDO TRAE Y PEGA LA NUEVA URL DEL MAPA CONFIRMADO
+  // =========================================================================
+  if (matchedOrder && customerReportedWrongMap) {
+    const rawName = String(matchedOrder?.nombre || '').trim();
+    const firstName = getNaturalFirstName(rawName);
+    const displayFirstName = firstName && firstName !== 'qué tal' ? firstName : 'cliente';
+    const isBuilding = isBuildingOrderServer(matchedOrder);
+    const placeLabel = isBuilding ? 'tu edificio' : 'tu casa';
+
+    matchedOrder.awaitingMapCorrection = true;
+    matchedOrder.gpsConfirmado = false;
+    const stepForMapCorrection = isAlreadyConfirmed ? 5 : 3;
+    if (!isAlreadyConfirmed) {
+      setOrderConvStep(cleanPhone, matchedOrder, 3);
+      matchedOrder.convStep = 3;
+    }
+
+    const wrongMapAudioReply = `No te preocupes para nada, ${displayFirstName}, no hay ningún problema si el mapa no quedó bien ubicado, eso lo solucionamos ahora mismo. Acá abajo en el chat te paso el botón de nuestro localizador satelital, que es el mismo algoritmo del formulario, con las instrucciones paso a paso: solo tenés que darle clic al enlace, tocar el botón para localizar ${placeLabel} en el mapa, copiar la nueva dirección URL y traérmela pegándola acá en el chat. Apenas me la pases, reemplazo el mapa que estaba mal por tu nueva ubicación confirmada y pasamos enseguida al siguiente paso de tu compra.`;
+    const helperCardText = buildMapCorrectionHelperCard(matchedOrder);
+
+    matchedOrder.atendidoPorIA = true;
+    matchedOrder.ultimoMensajeIA = wrongMapAudioReply;
+    matchedOrder.actualizado_en = new Date().toISOString();
+    savePedidos(pedidos);
+    syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+
+    return {
+      reply: wrongMapAudioReply,
+      locationTextConfirmation: helperCardText,
+      matchedOrder,
+      convStep: stepForMapCorrection,
+      error: apiWarning || undefined
+    };
+  }
+
+  if (matchedOrder && mapReplacementRes.updated && (currentStep === 3 || matchedOrder.awaitingMapCorrection || isAlreadyConfirmed)) {
+    const rawName = String(matchedOrder?.nombre || '').trim();
+    const firstName = getNaturalFirstName(rawName);
+    const displayFirstName = firstName && firstName !== 'qué tal' ? firstName : 'cliente';
+    const isBuilding = isBuildingOrderServer(matchedOrder);
+
+    matchedOrder.awaitingMapCorrection = false;
+    matchedOrder.gpsConfirmado = true;
+    matchedOrder.mapaCorregidoPorCliente = true;
+    matchedOrder.actualizado_en = new Date().toISOString();
+
+    if (isAlreadyConfirmed) {
+      const updatedPostConfirmReply = `Excelente, ${displayFirstName}, muchísimas gracias por enviarme tu nueva ubicación. Acabo de modificar tu orden en nuestro sistema informático, eliminé el mapa anterior que estaba mal y lo reemplacé por esta nueva URL confirmada para que el repartidor llegue directo y sin ninguna confusión.`;
+      matchedOrder.ultimoMensajeIA = updatedPostConfirmReply;
+      savePedidos(pedidos);
+      syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+      return {
+        reply: updatedPostConfirmReply,
+        locationTextConfirmation: `✅ *MAPA ACTUALIZADO Y REEMPLAZADO CON ÉXITO:*\n${mapReplacementRes.newMapUrl}`,
+        matchedOrder,
+        convStep: 5,
+        error: apiWarning || undefined
+      };
+    }
+
+    // Estaba en el Paso 3 (o corrigiendo mapa) -> Reemplazar el mapa que estaba mal y avanzar al Paso 4 de confirmación:
+    setOrderConvStep(cleanPhone, matchedOrder, 4);
+    matchedOrder.convStep = 4;
+    matchedOrder.atendidoPorIA = true;
+
+    const step4AfterMapReplaceAudio = isBuilding
+      ? `Excelente, ${displayFirstName}, muchísimas gracias. Acabo de recibir tu nueva dirección URL del mapa, ya modifiqué el registro eliminando el mapa anterior que estaba mal y lo reemplacé en nuestro sistema informático por esta nueva ubicación exacta de tu edificio. Ahora sí, pasando al siguiente paso para concretar tu envío, ¿me reconfirmás por favor si la recepcionista de portería está autorizada a recibir tu paquete o si preferís que el repartidor te avise al llegar a planta baja, y qué comercio conocido hay al lado del edificio?`
+      : `Excelente, ${displayFirstName}, muchísimas gracias. Acabo de recibir tu nueva dirección URL del mapa, ya modifiqué el registro eliminando el mapa anterior que estaba mal y lo reemplacé en nuestro sistema informático por esta nueva ubicación exacta de tu casa. Ahora sí, pasando al siguiente paso para concretar tu envío, ¿me pasás por favor cómo es la fachada de tu casa, el color de la pared o del portón y algún comercio cercano de referencia?`;
+
+    matchedOrder.ultimoMensajeIA = step4AfterMapReplaceAudio;
+    savePedidos(pedidos);
+    syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+
+    return {
+      reply: step4AfterMapReplaceAudio,
+      locationTextConfirmation: `✅ *MAPA ANTERIOR REEMPLAZADO POR TU NUEVA UBICACIÓN CONFIRMADA:*\n${mapReplacementRes.newMapUrl}`,
+      matchedOrder,
+      convStep: 4,
+      error: apiWarning || undefined
+    };
   }
 
   // Compute global cross-chat context and readiness diagnostic across all messages & orders for this phone
