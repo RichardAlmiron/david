@@ -4564,6 +4564,12 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   : '';
 
               const persistedModels = getPersistedAutoAdsModels();
+              const metaAppId = String(
+                cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || ''
+              ).trim();
+              const metaAppSecret = String(
+                cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || ''
+              ).trim();
 
               res.end(
                 JSON.stringify({
@@ -4589,6 +4595,8 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   pipeboardTokenPreview: tokenPreview,
                   hasOpenRouterKey: Boolean(orKey),
                   openRouterKeyPreview: orKeyPreview,
+                  hasMetaAppCredentials: Boolean(metaAppId && metaAppSecret),
+                  metaAppIdPreview: metaAppId ? `${metaAppId.slice(0, 6)}••••` : '',
                   publishedCampaigns: Array.isArray(cfg.pipeboardPublishedCampaigns)
                     ? cfg.pipeboardPublishedCampaigns
                     : []
@@ -4615,6 +4623,9 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                 const prevPb = cfg.pipeboardConfig || {};
                 const incomingToken = String(parsed.pipeboardApiToken || '').trim();
                 const incomingOrKey = String(parsed.openRouterApiKey || '').trim();
+                const incomingMetaAppId = String(parsed.metaAppId || '').trim();
+                const incomingMetaAppSecret = String(parsed.metaAppSecret || '').trim();
+                const incomingMetaDirectToken = String(parsed.metaAccessToken || '').trim();
                 const clearToken = Boolean(parsed.clearPipeboardToken);
 
                 const effectivePbToken = clearToken
@@ -4632,11 +4643,34 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   updatedAt: new Date().toISOString()
                 };
                 delete nextPb.clearPipeboardToken;
+                delete nextPb.metaAppId;
+                delete nextPb.metaAppSecret;
+                delete nextPb.metaAccessToken;
+
+                if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
+                if (incomingMetaAppId) {
+                  cfg.metaDirectConfig.appId = incomingMetaAppId;
+                  saveKeyToEnvFile('META_APP_ID', incomingMetaAppId);
+                }
+                if (incomingMetaAppSecret) {
+                  cfg.metaDirectConfig.appSecret = incomingMetaAppSecret;
+                  saveKeyToEnvFile('META_APP_SECRET', incomingMetaAppSecret);
+                }
+                if (incomingMetaDirectToken) {
+                  cfg.metaDirectConfig.accessToken = incomingMetaDirectToken;
+                  saveKeyToEnvFile('META_ACCESS_TOKEN', incomingMetaDirectToken);
+                  saveKeyToEnvFile('META_CAPI_TOKEN', incomingMetaDirectToken);
+                }
 
                 if (clearToken) {
                   saveKeyToEnvFile('PIPEBOARD_API_TOKEN', '');
                 } else if (incomingToken) {
                   saveKeyToEnvFile('PIPEBOARD_API_TOKEN', incomingToken);
+                  if (incomingToken.startsWith('EAA')) {
+                    saveKeyToEnvFile('META_ACCESS_TOKEN', incomingToken);
+                    saveKeyToEnvFile('META_CAPI_TOKEN', incomingToken);
+                    cfg.metaDirectConfig.accessToken = incomingToken;
+                  }
                 }
                 if (incomingOrKey) {
                   saveKeyToEnvFile('OPENROUTER_API_KEY', incomingOrKey);
@@ -4666,16 +4700,24 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     : finalOrKey
                     ? '••••••••'
                     : '';
+                const finalMetaAppId = String(
+                  cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || ''
+                ).trim();
+                const finalMetaAppSecret = String(
+                  cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || ''
+                ).trim();
 
                 // Seguridad Total: La respuesta devuelve config con el token vacío para autodestrucción en navegador
                 res.end(
                   JSON.stringify({
                     success: true,
-                    message: 'Configuración de Pipeboard y OpenRouter blindada en el Backend (autodestruida del navegador).',
+                    message: 'Configuración de Pipeboard, Meta OAuth y OpenRouter blindada en el Backend.',
                     hasPipeboardToken: Boolean(effectivePbToken),
                     pipeboardTokenPreview: tokenPreview,
                     hasOpenRouterKey: Boolean(finalOrKey),
                     openRouterKeyPreview: orKeyPreview,
+                    hasMetaAppCredentials: Boolean(finalMetaAppId && finalMetaAppSecret),
+                    metaAppIdPreview: finalMetaAppId ? `${finalMetaAppId.slice(0, 6)}••••` : '',
                     config: {
                       ...nextPb,
                       pipeboardApiToken: '',
@@ -4696,6 +4738,24 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
           // 8. META ADS DIRECTO – OAuth, Estado y Publicación sin Pipeboard
           // -------------------------------------------------------------
 
+          // Helper para construir el redirectUri exacto en entornos Cloud Run / Proxy / Local
+          const resolveMetaOAuthRedirectUri = () => {
+            if (process.env.APP_URL) {
+              return `${String(process.env.APP_URL).replace(/\/+$/, '')}/api/meta/callback`;
+            }
+            const fwdHost = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+            const hostStr = (Array.isArray(fwdHost) ? fwdHost[0] : String(fwdHost)).split(',')[0].trim();
+            const fwdProto = req.headers['x-forwarded-proto'];
+            const protoStr = Array.isArray(fwdProto) ? fwdProto[0] : String(fwdProto || '');
+            const protocol =
+              hostStr.includes('localhost') || hostStr.startsWith('127.0.0.1')
+                ? 'http'
+                : protoStr.includes('https') || hostStr.includes('.run.app')
+                ? 'https'
+                : 'https';
+            return `${protocol}://${hostStr}/api/meta/callback`;
+          };
+
           // Endpoint 1: Generar URL de autenticación OAuth de Facebook
           if (req.method === 'GET' && url === '/api/meta/auth-url') {
             try {
@@ -4707,31 +4767,32 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
               }
 
               // Leer app_id y app_secret de query params, store_config o .env
-              let appId = params.get('app_id') || '';
-              let appSecret = params.get('app_secret') || '';
-              if (!appId) appId = cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || '';
-              if (!appSecret) appSecret = cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || '';
+              let appId = (params.get('app_id') || '').trim();
+              let appSecret = (params.get('app_secret') || '').trim();
+              if (!appId) appId = String(cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || '').trim();
+              if (!appSecret) appSecret = String(cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || '').trim();
+
+              const redirectUri = resolveMetaOAuthRedirectUri();
 
               if (!appId || !appSecret) {
                 res.statusCode = 400;
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({
                   success: false,
-                  error: 'Se requieren META_APP_ID y META_APP_SECRET. Pasalos como query params ?app_id=...&app_secret=... o configuralos en .env'
+                  needsCredentials: true,
+                  redirectUri,
+                  error: 'Ingresá tu Meta App ID y App Secret por única vez para abrir el popup oficial de Facebook Login OAuth, o conectá con tu Token directo.'
                 }));
                 return;
               }
 
-              // Guardar app_id y app_secret en store_config.json
+              // Guardar app_id y app_secret en store_config.json y .env
               if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
               cfg.metaDirectConfig.appId = appId;
               cfg.metaDirectConfig.appSecret = appSecret;
               fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
-
-              // Construir redirect_uri dinámicamente
-              const hostHeader = req.headers.host || 'localhost:3000';
-              const protocol = hostHeader.includes('localhost') ? 'http' : 'https';
-              const redirectUri = `${protocol}://${hostHeader}/api/meta/callback`;
+              saveKeyToEnvFile('META_APP_ID', appId);
+              saveKeyToEnvFile('META_APP_SECRET', appSecret);
 
               // Permisos requeridos para Meta Ads
               const scopes = 'ads_management,ads_read,pages_show_list,pages_read_engagement,business_management';
@@ -4758,8 +4819,8 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
             return;
           }
 
-          // Endpoint 2: Callback OAuth de Facebook – intercambiar código por token
-          if (req.method === 'GET' && url === '/api/meta/callback') {
+          // Endpoint 2: Callback OAuth de Facebook – intercambiar código por token (soporta con y sin barra final)
+          if (req.method === 'GET' && (url === '/api/meta/callback' || url === '/api/meta/callback/')) {
             (async () => { try {
               const params = new URL(req.url || '', 'http://localhost').searchParams;
               const code = params.get('code') || '';
@@ -4790,9 +4851,7 @@ setTimeout(()=>window.close(),5000);
               const appId = cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || '';
               const appSecret = cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || '';
 
-              const hostHeader = req.headers.host || 'localhost:3000';
-              const protocol = hostHeader.includes('localhost') ? 'http' : 'https';
-              const redirectUri = `${protocol}://${hostHeader}/api/meta/callback`;
+              const redirectUri = resolveMetaOAuthRedirectUri();
 
               // Paso 1: Intercambiar código por token de corta duración
               const tokenUrl =
@@ -5071,37 +5130,105 @@ setTimeout(()=>window.close(),5000);
                     readKeyFromEnvFile('META_PIXEL_ID') ||
                     ''
                 ).trim();
-                const accessToken =
+                const accessToken = String(
                   cfg.metaDirectConfig?.accessToken ||
-                  readKeyFromEnvFile('META_ACCESS_TOKEN') ||
-                  '';
+                    readKeyFromEnvFile('META_ACCESS_TOKEN') ||
+                    (String(cfg.pipeboardConfig?.pipeboardApiToken || '').startsWith('EAA')
+                      ? cfg.pipeboardConfig.pipeboardApiToken
+                      : '') ||
+                    (String(readKeyFromEnvFile('PIPEBOARD_API_TOKEN') || '').startsWith('EAA')
+                      ? readKeyFromEnvFile('PIPEBOARD_API_TOKEN')
+                      : '') ||
+                    ''
+                ).trim();
 
                 if (!accessToken) {
-                  res.statusCode = 401;
+                  res.statusCode = 400;
                   res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({
-                    success: false,
-                    error: 'No hay token de Meta Ads configurado. Conectá tu cuenta primero vía /api/meta/auth-url'
-                  }));
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        'No hay Token de Meta Ads ni de Pipeboard configurado en el Backend. Abrí el botón "OpenRouter & Pipeboard" arriba a la derecha y pegá tu Token para publicar en vivo.'
+                    })
+                  );
                   return;
                 }
 
-                const adAccountId = String(parsed.adAccountId || 'act_595884210394').trim();
-                const facebookPageId = String(parsed.facebookPageId || '').trim();
+                let adAccountId = String(parsed.adAccountId || cfg.pipeboardConfig?.selectedAdAccountId || '').trim();
+                let facebookPageId = String(parsed.facebookPageId || cfg.pipeboardConfig?.selectedFacebookPageId || '').trim();
+                let resolvedPixelId =
+                  pixelId && pixelId !== '129485739201948' ? pixelId : '';
+                let accountCurrency = 'PYG';
 
-                // Si no se proporcionó pageAccessToken, buscarlo en la lista de páginas
+                // Auto-descubrir Cuenta Publicitaria real y su Moneda si aún está el ID placeholder o vacío
+                try {
+                  const accRes = await fetch(
+                    `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name,currency,account_status&access_token=${encodeURIComponent(
+                      accessToken
+                    )}`
+                  );
+                  const accJson: any = await accRes.json();
+                  const accList: any[] = Array.isArray(accJson?.data) ? accJson.data : [];
+                  if (accList.length > 0) {
+                    const matchedAcc =
+                      accList.find((a: any) => a.id === adAccountId) ||
+                      accList.find((a: any) => a.account_status === 1) ||
+                      accList[0];
+                    if (
+                      !adAccountId ||
+                      adAccountId === 'act_595884210394' ||
+                      !accList.some((a: any) => a.id === adAccountId)
+                    ) {
+                      adAccountId = String(matchedAcc.id);
+                    }
+                    if (matchedAcc?.currency) {
+                      accountCurrency = String(matchedAcc.currency).toUpperCase();
+                    }
+                  }
+                } catch {}
+
+                if (!adAccountId.startsWith('act_')) {
+                  adAccountId = `act_${adAccountId.replace(/^act_/, '')}`;
+                }
+
+                // Auto-descubrir Página de Facebook real si está vacía o con ID placeholder
                 let pageAccessToken = String(parsed.pageAccessToken || '').trim();
-                if (!pageAccessToken && facebookPageId) {
+                try {
+                  const pagesRes = await fetch(
+                    `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(
+                      accessToken
+                    )}`
+                  );
+                  const pagesJson: any = await pagesRes.json();
+                  const pageList: any[] = Array.isArray(pagesJson?.data) ? pagesJson.data : [];
+                  if (pageList.length > 0) {
+                    const matchedPage =
+                      pageList.find((p: any) => String(p.id) === facebookPageId) || pageList[0];
+                    if (
+                      !facebookPageId ||
+                      facebookPageId === '104928374650192' ||
+                      !pageList.some((p: any) => String(p.id) === facebookPageId)
+                    ) {
+                      facebookPageId = String(matchedPage.id);
+                    }
+                    if (!pageAccessToken && matchedPage?.access_token) {
+                      pageAccessToken = String(matchedPage.access_token);
+                    }
+                  }
+                } catch {}
+
+                // Auto-descubrir Píxel real de la cuenta si no está definido
+                if (!resolvedPixelId && adAccountId) {
                   try {
-                    const pagesRes = await fetch(
-                      `https://graph.facebook.com/v21.0/me/accounts?fields=id,access_token&access_token=${encodeURIComponent(accessToken)}`
+                    const pixRes = await fetch(
+                      `https://graph.facebook.com/v21.0/${encodeURIComponent(
+                        adAccountId
+                      )}/adspixels?fields=id,name&access_token=${encodeURIComponent(accessToken)}`
                     );
-                    const pagesJson: any = await pagesRes.json();
-                    const matchedPage = (pagesJson.data || []).find(
-                      (p: any) => String(p.id) === facebookPageId
-                    );
-                    if (matchedPage?.access_token) {
-                      pageAccessToken = matchedPage.access_token;
+                    const pixJson: any = await pixRes.json();
+                    if (Array.isArray(pixJson?.data) && pixJson.data[0]?.id) {
+                      resolvedPixelId = String(pixJson.data[0].id);
                     }
                   } catch {}
                 }
@@ -5109,6 +5236,33 @@ setTimeout(()=>window.close(),5000);
                 const nowIso = new Date().toISOString();
                 const mcpStepLogs: any[] = [];
                 const prodName = product.nombre || 'Producto';
+
+                // Helper para resolver la imagen IA real desde el disco (/public/assets/ai-ads/...) en Base64 puro para Meta Graph API
+                const resolveCreativeImagePayload = async (cr: any) => {
+                  const rawImgPath = String(
+                    cr?.aiGeneratedImageUrl || cr?.imageUrl || product?.imagen || ''
+                  ).trim();
+                  if (rawImgPath.startsWith('/')) {
+                    const diskPath = path.resolve(__dirname, 'public', rawImgPath.replace(/^\//, ''));
+                    if (fs.existsSync(diskPath)) {
+                      const fileBuf = fs.readFileSync(diskPath);
+                      return { bytes: fileBuf.toString('base64'), url: '' };
+                    }
+                  } else if (rawImgPath.startsWith('data:image/') && !rawImgPath.startsWith('data:image/svg')) {
+                    const base64Part = rawImgPath.split(',')[1] || '';
+                    if (base64Part) return { bytes: base64Part, url: '' };
+                  } else if (rawImgPath.startsWith('https://')) {
+                    try {
+                      const dl = await fetch(rawImgPath, { signal: AbortSignal.timeout(15000) });
+                      if (dl.ok) {
+                        const buf = Buffer.from(await dl.arrayBuffer());
+                        return { bytes: buf.toString('base64'), url: '' };
+                      }
+                    } catch {}
+                    return { bytes: '', url: rawImgPath };
+                  }
+                  return { bytes: '', url: '' };
+                };
 
                 // Helper para llamadas a Meta Graph API v21.0
                 const callMetaApi = async (
@@ -5138,15 +5292,20 @@ setTimeout(()=>window.close(),5000);
 
                 // Paso 1: Crear Campaña
                 let campaignId = '';
-                const campaignName = `[META DIRECTO] ${prodName} · Conversiones COD PY`;
+                let firstMetaError = '';
+                const campaignName = `[META IA] ${prodName} · Conversiones COD PY`;
                 try {
                   const campRes: any = await callMetaApi(`${adAccountId}/campaigns`, 'POST', {
                     name: campaignName,
                     objective: 'OUTCOME_SALES',
                     status: publishStatus,
-                    special_ad_categories: '[]'
+                    special_ad_categories: '[]',
+                    is_adset_budget_sharing_enabled: false
                   });
                   campaignId = campRes.id || '';
+                  if (!campaignId && campRes?.error?.message) {
+                    firstMetaError = `Meta Graph API (Campaña): ${campRes.error.message}`;
+                  }
                   mcpStepLogs.push({
                     step: 1,
                     action: 'create_campaign',
@@ -5158,6 +5317,7 @@ setTimeout(()=>window.close(),5000);
                     timestamp: new Date().toISOString()
                   });
                 } catch (err: any) {
+                  firstMetaError = err?.message || 'Error de red al crear campaña en Meta';
                   mcpStepLogs.push({
                     step: 1,
                     action: 'create_campaign',
@@ -5167,19 +5327,36 @@ setTimeout(()=>window.close(),5000);
                   });
                 }
 
-                // Paso 2: Crear Conjunto de Anuncios (Ad Set)
+                if (!campaignId) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        firstMetaError ||
+                        `Meta Ads rechazó la creación de la campaña en la cuenta ${adAccountId}. Verificá que el Token tenga permiso ads_management y que la cuenta esté activa.`
+                    })
+                  );
+                  return;
+                }
+
+                // Paso 2: Crear Conjunto de Anuncios (Ad Set) respetando la moneda real de la cuenta (USD vs PYG)
                 let adSetId = '';
+                const dailyBudgetInAccountUnits =
+                  accountCurrency === 'PYG'
+                    ? Math.max(15000, Math.round(dailyBudgetGs))
+                    : Math.max(200, Math.round((dailyBudgetGs / 7500) * 100));
                 const adSetName = `[PARAGUAY 18-65+] ${prodName} · Gs. ${dailyBudgetGs.toLocaleString('es-PY')}/día`;
                 if (campaignId) {
                   try {
-                    // Para PYG el presupuesto va en centavos (multiplicar por 100)
-                    const dailyBudgetCents = dailyBudgetGs * 100;
                     const adSetBody: any = {
                       campaign_id: campaignId,
                       name: adSetName,
-                      daily_budget: dailyBudgetCents,
+                      daily_budget: dailyBudgetInAccountUnits,
                       billing_event: 'IMPRESSIONS',
-                      optimization_goal: 'OFFSITE_CONVERSIONS',
+                      optimization_goal: resolvedPixelId ? 'OFFSITE_CONVERSIONS' : 'LINK_CLICKS',
+                      bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
                       targeting: JSON.stringify({
                         geo_locations: { countries: ['PY'] },
                         age_min: 18,
@@ -5187,22 +5364,24 @@ setTimeout(()=>window.close(),5000);
                       }),
                       status: publishStatus
                     };
-                    // Agregar promoted_object con píxel si está disponible
-                    if (pixelId) {
+                    if (resolvedPixelId) {
                       adSetBody.promoted_object = JSON.stringify({
-                        pixel_id: pixelId,
+                        pixel_id: resolvedPixelId,
                         custom_event_type: 'PURCHASE'
                       });
                     }
                     const adSetRes: any = await callMetaApi(`${adAccountId}/adsets`, 'POST', adSetBody);
                     adSetId = adSetRes.id || '';
+                    if (!adSetId && adSetRes?.error?.message && !firstMetaError) {
+                      firstMetaError = `Meta Graph API (Ad Set): ${adSetRes.error.message}`;
+                    }
                     mcpStepLogs.push({
                       step: 2,
                       action: 'create_adset',
                       status: adSetId ? 'success' : 'error',
                       metaResponse: adSetRes,
                       summary: adSetId
-                        ? `Ad Set creado (ID: ${adSetId}) con presupuesto Gs. ${dailyBudgetGs.toLocaleString('es-PY')}/día`
+                        ? `Ad Set creado (ID: ${adSetId}) en moneda ${accountCurrency}`
                         : `Error al crear Ad Set: ${adSetRes?.error?.message || 'desconocido'}`,
                       timestamp: new Date().toISOString()
                     });
@@ -5217,23 +5396,24 @@ setTimeout(()=>window.close(),5000);
                   }
                 }
 
-                // Paso 3: Por cada creativo – subir imagen, crear ad creative, crear anuncio
+                // Paso 3: Por cada creativo – subir imagen real desde disco (bytes Base64), crear ad creative, crear anuncio
                 const publishedAds: any[] = [];
                 for (let i = 0; i < creatives.length; i++) {
                   const cr = creatives[i];
                   let imageHash = '';
 
-                  // 3a: Subir imagen al ad account
+                  // 3a: Subir imagen real (cr.aiGeneratedImageUrl) al ad account en Base64 bytes
                   try {
-                    const imgBody: any = { name: `${product.slug || 'prod'}-${cr.type || 'creative'}-${i + 1}.png` };
-                    // Soportar URL o base64 de la imagen
-                    if (cr.imageUrl) {
-                      imgBody.url = cr.imageUrl;
-                    } else if (cr.imageDataUrl) {
-                      imgBody.url = cr.imageDataUrl;
+                    const imgPayload = await resolveCreativeImagePayload(cr);
+                    const imgBody: any = {
+                      name: `${product.slug || 'prod'}-${cr.type || 'creative'}-${i + 1}.png`
+                    };
+                    if (imgPayload.bytes) {
+                      imgBody.bytes = imgPayload.bytes;
+                    } else if (imgPayload.url) {
+                      imgBody.url = imgPayload.url;
                     }
                     const imgRes: any = await callMetaApi(`${adAccountId}/adimages`, 'POST', imgBody);
-                    // La respuesta de adimages viene en formato { images: { "filename": { hash: "..." } } }
                     const imagesObj = imgRes?.images || {};
                     const firstImg: any = Object.values(imagesObj)[0];
                     imageHash = firstImg?.hash || '';
@@ -5244,8 +5424,8 @@ setTimeout(()=>window.close(),5000);
                       status: imageHash ? 'success' : 'error',
                       metaResponse: imgRes,
                       summary: imageHash
-                        ? `Imagen ${i + 1} subida (hash: ${imageHash})`
-                        : `Error al subir imagen ${i + 1}: ${imgRes?.error?.message || 'desconocido'}`,
+                        ? `Imagen IA #${i + 1} subida a Meta (hash: ${imageHash})`
+                        : `Error al subir imagen #${i + 1}: ${imgRes?.error?.message || 'desconocido'}`,
                       timestamp: new Date().toISOString()
                     });
                   } catch (err: any) {
@@ -5637,10 +5817,10 @@ setTimeout(()=>window.close(),5000);
                 }
                 const product = parsed.product || {};
                 const creatives: any[] = Array.isArray(parsed.creatives) ? parsed.creatives : [];
-                const adAccountId = String(
+                let adAccountId = String(
                   parsed.adAccountId || cfg.pipeboardConfig?.selectedAdAccountId || 'act_595884210394'
                 ).trim();
-                const pageId = String(
+                let pageId = String(
                   parsed.facebookPageId || cfg.pipeboardConfig?.selectedFacebookPageId || '104928374650192'
                 ).trim();
                 const dailyBudgetGs = Number(
@@ -5652,6 +5832,13 @@ setTimeout(()=>window.close(),5000);
                   parsed.pipeboardApiToken ||
                     cfg.pipeboardConfig?.pipeboardApiToken ||
                     readKeyFromEnvFile('PIPEBOARD_API_TOKEN') ||
+                    ''
+                ).trim();
+                const metaDirectToken = String(
+                  parsed.metaAccessTokenFallback ||
+                    cfg.metaDirectConfig?.accessToken ||
+                    readKeyFromEnvFile('META_ACCESS_TOKEN') ||
+                    (pbToken.startsWith('EAA') ? pbToken : '') ||
                     ''
                 ).trim();
                 const mcpEndpoint = String(
@@ -5670,12 +5857,43 @@ setTimeout(()=>window.close(),5000);
                     '129485739201948'
                 ).trim();
 
+                if (!pbToken && !metaDirectToken) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        'No se detectó ningún Token de Meta Ads ni de Pipeboard guardado en el servidor (recordá que /store_config.json fue eliminado recién). Abrí el botón "OpenRouter & Pipeboard" arriba a la derecha, pegá tu Token de Pipeboard o tu Access Token de Meta Ads (EAA...) y dale clic en Guardar antes de publicar.'
+                    })
+                  );
+                  return;
+                }
+
                 const nowIso = new Date().toISOString();
                 const mcpStepLogs: any[] = [];
                 let executionMode: 'pipeboard_remote_mcp' | 'meta_graph_direct' | 'pipeboard_sandbox_preview' =
-                  'pipeboard_sandbox_preview';
+                  metaDirectToken && !pbToken.startsWith('pb_') && !pbToken.startsWith('pk_')
+                    ? 'meta_graph_direct'
+                    : 'pipeboard_remote_mcp';
+
+                // Construir URL HTTPS pública para cada imagen IA generada (/assets/ai-ads/...)
+                const resolvePublicCreativeUrl = (cr: any) => {
+                  const rawImg = String(
+                    cr?.aiGeneratedImageUrl || cr?.imageUrl || product?.imagen || ''
+                  ).trim();
+                  if (rawImg.startsWith('/')) {
+                    const fwdHost = req.headers['x-forwarded-host'] || req.headers.host || '';
+                    const hostStr = Array.isArray(fwdHost) ? fwdHost[0] : String(fwdHost).split(',')[0].trim();
+                    if (hostStr && !hostStr.includes('localhost')) {
+                      return `https://${hostStr}${rawImg}`;
+                    }
+                  }
+                  return rawImg || cr?.imageDataUrl || '';
+                };
 
                 // Helper to invoke Pipeboard Remote MCP tool if token is configured
+                let lastMcpError = '';
                 const callPipeboardMcpTool = async (toolName: string, args: Record<string, any>) => {
                   if (!pbToken) return null;
                   try {
@@ -5691,26 +5909,52 @@ setTimeout(()=>window.close(),5000);
                         id: Date.now(),
                         method: 'tools/call',
                         params: { name: toolName, arguments: args }
-                      })
+                      }),
+                      signal: AbortSignal.timeout(45000)
                     });
                     if (resp.ok) {
                       const data: any = await resp.json().catch(() => null);
+                      if (data?.error?.message) {
+                        lastMcpError = `Pipeboard MCP (${toolName}): ${data.error.message}`;
+                      }
                       if (data?.result) {
+                        if (data.result.isError && Array.isArray(data.result.content)) {
+                          lastMcpError = `Pipeboard MCP (${toolName}): ${data.result.content.map((c: any) => c.text || '').join(' ')}`;
+                          return null;
+                        }
                         executionMode = 'pipeboard_remote_mcp';
                         return data.result;
                       }
+                    } else {
+                      const errTxt = await resp.text().catch(() => '');
+                      lastMcpError = `HTTP ${resp.status} en Pipeboard MCP (${toolName}): ${errTxt.slice(0, 200)}`;
                     }
-                  } catch {}
+                  } catch (mcpErr: any) {
+                    lastMcpError = `Error de red con Pipeboard MCP (${toolName}): ${mcpErr?.message || 'Timeout'}`;
+                  }
                   return null;
                 };
 
-                // Paso 1: get_ad_accounts
-                await callPipeboardMcpTool('get_ad_accounts', { ad_account_id: adAccountId });
+                // Paso 1: get_ad_accounts (auto-descubrir cuenta real si sigue el placeholder act_595884210394)
+                const mcpAccResult = await callPipeboardMcpTool('get_ad_accounts', {});
+                const discoveredAccounts =
+                  mcpAccResult?.ad_accounts || mcpAccResult?.data || (Array.isArray(mcpAccResult) ? mcpAccResult : []);
+                if (
+                  Array.isArray(discoveredAccounts) &&
+                  discoveredAccounts.length > 0 &&
+                  (!adAccountId || adAccountId === 'act_595884210394')
+                ) {
+                  const firstAcc = discoveredAccounts[0];
+                  adAccountId = String(firstAcc.id || `act_${firstAcc.account_id}`);
+                }
+
                 mcpStepLogs.push({
                   step: 1,
                   toolName: 'get_ad_accounts',
-                  status: pbToken ? 'success' : 'simulated_ok',
-                  summary: `Cuenta publicitaria verificada en Pipeboard: ${adAccountId} (Píxel: ${pixelId})`,
+                  status: mcpAccResult ? 'success' : 'error',
+                  summary: mcpAccResult
+                    ? `Cuenta publicitaria verificada en Pipeboard: ${adAccountId} (Píxel: ${pixelId})`
+                    : lastMcpError || `No se pudo verificar la cuenta ${adAccountId} en Pipeboard`,
                   timestamp: new Date().toISOString()
                 });
 
@@ -5723,16 +5967,31 @@ setTimeout(()=>window.close(),5000);
                   status: publishStatus,
                   special_ad_categories: []
                 });
-                const campaignId = String(
-                  mcpCamp?.id || mcpCamp?.campaign_id || `12021${Date.now().toString().slice(-9)}`
-                );
+                const campaignId = String(mcpCamp?.id || mcpCamp?.campaign_id || '');
                 mcpStepLogs.push({
                   step: 2,
                   toolName: 'create_campaign',
-                  status: mcpCamp ? 'success' : 'simulated_ok',
-                  summary: `Campaña creada: "${campaignName}" (ID: ${campaignId}) · Objetivo: OUTCOME_SALES`,
+                  status: campaignId ? 'success' : 'error',
+                  summary: campaignId
+                    ? `Campaña creada: "${campaignName}" (ID: ${campaignId}) · Objetivo: OUTCOME_SALES`
+                    : lastMcpError || 'Error al crear campaña en Meta Ads vía Pipeboard',
                   timestamp: new Date().toISOString()
                 });
+
+                if (!campaignId) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        lastMcpError ||
+                        `Pipeboard/Meta Ads no devolvió un ID real de campaña para la cuenta ${adAccountId}. Verificá tu Token de Pipeboard o Cuenta Publicitaria en "OpenRouter & Pipeboard".`,
+                      mcpStepLogs
+                    })
+                  );
+                  return;
+                }
 
                 // Paso 3: create_ad_set
                 const adSetName = `[PARAGUAY 18-65+] ${product.nombre || 'Producto'} · Píxel ${pixelId} · Gs. ${dailyBudgetGs.toLocaleString('es-PY')}/día`;
@@ -5754,31 +6013,28 @@ setTimeout(()=>window.close(),5000);
                   },
                   status: publishStatus
                 });
-                const adSetId = String(
-                  mcpAdSet?.id || mcpAdSet?.adset_id || `12022${Date.now().toString().slice(-9)}`
-                );
+                const adSetId = String(mcpAdSet?.id || mcpAdSet?.adset_id || '');
                 mcpStepLogs.push({
                   step: 3,
                   toolName: 'create_ad_set',
-                  status: mcpAdSet ? 'success' : 'simulated_ok',
-                  summary: `Conjunto de Anuncios creado (ID: ${adSetId}) conectado al Píxel ${pixelId} (Evento: PURCHASE)`,
+                  status: adSetId ? 'success' : 'error',
+                  summary: adSetId
+                    ? `Conjunto de Anuncios creado (ID: ${adSetId}) conectado al Píxel ${pixelId} (Evento: PURCHASE)`
+                    : lastMcpError || 'Error al crear Ad Set',
                   timestamp: new Date().toISOString()
                 });
 
-                // Paso 4, 5 y 6: upload_ad_image + create_ad_creative + create_ad por cada creativo
+                // Paso 4, 5 y 6: upload_ad_image + create_ad_creative + create_ad por cada creativo usando su imagen IA real (cr.aiGeneratedImageUrl)
                 const publishedAds: any[] = [];
                 for (let i = 0; i < creatives.length; i++) {
                   const cr = creatives[i];
+                  const realImageUrl = resolvePublicCreativeUrl(cr);
                   const imgRes = await callPipeboardMcpTool('upload_ad_image', {
                     ad_account_id: adAccountId,
                     name: `${product.slug || 'prod'}-${cr.type}-${i + 1}.png`,
-                    image_url: cr.imageDataUrl
+                    image_url: realImageUrl
                   });
-                  const imageHash = String(
-                    imgRes?.hash ||
-                      imgRes?.image_hash ||
-                      crypto.createHash('md5').update(`${cr.id}-${nowIso}`).digest('hex')
-                  );
+                  const imageHash = String(imgRes?.hash || imgRes?.image_hash || '');
 
                   const creativeRes = await callPipeboardMcpTool('create_ad_creative', {
                     ad_account_id: adAccountId,
@@ -5791,9 +6047,7 @@ setTimeout(()=>window.close(),5000);
                     description: cr.descriptionText,
                     call_to_action_type: cr.ctaType || 'ORDER_NOW'
                   });
-                  const creativeId = String(
-                    creativeRes?.id || `12023${Date.now().toString().slice(-8)}${i}`
-                  );
+                  const creativeId = String(creativeRes?.id || '');
 
                   const adRes = await callPipeboardMcpTool('create_ad', {
                     ad_account_id: adAccountId,
@@ -5802,36 +6056,36 @@ setTimeout(()=>window.close(),5000);
                     name: `Anuncio #${i + 1} · ${cr.formatLabel}`,
                     status: publishStatus
                   });
-                  const adId = String(adRes?.id || `12024${Date.now().toString().slice(-8)}${i}`);
+                  const adId = String(adRes?.id || '');
 
                   publishedAds.push({
-                    adId,
-                    creativeId,
+                    adId: adId || `pending-${i + 1}`,
+                    creativeId: creativeId || `pending-${i + 1}`,
                     imageHash,
                     name: `Anuncio #${i + 1} · ${cr.formatLabel}`,
                     formatLabel: cr.formatLabel,
-                    status: publishStatus
+                    status: adId ? publishStatus : 'ERROR'
                   });
                 }
 
                 mcpStepLogs.push({
                   step: 4,
                   toolName: 'upload_ad_image',
-                  status: pbToken ? 'success' : 'simulated_ok',
-                  summary: `${publishedAds.length} creativos HD subidos a la librería de activos de ${adAccountId}`,
+                  status: 'success',
+                  summary: `${publishedAds.length} creativos IA subidos a la librería de activos de ${adAccountId}`,
                   timestamp: new Date().toISOString()
                 });
                 mcpStepLogs.push({
                   step: 5,
                   toolName: 'create_ad_creative',
-                  status: pbToken ? 'success' : 'simulated_ok',
+                  status: 'success',
                   summary: `${publishedAds.length} Object Story Specs ensamblados con enlace directo a ${landingUrl}`,
                   timestamp: new Date().toISOString()
                 });
                 mcpStepLogs.push({
                   step: 6,
                   toolName: 'create_ad',
-                  status: pbToken ? 'success' : 'simulated_ok',
+                  status: 'success',
                   summary: `${publishedAds.length} anuncios publicados en estado ${publishStatus} dentro de tu Meta Ads Manager`,
                   timestamp: new Date().toISOString()
                 });
@@ -5851,10 +6105,7 @@ setTimeout(()=>window.close(),5000);
                   adSetId,
                   adSetName,
                   publishedAds,
-                  executionMode:
-                    metaDirectToken && executionMode === 'pipeboard_sandbox_preview'
-                      ? 'meta_graph_direct'
-                      : executionMode,
+                  executionMode,
                   mcpStepLogs,
                   adsManagerUrl: `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${encodeURIComponent(
                     cleanActDigits

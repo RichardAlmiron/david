@@ -106,9 +106,22 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     sourceEndpoint?: string;
   } | null>(null);
 
-  // Estado de conexión en servidor
+  // Estado de conexión en servidor con Meta Ads / Facebook OAuth
   const [metaConnected, setMetaConnected] = useState<boolean>(false);
-  const [metaPages, setMetaPages] = useState<Array<{ id: string; name: string; category: string; access_token?: string }>>([]);
+  const [metaUser, setMetaUser] = useState<{ id: string; name: string } | null>(null);
+  const [metaAdAccounts, setMetaAdAccounts] = useState<
+    Array<{ id: string; account_id?: string; name: string; currency?: string }>
+  >([]);
+  const [metaPages, setMetaPages] = useState<
+    Array<{ id: string; name: string; category: string; access_token?: string }>
+  >([]);
+  const [hasMetaAppCredentials, setHasMetaAppCredentials] = useState<boolean>(false);
+  const [metaAppIdPreview, setMetaAppIdPreview] = useState<string>('');
+  const [showFacebookOAuthModal, setShowFacebookOAuthModal] = useState<boolean>(false);
+  const [metaAppIdInput, setMetaAppIdInput] = useState<string>('');
+  const [metaAppSecretInput, setMetaAppSecretInput] = useState<string>('');
+  const [directMetaTokenInput, setDirectMetaTokenInput] = useState<string>('');
+  const [connectingFacebookOAuth, setConnectingFacebookOAuth] = useState<boolean>(false);
 
   // Modo de origen del producto: 'catalog' (página creada) o 'external_url' (pegar URL)
   const [sourceMode, setSourceMode] = useState<'catalog' | 'external_url'>('catalog');
@@ -254,6 +267,80 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
   };
 
+  // Consultar estado vivo de Meta Ads / Facebook OAuth en el servidor
+  const refreshMetaConnectionStatus = async () => {
+    try {
+      const r = await fetch('/api/meta/status');
+      const data = await r.json();
+      if (data?.connected) {
+        setMetaConnected(true);
+        if (data.user) {
+          setMetaUser({ id: String(data.user.id || ''), name: String(data.user.name || 'Usuario Meta') });
+        }
+        if (Array.isArray(data.adAccounts) && data.adAccounts.length > 0) {
+          setMetaAdAccounts(data.adAccounts);
+          setPbConfig(prev => ({
+            ...prev,
+            selectedAdAccountId:
+              prev.selectedAdAccountId &&
+              prev.selectedAdAccountId !== 'act_595884210394' &&
+              data.adAccounts.some((a: any) => a.id === prev.selectedAdAccountId)
+                ? prev.selectedAdAccountId
+                : data.adAccounts[0].id
+          }));
+        }
+        if (Array.isArray(data.pages) && data.pages.length > 0) {
+          setMetaPages(data.pages);
+          setPbConfig(prev => ({
+            ...prev,
+            selectedFacebookPageId:
+              prev.selectedFacebookPageId &&
+              prev.selectedFacebookPageId !== '104928374650192' &&
+              data.pages.some((p: any) => p.id === prev.selectedFacebookPageId)
+                ? prev.selectedFacebookPageId
+                : data.pages[0].id
+          }));
+        }
+      } else {
+        setMetaConnected(false);
+        setMetaUser(null);
+      }
+      if (data?.universalPixelId) {
+        setCapiAudit(prev => ({
+          ...prev,
+          pixelConfigured: true,
+          pixelId: String(data.universalPixelId)
+        }));
+      }
+      return Boolean(data?.connected);
+    } catch {
+      return false;
+    }
+  };
+
+  // Escuchar el mensaje postMessage de la ventana emergente de Facebook OAuth (META_AUTH_SUCCESS / META_AUTH_ERROR)
+  useEffect(() => {
+    const handleOAuthPopupMessage = (event: MessageEvent) => {
+      if (!event?.data || typeof event.data !== 'object') return;
+      if (event.data.type === 'META_AUTH_SUCCESS') {
+        setShowFacebookOAuthModal(false);
+        setConnectingFacebookOAuth(false);
+        refreshMetaConnectionStatus().then(() => {
+          showToast(
+            `✅ ¡Facebook / Meta Ads autorizado con éxito (${event.data.userName || 'Cuenta Conectada'})! Cuenta publicitaria y Píxel listos para publicar.`
+          );
+        });
+      } else if (event.data.type === 'META_AUTH_ERROR') {
+        setConnectingFacebookOAuth(false);
+        showToast(
+          `⚠️ La autorización en Facebook no se completó (${event.data.error || 'cancelado'}). Podés intentar de nuevo o pegar tu Token directo.`
+        );
+      }
+    };
+    window.addEventListener('message', handleOAuthPopupMessage);
+    return () => window.removeEventListener('message', handleOAuthPopupMessage);
+  }, []);
+
   // Cargar configuración de servidor y estado CAPI al montar
   useEffect(() => {
     fetch('/api/pipeboard/config')
@@ -272,6 +359,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
         setHasOpenRouterKeyInBackend(Boolean(data?.hasOpenRouterKey));
         setOpenRouterKeyPreview(String(data?.openRouterKeyPreview || ''));
+        setHasMetaAppCredentials(Boolean(data?.hasMetaAppCredentials));
+        setMetaAppIdPreview(String(data?.metaAppIdPreview || ''));
         if (Array.isArray(data?.publishedCampaigns)) {
           setPublishedCampaigns(data.publishedCampaigns);
         }
@@ -301,34 +390,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       })
       .catch(() => {});
 
-    fetch('/api/meta/status')
-      .then(r => r.json())
-      .then(data => {
-        if (data?.connected) {
-          setMetaConnected(true);
-          if (Array.isArray(data.adAccounts) && data.adAccounts[0]?.id) {
-            setPbConfig(prev => ({
-              ...prev,
-              selectedAdAccountId: data.adAccounts[0].id
-            }));
-          }
-          if (Array.isArray(data.pages) && data.pages[0]?.id) {
-            setMetaPages(data.pages);
-            setPbConfig(prev => ({
-              ...prev,
-              selectedFacebookPageId: data.pages[0].id
-            }));
-          }
-        }
-        if (data?.universalPixelId) {
-          setCapiAudit(prev => ({
-            ...prev,
-            pixelConfigured: true,
-            pixelId: String(data.universalPixelId)
-          }));
-        }
-      })
-      .catch(() => {});
+    refreshMetaConnectionStatus();
 
     // Restaurar automáticamente desde el Backend todo el trabajo previo (Investigación + Imágenes + Videos + Paso exacto)
     fetch('/api/autoads/workspace')
@@ -494,12 +556,15 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     activeProduct?.precioNormal
   ]);
 
-  // Guardar Slot Pipeboard + OpenRouter Key en Backend + Bóveda Persistente Local
+  // Guardar Slot Pipeboard + OpenRouter Key + Meta OAuth en Backend + Bóveda Persistente Local
   const handleSaveConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setSavingSettings(true);
     const tokenToSend = pipeboardTokenInput.trim();
     const orKeyToSend = openRouterKeyInput.trim();
+    const appIdToSend = metaAppIdInput.trim();
+    const appSecretToSend = metaAppSecretInput.trim();
+    const directMetaToSend = directMetaTokenInput.trim();
     if (orKeyToSend && orKeyToSend.startsWith('sk-or-')) {
       try {
         localStorage.setItem('autoads_openrouter_api_key_vault', orKeyToSend);
@@ -508,6 +573,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
     setPipeboardTokenInput('');
     setOpenRouterKeyInput('');
+    setMetaAppSecretInput('');
+    setDirectMetaTokenInput('');
     setPbConfig(prev => ({
       ...prev,
       pipeboardApiToken: '',
@@ -522,6 +589,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           ...pbConfig,
           pipeboardApiToken: tokenToSend,
           openRouterApiKey: orKeyToSend || getVaultOpenRouterKey(),
+          metaAppId: appIdToSend || undefined,
+          metaAppSecret: appSecretToSend || undefined,
+          metaAccessToken: directMetaToSend || undefined,
           selectedImageModel,
           selectedVideoModel,
           metaAccessTokenFallback: ''
@@ -533,7 +603,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
         setHasOpenRouterKeyInBackend(Boolean(data?.hasOpenRouterKey));
         setOpenRouterKeyPreview(String(data?.openRouterKeyPreview || ''));
-        if (tokenToSend || orKeyToSend) {
+        setHasMetaAppCredentials(Boolean(data?.hasMetaAppCredentials));
+        setMetaAppIdPreview(String(data?.metaAppIdPreview || ''));
+        if (directMetaToSend || tokenToSend.startsWith('EAA')) {
+          await refreshMetaConnectionStatus();
+        }
+        if (tokenToSend || orKeyToSend || directMetaToSend || appIdToSend) {
           setLastTokenSelfDestructAt(new Date().toLocaleTimeString('es-PY'));
           showToast('🔒 Credenciales guardadas en el Backend y protegidas contra reinicios.');
         } else {
@@ -544,6 +619,84 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       showToast('Error al conectar con el servidor.');
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  // Abrir ventana emergente (Popup) de Facebook Login OAuth en 1 Clic (window.open directo al proveedor)
+  const handleConnectFacebookOAuth = async (forceOpenModal?: boolean) => {
+    if (forceOpenModal) {
+      setShowFacebookOAuthModal(true);
+      return;
+    }
+    setConnectingFacebookOAuth(true);
+    try {
+      const query = new URLSearchParams();
+      if (metaAppIdInput.trim()) query.set('app_id', metaAppIdInput.trim());
+      if (metaAppSecretInput.trim()) query.set('app_secret', metaAppSecretInput.trim());
+      const url = `/api/meta/auth-url${query.toString() ? `?${query.toString()}` : ''}`;
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data?.success && data?.authUrl) {
+        setHasMetaAppCredentials(true);
+        const popup = window.open(
+          data.authUrl,
+          'meta_oauth_popup',
+          'width=640,height=740,menubar=no,toolbar=no,location=yes,status=no'
+        );
+        if (!popup) {
+          showToast('⚠️ Habilitá las ventanas emergentes (popups) en tu navegador para autorizar en Facebook.');
+        } else {
+          showToast('🔵 Ventana de Facebook abierta: Dale clic en "Continuar" para autorizar tu cuenta de Meta Ads.');
+        }
+      } else {
+        // Si aún no tiene App ID / Secret guardados, abrir el modal de Login OAuth de Facebook en 1 clic
+        setShowFacebookOAuthModal(true);
+      }
+    } catch {
+      setShowFacebookOAuthModal(true);
+    } finally {
+      setConnectingFacebookOAuth(false);
+    }
+  };
+
+  // Conectar mediante Token directo de Meta Ads (EAA...) o Token de Pipeboard desde el modal de Facebook Login
+  const handleQuickConnectTokenInModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const rawToken = directMetaTokenInput.trim();
+    if (!rawToken) return;
+    setConnectingFacebookOAuth(true);
+    try {
+      const isMetaToken = rawToken.startsWith('EAA');
+      const res = await fetch('/api/pipeboard/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...pbConfig,
+          pipeboardApiToken: isMetaToken ? '' : rawToken,
+          metaAccessToken: isMetaToken ? rawToken : rawToken,
+          openRouterApiKey: getVaultOpenRouterKey(),
+          selectedImageModel,
+          selectedVideoModel
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHasPipeboardTokenInBackend(Boolean(data?.hasPipeboardToken));
+        setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
+        setDirectMetaTokenInput('');
+        const isConn = await refreshMetaConnectionStatus();
+        setShowFacebookOAuthModal(false);
+        if (isConn) {
+          showToast('✅ ¡Cuenta de Meta Ads conectada y sincronizada! Ya podés publicar todos tus anuncios.');
+        } else {
+          showToast('✅ Token guardado en el Backend. Listo para publicar en Meta Ads.');
+        }
+      }
+    } catch {
+      showToast('Error al guardar el token en el servidor.');
+    } finally {
+      setConnectingFacebookOAuth(false);
     }
   };
 
@@ -1398,6 +1551,14 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // ─────────────────────────────────────────────────────────────────────────────
   const handleStep3PublishNow = async () => {
     if (!activeProduct || creatives.length === 0 || workflowStep === 'publishing') return;
+
+    // Si todavía no inició sesión con su cuenta de Facebook / Meta Ads ni cargó token Pipeboard, abrir el Login OAuth de Facebook en 1 clic
+    if (!metaConnected && !hasPipeboardTokenInBackend) {
+      setShowFacebookOAuthModal(true);
+      showToast('🔵 Primero iniciá sesión en tu cuenta de Facebook / Meta Ads para autorizar la publicación.');
+      return;
+    }
+
     setWorkflowStep('publishing');
 
     try {
@@ -1406,10 +1567,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           ? externalUrlInput.trim()
           : `${window.location.origin}/?p=${activeProduct.slug}`;
 
-      const publishEndpoint =
-        metaConnected && !hasPipeboardTokenInBackend
-          ? '/api/meta/publish-direct'
-          : '/api/pipeboard/publish-campaign';
+      // Si está conectado vía Facebook OAuth / Meta Graph Directo, publicar directo en Meta Graph API v21.0 subiendo los archivos PNG reales
+      const publishEndpoint = metaConnected
+        ? '/api/meta/publish-direct'
+        : '/api/pipeboard/publish-campaign';
 
       const selectedPage = metaPages.find(p => p.id === pbConfig.selectedFacebookPageId);
 
@@ -1431,22 +1592,34 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         })
       });
 
-      if (pubRes.ok) {
-        const pubData = await pubRes.json();
-        if (pubData?.campaign) {
-          setPublishedCampaigns(prev => [pubData.campaign, ...prev]);
-        }
+      const pubData = await pubRes.json().catch(() => ({}));
+
+      if (pubRes.ok && pubData?.success !== false && pubData?.campaign) {
+        setPublishedCampaigns(prev => [pubData.campaign, ...prev]);
         setWorkflowStep('published');
         showToast(
-          `🚀 ¡Campaña publicada con éxito en Meta Ads con tus ${creatives.length} anuncios aprobados!`
+          `🚀 ¡Campaña publicada en vivo en Meta Ads (${pubData.campaign.campaignId}) con tus ${creatives.length} anuncios!`
         );
       } else {
         setWorkflowStep('generated');
-        showToast('Error al publicar en Meta Ads. Verificá la conexión de tu cuenta en el servidor.');
+        setShowSettingsDrawer(true);
+        setApiErrorModal({
+          isOpen: true,
+          title: '⚠️ Auditoría de Publicación en Meta Ads — Acción Requerida',
+          errorMessage:
+            pubData?.error ||
+            `Error ${pubRes.status}: No se pudo completar la publicación en Meta Ads. Verificá tu conexión de Facebook OAuth / Meta Ads y tu Cuenta Publicitaria.`,
+          sourceEndpoint: publishEndpoint
+        });
       }
-    } catch {
+    } catch (err: any) {
       setWorkflowStep('generated');
-      showToast('Error de red al conectar con el servidor de publicación.');
+      setApiErrorModal({
+        isOpen: true,
+        title: '⚠️ Error de Red al Publicar en Meta Ads',
+        errorMessage: err?.message || 'Error de red al conectar con el servidor de publicación.',
+        sourceEndpoint: '/api/meta/publish-direct'
+      });
     }
   };
 
@@ -1484,8 +1657,34 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           </div>
         </div>
 
-        {/* Botones compactos en la cabecera (Cero tarjetas gigantes ocupando espacio) */}
+        {/* Botones compactos en la cabecera (incluyendo Login OAuth 1-Clic con Facebook / Meta Ads) */}
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            data-testid="facebook-oauth-header-btn"
+            onClick={() => handleConnectFacebookOAuth(metaConnected ? true : false)}
+            disabled={connectingFacebookOAuth}
+            title="Iniciar sesión con Facebook (OAuth 1-Clic) para autorizar tu cuenta de Meta Ads y publicar directo"
+            className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+              metaConnected
+                ? 'border-emerald-500/80 bg-emerald-950/80 hover:bg-emerald-900/70 text-emerald-300'
+                : 'border-[#1877F2] bg-[#1877F2] hover:bg-[#166fe5] text-white shadow-md shadow-blue-950/60'
+            }`}
+          >
+            {connectingFacebookOAuth ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] font-black text-[11px] inline-flex items-center justify-center leading-none">
+                f
+              </span>
+            )}
+            <span>
+              {metaConnected
+                ? `✅ Meta Ads Conectado (${metaUser?.name || pbConfig.selectedAdAccountId})`
+                : 'Conectar Meta Ads (Facebook OAuth)'}
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={handleVerifyCapiTunnel}
@@ -1517,7 +1716,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Settings2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>OpenRouter &amp; Pipeboard</span>
+            <span>OpenRouter &amp; Meta Ads</span>
           </button>
 
           <a
@@ -1607,7 +1806,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               </div>
               <div>
                 <label className="block text-zinc-400 mb-1 font-medium">
-                  API de Pipeboard (Opcional · Se autodestruye)
+                  Token Meta Ads (EAA...) o Pipeboard
                 </label>
                 <input
                   type="password"
@@ -1618,22 +1817,40 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   value={pipeboardTokenInput}
                   onChange={e => setPipeboardTokenInput(e.target.value)}
                   placeholder={
-                    hasPipeboardTokenInBackend
+                    metaConnected
+                      ? 'Conectado vía Facebook OAuth / Token...'
+                      : hasPipeboardTokenInBackend
                       ? 'Blindada en Backend (pegá otra para reemplazar)...'
-                      : 'pipeboard_... (viaja al backend y se borra de acá)'
+                      : 'EAA... o pipeboard_... (se guarda en backend)'
                   }
                   className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
                 />
               </div>
               <div>
-                <label className="block text-zinc-400 mb-1 font-medium">Cuenta Publicitaria (Opcional)</label>
-                <input
-                  type="text"
-                  value={pbConfig.selectedAdAccountId === 'act_595884210394' ? '' : pbConfig.selectedAdAccountId}
-                  onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
-                  placeholder="Automático desde tu cuenta"
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
-                />
+                <label className="block text-zinc-400 mb-1 font-medium">
+                  Cuenta Publicitaria Meta Ads
+                </label>
+                {metaAdAccounts.length > 0 ? (
+                  <select
+                    value={pbConfig.selectedAdAccountId}
+                    onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-emerald-700/70 bg-zinc-900 text-zinc-100 font-mono text-xs outline-none focus:border-emerald-500"
+                  >
+                    {metaAdAccounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.id}) {acc.currency ? `· ${acc.currency}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={pbConfig.selectedAdAccountId === 'act_595884210394' ? '' : pbConfig.selectedAdAccountId}
+                    onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
+                    placeholder="Automático al conectar Facebook OAuth"
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-zinc-400 mb-1 font-medium">Presupuesto Diario (Gs.)</label>
@@ -1645,6 +1862,49 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
                 />
               </div>
+            </div>
+
+            {/* Selector de Página de Facebook cuando está conectado + Botón OAuth 1-Clic */}
+            <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-zinc-200">
+                  {metaConnected
+                    ? `🟢 Sesión Iniciada en Facebook: ${metaUser?.name || 'Cuenta Autorizada'}`
+                    : '🔵 Autenticación OAuth de Meta Ads:'}
+                </span>
+                {metaPages.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-zinc-400">Página FB:</span>
+                    <select
+                      value={pbConfig.selectedFacebookPageId}
+                      onChange={e =>
+                        setPbConfig(prev => ({ ...prev, selectedFacebookPageId: e.target.value }))
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-100 font-mono text-[11px]"
+                    >
+                      {metaPages.map(pg => (
+                        <option key={pg.id} value={pg.id}>
+                          {pg.name} ({pg.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleConnectFacebookOAuth(true)}
+                className="px-3 py-1.5 rounded-lg bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] font-black text-[11px] inline-flex items-center justify-center leading-none">
+                  f
+                </span>
+                <span>
+                  {metaConnected
+                    ? 'Cambiar / Reconectar Cuenta de Facebook OAuth'
+                    : 'Iniciar Sesión con Facebook (OAuth 1-Clic)'}
+                </span>
+              </button>
             </div>
 
             {lastTokenSelfDestructAt && (
@@ -2431,6 +2691,196 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               <button
                 onClick={() => setApiErrorModal(null)}
                 className="w-full sm:w-auto px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-xl text-xs transition-all"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL DE LOGIN OAUTH 1-CLIC CON FACEBOOK / META ADS                   */}
+      {/* ===================================================================== */}
+      {showFacebookOAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-xl bg-[#0d0d0f] border border-blue-500/40 rounded-2xl shadow-2xl p-6 text-white space-y-4 relative overflow-y-auto max-h-[92vh]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#1877F2] text-white font-black text-xl flex items-center justify-center shrink-0 shadow-lg shadow-blue-950/60">
+                  f
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white leading-tight">
+                    Iniciar Sesión en Meta Ads con Facebook (OAuth 1-Clic)
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Autorizá tu cuenta de Facebook para que el sistema detecte tu Cuenta Publicitaria, tu Página y tu Píxel y publique los 6 anuncios.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFacebookOAuthModal(false)}
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {metaConnected && (
+              <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-700/80 space-y-2 text-xs">
+                <div className="font-bold text-emerald-300 flex items-center justify-between">
+                  <span>✅ Cuenta de Facebook / Meta Ads Conectada</span>
+                  <span className="font-mono text-[11px]">{metaUser?.name || 'Autorizada'}</span>
+                </div>
+                {metaAdAccounts.length > 0 && (
+                  <div>
+                    <label className="block text-zinc-300 mb-1 font-medium">
+                      Seleccioná tu Cuenta Publicitaria activa:
+                    </label>
+                    <select
+                      value={pbConfig.selectedAdAccountId}
+                      onChange={e =>
+                        setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))
+                      }
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-emerald-700 text-zinc-100 font-mono text-xs"
+                    >
+                      {metaAdAccounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} ({acc.id}) {acc.currency ? `· Moneda: ${acc.currency}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {metaPages.length > 0 && (
+                  <div>
+                    <label className="block text-zinc-300 mb-1 font-medium">
+                      Seleccioná tu Página de Facebook para los anuncios:
+                    </label>
+                    <select
+                      value={pbConfig.selectedFacebookPageId}
+                      onChange={e =>
+                        setPbConfig(prev => ({ ...prev, selectedFacebookPageId: e.target.value }))
+                      }
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-emerald-700 text-zinc-100 font-mono text-xs"
+                    >
+                      {metaPages.map(pg => (
+                        <option key={pg.id} value={pg.id}>
+                          {pg.name} ({pg.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* OPCIÓN 1: OAUTH OFICIAL DE FACEBOOK (VENTANA EMERGENTE 1-CLIC) */}
+            <div className="p-4 rounded-xl bg-zinc-900/90 border border-blue-500/30 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-blue-300 uppercase tracking-wider">
+                  Opción A · Ventana Emergente Oficial de Facebook Login (OAuth 2.0)
+                </span>
+                {hasMetaAppCredentials && (
+                  <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
+                    App ID configurada ({metaAppIdPreview})
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                <div>
+                  <label className="block text-zinc-400 mb-1">Meta App ID (developers.facebook.com)</label>
+                  <input
+                    type="text"
+                    value={metaAppIdInput}
+                    onChange={e => setMetaAppIdInput(e.target.value)}
+                    placeholder={hasMetaAppCredentials ? `Guardado (${metaAppIdPreview})` : 'Ej: 123456789012345'}
+                    className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono text-xs outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-400 mb-1">Meta App Secret</label>
+                  <input
+                    type="password"
+                    value={metaAppSecretInput}
+                    onChange={e => setMetaAppSecretInput(e.target.value)}
+                    placeholder={hasMetaAppCredentials ? '••••••••••••••••' : 'Clave secreta de tu App Meta'}
+                    className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono text-xs outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
+                <div className="font-semibold text-zinc-300">
+                  URI de Redirección OAuth válida (Callback URL para Facebook Login):
+                </div>
+                <div className="font-mono text-emerald-400 select-all break-all">
+                  {window.location.origin}/api/meta/callback
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleConnectFacebookOAuth(false)}
+                disabled={connectingFacebookOAuth}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-950/60 cursor-pointer transition-all"
+              >
+                {connectingFacebookOAuth ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] font-black text-xs inline-flex items-center justify-center">
+                    f
+                  </span>
+                )}
+                <span>Abrir Página de Facebook y Autorizar Mi Cuenta (OAuth Popup)</span>
+              </button>
+            </div>
+
+            {/* OPCIÓN 2: LOGIN RÁPIDO SIN CREAR APP EN META DEVELOPERS (TOKEN DIRECTO EAA... O PIPEBOARD OAUTH) */}
+            <form onSubmit={handleQuickConnectTokenInModal} className="p-4 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
+                  Opción B · Conexión Instantánea (Token Meta EAA... o Pipeboard Facebook Login)
+                </span>
+                <a
+                  href="https://pipeboard.co"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] font-bold text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 underline"
+                >
+                  <span>Abrir Facebook Login en Pipeboard.co</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Si no querés configurar un App ID en Meta Developers, pegá aquí tu <strong>Access Token de Meta Ads (EAA...)</strong> o tu <strong>Token de Pipeboard</strong>. El sistema descubrirá automáticamente tu Cuenta Publicitaria (act_...), tu Página y tu Píxel.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="password"
+                  value={directMetaTokenInput}
+                  onChange={e => setDirectMetaTokenInput(e.target.value)}
+                  placeholder="Pegá tu Token EAA... de Meta Ads o tu Token de Pipeboard..."
+                  className="flex-1 px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-zinc-100 font-mono text-xs outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!directMetaTokenInput.trim() || connectingFacebookOAuth}
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  Conectar y Sincronizar Cuenta
+                </button>
+              </div>
+            </form>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowFacebookOAuthModal(false)}
+                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer"
               >
                 Cerrar
               </button>
