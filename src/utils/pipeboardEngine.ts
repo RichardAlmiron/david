@@ -101,8 +101,8 @@ export const DEFAULT_PIPEBOARD_CONFIG: PipeboardConnectionConfig = {
   metaAccessTokenFallback: '',
   openRouterApiKey: '',
   openRouterModel: 'openai/gpt-4o',
-  selectedAdAccountId: 'act_595884210394',
-  selectedFacebookPageId: '104928374650192',
+  selectedAdAccountId: 'act_1048211497774834',
+  selectedFacebookPageId: '1050835598123904',
   dailyBudgetGs: 65000,
   defaultPublishStatus: 'ACTIVE'
 };

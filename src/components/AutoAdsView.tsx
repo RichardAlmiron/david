@@ -115,6 +115,17 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [metaPages, setMetaPages] = useState<
     Array<{ id: string; name: string; category: string; access_token?: string }>
   >([]);
+  const [metaPixels, setMetaPixels] = useState<
+    Array<{ id: string; name: string; adAccountId: string; adAccountName?: string }>
+  >([]);
+  const [activeMetaPixel, setActiveMetaPixel] = useState<{
+    id: string;
+    name: string;
+  }>({
+    id: '1276031534651377',
+    name: 'Auto Ads 360'
+  });
+  const [copiedRefKey, setCopiedRefKey] = useState<string | null>(null);
   const [hasMetaAppCredentials, setHasMetaAppCredentials] = useState<boolean>(false);
   const [metaAppIdPreview, setMetaAppIdPreview] = useState<string>('');
   const [showFacebookOAuthModal, setShowFacebookOAuthModal] = useState<boolean>(false);
@@ -122,6 +133,17 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [metaAppSecretInput, setMetaAppSecretInput] = useState<string>('');
   const [directMetaTokenInput, setDirectMetaTokenInput] = useState<string>('');
   const [connectingFacebookOAuth, setConnectingFacebookOAuth] = useState<boolean>(false);
+
+  const handleCopyMetaRef = (key: string, label: string, textToCopy: string) => {
+    try {
+      navigator.clipboard.writeText(textToCopy);
+    } catch {}
+    setCopiedRefKey(key);
+    setTimeout(() => {
+      setCopiedRefKey(prev => (prev === key ? null : prev));
+    }, 2000);
+    showToast(`📋 Copiado al portapapeles — ${label}: ${textToCopy}`);
+  };
 
   // Modo de origen del producto: 'catalog' (página creada) o 'external_url' (pegar URL)
   const [sourceMode, setSourceMode] = useState<'catalog' | 'external_url'>('catalog');
@@ -279,18 +301,31 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         }
         if (Array.isArray(data.adAccounts) && data.adAccounts.length > 0) {
           setMetaAdAccounts(data.adAccounts);
+          const preferredLandingAcc =
+            data.adAccounts.find(
+              (a: any) =>
+                a.id === 'act_1048211497774834' || /landingcod/i.test(String(a.name || ''))
+            ) || data.adAccounts[0];
           setPbConfig(prev => ({
             ...prev,
             selectedAdAccountId:
               prev.selectedAdAccountId &&
               prev.selectedAdAccountId !== 'act_595884210394' &&
+              prev.selectedAdAccountId !== 'act_424711183775699' &&
               data.adAccounts.some((a: any) => a.id === prev.selectedAdAccountId)
                 ? prev.selectedAdAccountId
-                : data.adAccounts[0].id
+                : preferredLandingAcc.id
           }));
         }
         if (Array.isArray(data.pages) && data.pages.length > 0) {
           setMetaPages(data.pages);
+          const preferredLandingPage =
+            data.pages.find(
+              (p: any) =>
+                String(p.id) === '1050835598123904' ||
+                /landingcod\s*shop/i.test(String(p.name || '')) ||
+                /shop|tienda|landingcod/i.test(String(p.name || ''))
+            ) || data.pages[0];
           setPbConfig(prev => ({
             ...prev,
             selectedFacebookPageId:
@@ -298,18 +333,55 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               prev.selectedFacebookPageId !== '104928374650192' &&
               data.pages.some((p: any) => p.id === prev.selectedFacebookPageId)
                 ? prev.selectedFacebookPageId
-                : data.pages[0].id
+                : preferredLandingPage.id
           }));
+        }
+        if (Array.isArray(data.pixels) && data.pixels.length > 0) {
+          setMetaPixels(data.pixels);
+          const landingCodPrincipalPixel =
+            data.pixels.find(
+              (px: any) =>
+                String(px.id) === '1276031534651377' ||
+                String(px.adAccountId) === 'act_1048211497774834' ||
+                /auto\s*ads\s*360|principal.*landingcod/i.test(String(px.name || ''))
+            ) || data.pixels[0];
+          if (landingCodPrincipalPixel) {
+            const rawPxName = String(landingCodPrincipalPixel.name || '').trim();
+            const resolvedPxName =
+              String(landingCodPrincipalPixel.id) === '1276031534651377' &&
+              (!rawPxName || /principal.*landingcod/i.test(rawPxName))
+                ? 'Auto Ads 360'
+                : rawPxName || 'Auto Ads 360';
+            setActiveMetaPixel({
+              id: String(landingCodPrincipalPixel.id),
+              name: resolvedPxName
+            });
+            setCapiAudit(prev => ({
+              ...prev,
+              pixelConfigured: true,
+              pixelId: `${resolvedPxName} (${landingCodPrincipalPixel.id})`
+            }));
+          }
         }
       } else {
         setMetaConnected(false);
         setMetaUser(null);
       }
-      if (data?.universalPixelId) {
+      if (data?.universalPixelId && (!Array.isArray(data?.pixels) || data.pixels.length === 0)) {
+        const pxId =
+          String(data.universalPixelId) === '1306425611589565'
+            ? '1276031534651377'
+            : String(data.universalPixelId);
+        const rawName = String(data.universalPixelName || '').trim();
+        const pxName =
+          pxId === '1276031534651377' && (!rawName || /principal.*landingcod/i.test(rawName))
+            ? 'Auto Ads 360'
+            : rawName || 'Auto Ads 360';
+        setActiveMetaPixel({ id: pxId, name: pxName });
         setCapiAudit(prev => ({
           ...prev,
           pixelConfigured: true,
-          pixelId: String(data.universalPixelId)
+          pixelId: `${pxName} (${pxId})`
         }));
       }
       return Boolean(data?.connected);
@@ -1598,6 +1670,13 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         : '/api/pipeboard/publish-campaign';
 
       const selectedPage = metaPages.find(p => p.id === pbConfig.selectedFacebookPageId);
+      const effectivePixelId =
+        activeMetaPixel?.id ||
+        (activeProduct.metaTracking?.pixelId &&
+        activeProduct.metaTracking.pixelId !== '1306425611589565' &&
+        activeProduct.metaTracking.pixelId !== '129485739201948'
+          ? activeProduct.metaTracking.pixelId
+          : '1276031534651377');
 
       const pubRes = await fetch(publishEndpoint, {
         method: 'POST',
@@ -1606,14 +1685,21 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           product: activeProduct,
           creatives,
           brainProfile,
-          adAccountId: pbConfig.selectedAdAccountId,
-          facebookPageId: pbConfig.selectedFacebookPageId,
+          adAccountId:
+            pbConfig.selectedAdAccountId === 'act_424711183775699' ||
+            pbConfig.selectedAdAccountId === 'act_595884210394'
+              ? 'act_1048211497774834'
+              : pbConfig.selectedAdAccountId,
+          facebookPageId:
+            pbConfig.selectedFacebookPageId === '104928374650192'
+              ? '1050835598123904'
+              : pbConfig.selectedFacebookPageId,
           pageAccessToken: selectedPage?.access_token || '',
           dailyBudgetGs: pbConfig.dailyBudgetGs,
           publishStatus: pbConfig.defaultPublishStatus,
           pipeboardMcpEndpoint: pbConfig.pipeboardMcpEndpoint,
           landingUrl,
-          pixelId: activeProduct.metaTracking?.pixelId || ''
+          pixelId: effectivePixelId
         })
       });
 
@@ -1705,7 +1791,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             )}
             <span>
               {metaConnected
-                ? `✅ Meta Ads Conectado (${metaUser?.name || pbConfig.selectedAdAccountId})`
+                ? `✅ Meta Ads: Landingcod (Cta. 834) · Píxel Auto Ads 360 (377)`
                 : 'Conectar Meta Ads (Facebook OAuth)'}
             </span>
           </button>
@@ -1745,14 +1831,161 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           </button>
 
           <a
-            href="https://adsmanager.facebook.com"
+            href="https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=1048211497774834"
             target="_blank"
             rel="noreferrer"
             className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1.5 transition-colors"
           >
-            <span>Ads Manager</span>
+            <span>Ads Manager (834)</span>
             <ExternalLink className="w-3 h-3 text-zinc-400" />
           </a>
+        </div>
+      </div>
+
+      {/* ===================================================================== */}
+      {/* 1.B TARJETA DE REFERENCIA EXACTA: PORTAFOLIO + CUENTA 834 + PÍXEL 377 */}
+      {/* ===================================================================== */}
+      <div
+        data-testid="meta-official-reference-card"
+        className="p-3.5 sm:px-5 rounded-2xl bg-[#0d0d0f] border border-emerald-900/70 space-y-3"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black text-[10px] uppercase tracking-wider">
+              📌 Referencia Oficial Fija (No Olvidar)
+            </span>
+            <span className="text-xs font-bold text-zinc-100">
+              Estructura Exacta de tu Meta Ads conectada a esta Herramienta (Copiá con 1 Clic)
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-zinc-400">
+            ❌ Cuenta personal Richard Almiron (699) y su píxel viejo (565) están desactivados aquí
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+          {/* 1. Portafolio Comercial */}
+          <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
+                1. Portafolio Comercial (Business)
+              </span>
+              <div className="text-sm font-black text-zinc-100 mt-0.5">Landingcod</div>
+              <span className="text-[11px] text-zinc-400 block mt-0.5">
+                Tu cuenta comercial principal en Meta Business Suite
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCopyMetaRef('portfolio', 'Portafolio Comercial', 'Landingcod')}
+              className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <span>{copiedRefKey === 'portfolio' ? '✅ Copiado: Landingcod' : '📋 Copiar Nombre: Landingcod'}</span>
+            </button>
+          </div>
+
+          {/* 2. Cuenta Publicitaria Principal (834) */}
+          <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
+            <div>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                  2. Cuenta Publicitaria (834)
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
+                  Termina en 834 · USD
+                </span>
+              </div>
+              <div className="text-sm font-black text-white mt-0.5">Landingcod PY</div>
+              <div className="text-[11px] font-mono text-emerald-300 mt-0.5">
+                ID: 1048211497774834
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  handleCopyMetaRef('acc_num', 'ID Cuenta Publicitaria (834)', '1048211497774834')
+                }
+                className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-black flex items-center justify-center cursor-pointer transition-colors"
+              >
+                {copiedRefKey === 'acc_num' ? '✅ Copiado' : '📋 Copiar 104821...834'}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleCopyMetaRef('acc_act', 'Cuenta act_ (834)', 'act_1048211497774834')
+                }
+                className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold flex items-center justify-center cursor-pointer transition-colors"
+              >
+                {copiedRefKey === 'acc_act' ? '✅ Copiado' : '📋 Copiar act_...834'}
+              </button>
+            </div>
+          </div>
+
+          {/* 3. Píxel Oficial de esta Cuenta 834 (Termina en 377) */}
+          <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
+            <div>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                  3. Píxel de la Cuenta 834 (377)
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
+                  Termina en 377
+                </span>
+              </div>
+              <div className="text-sm font-black text-white mt-0.5">Auto Ads 360</div>
+              <div className="text-[11px] font-mono text-emerald-300 mt-0.5">
+                ID: 1276031534651377
+              </div>
+              <span className="text-[10px] text-zinc-400 block">
+                Pertenece a la cuenta Landingcod 834
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  handleCopyMetaRef('pixel_id', 'ID Píxel Auto Ads 360 (377)', '1276031534651377')
+                }
+                className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-black flex items-center justify-center cursor-pointer transition-colors"
+              >
+                {copiedRefKey === 'pixel_id' ? '✅ Copiado' : '📋 Copiar ID 1276...377'}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleCopyMetaRef('pixel_name', 'Nombre del Píxel', 'Auto Ads 360')
+                }
+                className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold flex items-center justify-center cursor-pointer transition-colors"
+              >
+                {copiedRefKey === 'pixel_name' ? '✅ Copiado' : '📋 Copiar Nombre'}
+              </button>
+            </div>
+          </div>
+
+          {/* 4. Página Oficial de Facebook */}
+          <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
+                4. Página de Facebook (Fanpage)
+              </span>
+              <div className="text-sm font-black text-zinc-100 mt-0.5">Landingcod Shop</div>
+              <div className="text-[11px] font-mono text-zinc-300 mt-0.5">
+                ID: 1050835598123904
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                handleCopyMetaRef('page_id', 'ID Página Landingcod Shop', '1050835598123904')
+              }
+              className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <span>
+                {copiedRefKey === 'page_id' ? '✅ Copiado: 1050835598123904' : '📋 Copiar ID: 1050835598123904'}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1852,27 +2085,40 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-zinc-400 mb-1 font-medium">
-                  Cuenta Publicitaria Meta Ads
+                <label className="block text-emerald-300 mb-1 font-bold">
+                  Cuenta Publicitaria Funcional
                 </label>
                 {metaAdAccounts.length > 0 ? (
                   <select
                     value={pbConfig.selectedAdAccountId}
-                    onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
+                    onChange={e => {
+                      const nextAccId = e.target.value;
+                      setPbConfig(prev => ({ ...prev, selectedAdAccountId: nextAccId }));
+                      const matchingPx = metaPixels.find(px => px.adAccountId === nextAccId);
+                      if (matchingPx) {
+                        setActiveMetaPixel({ id: matchingPx.id, name: matchingPx.name });
+                      }
+                    }}
                     className="w-full px-3 py-2 rounded-xl border border-emerald-700/70 bg-zinc-900 text-zinc-100 font-mono text-xs outline-none focus:border-emerald-500"
                   >
-                    {metaAdAccounts.map(acc => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.name} ({acc.id}) {acc.currency ? `· ${acc.currency}` : ''}
-                      </option>
-                    ))}
+                    {metaAdAccounts.map(acc => {
+                      const isFunctional =
+                        acc.id === 'act_1048211497774834' || /landingcod/i.test(String(acc.name || ''));
+                      return (
+                        <option key={acc.id} value={acc.id}>
+                          {isFunctional ? '✅ ' : '⚠️ '}
+                          {acc.name} ({acc.id}) {acc.currency ? `· ${acc.currency}` : ''}
+                          {isFunctional ? ' [FUNCIONAL ACTIVA]' : ' [Personal - No usar]'}
+                        </option>
+                      );
+                    })}
                   </select>
                 ) : (
                   <input
                     type="text"
-                    value={pbConfig.selectedAdAccountId === 'act_595884210394' ? '' : pbConfig.selectedAdAccountId}
+                    value={pbConfig.selectedAdAccountId}
                     onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
-                    placeholder="Automático al conectar Facebook OAuth"
+                    placeholder="act_1048211497774834 (Landingcod PY)"
                     className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
                   />
                 )}
@@ -1889,12 +2135,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               </div>
             </div>
 
-            {/* Selector de Página de Facebook cuando está conectado + Botón OAuth 1-Clic */}
+            {/* Resumen claro de Cuenta Publicitaria + Página FB + Píxel Principal de Landingcod PY */}
             <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-zinc-200">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-bold text-emerald-300">
                   {metaConnected
-                    ? `🟢 Sesión Iniciada en Facebook: ${metaUser?.name || 'Cuenta Autorizada'}`
+                    ? `🟢 Activo: Cuenta "Landingcod PY" (act_1048211497774834)`
                     : '🔵 Autenticación OAuth de Meta Ads:'}
                 </span>
                 {metaPages.length > 0 && (
@@ -1905,16 +2151,25 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                       onChange={e =>
                         setPbConfig(prev => ({ ...prev, selectedFacebookPageId: e.target.value }))
                       }
-                      className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-100 font-mono text-[11px]"
+                      className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-emerald-700/70 text-zinc-100 font-mono text-[11px]"
                     >
-                      {metaPages.map(pg => (
-                        <option key={pg.id} value={pg.id}>
-                          {pg.name} ({pg.id})
-                        </option>
-                      ))}
+                      {metaPages.map(pg => {
+                        const isLandingShop =
+                          String(pg.id) === '1050835598123904' ||
+                          /landingcod\s*shop/i.test(String(pg.name || ''));
+                        return (
+                          <option key={pg.id} value={pg.id}>
+                            {isLandingShop ? '✅ ' : ''}
+                            {pg.name} ({pg.id})
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 )}
+                <div className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700/80 text-emerald-200 font-mono text-[11px]">
+                  🎯 Píxel de Landingcod PY: <strong>{activeMetaPixel.name}</strong> ({activeMetaPixel.id})
+                </div>
               </div>
               <button
                 type="button"

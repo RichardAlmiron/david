@@ -2771,15 +2771,77 @@ export const AdminView: React.FC = () => {
                             data-testid={`product-pixel-token-box-${prod.id}`}
                             className="p-3.5 sm:p-4 rounded-2xl bg-[#0d0d0f] border border-zinc-800 shadow-xs space-y-3"
                           >
-                            <div className="p-2.5 rounded-xl bg-blue-950/30 border border-blue-900/50 flex items-start gap-2.5 text-xs text-blue-200">
-                              <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                              <div className="leading-relaxed">
-                                <strong className="text-blue-300 font-bold block text-[11px] uppercase tracking-wide">
-                                  🎯 Medición Oficial con Meta Píxel & CAPI (Servidor Anti-Bloqueo)
-                                </strong>
-                                <span className="text-[11px] text-zinc-300 mt-0.5 block">
-                                  Pegá tu <strong>ID de Píxel de Meta</strong> y tu <strong>CAPI Access Token</strong>. Tus eventos de compra y pedidos se enviarán de servidor a servidor para saltar los bloqueos de Safari y AdBlockers.
+                            {/* Referencia fija oficial para no olvidar ni confundir cuentas/píxeles */}
+                            <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/70 space-y-2 text-xs">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-black text-emerald-300 text-[11px] uppercase tracking-wider">
+                                  📌 Tu Referencia Oficial de Meta Ads (1 Clic para Copiar o Usar)
                                 </span>
+                                <span className="text-[10px] font-mono text-zinc-400">
+                                  Portafolio: <strong className="text-white">Landingcod</strong> · Cuenta (834): <strong className="text-white">Landingcod PY</strong>
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2">
+                                  <div>
+                                    <span className="text-[10px] text-zinc-400 block">Portafolio Comercial</span>
+                                    <strong className="text-zinc-100 font-mono text-xs">Landingcod</strong>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      try { navigator.clipboard.writeText('Landingcod'); } catch {}
+                                      showToast('📋 Copiado Portafolio Comercial: Landingcod');
+                                    }}
+                                    className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[10px] font-bold cursor-pointer"
+                                  >
+                                    📋 Copiar
+                                  </button>
+                                </div>
+                                <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2">
+                                  <div>
+                                    <span className="text-[10px] text-emerald-300 block">Cuenta Publicitaria (834)</span>
+                                    <strong className="text-white font-mono text-xs">Landingcod PY (1048211497774834)</strong>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      try { navigator.clipboard.writeText('1048211497774834'); } catch {}
+                                      showToast('📋 Copiado ID Cuenta 834: 1048211497774834');
+                                    }}
+                                    className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
+                                  >
+                                    📋 Copiar 834
+                                  </button>
+                                </div>
+                                <div className="p-2 rounded-lg bg-zinc-900/90 border border-emerald-700/70 flex items-center justify-between gap-2">
+                                  <div>
+                                    <span className="text-[10px] text-emerald-300 block">Píxel de Cuenta 834 (377)</span>
+                                    <strong className="text-white font-mono text-xs">Auto Ads 360 (1276031534651377)</strong>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        try { navigator.clipboard.writeText('1276031534651377'); } catch {}
+                                        showToast('📋 Copiado ID Píxel Auto Ads 360 (377): 1276031534651377');
+                                      }}
+                                      className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
+                                    >
+                                      📋 Copiar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditPixelId('1276031534651377');
+                                        showToast('🎯 Píxel Auto Ads 360 (1276031534651377) colocado en el campo.');
+                                      }}
+                                      className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-black cursor-pointer"
+                                    >
+                                      ⚡ Usar 377
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             </div>
 
@@ -2817,14 +2879,14 @@ export const AdminView: React.FC = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-start">
                               <div className="sm:col-span-5">
                                 <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-                                  ID del Píxel de Facebook (Meta Pixel ID)
+                                  ID del Píxel de Facebook (Auto Ads 360: 1276031534651377)
                                 </label>
                                 <input
                                   type="text"
                                   data-testid={`product-pixel-id-input-${prod.id}`}
                                   value={editPixelId}
                                   onChange={e => setEditPixelId(e.target.value)}
-                                  placeholder="Pegá aquí el ID del Píxel (Ej: 123456789012345)"
+                                  placeholder="1276031534651377 (Píxel Auto Ads 360)"
                                   className="w-full px-3 py-2.5 border border-zinc-800 rounded-xl text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
                                 />
                               </div>
