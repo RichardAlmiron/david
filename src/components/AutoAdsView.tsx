@@ -621,30 +621,46 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }, 2500);
 
     try {
-      const response = await fetch('/api/autoads/brain-train', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product: sourceMode === 'catalog' ? selectedCatalogProduct : {},
-          externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
-          openRouterModel: AUTOADS_LLM_MODEL,
-          openRouterApiKey: getVaultOpenRouterKey()
-        })
-      });
+      let response: Response | null = null;
+      let data: any = null;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          response = await fetch('/api/autoads/brain-train', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              product: sourceMode === 'catalog' ? selectedCatalogProduct : {},
+              externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
+              openRouterModel: AUTOADS_LLM_MODEL,
+              openRouterApiKey: getVaultOpenRouterKey()
+            }),
+            signal: AbortSignal.timeout(120000)
+          });
+          data = await response.json();
+          if (response.ok && data?.success !== false) break;
+          const errStr = String(data?.error || '');
+          if (attempt < 2 && (errStr.includes('timeout') || errStr.includes('aborted') || errStr.includes('in_flight'))) {
+            await new Promise(r => setTimeout(r, 2500));
+            continue;
+          }
+          break;
+        } catch (innerErr: any) {
+          if (attempt === 2) throw innerErr;
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
 
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);
 
-      const data = await response.json();
-
-      if (!response.ok || data?.success === false) {
+      if (!response || !response.ok || data?.success === false) {
         setWorkflowStep('idle');
         setApiErrorModal({
           isOpen: true,
           title: '⚠️ Error en la API de OpenRouter — Trabajo Pausado',
           errorMessage:
             data?.error ||
-            `Error ${response.status}: No se pudo comunicar con la API de OpenRouter (${AUTOADS_LLM_MODEL}). Se suspendió el proceso sin fallbacks ficticios.`,
+            `Error ${response?.status || ''}: No se pudo comunicar con la API de OpenRouter (${AUTOADS_LLM_MODEL}). Se suspendió el proceso sin fallbacks ficticios.`,
           sourceEndpoint: '/api/autoads/brain-train'
         });
         return;
@@ -896,12 +912,15 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       let completedCardsCount = 6 - singleCardIndices.length;
 
       setGenerationProgressText(
-        `⚡ Ráfaga Turbo De Un Tiro Activa: Generando los ${singleCardIndices.length} creativos automáticamente (${selectedImageModel}${onlyImagesMode ? '' : ` + ${selectedVideoModel}`})...`
+        `🛡️ Modo Seguro Por Turno (1 por 1): Iniciando generación secuencial de los ${singleCardIndices.length} creativos (${selectedImageModel}${onlyImagesMode ? '' : ` + ${selectedVideoModel}`})...`
       );
 
-      // Helper individual para generar 1 Imagen IA con absorción automática de reserva in-flight
-      const generateSingleImageCardInParallel = async (cardIdx: number) => {
-        for (let attempt = 1; attempt <= 3; attempt++) {
+      // Helper para generar 1 Imagen IA en su propio turno exclusivo (1 a la vez, cero choques en OpenRouter)
+      const generateSingleImageCardByTurn = async (cardIdx: number) => {
+        setGenerationProgressText(
+          `🛡️ Generación Por Turno (${completedCardsCount}/6 listos) · 🎨 Creando Imagen del Anuncio #${cardIdx + 1} en ${selectedImageModel} (1 a la vez)...`
+        );
+        for (let attempt = 1; attempt <= 5; attempt++) {
           try {
             const res = await fetch('/api/autoads/generate-ad-images', {
               method: 'POST',
@@ -916,32 +935,41 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 openRouterApiKey: vaultKey,
                 targetIndices: [cardIdx]
               }),
-              signal: AbortSignal.timeout(75000)
+              signal: AbortSignal.timeout(180000)
             });
             const rawText = await res.text();
             let imgData: any = null;
             try {
               imgData = JSON.parse(rawText);
             } catch {
-              if (attempt === 3 && !lastWaveError) {
+              if (attempt === 5 && !lastWaveError) {
                 lastWaveError = `Respuesta inválida al generar Anuncio #${cardIdx + 1} (HTTP ${res.status}).`;
               }
+              await new Promise(r => setTimeout(r, 2500));
               continue;
             }
 
             if (!res.ok || imgData?.success === false) {
               const errMsg = String(imgData?.error || '');
-              if (errMsg.includes('in_flight_budget_exhausted') || errMsg.includes('in-flight')) {
-                await new Promise(r => setTimeout(r, 3500));
+              if (
+                errMsg.includes('in_flight_budget_exhausted') ||
+                errMsg.includes('in-flight') ||
+                errMsg.includes('timeout') ||
+                errMsg.includes('aborted')
+              ) {
+                setGenerationProgressText(
+                  `⏳ Esperando que OpenRouter libere la reserva del turno anterior para continuar con el Anuncio #${cardIdx + 1} (intento ${attempt}/5)...`
+                );
+                await new Promise(r => setTimeout(r, 4500));
                 continue;
               }
-              if (attempt === 3 && !lastWaveError) {
+              if (attempt === 5 && !lastWaveError) {
                 lastWaveError =
                   errMsg ||
                   `Error ${res.status}: Fallo en la API de ${selectedImageModel} en OpenRouter.`;
               }
-              if (attempt < 3) {
-                await new Promise(r => setTimeout(r, 1500));
+              if (attempt < 5) {
+                await new Promise(r => setTimeout(r, 2500));
               }
               continue;
             }
@@ -969,29 +997,29 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 )
               );
               setGenerationProgressText(
-                `⚡ Ráfaga Turbo (${completedCardsCount}/6 listos): Imagen del Anuncio #${cardIdx + 1} completada...`
+                `✅ Turno completado (${completedCardsCount}/6 listos): Imagen del Anuncio #${cardIdx + 1} guardada. Pasando al siguiente turno...`
               );
               return;
             }
           } catch (cardErr: any) {
-            if (attempt === 3 && !lastWaveError) {
+            if (attempt === 5 && !lastWaveError) {
               lastWaveError = cardErr?.message || `Error de red al generar imagen #${cardIdx + 1}.`;
             }
-            if (attempt < 3) {
-              await new Promise(r => setTimeout(r, 1500));
+            if (attempt < 5) {
+              await new Promise(r => setTimeout(r, 3000));
             }
           }
         }
       };
 
-      // Helper individual para generar 1 Video Reel de 15s
-      const generateSingleReelCardInParallel = async (cardIdx: number) => {
+      // Helper para generar 1 Video Reel de 15s en su propio turno exclusivo
+      const generateSingleReelCardByTurn = async (cardIdx: number) => {
         const { videoUrl, error } = await requestDirectReelVideoWithPolling(
           cardIdx,
           workingAssets[cardIdx]?.aiImagePrompt || '',
           (round, totalRounds) => {
             setGenerationProgressText(
-              `⚡ Ráfaga Turbo (${completedCardsCount}/6 listos) · 🎬 Renderizando Video Reel 15s #${cardIdx + 1} en ${selectedVideoModel} (${round}/${totalRounds})...`
+              `🛡️ Generación Por Turno (${completedCardsCount}/6 listos) · 🎬 Renderizando Video Reel 15s #${cardIdx + 1} en ${selectedVideoModel} (${round}/${totalRounds})...`
             );
           },
           {
@@ -1015,7 +1043,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             )
           );
           setGenerationProgressText(
-            `⚡ Ráfaga Turbo (${completedCardsCount}/6 listos): Video Reel 15s #${cardIdx + 1} completado...`
+            `✅ Turno completado (${completedCardsCount}/6 listos): Video Reel 15s #${cardIdx + 1} guardado...`
           );
         } else if (error && !lastWaveError) {
           lastWaveError = error;
@@ -1026,29 +1054,23 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       const pendingImageIndices = singleCardIndices.filter(idx => onlyImagesMode || idx < 4);
       const pendingReelIndices = singleCardIndices.filter(idx => !onlyImagesMode && idx >= 4);
 
-      // 1. RÁFAGA PARALELA DÚO-TURBO DE IMÁGENES:
-      // Ejecuta de a 2 imágenes en paralelo simultáneo (~7s por par) para que terminen volando sin exceder la reserva temporal "in-flight" de OpenRouter
-      if (pendingImageIndices.length > 0) {
-        const imgQueue = [...pendingImageIndices];
-        const imgWorkers = Array.from({ length: Math.min(2, imgQueue.length) }, async (_, workerIdx) => {
-          if (workerIdx > 0) {
-            await new Promise(r => setTimeout(r, 250));
-          }
-          while (imgQueue.length > 0) {
-            const nextImgIdx = imgQueue.shift();
-            if (nextImgIdx !== undefined) {
-              await generateSingleImageCardInParallel(nextImgIdx);
-            }
-          }
-        });
-        await Promise.allSettled(imgWorkers);
+      // 1. FILA SEGURA POR TURNO DE IMÁGENES (1 por 1 en orden estricto):
+      // Espera que cada imagen termine y liquide su reserva en OpenRouter antes de disparar la siguiente
+      for (let i = 0; i < pendingImageIndices.length; i++) {
+        const imgIdx = pendingImageIndices[i];
+        await generateSingleImageCardByTurn(imgIdx);
+        if (i < pendingImageIndices.length - 1 || pendingReelIndices.length > 0) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
       }
 
-      // 2. RÁFAGA CONTINUA DE VIDEOS REELS DE 15S (Anuncios #5 y #6):
-      // Apenas las imágenes liberan su reserva in-flight (~$0.70 reales cobrados), se disparan los Videos Reels en el mismo clic
-      // liberando la reserva temporal de ~$2.50 de cada video para no chocar jamás con HTTP 402 in_flight_budget_exhausted
-      for (const reelIdx of pendingReelIndices) {
-        await generateSingleReelCardInParallel(reelIdx);
+      // 2. FILA SEGURA POR TURNO DE VIDEOS REELS DE 15S (Anuncios #5 y #6, 1 por 1):
+      for (let i = 0; i < pendingReelIndices.length; i++) {
+        const reelIdx = pendingReelIndices[i];
+        await generateSingleReelCardByTurn(reelIdx);
+        if (i < pendingReelIndices.length - 1) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
       }
 
       const totalGeneratedImagesCount = workingAssets
@@ -1159,32 +1181,53 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     setRegeneratingAdIdx(adIndex);
     try {
       const currentAd = creatives[adIndex];
-      const res = await fetch('/api/autoads/regenerate-ad', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product: activeProduct,
-          adIndex,
-          variationSeed: (adVariationCounters[adIndex] || 0) + 1,
-          currentHeadline: currentAd?.headline || '',
-          customImagePrompt: customPromptOverride || currentAd?.aiImagePrompt || '',
-          imageModel: selectedImageModel,
-          videoModel: selectedVideoModel,
-          onlyImagesMode,
-          openRouterApiKey: getVaultOpenRouterKey(),
-          imageOnly: true
-        }),
-        signal: AbortSignal.timeout(45000)
-      });
-      const data = await res.json();
-      if (!res.ok || data?.success === false || !data?.customBrief?.aiGeneratedImageUrl) {
+      let res: Response | null = null;
+      let data: any = null;
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        res = await fetch('/api/autoads/regenerate-ad', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product: activeProduct,
+            adIndex,
+            variationSeed: (adVariationCounters[adIndex] || 0) + 1,
+            currentHeadline: currentAd?.headline || '',
+            customImagePrompt: customPromptOverride || currentAd?.aiImagePrompt || '',
+            imageModel: selectedImageModel,
+            videoModel: selectedVideoModel,
+            onlyImagesMode,
+            openRouterApiKey: getVaultOpenRouterKey(),
+            imageOnly: true
+          }),
+          signal: AbortSignal.timeout(180000)
+        });
+        data = await res.json();
+        if (res.ok && data?.success !== false && data?.customBrief?.aiGeneratedImageUrl) {
+          break;
+        }
+        const errStr = String(data?.error || '');
+        if (
+          attempt < 4 &&
+          (errStr.includes('in_flight_budget_exhausted') ||
+            errStr.includes('in-flight') ||
+            errStr.includes('timeout') ||
+            errStr.includes('aborted'))
+        ) {
+          showToast(`⏳ Esperando liquidación de turno en OpenRouter para Anuncio #${adIndex + 1} (reintento ${attempt}/4)...`);
+          await new Promise(r => setTimeout(r, 4500));
+          continue;
+        }
+        break;
+      }
+
+      if (!res || !res.ok || data?.success === false || !data?.customBrief?.aiGeneratedImageUrl) {
         setRegeneratingAdIdx(null);
         setApiErrorModal({
           isOpen: true,
           title: '⚠️ Error al Generar Imagen IA — Trabajo Pausado',
           errorMessage:
             data?.error ||
-            `Error ${res.status}: OpenRouter (${selectedImageModel}) no devolvió la imagen para el Anuncio #${adIndex + 1}.`,
+            `Error ${res?.status || ''}: OpenRouter (${selectedImageModel}) no devolvió la imagen para el Anuncio #${adIndex + 1}.`,
           sourceEndpoint: '/api/autoads/regenerate-ad'
         });
         return;

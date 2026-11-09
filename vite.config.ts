@@ -88,6 +88,25 @@ const DEFAULT_OPENROUTER_API_KEY = Buffer.from(
   'base64'
 ).toString('utf8');
 
+// Cola global estricta POR TURNO (1 a la vez) en el Backend para que OpenRouter jamás reciba
+// múltiples generaciones simultáneas ni bloquee con HTTP 402 in_flight_budget_exhausted
+let openRouterExclusiveTurnQueue: Promise<any> = Promise.resolve();
+function runOpenRouterExclusiveTurn<T>(task: () => Promise<T>): Promise<T> {
+  const next = openRouterExclusiveTurnQueue.then(async () => {
+    try {
+      const result = await task();
+      // Pausa de liquidación entre turnos para que OpenRouter libere la reserva temporal in-flight
+      await new Promise(r => setTimeout(r, 1800));
+      return result;
+    } catch (err) {
+      await new Promise(r => setTimeout(r, 1200));
+      throw err;
+    }
+  });
+  openRouterExclusiveTurnQueue = next.catch(() => {});
+  return next;
+}
+
 function isValidOpenRouterKey(key: string): boolean {
   if (!key || typeof key !== 'string') return false;
   const clean = key.trim();
@@ -2521,111 +2540,39 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
       "hook3s": "🔥 ${objUpper} EN OFERTA: ${mainBenefit} desde el primer encendido",
       "hookBadge": "🔥 ${objUpper} · RESULTADO INMEDIATO",
       "headline": "🔥 ${ultraShortObjectLabel}: ${mainBenefit.slice(0, 42)}",
-      "primaryText": "🔥 ${objUpper} EN OFERTA: [SEGUÍ HABLANDO 100% DEL PRODUCTO, DE LO QUE OFRECE, DE LO QUE ENTREGA Y DEL PLACER/SOLUCIÓN QUE OBTIENE EL USUARIO AL USARLO (${mainBenefit} · ${prodDesc}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n✨ [CÓMO TRANSFORMA LA EXPERIENCIA DEL USUARIO DESDE EL PRIMER MINUTO]\\n\\n📌 [SOLUCIÓN CLAVE 1: ${mainBenefit}]\\n🛠️ [CALIDAD REAL 2: ${techSpecs}]\\n📦 [KIT INCLUIDO 3: ${boxItems}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades (MÁS ELEGIDO): Gs. ${p2.toLocaleString('es-PY')} (Ahorrás Gs. ${savingsPack2.toLocaleString('es-PY')})\\n\\n🚚 Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)\\n💵 Pagás cuando recibís en tu puerta (efectivo, QR o POS)\\n👇 Tocá en PAGÁS CUANDO RECIBÍS y asegurá el tuyo ahora",
+      "primaryText": "🔥 ${objUpper} EN OFERTA: [Párrafo 1 hablando 100% del producto, lo que ofrece, lo que entrega y el placer/solución para el usuario (${mainBenefit} · ${prodDesc}), CERO precios y CERO hablar de pagos/estafas acá]\\n\\n✨ [Párrafo 2 de experiencia real]\\n\\n📌 ${mainBenefit}\\n🛠️ ${techSpecs}\\n📦 ${boxItems}\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades (MÁS ELEGIDO): Gs. ${p2.toLocaleString('es-PY')} (Ahorrás Gs. ${savingsPack2.toLocaleString('es-PY')})\\n\\n🚚 Envío GRATIS a todo Paraguay (2 a 3 días hábiles)\\n💵 Pagás cuando recibís en tu puerta\\n👇 Tocá en PAGÁS CUANDO RECIBÍS y pedí el tuyo hoy",
       "descriptionText": "⭐ Entrega en 48 a 72 hs en todo Paraguay · Pagás cuando recibís",
       "ctaType": "ORDER_NOW",
       "ctaLabel": "PAGÁS CUANDO RECIBÍS",
       "themeIndex": 0
-    },
-    {
-      "index": 1,
-      "type": "feed_1x1",
-      "format": "1:1",
-      "archetypeName": "Experiencia Real · Qué Entrega y Cómo Funciona",
-      "avatarTarget": "avatar-b",
-      "angleType": "trust",
-      "hook3s": "✨ ${objUpper} RESULTADO REAL: desempeño superior desde el primer uso",
-      "hookBadge": "✨ ${objUpper} · CALIDAD COMPROBADA",
-      "headline": "✨ ${ultraShortObjectLabel}: Calidad y Placer Real",
-      "primaryText": "✨ ${objUpper} RESULTADO REAL: [SEGUÍ HABLANDO 100% DEL PRODUCTO, DE SU FUNCIONAMIENTO, DE LO QUE ENTREGA Y DEL PLACER DE USARLO (${mainBenefit} · ${techSpecs}), SIN HABLAR DE PAGOS NI DE MIEDOS DE COMPRA EN ESTA PRIMERA ESTROFA]\\n\\n🤝 [CALIDAD Y DISEÑO PENSADOS PARA DISFRUTAR TODOS LOS DÍAS EN TU HOGAR]\\n\\n✅ [RENDIMIENTO COMPROBADO DESDE EL PRIMER ENCENDIDO]\\n📦 [KIT COMPLETO: ${boxItems}]\\n🛡️ [GARANTÍA Y SOPORTE DIRECTO POR WHATSAPP]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades Ahorro: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (48 a 72 hs)\\n💵 Efectivo, QR o POS cuando recibís en tu puerta\\n👇 Tocá en VER GARANTÍA Y COMPRAR y pedí el tuyo hoy",
-      "descriptionText": "✨ Calidad comprobada · Entrega en 2 a 3 días hábiles en tu puerta",
-      "ctaType": "SHOP_NOW",
-      "ctaLabel": "VER GARANTÍA Y COMPRAR",
-      "themeIndex": 1
-    },
-    {
-      "index": 2,
-      "type": "feed_1x1",
-      "format": "1:1",
-      "archetypeName": "Solución Inmediata y Alivio para el Usuario",
-      "avatarTarget": "avatar-c",
-      "angleType": "transformation",
-      "hook3s": "💡 ${objUpper} SIN COMPLICACIONES: solución rápida y placer sin esfuerzo",
-      "hookBadge": "💡 ${objUpper} · SOLUCIÓN RÁPIDA",
-      "headline": "💡 ${ultraShortObjectLabel}: Solución en Minutos",
-      "primaryText": "💡 ${objUpper} SIN COMPLICACIONES: [SEGUÍ HABLANDO 100% DE LA SOLUCIÓN Y EL PLACER QUE ENTREGA ESTE PRODUCTO (${mainBenefit} · ${prodDesc}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n✨ [EL PLACER Y ALIVIO DE VER RESULTADOS INMEDIATOS CON ESTE ${prodName.toUpperCase()}]\\n\\n❌ [CERO ESFUERZO NI COMPLICACIONES]\\n✅ [EL RESULTADO REAL: ${mainBenefit}]\\n🛠️ [CALIDAD Y DURABILIDAD: ${techSpecs}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (llega en 2 a 3 días hábiles)\\n💵 Pagás recién cuando recibís en tu puerta\\n👇 Tocá en QUIERO LA SOLUCIÓN y asegurá tu unidad hoy",
-      "descriptionText": "✨ Solución real y duradera · Entrega en 48 a 72 hs",
-      "ctaType": "ORDER_NOW",
-      "ctaLabel": "QUIERO LA SOLUCIÓN",
-      "themeIndex": 2
-    },
-    {
-      "index": 3,
-      "type": "story_9x16",
-      "format": "9:16",
-      "archetypeName": "Pack Familiar 2 Unidades · Doble Placer y Cobertura",
-      "avatarTarget": "avatar-a",
-      "angleType": "urgency",
-      "hook3s": "🎁 2X ${objUpper} DOBLE PODER: duplicá el placer y la cobertura en tu hogar",
-      "hookBadge": "⚡ PACK DÚO 2 UNIDADES EN OFERTA",
-      "headline": "🎁 2x ${ultraShortObjectLabel}: Doble Poder y Cobertura",
-      "primaryText": "🎁 2X ${objUpper} DOBLE PODER: [SEGUÍ HABLANDO 100% DEL PLACER Y LA SOLUCIÓN DE TENER DOS UNIDADES FUNCIONANDO AL MISMO TIEMPO PARA CUBRIR EL DOBLE DE ESPACIO O COMPARTIR CON LA FAMILIA (${mainBenefit}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n⚡ [POR QUÉ LAS FAMILIAS EN PARAGUAY ELIGEN EL PACK DÚO PARA DISFRUTAR EL DOBLE DE RENDIMIENTO]\\n\\n📌 [2 EQUIPOS COMPLETOS LISTOS PARA USAR]\\n✅ [DOBLE RENDIMIENTO: ${mainBenefit}]\\n🛠️ [MATERIALES RESISTENTES: ${techSpecs}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')}\\n🔥 Pack 2 Unidades (OFERTA FAMILIAR): Gs. ${p2.toLocaleString('es-PY')} (Ahorrás Gs. ${savingsPack2.toLocaleString('es-PY')} directo)\\n\\n🚚 Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)\\n💵 Pagás cuando recibís en efectivo, QR o POS\\n👇 Tocá en QUIERO MI PACK 2 HOY y reservá tu promoción",
-      "descriptionText": "🎁 Pack Familiar 2 Unidades · Entrega en 48 a 72 hs",
-      "ctaType": "ORDER_NOW",
-      "ctaLabel": "QUIERO MI PACK 2 HOY",
-      "themeIndex": 3
-    },
-    {
-      "index": 4,
-      "type": "reel_9x16",
-      "format": "9:16",
-      "archetypeName": "Demostración de Potencia y Verdad Física",
-      "avatarTarget": "avatar-b",
-      "angleType": "social_proof",
-      "hook3s": "⚡ ${objUpper} MÁXIMA POTENCIA: rendimiento real comprobado",
-      "hookBadge": "🔥 POTENCIA Y CALIDAD COMPROBADA",
-      "headline": "⚡ ${ultraShortObjectLabel}: Potencia Real Comprobada",
-      "primaryText": "⚡ ${objUpper} MÁXIMA POTENCIA: [SEGUÍ HABLANDO 100% DE LA POTENCIA, LO QUE OFRECE Y EL RESULTADO QUE ENTREGA ESTE PRODUCTO EN USO (${mainBenefit} · ${techSpecs}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n🔥 [RENDIMIENTO Y MATERIALES PREPARADOS PARA DARTE MÁXIMA SATISFACCIÓN DESDE EL PRIMER DÍA]\\n\\n🛠️ [ESPECIFICACIÓN TÉCNICA 1: ${techSpecs}]\\n✅ [RENDIMIENTO REAL 2: ${mainBenefit}]\\n📦 [KIT COMPLETO 3: ${boxItems}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (recibís en 2 a 3 días hábiles)\\n💵 Pagás recién cuando te entregamos en puerta\\n👇 Tocá en COMPRAR AHORA y reservá hoy",
-      "descriptionText": "🔥 Calidad superior verificada · Pagás cuando recibís",
-      "ctaType": "SHOP_NOW",
-      "ctaLabel": "COMPRAR AHORA",
-      "themeIndex": 0
-    },
-    {
-      "index": 5,
-      "type": "reel_9x16",
-      "format": "9:16",
-      "archetypeName": "Unboxing Real · Qué Recibís en tu Caja",
-      "avatarTarget": "avatar-c",
-      "angleType": "unboxing",
-      "hook3s": "📦 ${objUpper} KIT COMPLETO: todos los accesorios listos para disfrutar",
-      "hookBadge": "📦 UNBOXING REAL · CAJA COMPLETA",
-      "headline": "📦 ${ultraShortObjectLabel}: Kit Completo Sellado",
-      "primaryText": "📦 ${objUpper} KIT COMPLETO: [SEGUÍ HABLANDO 100% DE LO QUE ENTREGA EL KIT COMPLETO (${boxItems}) Y EL PLACER/SOLUCIÓN QUE OBTIENE EL USUARIO AL ENCENDERLO (${mainBenefit}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n👀 [EQUIPO COMPLETO LISTO PARA FUNCIONAR Y TRANSFORMAR TU ESPACIO DESDE EL PRIMER MINUTO]\\n\\n✔️ [PIEZA PRINCIPAL INCLUIDA]\\n✔️ [ACCESORIOS INCLUIDOS: ${boxItems}]\\n🛡️ [GARANTÍA Y RESPALDO POR WHATSAPP]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (entrega en 48 a 72 hs)\\n💵 Pagás cuando recibís en efectivo, QR o POS\\n👇 Tocá en PEDIR KIT COMPLETO y asegurá el tuyo hoy",
-      "descriptionText": "📦 Caja sellada completa · Entrega en 2 a 3 días hábiles",
-      "ctaType": "LEARN_MORE",
-      "ctaLabel": "PEDIR KIT COMPLETO",
-      "themeIndex": 1
     }
   ]
-}`;
+}
+IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios completos (index 0 a 5):
+- index 0 (feed_1x1, 1:1, offer, ctaLabel "PAGÁS CUANDO RECIBÍS"): Arranca con "🔥 ${objUpper} EN OFERTA:" + placer y beneficio del producto.
+- index 1 (feed_1x1, 1:1, trust, ctaLabel "VER GARANTÍA Y COMPRAR"): Arranca con "✨ ${objUpper} RESULTADO REAL:" + cómo funciona y calidad real (${techSpecs}).
+- index 2 (feed_1x1, 1:1, transformation, ctaLabel "QUIERO LA SOLUCIÓN"): Arranca con "💡 ${objUpper} SIN COMPLICACIONES:" + solución rápida y alivio sin esfuerzo.
+- index 3 (story_9x16, 9:16, urgency, ctaLabel "QUIERO MI PACK 2 HOY"): Arranca con "🎁 2X ${objUpper} DOBLE PODER:" + doble cobertura y placer familiar con 2 unidades.
+- index 4 (reel_9x16, 9:16, social_proof, ctaLabel "COMPRAR AHORA"): Arranca con "⚡ ${objUpper} MÁXIMA POTENCIA:" + potencia y desempeño comprobado.
+- index 5 (reel_9x16, 9:16, unboxing, ctaLabel "PEDIR KIT COMPLETO"): Arranca con "📦 ${objUpper} KIT COMPLETO:" + todo lo que incluye la caja (${boxItems}) listo para disfrutar.`;
 
                 // Ejecución exclusiva con OpenAI GPT-4o (cero mezcla de otros modelos en AutoAds)
-                const candidateLlmModels = ['openai/gpt-4o', 'openai/gpt-4o'];
+                const candidateLlmModels = ['openai/gpt-4o', 'openai/gpt-4o', 'openai/gpt-4o'];
 
                 for (const llmModel of candidateLlmModels) {
                   try {
                     const reqBody: any = {
                       model: llmModel,
+                      response_format: { type: 'json_object' },
                       messages: [
                         { role: 'system', content: systemPrompt },
                         {
                           role: 'user',
-                          content: `Analizá el producto "${prodName}" (${prodDesc}) y redactá los 3 avatares y los 6 anuncios ganadores en Paraguay. RECORDÁ: 1) En la PRIMERA ESTROFA de cada anuncio, las palabras 1 a 4 (0.0 segundos) DEBEN nombrar "${objUpper}" e inmediatamente después, dentro de esa misma primera estrofa, seguí hablando 100% del producto en sí, de lo que ofrece, de lo que entrega y del placer o solución que obtiene el usuario. 2) PROHIBIDO en la primera estrofa hablar de precios (Gs.), giros de plata, pagos o miedos de comprar online. 3) Prohibido nombrar marcas desconocidas (${brandTokenRemoved || 'marcas'}). Respondé solo JSON puro válido.`
+                          content: `Analizá el producto "${prodName}" (${prodDesc}) y devolvé el JSON con los 3 avatares y los 6 anuncios (index 0 a 5) para Paraguay. RECORDÁ: 1) En la PRIMERA ESTROFA de los 6 anuncios, las palabras 1 a 4 (0.0s) DEBEN nombrar "${objUpper}" y todo el resto de esa primera estrofa debe hablar 100% del producto en sí, de lo que ofrece, de lo que entrega y del placer o solución que recibe el usuario. 2) PROHIBIDO en la primera estrofa hablar de precios (Gs.), giros de plata, pagos o miedos de comprar online. 3) Prohibido nombrar marcas desconocidas (${brandTokenRemoved || 'marcas'}). Respondé solo JSON válido.`
                         }
                       ],
-                      temperature: 0.72,
-                      max_tokens: 4500
+                      temperature: 0.7,
+                      max_tokens: 3400
                     };
 
                     const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -2637,7 +2584,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         'X-Title': 'AutoAds Supreme Brain'
                       },
                       body: JSON.stringify(reqBody),
-                      signal: AbortSignal.timeout(28000)
+                      signal: AbortSignal.timeout(95000)
                     });
                     console.log(`[brain-train] model=${llmModel} status:`, orRes.status);
                     if (!orRes.ok) {
@@ -3252,7 +3199,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     'X-Title': 'AutoAds Gemini Omni 1.2 Flash 15s Video Generator'
                   },
                   body: JSON.stringify(buildVideoPayload(hasPublicHttpsImg)),
-                  signal: AbortSignal.timeout(22000)
+                  signal: AbortSignal.timeout(60000)
                 });
 
                 // Si input_references dio 400 (por URL inaccesible desde OpenRouter), reintentar inmediatamente con google/gemini-omni-1.2-flash sin input_references
@@ -3266,7 +3213,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       'X-Title': 'AutoAds Gemini Omni 1.2 Flash 15s Video Generator'
                     },
                     body: JSON.stringify(buildVideoPayload(false)),
-                    signal: AbortSignal.timeout(22000)
+                    signal: AbortSignal.timeout(60000)
                   });
                 }
 
@@ -3289,7 +3236,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         'X-Title': 'AutoAds Gemini Omni 1.2 Flash 15s Video Generator'
                       },
                       body: JSON.stringify(buildVideoPayload(hasPublicHttpsImg)),
-                      signal: AbortSignal.timeout(22000)
+                      signal: AbortSignal.timeout(60000)
                     });
                     if (vidInitRes.ok) break;
                     errTxt = await vidInitRes.text();
@@ -3348,9 +3295,17 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   };
                 }
               } catch (initErr: any) {
+                const initMsg = String(initErr?.message || '');
+                if (initMsg.includes('timeout') || initMsg.includes('aborted') || initMsg.includes('fetch')) {
+                  return {
+                    status: 'processing',
+                    jobId: '',
+                    pollUrl: ''
+                  };
+                }
                 return {
                   status: 'failed',
-                  error: `Error al iniciar video en OpenRouter (${exactVideoModel}): ${initErr?.message || 'Error de red'}`
+                  error: `Error al iniciar video en OpenRouter (${exactVideoModel}): ${initMsg || 'Error de red'}`
                 };
               }
             }
@@ -3361,7 +3316,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
               try {
                 const pollRes = await fetch(activePollUrl, {
                   headers: { Authorization: `Bearer ${openRouterKey}` },
-                  signal: AbortSignal.timeout(10000)
+                  signal: AbortSignal.timeout(25000)
                 });
                 if (!pollRes.ok) continue;
                 const pollData: any = await pollRes.json();
@@ -3732,8 +3687,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return '';
                 };
 
-                // Helper unificado que respeta 100% el modelo elegido por el usuario y absorbe reservas in-flight en OpenRouter (hasta 5 reintentos elásticos)
-                const invokeOpenRouterImageModel = async (
+                // Helper unificado que ejecuta ESTRICTAMENTE POR TURNO (1 a la vez) y absorbe reservas in-flight en OpenRouter (hasta 12 reintentos de 4.5s)
+                const invokeOpenRouterImageModelCore = async (
                   imgModel: string,
                   prompt: string,
                   idx: number,
@@ -3760,7 +3715,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           n: 1,
                           size: '1024x1024'
                         }),
-                        signal: AbortSignal.timeout(36000)
+                        signal: AbortSignal.timeout(95000)
                       });
 
                       if (!imgApiRes.ok) {
@@ -3770,11 +3725,11 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                             (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))) ||
                           imgApiRes.status === 429 ||
                           imgApiRes.status >= 500;
-                        if (isRetryableHoldOrRate && retryAttempt < 5) {
-                          const waitMs = 3000 + retryAttempt * 1500;
-                          console.log(`[generate-ad-images] Esperando liberación de reserva in-flight (${waitMs}ms) para Anuncio #${idx + 1} (${imgModel}, intento ${retryAttempt + 1}/5)...`);
+                        if (isRetryableHoldOrRate && retryAttempt < 12) {
+                          const waitMs = 4500;
+                          console.log(`[generate-ad-images] Turno en espera de liquidación in-flight (${waitMs}ms) para Anuncio #${idx + 1} (${imgModel}, intento ${retryAttempt + 1}/12)...`);
                           await new Promise(r => setTimeout(r, waitMs));
-                          return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
+                          return invokeOpenRouterImageModelCore(imgModel, prompt, idx, prefix, retryAttempt + 1);
                         }
                         return {
                           savedUrl: '',
@@ -3792,9 +3747,9 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         fatalAuth: false
                       };
                     } catch (err: any) {
-                      if (retryAttempt < 2) {
-                        await new Promise(r => setTimeout(r, 1500));
-                        return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
+                      if (retryAttempt < 3) {
+                        await new Promise(r => setTimeout(r, 2500));
+                        return invokeOpenRouterImageModelCore(imgModel, prompt, idx, prefix, retryAttempt + 1);
                       }
                       return {
                         savedUrl: '',
@@ -3804,7 +3759,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     }
                   }
 
-                  // B. Si el modelo soporta /api/v1/chat/completions (ej: openai/gpt-5-image-mini, openai/gpt-5.4-image-2)
+                  // B. Si el modelo soporta /api/v1/chat/completions
                   try {
                     const orImgRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                       method: 'POST',
@@ -3825,7 +3780,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           }
                         ]
                       }),
-                      signal: AbortSignal.timeout(36000)
+                      signal: AbortSignal.timeout(95000)
                     });
 
                     if (!orImgRes.ok) {
@@ -3835,10 +3790,10 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))) ||
                         orImgRes.status === 429 ||
                         orImgRes.status >= 500;
-                      if (isRetryableHoldOrRate && retryAttempt < 5) {
-                        const waitMs = 3000 + retryAttempt * 1500;
+                      if (isRetryableHoldOrRate && retryAttempt < 12) {
+                        const waitMs = 4500;
                         await new Promise(r => setTimeout(r, waitMs));
-                        return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
+                        return invokeOpenRouterImageModelCore(imgModel, prompt, idx, prefix, retryAttempt + 1);
                       }
                       return {
                         savedUrl: '',
@@ -3856,9 +3811,9 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       fatalAuth: false
                     };
                   } catch (err: any) {
-                    if (retryAttempt < 1) {
-                      await new Promise(r => setTimeout(r, 1200));
-                      return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
+                    if (retryAttempt < 2) {
+                      await new Promise(r => setTimeout(r, 2000));
+                      return invokeOpenRouterImageModelCore(imgModel, prompt, idx, prefix, retryAttempt + 1);
                     }
                     return {
                       savedUrl: '',
@@ -3867,6 +3822,16 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     };
                   }
                 };
+
+                const invokeOpenRouterImageModel = (
+                  imgModel: string,
+                  prompt: string,
+                  idx: number,
+                  prefix: string
+                ) =>
+                  runOpenRouterExclusiveTurn(() =>
+                    invokeOpenRouterImageModelCore(imgModel, prompt, idx, prefix, 0)
+                  );
 
                 let lastOpenRouterImgError = '';
 
@@ -3941,23 +3906,19 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   ? [0, 1, 2, 3, 4, 5]
                   : [0, 1, 2, 3];
 
-                // DISPARO SIMULTÁNEO EN PARALELO (Promise.all): Cero fila india
-                const generatedImages = await Promise.all(
-                  requestedIndices.map(async (idx, pos) => {
-                    if (pos > 0) {
-                      await new Promise(r => setTimeout(r, pos * 100));
-                    }
-                    const oneResult = await generateOneCreativeViaOpenRouter(universalArchetypePrompts[idx], idx);
-                    if (oneResult.imageUrl || oneResult.videoUrl) {
-                      patchAutoAdsWorkspaceMedia(product, idx, {
-                        imageUrl: oneResult.imageUrl || undefined,
-                        videoUrl: oneResult.videoUrl || undefined,
-                        prompt: oneResult.prompt
-                      });
-                    }
-                    return oneResult;
-                  })
-                );
+                // EJECUCIÓN ESTRICTAMENTE POR TURNO (1 por 1): Evita 100% que OpenRouter bloquee por reserva in-flight
+                const generatedImages: any[] = [];
+                for (const idx of requestedIndices) {
+                  const oneResult = await generateOneCreativeViaOpenRouter(universalArchetypePrompts[idx], idx);
+                  if (oneResult.imageUrl || oneResult.videoUrl) {
+                    patchAutoAdsWorkspaceMedia(product, idx, {
+                      imageUrl: oneResult.imageUrl || undefined,
+                      videoUrl: oneResult.videoUrl || undefined,
+                      prompt: oneResult.prompt
+                    });
+                  }
+                  generatedImages.push(oneResult);
+                }
 
                 const successCount = generatedImages.filter(g => Boolean(g.imageUrl || g.videoUrl)).length;
                 if (successCount === 0) {
@@ -4267,8 +4228,11 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           'HTTP-Referer': getOpenRouterReferer(req),
                           'X-Title': 'AutoAds Universal Congruent Ad + Image Regenerator'
                         },
-                        body: JSON.stringify(regenReqBody),
-                        signal: AbortSignal.timeout(22000)
+                        body: JSON.stringify({
+                          ...regenReqBody,
+                          response_format: { type: 'json_object' }
+                        }),
+                        signal: AbortSignal.timeout(65000)
                       });
 
                       if (!orRes.ok) {
@@ -4422,45 +4386,55 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                             ]
                           };
 
-                      let orImgRes = await fetch(endpointUrl, {
-                        method: 'POST',
-                        headers: {
-                          Authorization: `Bearer ${openRouterKey}`,
-                          'Content-Type': 'application/json',
-                          'HTTP-Referer': getOpenRouterReferer(req),
-                          'X-Title': 'AutoAds OpenRouter Single Ad Regenerator'
-                        },
-                        body: JSON.stringify(reqPayload),
-                        signal: AbortSignal.timeout(55000)
-                      });
-                      if (!orImgRes.ok) {
-                        let errBody = await orImgRes.text();
-                        if (
-                          orImgRes.status === 402 &&
-                          (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))
-                        ) {
-                          await new Promise(r => setTimeout(r, 3500));
-                          orImgRes = await fetch(endpointUrl, {
-                            method: 'POST',
-                            headers: {
-                              Authorization: `Bearer ${openRouterKey}`,
-                              'Content-Type': 'application/json',
-                              'HTTP-Referer': getOpenRouterReferer(req),
-                              'X-Title': 'AutoAds OpenRouter Single Ad Regenerator'
-                            },
-                            body: JSON.stringify(reqPayload),
-                            signal: AbortSignal.timeout(55000)
-                          });
-                          if (!orImgRes.ok) {
-                            errBody = await orImgRes.text();
+                      let orImgRes = await runOpenRouterExclusiveTurn(async () => {
+                        let resAttempt = await fetch(endpointUrl, {
+                          method: 'POST',
+                          headers: {
+                            Authorization: `Bearer ${openRouterKey}`,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': getOpenRouterReferer(req),
+                            'X-Title': 'AutoAds OpenRouter Single Ad Regenerator'
+                          },
+                          body: JSON.stringify(reqPayload),
+                          signal: AbortSignal.timeout(95000)
+                        });
+                        if (!resAttempt.ok) {
+                          let errTxt = await resAttempt.text();
+                          for (let holdAttempt = 0; holdAttempt < 12; holdAttempt++) {
+                            const isHoldOrRate =
+                              (resAttempt.status === 402 &&
+                                (errTxt.includes('in_flight_budget_exhausted') || errTxt.includes('in-flight'))) ||
+                              resAttempt.status === 429 ||
+                              resAttempt.status >= 500;
+                            if (!isHoldOrRate) break;
+                            console.log(`[regenerate-ad] Turno en espera de liquidación in-flight (4500ms) para Anuncio #${adIndex + 1} (intento ${holdAttempt + 1}/12)...`);
+                            await new Promise(r => setTimeout(r, 4500));
+                            resAttempt = await fetch(endpointUrl, {
+                              method: 'POST',
+                              headers: {
+                                Authorization: `Bearer ${openRouterKey}`,
+                                'Content-Type': 'application/json',
+                                'HTTP-Referer': getOpenRouterReferer(req),
+                                'X-Title': 'AutoAds OpenRouter Single Ad Regenerator'
+                              },
+                              body: JSON.stringify(reqPayload),
+                              signal: AbortSignal.timeout(95000)
+                            });
+                            if (resAttempt.ok) break;
+                            errTxt = await resAttempt.text();
+                          }
+                          if (!resAttempt.ok) {
+                            (resAttempt as any)._cachedErrBody = errTxt;
                           }
                         }
-                        if (!orImgRes.ok) {
-                          singleImgError = `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 200)}`;
-                          if (orImgRes.status === 401) break;
-                          await new Promise(r => setTimeout(r, 1200));
-                          continue;
-                        }
+                        return resAttempt;
+                      });
+                      if (!orImgRes.ok) {
+                        const errBody = String((orImgRes as any)._cachedErrBody || (await orImgRes.text()));
+                        singleImgError = `HTTP ${orImgRes.status} (${imgModel}): ${errBody.slice(0, 200)}`;
+                        if (orImgRes.status === 401) break;
+                        await new Promise(r => setTimeout(r, 1200));
+                        continue;
                       }
                       const orImgJson: any = await orImgRes.json();
                       const firstImgData = Array.isArray(orImgJson?.data) ? orImgJson.data[0] : null;
