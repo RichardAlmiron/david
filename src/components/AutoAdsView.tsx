@@ -862,146 +862,17 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             .filter(idx => idx !== -1)
         : [0, 1, 2, 3, 4, 5];
       let lastWaveError = '';
+      let completedCardsCount = 6 - singleCardIndices.length;
 
-      for (let i = 0; i < singleCardIndices.length; i++) {
-        const cardIdx = singleCardIndices[i];
-        const isReelCard = cardIdx >= 4 && !onlyImagesMode;
+      setGenerationProgressText(
+        `⚡ Ráfaga Simultánea De Un Tiro Activa: Disparando los ${singleCardIndices.length} creativos en paralelo (${selectedImageModel}${onlyImagesMode ? '' : ` + ${selectedVideoModel}`})...`
+      );
 
-        // SI ES REEL (Anuncio #5 o #6 y el interruptor Solo Imágenes está APAGADO): Crear el Video Reel MP4 de 15s con Google Gemini Omni 1.2 Flash
-        if (isReelCard) {
-          const { videoUrl, error } = await requestDirectReelVideoWithPolling(
-            cardIdx,
-            workingAssets[cardIdx]?.aiImagePrompt || '',
-            (round, totalRounds) => {
-              setGenerationProgressText(
-                `🎬 Creando Video Reel de 15s con Avatar Hablando + Producto para Anuncio #${cardIdx + 1} en ${selectedVideoModel} (Ronda ${round}/${totalRounds})...`
-              );
-            },
-            {
-              headline: workingAssets[cardIdx]?.headline || '',
-              primaryText: workingAssets[cardIdx]?.primaryText || '',
-              ctaLabel: workingAssets[cardIdx]?.ctaLabel || ''
-            }
-          );
-          if (videoUrl) {
-            workingAssets = workingAssets.map((asset, idx) =>
-              idx === cardIdx
-                ? { ...asset, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: videoUrl }
-                : asset
-            );
-            setCreatives([...workingAssets]);
-          } else if (error && !lastWaveError) {
-            lastWaveError = error;
-          }
-          continue;
-        }
-
-        // SI ES ANUNCIO DE IMAGEN: Generar la Imagen IA con openai/gpt-image-2.6-sunburst
-        setGenerationProgressText(
-          `🎨 Generando Imagen IA ${cardIdx + 1}/${imageSliceEnd} en OpenRouter (Anuncio #${cardIdx + 1}) con ${selectedImageModel}...`
-        );
-
-        try {
-          const res = await fetch('/api/autoads/generate-ad-images', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              product: activeProduct,
-              creativeBriefs: currentBrain.creativeBriefs,
-              forceNewGeneration: true,
-              imageModel: selectedImageModel,
-              videoModel: selectedVideoModel,
-              onlyImagesMode,
-              openRouterApiKey: vaultKey,
-              targetIndices: [cardIdx]
-            })
-          });
-          const rawText = await res.text();
-          let imgData: any = null;
+      // Helper individual para generar 1 Imagen IA con reintento automático inmediato sin bloquear al resto
+      const generateSingleImageCardInParallel = async (cardIdx: number) => {
+        for (let attempt = 1; attempt <= 2; attempt++) {
           try {
-            imgData = JSON.parse(rawText);
-          } catch {
-            if (!lastWaveError) {
-              lastWaveError = `Respuesta inválida al generar Anuncio #${cardIdx + 1} (HTTP ${res.status}).`;
-            }
-            continue;
-          }
-
-          if (!res.ok || imgData?.success === false) {
-            lastWaveError =
-              imgData?.error ||
-              `Error ${res.status}: Fallo en la API de ${selectedImageModel} en OpenRouter.`;
-            continue;
-          }
-          if (Array.isArray(imgData?.generatedImages) && imgData.generatedImages.length > 0) {
-            workingAssets = workingAssets.map((asset, idx) => {
-              const match = imgData.generatedImages.find((g: any) => g.adIndex === idx);
-              if (!match?.imageUrl) return asset;
-              return {
-                ...asset,
-                aiGeneratedImageUrl: match.imageUrl,
-                aiImagePrompt: match.prompt || asset.aiImagePrompt
-              };
-            });
-            setCreatives([...workingAssets]);
-          }
-        } catch (cardErr: any) {
-          if (!lastWaveError) {
-            lastWaveError = cardErr?.message || `Error de red al generar imagen #${cardIdx + 1}.`;
-          }
-        }
-
-        if (i + 1 < singleCardIndices.length && (onlyImagesMode || singleCardIndices[i + 1] < 4)) {
-          // Pausa de 1.8s para que OpenRouter libere la reserva de créditos en vuelo ("in-flight hold") antes de la siguiente imagen Sunburst
-          await new Promise(r => setTimeout(r, 1800));
-        }
-      }
-
-      // Segunda pasada de autorrecuperación automática si alguna tarjeta quedó pendiente por reserva in-flight
-      const missingIndices = workingAssets
-        .map((asset, idx) =>
-          (idx < imageSliceEnd && !asset.aiGeneratedImageUrl) ||
-          (!onlyImagesMode && idx >= 4 && !asset.aiGeneratedVideoUrl)
-            ? idx
-            : -1
-        )
-        .filter(idx => idx !== -1);
-
-      if (missingIndices.length > 0) {
-        await new Promise(r => setTimeout(r, 1800));
-        for (const missingIdx of missingIndices) {
-          if (missingIdx >= 4 && !onlyImagesMode) {
-            const { videoUrl } = await requestDirectReelVideoWithPolling(
-              missingIdx,
-              workingAssets[missingIdx]?.aiImagePrompt || '',
-              (round, totalRounds) => {
-                setGenerationProgressText(
-                  `🎬 Finalizando Video Reel de 15s del Anuncio #${missingIdx + 1} (${selectedVideoModel} · Ronda ${round}/${totalRounds})...`
-                );
-              },
-              {
-                headline: workingAssets[missingIdx]?.headline || '',
-                primaryText: workingAssets[missingIdx]?.primaryText || '',
-                ctaLabel: workingAssets[missingIdx]?.ctaLabel || ''
-              }
-            );
-            if (videoUrl) {
-              workingAssets = workingAssets.map((asset, idx) =>
-                idx === missingIdx
-                  ? { ...asset, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: videoUrl }
-                  : asset
-              );
-              setCreatives([...workingAssets]);
-            }
-            continue;
-          }
-
-          setGenerationProgressText(
-            `🔄 Liberando reserva en vuelo y completando Imagen del Anuncio #${missingIdx + 1} en OpenRouter (${selectedImageModel})...`
-          );
-          await new Promise(r => setTimeout(r, 1500));
-          try {
-            const retryRes = await fetch('/api/autoads/generate-ad-images', {
+            const res = await fetch('/api/autoads/generate-ad-images', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1012,29 +883,124 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 videoModel: selectedVideoModel,
                 onlyImagesMode,
                 openRouterApiKey: vaultKey,
-                targetIndices: [missingIdx]
-              })
+                targetIndices: [cardIdx]
+              }),
+              signal: AbortSignal.timeout(45000)
             });
-            const retryRaw = await retryRes.text();
-            const retryData = JSON.parse(retryRaw || '{}');
-            if (retryRes.ok && Array.isArray(retryData?.generatedImages)) {
-              const recovered = retryData.generatedImages.find((g: any) => g.adIndex === missingIdx);
-              if (recovered?.imageUrl) {
-                workingAssets = workingAssets.map((asset, idx) =>
-                  idx === missingIdx
-                    ? {
-                        ...asset,
-                        aiGeneratedImageUrl: recovered.imageUrl,
-                        aiImagePrompt: recovered.prompt || asset.aiImagePrompt
-                      }
-                    : asset
-                );
-                setCreatives([...workingAssets]);
+            const rawText = await res.text();
+            let imgData: any = null;
+            try {
+              imgData = JSON.parse(rawText);
+            } catch {
+              if (attempt === 2 && !lastWaveError) {
+                lastWaveError = `Respuesta inválida al generar Anuncio #${cardIdx + 1} (HTTP ${res.status}).`;
               }
+              continue;
             }
-          } catch {}
+
+            if (!res.ok || imgData?.success === false) {
+              if (attempt === 2 && !lastWaveError) {
+                lastWaveError =
+                  imgData?.error ||
+                  `Error ${res.status}: Fallo en la API de ${selectedImageModel} en OpenRouter.`;
+              }
+              if (attempt === 1) {
+                await new Promise(r => setTimeout(r, 900));
+              }
+              continue;
+            }
+
+            const match = Array.isArray(imgData?.generatedImages)
+              ? imgData.generatedImages.find((g: any) => g.adIndex === cardIdx) || imgData.generatedImages[0]
+              : null;
+
+            if (match?.imageUrl) {
+              workingAssets[cardIdx] = {
+                ...workingAssets[cardIdx],
+                aiGeneratedImageUrl: match.imageUrl,
+                aiImagePrompt: match.prompt || workingAssets[cardIdx]?.aiImagePrompt
+              };
+              completedCardsCount += 1;
+              setCreatives(prev =>
+                prev.map((item, idx) =>
+                  idx === cardIdx
+                    ? {
+                        ...item,
+                        aiGeneratedImageUrl: match.imageUrl,
+                        aiImagePrompt: match.prompt || item.aiImagePrompt
+                      }
+                    : item
+                )
+              );
+              setGenerationProgressText(
+                `⚡ Ráfaga Simultánea (${completedCardsCount}/6 listos): Anuncio #${cardIdx + 1} completado al instante...`
+              );
+              return;
+            }
+          } catch (cardErr: any) {
+            if (attempt === 2 && !lastWaveError) {
+              lastWaveError = cardErr?.message || `Error de red al generar imagen #${cardIdx + 1}.`;
+            }
+            if (attempt === 1) {
+              await new Promise(r => setTimeout(r, 900));
+            }
+          }
         }
-      }
+      };
+
+      // Helper individual para generar 1 Video Reel de 15s en paralelo sin bloquear a ninguna otra tarjeta
+      const generateSingleReelCardInParallel = async (cardIdx: number) => {
+        const { videoUrl, error } = await requestDirectReelVideoWithPolling(
+          cardIdx,
+          workingAssets[cardIdx]?.aiImagePrompt || '',
+          (round, totalRounds) => {
+            setGenerationProgressText(
+              `⚡ Ráfaga Simultánea (${completedCardsCount}/6 listos) · 🎬 Renderizando Reel 15s #${cardIdx + 1} en ${selectedVideoModel} (${round}/${totalRounds})...`
+            );
+          },
+          {
+            headline: workingAssets[cardIdx]?.headline || '',
+            primaryText: workingAssets[cardIdx]?.primaryText || '',
+            ctaLabel: workingAssets[cardIdx]?.ctaLabel || ''
+          }
+        );
+        if (videoUrl) {
+          workingAssets[cardIdx] = {
+            ...workingAssets[cardIdx],
+            aiGeneratedImageUrl: '',
+            aiGeneratedVideoUrl: videoUrl
+          };
+          completedCardsCount += 1;
+          setCreatives(prev =>
+            prev.map((item, idx) =>
+              idx === cardIdx
+                ? { ...item, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: videoUrl }
+                : item
+            )
+          );
+          setGenerationProgressText(
+            `⚡ Ráfaga Simultánea (${completedCardsCount}/6 listos): Video Reel 15s #${cardIdx + 1} completado...`
+          );
+        } else if (error && !lastWaveError) {
+          lastWaveError = error;
+        }
+      };
+
+      // DISPARO SIMULTÁNEO DE UN SOLO TIRO (Promise.allSettled): Cero fila india, todas las tarjetas arrancan a la vez
+      await Promise.allSettled(
+        singleCardIndices.map(async (cardIdx, staggerOrder) => {
+          // Micro-escalonado de 120ms solo para evitar colisión de socket TCP simultáneo en el navegador
+          if (staggerOrder > 0) {
+            await new Promise(r => setTimeout(r, staggerOrder * 120));
+          }
+          const isReelCard = cardIdx >= 4 && !onlyImagesMode;
+          if (isReelCard) {
+            await generateSingleReelCardInParallel(cardIdx);
+          } else {
+            await generateSingleImageCardInParallel(cardIdx);
+          }
+        })
+      );
 
       const totalGeneratedImagesCount = workingAssets
         .slice(0, imageSliceEnd)
@@ -1062,12 +1028,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       }
 
       clearTimeout(genTimer1);
-      setCreatives(workingAssets);
+      setCreatives([...workingAssets]);
       setWorkflowStep('generated');
       showToast(
         onlyImagesMode
-          ? `🖼️ ${totalGeneratedImagesCount}/6 Imágenes IA (${selectedImageModel}) creadas (Modo 100% Solo Imágenes).`
-          : `🤖 ${totalGeneratedImagesCount}/4 Imágenes IA (${selectedImageModel}) + ${totalReelVideosCount}/2 Videos Reels (${selectedVideoModel}) creados.`
+          ? `⚡ Ráfaga Simultánea: ${totalGeneratedImagesCount}/6 Imágenes IA (${selectedImageModel}) creadas de un tiro.`
+          : `⚡ Ráfaga Simultánea: ${totalGeneratedImagesCount}/4 Imágenes IA (${selectedImageModel}) + ${totalReelVideosCount}/2 Videos Reels (${selectedVideoModel}) creados de un tiro.`
       );
     } catch (err: any) {
       clearTimeout(genTimer1);
@@ -1158,7 +1124,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           onlyImagesMode,
           openRouterApiKey: getVaultOpenRouterKey(),
           imageOnly: true
-        })
+        }),
+        signal: AbortSignal.timeout(45000)
       });
       const data = await res.json();
       if (!res.ok || data?.success === false || !data?.customBrief?.aiGeneratedImageUrl) {
@@ -1198,52 +1165,6 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
   };
 
-  // Auto-creación directa de los Videos Reels MP4 (Anuncios #5 y #6) solo si onlyImagesMode está desactivado
-  useEffect(() => {
-    if (
-      onlyImagesMode ||
-      !activeProduct ||
-      !brainProfile ||
-      workflowStep === 'generating' ||
-      workflowStep === 'researching' ||
-      regeneratingAdIdx !== null ||
-      creatives.length < 6
-    ) {
-      return;
-    }
-    const missingReelIdx = [4, 5].find(idx => !creatives[idx]?.aiGeneratedVideoUrl);
-    if (missingReelIdx === undefined) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const targetAd = creatives[missingReelIdx];
-        const { videoUrl } = await requestDirectReelVideoWithPolling(
-          missingReelIdx,
-          targetAd?.aiImagePrompt || '',
-          undefined,
-          {
-            headline: targetAd?.headline || '',
-            primaryText: targetAd?.primaryText || '',
-            ctaLabel: targetAd?.ctaLabel || ''
-          }
-        );
-        if (videoUrl && !cancelled) {
-          setCreatives(prev =>
-            prev.map((item, idx) =>
-              idx === missingReelIdx
-                ? { ...item, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: videoUrl }
-                : item
-            )
-          );
-        }
-      } catch {}
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [creatives, activeProduct, brainProfile, workflowStep, regeneratingAdIdx, onlyImagesMode]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Cambiar / Regenerar UN anuncio específico ("🔄 Cambiar")

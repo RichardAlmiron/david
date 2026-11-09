@@ -3702,7 +3702,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           n: 1,
                           size: '1024x1024'
                         }),
-                        signal: AbortSignal.timeout(55000)
+                        signal: AbortSignal.timeout(36000)
                       });
 
                       if (!imgApiRes.ok) {
@@ -3712,9 +3712,9 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                             (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))) ||
                           imgApiRes.status === 429 ||
                           imgApiRes.status >= 500;
-                        if (isRetryableHoldOrRate && retryAttempt < 3) {
-                          const waitMs = 3800 + retryAttempt * 1500;
-                          console.log(`[generate-ad-images] Esperando ${waitMs}ms a que OpenRouter libere reserva in-flight para el modelo elegido ${imgModel} (intento ${retryAttempt + 1}/3)...`);
+                        if (isRetryableHoldOrRate && retryAttempt < 2) {
+                          const waitMs = 1800 + retryAttempt * 1200;
+                          console.log(`[generate-ad-images] Reintento rápido en ${waitMs}ms para ${imgModel} (intento ${retryAttempt + 1}/2)...`);
                           await new Promise(r => setTimeout(r, waitMs));
                           return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
                         }
@@ -3734,8 +3734,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         fatalAuth: false
                       };
                     } catch (err: any) {
-                      if (retryAttempt < 2) {
-                        await new Promise(r => setTimeout(r, 3000));
+                      if (retryAttempt < 1) {
+                        await new Promise(r => setTimeout(r, 1200));
                         return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
                       }
                       return {
@@ -3767,7 +3767,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           }
                         ]
                       }),
-                      signal: AbortSignal.timeout(55000)
+                      signal: AbortSignal.timeout(36000)
                     });
 
                     if (!orImgRes.ok) {
@@ -3777,9 +3777,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))) ||
                         orImgRes.status === 429 ||
                         orImgRes.status >= 500;
-                      if (isRetryableHoldOrRate && retryAttempt < 3) {
-                        const waitMs = 3800 + retryAttempt * 1500;
-                        console.log(`[generate-ad-images] Esperando ${waitMs}ms a que OpenRouter libere reserva in-flight para el modelo elegido ${imgModel} (intento ${retryAttempt + 1}/3)...`);
+                      if (isRetryableHoldOrRate && retryAttempt < 2) {
+                        const waitMs = 1800 + retryAttempt * 1200;
                         await new Promise(r => setTimeout(r, waitMs));
                         return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
                       }
@@ -3799,8 +3798,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       fatalAuth: false
                     };
                   } catch (err: any) {
-                    if (retryAttempt < 2) {
-                      await new Promise(r => setTimeout(r, 3000));
+                    if (retryAttempt < 1) {
+                      await new Promise(r => setTimeout(r, 1200));
                       return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
                     }
                     return {
@@ -3866,7 +3865,6 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     lastOpenRouterImgError = errorText;
                     console.warn(`[generate-ad-images] Ad #${idx + 1} Model ${imgModel} failed:`, lastOpenRouterImgError);
                     if (fatalAuth) break;
-                    await new Promise(r => setTimeout(r, 1200));
                   }
 
                   return {
@@ -3885,31 +3883,23 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   ? [0, 1, 2, 3, 4, 5]
                   : [0, 1, 2, 3];
 
-                const generatedImages: Array<{
-                  adIndex: number;
-                  imageUrl: string;
-                  videoUrl?: string;
-                  prompt: string;
-                  imageModel: string;
-                  videoModel?: string;
-                  error?: string;
-                }> = [];
-
-                for (let i = 0; i < requestedIndices.length; i++) {
-                  const idx = requestedIndices[i];
-                  const oneResult = await generateOneCreativeViaOpenRouter(universalArchetypePrompts[idx], idx);
-                  if (oneResult.imageUrl || oneResult.videoUrl) {
-                    patchAutoAdsWorkspaceMedia(product, idx, {
-                      imageUrl: oneResult.imageUrl || undefined,
-                      videoUrl: oneResult.videoUrl || undefined,
-                      prompt: oneResult.prompt
-                    });
-                  }
-                  generatedImages.push(oneResult);
-                  if (i + 1 < requestedIndices.length) {
-                    await new Promise(r => setTimeout(r, 400));
-                  }
-                }
+                // DISPARO SIMULTÁNEO EN PARALELO (Promise.all): Cero fila india
+                const generatedImages = await Promise.all(
+                  requestedIndices.map(async (idx, pos) => {
+                    if (pos > 0) {
+                      await new Promise(r => setTimeout(r, pos * 100));
+                    }
+                    const oneResult = await generateOneCreativeViaOpenRouter(universalArchetypePrompts[idx], idx);
+                    if (oneResult.imageUrl || oneResult.videoUrl) {
+                      patchAutoAdsWorkspaceMedia(product, idx, {
+                        imageUrl: oneResult.imageUrl || undefined,
+                        videoUrl: oneResult.videoUrl || undefined,
+                        prompt: oneResult.prompt
+                      });
+                    }
+                    return oneResult;
+                  })
+                );
 
                 const successCount = generatedImages.filter(g => Boolean(g.imageUrl || g.videoUrl)).length;
                 if (successCount === 0) {
