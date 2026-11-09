@@ -2188,19 +2188,62 @@ function registerApiServerMiddlewares(server: any) {
                   }
                   txt = txt.replace(/[™®©]/g, '').replace(/  +/g, ' ').trim();
 
-                  // Garantizar que si es copy multilínea (primaryText), las palabras 1 a 4 (0.0 segundos) nombren el OBJETO + Dolor/Solución/Placer/Oferta
+                  // Garantizar que si es copy multilínea (primaryText), la PRIMERA ESTROFA (lines[0]):
+                  // 1) Empiece en las palabras 1 a 4 (0.0 segundos) nombrando el PRODUCTO.
+                  // 2) Siga hablando dentro de esa misma primera estrofa 100% del PRODUCTO en sí: qué ofrece, qué entrega, qué placer o solución obtiene el usuario.
+                  // 3) PROHIBIDO hablar en la primera estrofa de precios (Gs.), pagos, giros, repartidores o miedos de comprar online.
                   if (txt.includes('\n')) {
                     const lines = txt.split('\n');
                     const firstLine = (lines[0] || '').trim();
                     if (firstLine) {
+                      const rawDescClean = String(product.descripcion || 'rendimiento superior y resultados reales desde el primer uso').replace(/[™®©]/g, '').trim();
+                      const rawBenClean = String(product?.landingContent?.benefitCards?.[0]?.title || product?.agentBrain?.usageSummarySpoken || rawDescClean).replace(/[™®©]/g, '').trim();
+                      const rawTechClean = String(product?.physicalTruth?.materialMain || product?.agentBrain?.technicalSpecsSpoken || 'materiales resistentes de alta durabilidad').replace(/[™®©]/g, '').trim();
+                      const rawBoxClean = String(product?.physicalTruth?.boxContents || product?.agentBrain?.boxContentsSpoken || `${genericProdName} completo con todos sus accesorios originales`).replace(/[™®©]/g, '').trim();
+
                       const leadingEmojiMatch = firstLine.match(/^([🔥✨💡🤝⚡📦🛑🎁🎄✅⭐]+\s*)/);
-                      const defaultEmojis = ['🔥 ', '🛑 ', '💡 ', '🎁 ', '⚡ ', '📦 '];
+                      const defaultEmojis = ['🔥 ', '✨ ', '💡 ', '🎁 ', '⚡ ', '📦 '];
                       const leadingEmoji = leadingEmojiMatch ? leadingEmojiMatch[1] : defaultEmojis[angleIdx % defaultEmojis.length];
                       let bodyLine = leadingEmojiMatch ? firstLine.slice(leadingEmojiMatch[0].length).trim() : firstLine;
                       bodyLine = bodyLine
-                        .replace(/^(?:¿\s*)?(?:te imagin[aá]s|alguna vez (?:te pas[oó] que|compraste)|hasta cu[aá]ndo vas a seguir|sab[ií]as que|te preocupa pedir algo y que|quer[eé]s saber exactamente)\s+/i, '¿')
-                        .replace(/^¿\s*¿/, '¿')
+                        .replace(/^(?:¿\s*)?(?:te imagin[aá]s|alguna vez (?:te pas[oó] que|compraste)|hasta cu[aá]ndo vas a seguir|sab[ií]as que|te preocupa pedir algo y que|quer[eé]s saber exactamente)\s+/i, '')
+                        .replace(/\bPAGO EN PUERTA\s*:/gi, 'RESULTADO REAL:')
+                        .replace(/\s*(?:por\s+solo|a\s+solo|por)\s+Gs\.?\s*[\d.]+(?:\s*\([^)]*\))?/gi, '')
+                        .replace(/\s*\(\s*(?:antes|ahorr[aá]s|pag[aá]s)[^)]*\)/gi, '')
+                        .replace(/\s*ahorrando\s+Gs\.?\s*[\d.]+(?:\s+directo)?/gi, '')
+                        .replace(/\s*(?:y\s+|;\s*|,\s*)?(?:pag[aá](?:s|ndo)?\s+(?:reci[eé]n\s+)?(?:cuando\s+(?:recib[ií]s|te\s+entregamos)|al\s+recibir|en\s+puerta|frente\s+al\s+repartidor))[^.]*/gi, '')
+                        .replace(/\s*(?:no\s+arriesgues\s+ni\s+un\s+solo\s+guaran[ií]|cero\s+giros\s+previos|sin\s+riesgo\s+de\s+estafa|recib[ií]s\s+tu\s+pedido\s+en\s+\d+\s+a\s+\d+\s+d[ií]as)[^.]*/gi, '')
+                        .replace(/\s+,/g, ',')
+                        .replace(/\s+\./g, '.')
+                        .replace(/[:;,\s]+$/, '')
                         .trim();
+
+                      const colonIdx = bodyLine.indexOf(':');
+                      const afterColon = colonIdx >= 0 ? bodyLine.slice(colonIdx + 1).trim() : bodyLine;
+                      const hasForbiddenFirstStanza =
+                        /\b(?:gs\.?\s*\d|repartidor|estafa|adelanto|giro|transferencia|pag[aá]s|abonar|48\s*a\s*72|2\s*a\s*3\s*d[ií]as)\b/i.test(
+                          afterColon
+                        );
+
+                      const productPleasureContinuations = [
+                        `disfrutá ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)} desde el primer encendido y transformá tu experiencia al instante con lo mejor que ofrece este ${shortCategoryNoun} (${rawDescClean.charAt(0).toLowerCase() + rawDescClean.slice(1)}).`,
+                        `viví el placer de contar con un ${shortCategoryNoun} de alto desempeño que te entrega ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)} con calidad y potencia real (${rawTechClean.charAt(0).toLowerCase() + rawTechClean.slice(1)}).`,
+                        `olvidate del esfuerzo innecesario y obtené la solución inmediata que buscabas con ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)}, diseñado para brindarte comodidad y resultados visibles en minutos.`,
+                        `duplicá el placer y la cobertura en tu hogar con dos equipos completos funcionando al máximo para brindarte ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)} donde más lo necesitás.`,
+                        `sentí la diferencia de un ${shortCategoryNoun} superior (${rawTechClean.charAt(0).toLowerCase() + rawTechClean.slice(1)}) que trabaja a máxima capacidad para entregarte ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)} desde el primer segundo.`,
+                        `disfrutá la solución completa en tus manos (${rawBoxClean.charAt(0).toLowerCase() + rawBoxClean.slice(1)}) lista para encender y brindarte ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)} al instante.`
+                      ];
+
+                      const instantPrefixes = [
+                        `${objUpper} EN OFERTA:`,
+                        `${objUpper} RESULTADO REAL:`,
+                        `${objUpper} SIN COMPLICACIONES:`,
+                        `2X ${objUpper} DOBLE PODER:`,
+                        `${objUpper} MÁXIMA POTENCIA:`,
+                        `${objUpper} KIT COMPLETO:`
+                      ];
+                      const prefix = instantPrefixes[angleIdx % instantPrefixes.length];
+                      const continuation = productPleasureContinuations[angleIdx % productPleasureContinuations.length];
 
                       const firstFourWords = bodyLine
                         .replace(/[¿?¡!:.,—\-()]/g, ' ')
@@ -2215,23 +2258,11 @@ function registerApiServerMiddlewares(server: any) {
                         rootSlice.length >= 3 &&
                         new RegExp(`^(?:2x\\s+)?${rootSlice}`, 'i').test(firstFourWords);
 
-                      if (!startsWithObjectHeader && bodyLine.length > 12) {
-                        const instantPrefixes = [
-                          `${objUpper} EN OFERTA:`,
-                          `${objUpper} PAGO EN PUERTA:`,
-                          `${objUpper} SIN COMPLICACIONES:`,
-                          `2X ${objUpper} EN OFERTA:`,
-                          `${objUpper} MÁXIMA POTENCIA:`,
-                          `${objUpper} KIT COMPLETO:`
-                        ];
-                        const prefix = instantPrefixes[angleIdx % instantPrefixes.length];
-                        const normalizedRest =
-                          bodyLine.startsWith('¿') || bodyLine.startsWith('¡')
-                            ? bodyLine
-                            : bodyLine.charAt(0).toLowerCase() + bodyLine.slice(1);
-                        lines[0] = `${leadingEmoji}${prefix} ${normalizedRest}`;
+                      if (!startsWithObjectHeader || afterColon.length < 35 || hasForbiddenFirstStanza) {
+                        lines[0] = `${leadingEmoji}${prefix} ${continuation}`;
                       } else {
-                        lines[0] = `${leadingEmoji}${bodyLine}`;
+                        const cleanBody = bodyLine.endsWith('.') ? bodyLine : `${bodyLine}.`;
+                        lines[0] = `${leadingEmoji}${cleanBody}`;
                       }
                       txt = lines.join('\n');
                     }
@@ -2326,21 +2357,21 @@ function registerApiServerMiddlewares(server: any) {
                   activeAdsFound: 24,
                   marketsScanned: ['Paraguay (PY)', 'Colombia (CO)', 'Chile (CL)', 'México (MX)', 'Brasil (BR)', 'España (ES)'],
                   winningPatterns: [
-                    `Impacto en 0.0 Segundos (Palabras 1 a 4): Objeto (${objUpper}) + Dolor/Solución/Placer/Oferta de entrada sin preámbulos`,
-                    `Transparencia logística COD Paraguay (Hormozi): "Reservás sin adelantos, recibís en 2 a 3 días hábiles y pagás recién en tu puerta"`,
+                    `Impacto en 0.0 Segundos + 1ª Estrofa 100% Producto: Palabras 1 a 4 nombran el objeto (${objUpper}) y toda la primera estrofa sigue hablando de lo que ofrece, el placer y la solución (cero precios ni miedos de pago en el 1er párrafo)`,
+                    `Transparencia logística COD Paraguay en el cierre: "Reservás sin adelantos, recibís en 2 a 3 días hábiles y pagás recién en tu puerta"`,
                     `Anclaje Psicológico Pack 2 Familiar (Gs. ${p2.toLocaleString('es-PY')}) con Envío Gratis`
                   ],
                   commonHooks: [
-                    `🔥 ${objUpper} EN OFERTA: ${mainBenefit.toLowerCase()} por solo Gs. ${p1.toLocaleString('es-PY')} (pagás recién al recibir)`,
-                    `🛑 ${objUpper} PAGO EN PUERTA: recibilo en 2 a 3 días hábiles y pagá recién al verificarlo`,
-                    `🎁 2X ${objUpper} CON DESCUENTO: llevate 2 unidades por Gs. ${p2.toLocaleString('es-PY')} con envío gratis`,
-                    `💡 ${objUpper} SIN COMPLICACIONES: olvidate de renegar con opciones viejas y resolvelo en minutos`
+                    `🔥 ${objUpper} EN OFERTA: disfrutá ${mainBenefit.toLowerCase()} desde el primer encendido`,
+                    `✨ ${objUpper} RESULTADO REAL: desempeño superior y placer inmediato en tu hogar`,
+                    `🎁 2X ${objUpper} DOBLE PODER: duplicá la cobertura y el disfrute en dos ambientes a la vez`,
+                    `💡 ${objUpper} SIN COMPLICACIONES: olvidate de renegar con opciones viejas y disfrutá el resultado en minutos`
                   ],
                   commonAngles: [
-                    'Ángulo 1 (Oferta + Placer en 0.0s): Objeto en palabras 1-4 + transformación inmediata + Cero Riesgo en Puerta (entrega en 48-72 hs)',
-                    'Ángulo 2 (Anti-Estafa / Confianza COD): Objeto en palabras 1-4 + "No girás plata antes, pagás recién en tu puerta"',
-                    'Ángulo 3 (Dolor Cotidiano → Solución Práctica): Objeto en palabras 1-4 + alivio inmediato sin esfuerzo',
-                    'Ángulo 4 (Autoridad + Verdad Física): Objeto en palabras 1-4 + potencia real y caja sellada completa'
+                    'Ángulo 1 (Oferta + Placer del Producto en 0.0s): Objeto en palabras 1-4 + toda la 1ª estrofa dedicada a lo que entrega y el placer que recibe el usuario',
+                    'Ángulo 2 (Experiencia y Calidad Real): Objeto en palabras 1-4 + toda la 1ª estrofa dedicada al desempeño y beneficio real del producto',
+                    'Ángulo 3 (Dolor Cotidiano → Solución Práctica): Objeto en palabras 1-4 + toda la 1ª estrofa dedicada a la solución inmediata que da el producto',
+                    'Ángulo 4 (Autoridad + Verdad Física): Objeto en palabras 1-4 + toda la 1ª estrofa dedicada a la potencia real y el kit completo'
                   ],
                   dominantFormats: ['Feed 1:1 (1080×1080)', 'Story 9:16 (1080×1920)', 'Video Reel 9:16 (4 Escenas)'],
                   avgLongevityDays: 38
@@ -2387,7 +2418,7 @@ function registerApiServerMiddlewares(server: any) {
                   }
                 } catch {}
 
-                // 3. Entrenar Cerebro Maestro Supremo con GLM-5.3 / OpenRouter (Andrómeda + Gurús Direct-Response)
+                // 3. Entrenar Cerebro Maestro Supremo con OpenAI GPT-4o vía OpenRouter (Andrómeda + Gurús Direct-Response)
                 let brainProfile: any = null;
 
                 if (!openRouterKey || openRouterKey.includes('tu-clave-de-openrouter')) {
@@ -2406,7 +2437,7 @@ function registerApiServerMiddlewares(server: any) {
                 const savingsPack2 = Math.max(20000, p1 * 2 - p2);
 
                 const systemPrompt = `# SISTEMA AUTOADS — CEREBRO MAESTRO ANDRÓMEDA 2026 (EUGENE SCHWARTZ + ALEX HORMOZI + SABRI SUBY)
-Sos el Copywriter #1 de Respuesta Directa y Meta Ads para E-Commerce en Paraguay donde el cliente paga recién cuando recibe en su puerta.
+Sos el Copywriter #1 de Respuesta Directa y Meta Ads para E-Commerce en Paraguay.
 
 IDENTIDAD FUNCIONAL DEL PRODUCTO (QUÉ ES EL OBJETO, QUÉ RESUELVE Y QUÉ PLACER DA):
 - Objeto principal (2 a 3 palabras clave obligatorias en el arranque): "${ultraShortObjectLabel}" (${objUpper})
@@ -2417,33 +2448,31 @@ ${brandTokenRemoved ? `- PROHIBICIÓN DE MARCA DESCONOCIDA: La palabra "${brandT
 - Especificaciones Reales (Verdad Física): ${techSpecs}
 - Contenido Exacto de la Caja: ${boxItems}
 ${contextIA ? `- Contexto Adicional:\n${contextIA}\n` : ''}
-- Precios Oficiales EN TIEMPO REAL en Guaraníes (RESPETÁ ESTRICTAMENTE ESTOS PRECIOS EXACTOS):
+- Precios Oficiales EN TIEMPO REAL en Guaraníes (PARA EL BLOQUE DE PRECIOS ABAJO, NUNCA EN LA PRIMERA ESTROFA):
   • 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Precio Normal Tachado: Gs. ${pNormal.toLocaleString('es-PY')})
   • Pack 2 Unidades (Oferta Familiar Más Elegida): Gs. ${p2.toLocaleString('es-PY')} (Ahorro directo de Gs. ${savingsPack2.toLocaleString('es-PY')})
   • Pack 3 Unidades: Gs. ${p3.toLocaleString('es-PY')}
 
 REGLAS ESTRICTAS E INQUEBRANTABLES DE COPYWRITING PARAGUAY:
-1. REGLA DE LOS 0.0 SEGUNDOS (PALABRAS 1 A 4 DE LA PRIMERA LÍNEA = OBJETO + DOLOR/SOLUCIÓN/PLACER/OFERTA):
-   - En menos de 0.0 segundos (en la 1ª, 2ª, 3ª o 4ª palabra), el espectador DEBE saber exactamente QUÉ OBJETO ES ("${objUpper}") y qué DOLOR resuelve, qué PLACER da o qué OFERTA IRRESISTIBLE tiene enfrente.
-   - Está TERMINANTEMENTE PROHIBIDO poner palabras de relleno antes de nombrar el objeto (PROHIBIDO empezar con "¿Te imaginás...", "¿Alguna vez te pasó...", "¿Hasta cuándo vas a seguir...", "¿Te da miedo...", "¿Querés cubrir...", "Mirá la imagen:", "Mirá bien esta comparación:").
-   - La Línea 1 de cada "primaryText" DEBE empezar exactamente con este formato de impacto instantáneo en las primeras 1 a 4 palabras:
-     • Anuncio #1 (Oferta/Placer): "🔥 ${objUpper} EN OFERTA: [solución/placer inmediato + Gs. ${p1.toLocaleString('es-PY')} pagás cuando recibís]"
-     • Anuncio #2 (Confianza Pago al Recibir): "🛑 ${objUpper} PAGO EN PUERTA: [cero giros previos, recibís en 2 a 3 días hábiles y pagás cuando te entregamos]"
-     • Anuncio #3 (Dolor → Solución): "💡 ${objUpper} SIN COMPLICACIONES: [alivio inmediato del dolor cotidiano en minutos]"
-     • Anuncio #4 (Pack 2x Ahorro): "🎁 2X ${objUpper} EN OFERTA: [llevate 2 unidades por Gs. ${p2.toLocaleString('es-PY')} ahorrando Gs. ${savingsPack2.toLocaleString('es-PY')}]"
-     • Anuncio #5 (Potencia Real): "⚡ ${objUpper} MÁXIMA POTENCIA: [calidad real, alcance y durabilidad comprobada]"
-     • Anuncio #6 (Kit Completo): "📦 ${objUpper} KIT COMPLETO: [caja sellada con todos los accesorios listos para usar]"
+1. REGLA DE ORO DE LA PRIMERA ESTROFA (0.0 SEGUNDOS + 100% PRODUCTO, LO QUE OFRECE, EL PLACER Y LA SOLUCIÓN):
+   - En las primeras 1 a 4 palabras (0.0 segundos) de la primera estrofa, nombrá el OBJETO ("${objUpper}").
+   - Inmediatamente después de esas 3 o 4 palabras, DENTRO DE ESA MISMA PRIMERA ESTROFA, seguí hablando 100% del PRODUCTO en sí: qué hace, qué ofrece, qué entrega, qué placer recibe el usuario al usarlo o qué solución real obtiene en su vida/hogar (${mainBenefit} · ${prodDesc}).
+   - PROHIBIDO EN LA PRIMERA ESTROFA (1er párrafo):
+     • Está TERMINANTEMENTE PROHIBIDO mencionar precios (Gs.) en la primera estrofa.
+     • Está TERMINANTEMENTE PROHIBIDO hablar en la primera estrofa de pagos, de girar plata, de miedos a comprar online, de estafas o de repartidores.
+     • Toda la primera estrofa debe despertar el deseo e interés instantáneo por el PRODUCTO, su función, su placer y su solución:
+       - Anuncio #1 (Oferta + Placer del Producto): "🔥 ${objUpper} EN OFERTA: [seguí hablando del producto, de lo que ofrece, del placer que recibe el usuario y cómo transforma su espacio con ${mainBenefit}]"
+       - Anuncio #2 (Experiencia y Resultado Real): "✨ ${objUpper} RESULTADO REAL: [seguí hablando de cómo funciona el producto, lo que entrega y la satisfacción de su calidad superior (${techSpecs})]"
+       - Anuncio #3 (Solución Inmediata): "💡 ${objUpper} SIN COMPLICACIONES: [seguí hablando de cómo este producto resuelve el problema en minutos y la comodidad/alivio que obtiene el usuario]"
+       - Anuncio #4 (Pack 2x Doble Poder): "🎁 2X ${objUpper} DOBLE PODER: [seguí hablando del placer de tener dos equipos funcionando a máxima capacidad y duplicando el resultado en casa]"
+       - Anuncio #5 (Potencia Real): "⚡ ${objUpper} MÁXIMA POTENCIA: [seguí hablando de la potencia, alcance y desempeño real del producto en uso]"
+       - Anuncio #6 (Kit Completo): "📦 ${objUpper} KIT COMPLETO: [seguí hablando de todo lo que entrega el producto con sus accesorios originales (${boxItems}) y el placer de disfrutarlo desde el primer minuto]"
 2. PROHIBIDO USAR LA JERGA "CONTRA ENTREGA" O "PEDIR CONTRA ENTREGA":
-   - Un comprador normal NO entiende qué significa "contra entrega" (esa es palabra de comerciantes).
-   - Está TERMINANTEMENTE PROHIBIDO escribir "contra entrega", "pedir contra entrega" o "cobro contra entrega".
-   - Usá SIEMPRE palabras claras y directas para el cliente: "PAGÁS CUANDO RECIBÍS", "pagás recién cuando te entregamos en tu puerta", "abonás cuando recibís".
-3. PROHIBIDO MENTIR CON EL TIEMPO DE ENTREGA ("HOY MISMO EN TU PUERTA"):
-   - En Paraguay los envíos tardan **entre 2 y 3 días hábiles (48 a 72 horas)** en llegar a la puerta del cliente.
-   - Está TERMINANTEMENTE PROHIBIDO decir "vos podés tener esto HOY mismo en tu puerta", "recibilo hoy mismo" o "entrega al instante".
-   - Decí SIEMPRE: "Reservás hoy sin pagar nada por adelantado, lo recibís en 2 a 3 días hábiles (48 a 72 hs) y pagás recién cuando te entregamos en tu puerta".
+   - Usá SIEMPRE en el cierre: "PAGÁS CUANDO RECIBÍS" o "pagás recién cuando recibís en tu puerta".
+3. TIEMPO DE ENTREGA REAL EN EL BLOQUE LOGÍSTICO FINAL (2 A 3 DÍAS HÁBILES / 48 A 72 HS):
+   - Prohibido decir "hoy mismo en tu puerta". En el bloque final de envío decí que llega en 2 a 3 días hábiles (48 a 72 hs).
 4. CERO REDUNDANCIAS Y ESTRUCTURA PERSUASIVA DE 7 A 9 LÍNEAS:
-   - Prohibido repetir el mismo dato dos veces en el mismo anuncio.
-   - Usá español paraguayo natural ("vos", "tenés", "recibís", "pagás").
+   - Usá español paraguayo natural ("vos", "tenés", "disfrutás").
 5. REGLA DE ORO PARA "aiImagePrompt" (PRODUCTO USÁNDOSE + RESULTADO VISIBLE + CONGRUENCIA 100% CON LA PRIMERA ESTROFA):
    - Cada "aiImagePrompt" DEBE reflejar exactamente lo que ofrece la primera estrofa de ese anuncio: mostrar (A) el producto "${prodName}" ("${ultraShortObjectLabel}") USÁNDOSE ACTIVAMENTE en primer plano, (B) el RESULTADO REAL e impactante que provoca (${mainBenefit}), y (C) un titular publicitario en ESPAÑOL en tipografía grande y legible + botón CTA congruente ("PAGÁS CUANDO RECIBÍS").
 
@@ -2454,22 +2483,22 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
       "id": "avatar-a",
       "name": "María de Asunción",
       "description": "Compradora de hogar que busca practicidad, placer visual y cero complicaciones",
-      "painPoints": ["Miedo a pagar por adelantado en internet", "Cansada de productos débiles que no cumplen", "Quiere recibir en su casa y pagar recién cuando le entregan"],
-      "angles": [{"id": "angle-a1", "type": "offer", "hook": "🔥 ${objUpper} EN OFERTA: transformación inmediata y pagás cuando recibís", "emotionalTrigger": "placer y oferta irresistible"}]
+      "painPoints": ["Quiere transformar su hogar al instante", "Busca un producto que cumpla de verdad", "Valora comodidad y resultados visibles desde el primer uso"],
+      "angles": [{"id": "angle-a1", "type": "offer", "hook": "🔥 ${objUpper} EN OFERTA: placer y transformación inmediata desde el primer encendido", "emotionalTrigger": "placer y deseo por el producto"}]
     },
     {
       "id": "avatar-b",
       "name": "Carlos de Luque",
-      "description": "Comprador práctico que exige seguridad total de pagar cuando recibe y garantía",
-      "painPoints": ["Desconfía de transferencias previas", "Quiere potencia y materiales resistentes"],
-      "angles": [{"id": "angle-b1", "type": "trust", "hook": "🛑 ${objUpper} PAGO EN PUERTA: cero adelantos, pagás cuando te entregamos", "emotionalTrigger": "confianza total"}]
+      "description": "Comprador práctico que busca potencia real, materiales resistentes y desempeño comprobado",
+      "painPoints": ["Cansado de opciones débiles que no rinden", "Quiere potencia y materiales duraderos"],
+      "angles": [{"id": "angle-b1", "type": "trust", "hook": "✨ ${objUpper} RESULTADO REAL: desempeño superior y satisfacción garantizada", "emotionalTrigger": "calidad comprobada"}]
     },
     {
       "id": "avatar-c",
       "name": "Laura de Ciudad del Este",
-      "description": "Compradora familiar que aprovecha el Pack de 2 Unidades para ahorrar",
-      "painPoints": ["Busca cubrir más espacio o regalar a su familia ahorrando", "Quiere envío seguro en 48 a 72 hs"],
-      "angles": [{"id": "angle-c1", "type": "transformation", "hook": "🎁 2X ${objUpper} EN OFERTA: ahorro familiar con envío gratis", "emotionalTrigger": "compra inteligente"}]
+      "description": "Compradora familiar que busca doble cobertura y disfrute para toda su casa",
+      "painPoints": ["Busca cubrir más espacio o compartir con su familia", "Quiere el kit completo listo para usar"],
+      "angles": [{"id": "angle-c1", "type": "transformation", "hook": "🎁 2X ${objUpper} DOBLE PODER: doble cobertura y disfrute en tu hogar", "emotionalTrigger": "placer familiar multiplicado"}]
     }
   ],
   "targeting": {
@@ -2486,13 +2515,13 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
       "index": 0,
       "type": "feed_1x1",
       "format": "1:1",
-      "archetypeName": "Oferta Directa · Placer y Solución en 0.0s",
+      "archetypeName": "Oferta Directa · Placer y Solución del Producto en 0.0s",
       "avatarTarget": "avatar-a",
       "angleType": "offer",
-      "hook3s": "🔥 ${objUpper} EN OFERTA: ${mainBenefit} por Gs. ${p1.toLocaleString('es-PY')}",
-      "hookBadge": "🔥 ${objUpper} · PAGÁS CUANDO RECIBÍS",
-      "headline": "🔥 ${ultraShortObjectLabel}: Gs. ${p1.toLocaleString('es-PY')} · Pagás Cuando Recibís",
-      "primaryText": "🔥 ${objUpper} EN OFERTA: [SOLUCIÓN Y PLACER INMEDIATO QUE LOGRA EL USUARIO POR SOLO Gs. ${p1.toLocaleString('es-PY')} PAGANDO RECIÉN CUANDO RECIBE]\\n\\n✨ [POR QUÉ NO PUEDE DEJAR PASAR ESTA OFERTA Y CÓMO TRANSFORMA SU VIDA: ${prodDesc}]\\n\\n📌 [SOLUCIÓN CLAVE 1: ${mainBenefit}]\\n🛠️ [CALIDAD REAL 2: ${techSpecs}]\\n📦 [KIT INCLUIDO 3: ${boxItems}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades (MÁS ELEGIDO): Gs. ${p2.toLocaleString('es-PY')} (Ahorrás Gs. ${savingsPack2.toLocaleString('es-PY')})\\n\\n🚚 Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)\\n💵 Cero adelantos: pagás cuando te entregamos en tu puerta (efectivo, QR o POS)\\n👇 Tocá en PAGÁS CUANDO RECIBÍS y asegurá el tuyo ahora",
+      "hook3s": "🔥 ${objUpper} EN OFERTA: ${mainBenefit} desde el primer encendido",
+      "hookBadge": "🔥 ${objUpper} · RESULTADO INMEDIATO",
+      "headline": "🔥 ${ultraShortObjectLabel}: ${mainBenefit.slice(0, 42)}",
+      "primaryText": "🔥 ${objUpper} EN OFERTA: [SEGUÍ HABLANDO 100% DEL PRODUCTO, DE LO QUE OFRECE, DE LO QUE ENTREGA Y DEL PLACER/SOLUCIÓN QUE OBTIENE EL USUARIO AL USARLO (${mainBenefit} · ${prodDesc}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n✨ [CÓMO TRANSFORMA LA EXPERIENCIA DEL USUARIO DESDE EL PRIMER MINUTO]\\n\\n📌 [SOLUCIÓN CLAVE 1: ${mainBenefit}]\\n🛠️ [CALIDAD REAL 2: ${techSpecs}]\\n📦 [KIT INCLUIDO 3: ${boxItems}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades (MÁS ELEGIDO): Gs. ${p2.toLocaleString('es-PY')} (Ahorrás Gs. ${savingsPack2.toLocaleString('es-PY')})\\n\\n🚚 Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)\\n💵 Pagás cuando recibís en tu puerta (efectivo, QR o POS)\\n👇 Tocá en PAGÁS CUANDO RECIBÍS y asegurá el tuyo ahora",
       "descriptionText": "⭐ Entrega en 48 a 72 hs en todo Paraguay · Pagás cuando recibís",
       "ctaType": "ORDER_NOW",
       "ctaLabel": "PAGÁS CUANDO RECIBÍS",
@@ -2502,14 +2531,14 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
       "index": 1,
       "type": "feed_1x1",
       "format": "1:1",
-      "archetypeName": "Trust / Cero Riesgo Anti-Estafa",
+      "archetypeName": "Experiencia Real · Qué Entrega y Cómo Funciona",
       "avatarTarget": "avatar-b",
       "angleType": "trust",
-      "hook3s": "🛑 ${objUpper} PAGO EN PUERTA: recibís y verificás antes de pagar",
-      "hookBadge": "✅ PAGÁS CUANDO TE ENTREGAMOS",
-      "headline": "🛑 ${ultraShortObjectLabel}: Pagás Cuando Recibís",
-      "primaryText": "🛑 ${objUpper} PAGO EN PUERTA: [CERO GIROS PREVIOS NI RIESGO DE ESTAFA, RECIBÍS EN 2 A 3 DÍAS HÁBILES Y PAGÁS RECIÉN CUANDO TE ENTREGAMOS]\\n\\n🤝 [TRANQUILIDAD TOTAL: RESERVÁS HOY Y ABONÁS ÚNICAMENTE CUANDO TENÉS TU ${prodName.toUpperCase()} EN TUS MANOS]\\n\\n✅ [CAJA SELLADA EN PUERTA]\\n📦 [KIT COMPLETO: ${boxItems}]\\n🛡️ [GARANTÍA Y SOPORTE DIRECTO POR WHATSAPP]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades Ahorro: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (48 a 72 hs)\\n💵 Efectivo, QR o POS cuando recibís en tu puerta\\n👇 Tocá en VER GARANTÍA Y COMPRAR para reservar sin arriesgar un solo Guaraní",
-      "descriptionText": "🛡️ Cero giros previos · Entrega en 2 a 3 días hábiles en tu puerta",
+      "hook3s": "✨ ${objUpper} RESULTADO REAL: desempeño superior desde el primer uso",
+      "hookBadge": "✨ ${objUpper} · CALIDAD COMPROBADA",
+      "headline": "✨ ${ultraShortObjectLabel}: Calidad y Placer Real",
+      "primaryText": "✨ ${objUpper} RESULTADO REAL: [SEGUÍ HABLANDO 100% DEL PRODUCTO, DE SU FUNCIONAMIENTO, DE LO QUE ENTREGA Y DEL PLACER DE USARLO (${mainBenefit} · ${techSpecs}), SIN HABLAR DE PAGOS NI DE MIEDOS DE COMPRA EN ESTA PRIMERA ESTROFA]\\n\\n🤝 [CALIDAD Y DISEÑO PENSADOS PARA DISFRUTAR TODOS LOS DÍAS EN TU HOGAR]\\n\\n✅ [RENDIMIENTO COMPROBADO DESDE EL PRIMER ENCENDIDO]\\n📦 [KIT COMPLETO: ${boxItems}]\\n🛡️ [GARANTÍA Y SOPORTE DIRECTO POR WHATSAPP]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades Ahorro: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (48 a 72 hs)\\n💵 Efectivo, QR o POS cuando recibís en tu puerta\\n👇 Tocá en VER GARANTÍA Y COMPRAR y pedí el tuyo hoy",
+      "descriptionText": "✨ Calidad comprobada · Entrega en 2 a 3 días hábiles en tu puerta",
       "ctaType": "SHOP_NOW",
       "ctaLabel": "VER GARANTÍA Y COMPRAR",
       "themeIndex": 1
@@ -2518,13 +2547,13 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
       "index": 2,
       "type": "feed_1x1",
       "format": "1:1",
-      "archetypeName": "Dolor Agudo → Solución Inmediata",
+      "archetypeName": "Solución Inmediata y Alivio para el Usuario",
       "avatarTarget": "avatar-c",
       "angleType": "transformation",
-      "hook3s": "💡 ${objUpper} SIN COMPLICACIONES: solución rápida y sin esfuerzo",
+      "hook3s": "💡 ${objUpper} SIN COMPLICACIONES: solución rápida y placer sin esfuerzo",
       "hookBadge": "💡 ${objUpper} · SOLUCIÓN RÁPIDA",
       "headline": "💡 ${ultraShortObjectLabel}: Solución en Minutos",
-      "primaryText": "💡 ${objUpper} SIN COMPLICACIONES: [DEJÁ DE PERDER TIEMPO Y PACIENCIA CON MÉTODOS VIEJOS Y SOLUCIONALO EN MINUTOS]\\n\\n✨ [EL PLACER Y ALIVIO DE VER RESULTADOS INMEDIATOS CON ESTE ${prodName.toUpperCase()}]\\n\\n❌ [LO QUE DEJÁS DE SUFRIR]\\n✅ [EL RESULTADO REAL: ${mainBenefit}]\\n🛠️ [CALIDAD Y DURABILIDAD: ${techSpecs}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (llega en 2 a 3 días hábiles)\\n💵 Pagás recién cuando recibís en tu puerta\\n👇 Tocá en QUIERO LA SOLUCIÓN y pedilo sin adelantos",
+      "primaryText": "💡 ${objUpper} SIN COMPLICACIONES: [SEGUÍ HABLANDO 100% DE LA SOLUCIÓN Y EL PLACER QUE ENTREGA ESTE PRODUCTO (${mainBenefit} · ${prodDesc}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n✨ [EL PLACER Y ALIVIO DE VER RESULTADOS INMEDIATOS CON ESTE ${prodName.toUpperCase()}]\\n\\n❌ [CERO ESFUERZO NI COMPLICACIONES]\\n✅ [EL RESULTADO REAL: ${mainBenefit}]\\n🛠️ [CALIDAD Y DURABILIDAD: ${techSpecs}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (llega en 2 a 3 días hábiles)\\n💵 Pagás recién cuando recibís en tu puerta\\n👇 Tocá en QUIERO LA SOLUCIÓN y asegurá tu unidad hoy",
       "descriptionText": "✨ Solución real y duradera · Entrega en 48 a 72 hs",
       "ctaType": "ORDER_NOW",
       "ctaLabel": "QUIERO LA SOLUCIÓN",
@@ -2534,13 +2563,13 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
       "index": 3,
       "type": "story_9x16",
       "format": "9:16",
-      "archetypeName": "Pack Familiar Ahorro (2 Unidades)",
+      "archetypeName": "Pack Familiar 2 Unidades · Doble Placer y Cobertura",
       "avatarTarget": "avatar-a",
       "angleType": "urgency",
-      "hook3s": "🎁 2X ${objUpper} EN OFERTA: ahorrá Gs. ${savingsPack2.toLocaleString('es-PY')} hoy",
+      "hook3s": "🎁 2X ${objUpper} DOBLE PODER: duplicá el placer y la cobertura en tu hogar",
       "hookBadge": "⚡ PACK DÚO 2 UNIDADES EN OFERTA",
-      "headline": "🎁 2x ${ultraShortObjectLabel}: Ahorrá Gs. ${savingsPack2.toLocaleString('es-PY')}",
-      "primaryText": "🎁 2X ${objUpper} EN OFERTA: [LLEVATE 2 UNIDADES COMPLETAS POR SOLO Gs. ${p2.toLocaleString('es-PY')} AHORRANDO Gs. ${savingsPack2.toLocaleString('es-PY')} DIRECTO PARA CUBRIR EL DOBLE O REGALAR A TU FAMILIA]\\n\\n⚡ [POR QUÉ 8 DE CADA 10 COMPRADORES EN PARAGUAY ELIGEN EL PACK DÚO CON ENVÍO GRATIS]\\n\\n📌 [2 EQUIPOS COMPLETOS LISTOS PARA USAR]\\n✅ [DOBLE RENDIMIENTO: ${mainBenefit}]\\n🛠️ [MATERIALES RESISTENTES: ${techSpecs}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')}\\n🔥 Pack 2 Unidades (OFERTA FAMILIAR): Gs. ${p2.toLocaleString('es-PY')} (Ahorrás Gs. ${savingsPack2.toLocaleString('es-PY')} directo)\\n\\n🚚 Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)\\n💵 Pagás cuando recibís en efectivo, QR o POS\\n👇 Tocá en QUIERO MI PACK 2 HOY y reservá tu promoción",
+      "headline": "🎁 2x ${ultraShortObjectLabel}: Doble Poder y Cobertura",
+      "primaryText": "🎁 2X ${objUpper} DOBLE PODER: [SEGUÍ HABLANDO 100% DEL PLACER Y LA SOLUCIÓN DE TENER DOS UNIDADES FUNCIONANDO AL MISMO TIEMPO PARA CUBRIR EL DOBLE DE ESPACIO O COMPARTIR CON LA FAMILIA (${mainBenefit}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n⚡ [POR QUÉ LAS FAMILIAS EN PARAGUAY ELIGEN EL PACK DÚO PARA DISFRUTAR EL DOBLE DE RENDIMIENTO]\\n\\n📌 [2 EQUIPOS COMPLETOS LISTOS PARA USAR]\\n✅ [DOBLE RENDIMIENTO: ${mainBenefit}]\\n🛠️ [MATERIALES RESISTENTES: ${techSpecs}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')}\\n🔥 Pack 2 Unidades (OFERTA FAMILIAR): Gs. ${p2.toLocaleString('es-PY')} (Ahorrás Gs. ${savingsPack2.toLocaleString('es-PY')} directo)\\n\\n🚚 Envío GRATIS a todo Paraguay (entrega en 2 a 3 días hábiles)\\n💵 Pagás cuando recibís en efectivo, QR o POS\\n👇 Tocá en QUIERO MI PACK 2 HOY y reservá tu promoción",
       "descriptionText": "🎁 Pack Familiar 2 Unidades · Entrega en 48 a 72 hs",
       "ctaType": "ORDER_NOW",
       "ctaLabel": "QUIERO MI PACK 2 HOY",
@@ -2556,7 +2585,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
       "hook3s": "⚡ ${objUpper} MÁXIMA POTENCIA: rendimiento real comprobado",
       "hookBadge": "🔥 POTENCIA Y CALIDAD COMPROBADA",
       "headline": "⚡ ${ultraShortObjectLabel}: Potencia Real Comprobada",
-      "primaryText": "⚡ ${objUpper} MÁXIMA POTENCIA: [OLVIDATE DE IMITACIONES DÉBILES; CONOCÉ LA POTENCIA REAL Y DURABILIDAD DE ESTE EQUIPO]\\n\\n🔥 [RENDIMIENTO Y MATERIALES PREPARADOS PARA EL USO EXIGENTE EN PARAGUAY]\\n\\n🛠️ [ESPECIFICACIÓN TÉCNICA 1: ${techSpecs}]\\n✅ [RENDIMIENTO REAL 2: ${mainBenefit}]\\n📦 [KIT COMPLETO 3: ${boxItems}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (recibís en 2 a 3 días hábiles)\\n💵 Pagás recién cuando te entregamos en puerta\\n👇 Tocá en COMPRAR AHORA y reservá sin riesgo",
+      "primaryText": "⚡ ${objUpper} MÁXIMA POTENCIA: [SEGUÍ HABLANDO 100% DE LA POTENCIA, LO QUE OFRECE Y EL RESULTADO QUE ENTREGA ESTE PRODUCTO EN USO (${mainBenefit} · ${techSpecs}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n🔥 [RENDIMIENTO Y MATERIALES PREPARADOS PARA DARTE MÁXIMA SATISFACCIÓN DESDE EL PRIMER DÍA]\\n\\n🛠️ [ESPECIFICACIÓN TÉCNICA 1: ${techSpecs}]\\n✅ [RENDIMIENTO REAL 2: ${mainBenefit}]\\n📦 [KIT COMPLETO 3: ${boxItems}]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (recibís en 2 a 3 días hábiles)\\n💵 Pagás recién cuando te entregamos en puerta\\n👇 Tocá en COMPRAR AHORA y reservá hoy",
       "descriptionText": "🔥 Calidad superior verificada · Pagás cuando recibís",
       "ctaType": "SHOP_NOW",
       "ctaLabel": "COMPRAR AHORA",
@@ -2569,10 +2598,10 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
       "archetypeName": "Unboxing Real · Qué Recibís en tu Caja",
       "avatarTarget": "avatar-c",
       "angleType": "unboxing",
-      "hook3s": "📦 ${objUpper} KIT COMPLETO: caja sellada lista para usar",
+      "hook3s": "📦 ${objUpper} KIT COMPLETO: todos los accesorios listos para disfrutar",
       "hookBadge": "📦 UNBOXING REAL · CAJA COMPLETA",
       "headline": "📦 ${ultraShortObjectLabel}: Kit Completo Sellado",
-      "primaryText": "📦 ${objUpper} KIT COMPLETO: [RECIBÍS EN TU PUERTA LA CAJA SELLADA DE FÁBRICA CON TODOS SUS ACCESORIOS ORIGINALES LISTOS PARA USAR]\\n\\n👀 [EN 2 A 3 DÍAS HÁBILES LLEGA EL REPARTIDOR Y VOS VERIFICÁS TU ${prodName.toUpperCase()} ANTES DE PAGAR]\\n\\n✔️ [PIEZA PRINCIPAL INCLUIDA]\\n✔️ [ACCESORIOS INCLUIDOS: ${boxItems}]\\n🛡️ [GARANTÍA Y RESPALDO POR WHATSAPP]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (entrega en 48 a 72 hs)\\n💵 Pagás cuando recibís en efectivo, QR o POS\\n👇 Tocá en PEDIR KIT COMPLETO y asegurá el tuyo hoy",
+      "primaryText": "📦 ${objUpper} KIT COMPLETO: [SEGUÍ HABLANDO 100% DE LO QUE ENTREGA EL KIT COMPLETO (${boxItems}) Y EL PLACER/SOLUCIÓN QUE OBTIENE EL USUARIO AL ENCENDERLO (${mainBenefit}), SIN PRECIOS NI TEMAS DE PAGO EN ESTA PRIMERA ESTROFA]\\n\\n👀 [EQUIPO COMPLETO LISTO PARA FUNCIONAR Y TRANSFORMAR TU ESPACIO DESDE EL PRIMER MINUTO]\\n\\n✔️ [PIEZA PRINCIPAL INCLUIDA]\\n✔️ [ACCESORIOS INCLUIDOS: ${boxItems}]\\n🛡️ [GARANTÍA Y RESPALDO POR WHATSAPP]\\n\\n💰 1 Unidad: Gs. ${p1.toLocaleString('es-PY')} (Antes Gs. ${pNormal.toLocaleString('es-PY')})\\n🔥 Pack 2 Unidades: Gs. ${p2.toLocaleString('es-PY')}\\n\\n🚚 Envío GRATIS a todo Paraguay (entrega en 48 a 72 hs)\\n💵 Pagás cuando recibís en efectivo, QR o POS\\n👇 Tocá en PEDIR KIT COMPLETO y asegurá el tuyo hoy",
       "descriptionText": "📦 Caja sellada completa · Entrega en 2 a 3 días hábiles",
       "ctaType": "LEARN_MORE",
       "ctaLabel": "PEDIR KIT COMPLETO",
@@ -2592,7 +2621,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         { role: 'system', content: systemPrompt },
                         {
                           role: 'user',
-                          content: `Analizá el producto "${prodName}" (${prodDesc}) y redactá los 3 avatares y los 6 anuncios ganadores en Paraguay. RECORDÁ: 1) En las palabras 1 a 4 (0.0 segundos) de cada anuncio DEBE aparecer "${objUpper}" + dolor, solución, placer u oferta (cero palabras de relleno antes del objeto). 2) Prohibido nombrar marcas desconocidas (${brandTokenRemoved || 'marcas'}). 3) Prohibido usar la palabra "contra entrega" (usá "pagás cuando recibís" / "pagás cuando te entregamos"). 4) Prohibido decir "hoy mismo en tu puerta"; el envío tarda de 2 a 3 días hábiles (48 a 72 hs). Respondé solo JSON puro válido.`
+                          content: `Analizá el producto "${prodName}" (${prodDesc}) y redactá los 3 avatares y los 6 anuncios ganadores en Paraguay. RECORDÁ: 1) En la PRIMERA ESTROFA de cada anuncio, las palabras 1 a 4 (0.0 segundos) DEBEN nombrar "${objUpper}" e inmediatamente después, dentro de esa misma primera estrofa, seguí hablando 100% del producto en sí, de lo que ofrece, de lo que entrega y del placer o solución que obtiene el usuario. 2) PROHIBIDO en la primera estrofa hablar de precios (Gs.), giros de plata, pagos o miedos de comprar online. 3) Prohibido nombrar marcas desconocidas (${brandTokenRemoved || 'marcas'}). Respondé solo JSON puro válido.`
                         }
                       ],
                       temperature: 0.72,
@@ -4050,14 +4079,54 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     const lines = txt.split('\n');
                     const firstLine = (lines[0] || '').trim();
                     if (firstLine) {
+                      const rawDescClean = String(product.descripcion || 'rendimiento superior y resultados reales desde el primer uso').replace(/[™®©]/g, '').trim();
+                      const rawBenClean = String(product?.landingContent?.benefitCards?.[0]?.title || product?.agentBrain?.usageSummarySpoken || rawDescClean).replace(/[™®©]/g, '').trim();
+                      const rawTechClean = String(product?.physicalTruth?.materialMain || product?.agentBrain?.technicalSpecsSpoken || 'materiales resistentes de alta durabilidad').replace(/[™®©]/g, '').trim();
+                      const rawBoxClean = String(product?.physicalTruth?.boxContents || product?.agentBrain?.boxContentsSpoken || `${genericProdName} completo con todos sus accesorios originales`).replace(/[™®©]/g, '').trim();
+
                       const leadingEmojiMatch = firstLine.match(/^([🔥✨💡🤝⚡📦🛑🎁🎄✅⭐]+\s*)/);
-                      const defaultEmojis = ['🔥 ', '🛑 ', '💡 ', '🎁 ', '⚡ ', '📦 '];
+                      const defaultEmojis = ['🔥 ', '✨ ', '💡 ', '🎁 ', '⚡ ', '📦 '];
                       const leadingEmoji = leadingEmojiMatch ? leadingEmojiMatch[1] : defaultEmojis[angleIdx % defaultEmojis.length];
                       let bodyLine = leadingEmojiMatch ? firstLine.slice(leadingEmojiMatch[0].length).trim() : firstLine;
                       bodyLine = bodyLine
-                        .replace(/^(?:¿\s*)?(?:te imagin[aá]s|alguna vez (?:te pas[oó] que|compraste)|hasta cu[aá]ndo vas a seguir|sab[ií]as que|te preocupa pedir algo y que|quer[eé]s saber exactamente)\s+/i, '¿')
-                        .replace(/^¿\s*¿/, '¿')
+                        .replace(/^(?:¿\s*)?(?:te imagin[aá]s|alguna vez (?:te pas[oó] que|compraste)|hasta cu[aá]ndo vas a seguir|sab[ií]as que|te preocupa pedir algo y que|quer[eé]s saber exactamente)\s+/i, '')
+                        .replace(/\bPAGO EN PUERTA\s*:/gi, 'RESULTADO REAL:')
+                        .replace(/\s*(?:por\s+solo|a\s+solo|por)\s+Gs\.?\s*[\d.]+(?:\s*\([^)]*\))?/gi, '')
+                        .replace(/\s*\(\s*(?:antes|ahorr[aá]s|pag[aá]s)[^)]*\)/gi, '')
+                        .replace(/\s*ahorrando\s+Gs\.?\s*[\d.]+(?:\s+directo)?/gi, '')
+                        .replace(/\s*(?:y\s+|;\s*|,\s*)?(?:pag[aá](?:s|ndo)?\s+(?:reci[eé]n\s+)?(?:cuando\s+(?:recib[ií]s|te\s+entregamos)|al\s+recibir|en\s+puerta|frente\s+al\s+repartidor))[^.]*/gi, '')
+                        .replace(/\s*(?:no\s+arriesgues\s+ni\s+un\s+solo\s+guaran[ií]|cero\s+giros\s+previos|sin\s+riesgo\s+de\s+estafa|recib[ií]s\s+tu\s+pedido\s+en\s+\d+\s+a\s+\d+\s+d[ií]as)[^.]*/gi, '')
+                        .replace(/\s+,/g, ',')
+                        .replace(/\s+\./g, '.')
+                        .replace(/[:;,\s]+$/, '')
                         .trim();
+
+                      const colonIdx = bodyLine.indexOf(':');
+                      const afterColon = colonIdx >= 0 ? bodyLine.slice(colonIdx + 1).trim() : bodyLine;
+                      const hasForbiddenFirstStanza =
+                        /\b(?:gs\.?\s*\d|repartidor|estafa|adelanto|giro|transferencia|pag[aá]s|abonar|48\s*a\s*72|2\s*a\s*3\s*d[ií]as)\b/i.test(
+                          afterColon
+                        );
+
+                      const productPleasureContinuations = [
+                        `disfrutá ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)} desde el primer encendido y transformá tu experiencia al instante con lo mejor que ofrece este ${shortCategoryNoun} (${rawDescClean.charAt(0).toLowerCase() + rawDescClean.slice(1)}).`,
+                        `viví el placer de contar con un ${shortCategoryNoun} de alto desempeño que te entrega ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)} con calidad y potencia real (${rawTechClean.charAt(0).toLowerCase() + rawTechClean.slice(1)}).`,
+                        `olvidate del esfuerzo innecesario y obtené la solución inmediata que buscabas con ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)}, diseñado para brindarte comodidad y resultados visibles en minutos.`,
+                        `duplicá el placer y la cobertura en tu hogar con dos equipos completos funcionando al máximo para brindarte ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)} donde más lo necesitás.`,
+                        `sentí la diferencia de un ${shortCategoryNoun} superior (${rawTechClean.charAt(0).toLowerCase() + rawTechClean.slice(1)}) que trabaja a máxima capacidad para entregarte ${rawBenClean.charAt(0).toLowerCase() + rawTechClean.slice(1)} desde el primer segundo.`,
+                        `disfrutá la solución completa en tus manos (${rawBoxClean.charAt(0).toLowerCase() + rawBoxClean.slice(1)}) lista para encender y brindarte ${rawBenClean.charAt(0).toLowerCase() + rawBenClean.slice(1)} al instante.`
+                      ];
+
+                      const instantPrefixes = [
+                        `${objUpper} EN OFERTA:`,
+                        `${objUpper} RESULTADO REAL:`,
+                        `${objUpper} SIN COMPLICACIONES:`,
+                        `2X ${objUpper} DOBLE PODER:`,
+                        `${objUpper} MÁXIMA POTENCIA:`,
+                        `${objUpper} KIT COMPLETO:`
+                      ];
+                      const prefix = instantPrefixes[angleIdx % instantPrefixes.length];
+                      const continuation = productPleasureContinuations[angleIdx % productPleasureContinuations.length];
 
                       const firstFourWords = bodyLine
                         .replace(/[¿?¡!:.,—\-()]/g, ' ')
@@ -4072,23 +4141,11 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         rootSlice.length >= 3 &&
                         new RegExp(`^(?:2x\\s+)?${rootSlice}`, 'i').test(firstFourWords);
 
-                      if (!startsWithObjectHeader && bodyLine.length > 12) {
-                        const instantPrefixes = [
-                          `${objUpper} EN OFERTA:`,
-                          `${objUpper} PAGO EN PUERTA:`,
-                          `${objUpper} SIN COMPLICACIONES:`,
-                          `2X ${objUpper} EN OFERTA:`,
-                          `${objUpper} MÁXIMA POTENCIA:`,
-                          `${objUpper} KIT COMPLETO:`
-                        ];
-                        const prefix = instantPrefixes[angleIdx % instantPrefixes.length];
-                        const normalizedRest =
-                          bodyLine.startsWith('¿') || bodyLine.startsWith('¡')
-                            ? bodyLine
-                            : bodyLine.charAt(0).toLowerCase() + bodyLine.slice(1);
-                        lines[0] = `${leadingEmoji}${prefix} ${normalizedRest}`;
+                      if (!startsWithObjectHeader || afterColon.length < 35 || hasForbiddenFirstStanza) {
+                        lines[0] = `${leadingEmoji}${prefix} ${continuation}`;
                       } else {
-                        lines[0] = `${leadingEmoji}${bodyLine}`;
+                        const cleanBody = bodyLine.endsWith('.') ? bodyLine : `${bodyLine}.`;
+                        lines[0] = `${leadingEmoji}${cleanBody}`;
                       }
                       txt = lines.join('\n');
                     }
@@ -4127,19 +4184,19 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
 
                 const sceneContexts = [
                   {
-                    sceneName: `Deseo y Transformación en Casa con este "${prodName}" (Oferta Directa · Pagás Cuando Recibís)`,
+                    sceneName: `Deseo y Transformación en Casa con este "${prodName}" (Oferta y Placer del Producto)`,
                     enPrompt: `Hyper-impactful commercial Facebook Ad poster for "${prodName}" (${prodDesc}): clearly shows the physical "${prodName}" in the foreground ACTIVELY WORKING and producing its dramatic real-world result (${mainBenefit}) while a delighted family enjoys the outcome. Includes bold Spanish headline banner at top: "${objUpper} EN OFERTA: Gs. ${p1.toLocaleString('es-PY')}" and high-contrast CTA button at bottom: "PAGÁS CUANDO RECIBÍS", 8k commercial photography`
                   },
                   {
-                    sceneName: `Confianza Total Anti-Estafa: "${prodName}" Funcionando en Puerta al Recibir`,
-                    enPrompt: `High-converting Cash-on-Delivery commercial Meta Ad poster for "${prodName}" (${prodDesc}): happy homeowner at their front door testing and using the newly delivered "${prodName}" while it actively produces its real visible result (${mainBenefit}) right at the entrance as the friendly delivery courier smiles. Includes bold Spanish headline at top: "${objUpper}: PAGÁS CUANDO RECIBÍS" and bottom CTA button: "VER GARANTÍA Y COMPRAR", 8k photorealistic`
+                    sceneName: `Experiencia Real y Calidad Superior de "${prodName}" Funcionando`,
+                    enPrompt: `High-converting commercial Meta Ad poster for "${prodName}" (${prodDesc}): happy homeowner testing and enjoying the "${prodName}" while it actively produces its real visible result (${mainBenefit}) in their home. Includes bold Spanish headline at top: "${objUpper}: CALIDAD Y RESULTADO REAL" and bottom CTA button: "VER GARANTÍA Y COMPRAR", 8k photorealistic`
                   },
                   {
                     sceneName: `Dolor Cotidiano vs. Solución Práctica con "${prodName}"`,
                     enPrompt: `Split-screen BEFORE and AFTER commercial Meta Ad poster for "${prodName}" (${prodDesc}): left side labeled "ANTES" shows the frustrating problem before having "${prodName}"; right side labeled "DESPUÉS CON ${objUpper}" shows the physical "${prodName}" actively turned on and producing its dramatic transformation (${mainBenefit}). Bottom CTA button reads: "QUIERO LA SOLUCIÓN · Gs. ${p1.toLocaleString('es-PY')}", 8k high-CTR visual`
                   },
                   {
-                    sceneName: `Pack Familiar Ahorro (2 Unidades de "${prodName}" Funcionando)`,
+                    sceneName: `Pack Familiar 2 Unidades de "${prodName}" Funcionando (Doble Poder)`,
                     enPrompt: `High-impact 2x Bundle Promotion commercial ad poster: TWO identical units of "${prodName}" (${prodDesc}) both turned on and actively operating in the foreground, producing double the real-world effect (${mainBenefit}) in a real home setting. Bold Spanish header at top: "PACK 2X ${objUpper}: Gs. ${p2.toLocaleString('es-PY')}" and bottom CTA button: "QUIERO MI PACK 2 HOY · ENVÍO GRATIS", 8k commercial photography`
                   },
                   {
@@ -4183,19 +4240,19 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                             content:
                               `Sos el Copywriter #1 de Respuesta Directa y Meta Ads en Paraguay.\n` +
                               `REGLAS OBLIGATORIAS E INQUEBRANTABLES:\n` +
-                              `1) REGLA 0.0 SEGUNDOS (PALABRAS 1 A 4 = OBJETO + DOLOR/SOLUCIÓN/PLACER/OFERTA): En las primeras 1 a 4 palabras de "primaryText" DEBE aparecer "${objUpper}" + la oferta, dolor o solución (ej: "🔥 ${objUpper} EN OFERTA:", "🛑 ${objUpper} PAGO EN PUERTA:", "💡 ${objUpper} SIN COMPLICACIONES:"). Está PROHIBIDO poner palabras de relleno antes del objeto.\n` +
+                              `1) PRIMERA ESTROFA = 0.0 SEGUNDOS + 100% PRODUCTO, PLACER Y SOLUCIÓN: En las primeras 1 a 4 palabras de "primaryText" DEBE aparecer "${objUpper}" (ej: "🔥 ${objUpper} EN OFERTA:", "✨ ${objUpper} RESULTADO REAL:", "💡 ${objUpper} SIN COMPLICACIONES:"), e INMEDIATAMENTE DESPUÉS, dentro de esa misma primera estrofa, seguí hablando 100% del producto en sí, de lo que ofrece, de lo que entrega y del placer o solución que obtiene el usuario (${mainBenefit} · ${prodDesc}). Está TERMINANTEMENTE PROHIBIDO hablar en la primera estrofa de precios (Gs.), de pagos, de giros de plata o de miedos de comprar online.\n` +
                               `2) CERO MARCAS DESCONOCIDAS: ${brandTokenRemoved ? `Está TERMINANTEMENTE PROHIBIDO nombrar "${brandTokenRemoved}".` : ''} Nombrá siempre al producto por lo que es ("${ultraShortObjectLabel}" o "${prodName}").\n` +
-                              `3) PROHIBIDO DECIR "CONTRA ENTREGA": El cliente común no sabe qué significa "contra entrega". Decí SIEMPRE "pagás cuando recibís", "pagás cuando te entregamos en tu puerta" o "PAGÁS CUANDO RECIBÍS".\n` +
-                              `4) TIEMPO DE ENTREGA REAL PARAGUAY (2 A 3 DÍAS HÁBILES / 48 A 72 HS): Está TERMINANTEMENTE PROHIBIDO decir "lo tenés hoy mismo en tu puerta". Decí siempre que el comprador reserva hoy sin adelantos y lo recibe en 2 a 3 días hábiles en su puerta.\n` +
-                              `5) CERO REDUNDANCIAS Y PRECIOS EN TIEMPO REAL: Escribí de 7 a 9 líneas con saltos de línea (\\n), iconos y emojis en cada bloque (🔥, ✨, ✅, 📌, 🛠️, 💰, 🚚, 💵, 👇), beneficio clave (${mainBenefit}), precios exactos en tiempo real (1x Gs. ${p1.toLocaleString('es-PY')} — Antes Gs. ${pNormal.toLocaleString('es-PY')} | Pack 2x Ahorro: Gs. ${p2.toLocaleString('es-PY')}) y ${freeShipping ? 'Envío Gratis a todo Paraguay (entrega en 2 a 3 días hábiles)' : 'Entrega en 2 a 3 días hábiles'} pagando cuando recibís.\n` +
+                              `3) PROHIBIDO DECIR "CONTRA ENTREGA": En el cierre decí SIEMPRE "pagás cuando recibís" o "PAGÁS CUANDO RECIBÍS".\n` +
+                              `4) TIEMPO DE ENTREGA REAL PARAGUAY EN EL BLOQUE FINAL (2 A 3 DÍAS HÁBILES / 48 A 72 HS): Prohibido decir "lo tenés hoy mismo en tu puerta".\n` +
+                              `5) ESTRUCTURA DE 7 A 9 LÍNEAS: Escribí de 7 a 9 líneas con saltos de línea (\\n), iconos y emojis en cada bloque, beneficio clave (${mainBenefit}), y colocá los precios exactos recién en el bloque de precios inferior (1x Gs. ${p1.toLocaleString('es-PY')} — Antes Gs. ${pNormal.toLocaleString('es-PY')} | Pack 2x Ahorro: Gs. ${p2.toLocaleString('es-PY')}).\n` +
                               `6) IMAGEN CON PRODUCTO USÁNDOSE + RESULTADO + TEXTO Y CTA CONGRUENTE: "aiImagePrompt" debe mostrar el "${prodName}" funcionando en vivo, el resultado real que provoca (${mainBenefit}) y el titular + botón CTA congruente en español.\n` +
                               `No repitas el titular anterior ("${currentHeadline}").\n` +
                               `Devolvé SOLO un objeto JSON válido con:\n` +
-                              `{ "hookBadge": "🔥 ${objUpper} · PAGÁS CUANDO RECIBÍS", "headline": "🔥 ${ultraShortObjectLabel}: Gs. ${p1.toLocaleString('es-PY')} · Pagás Cuando Recibís", "primaryText": "Copy persuasivo completo de 7 a 9 líneas empezando en palabra 1-4 con ${objUpper}", "descriptionText": "⭐ Entrega en 48 a 72 hs en todo Paraguay · Pagás cuando recibís", "aiImagePrompt": "${targetScene.enPrompt}" }`
+                              `{ "hookBadge": "🔥 ${objUpper} · RESULTADO INMEDIATO", "headline": "🔥 ${ultraShortObjectLabel}: ${mainBenefit.slice(0, 42)}", "primaryText": "Copy persuasivo completo de 7 a 9 líneas donde toda la primera estrofa habla 100% del producto, su placer y solución sin precios ni pagos", "descriptionText": "⭐ Entrega en 48 a 72 hs en todo Paraguay · Pagás cuando recibís", "aiImagePrompt": "${targetScene.enPrompt}" }`
                           },
                           {
                             role: 'user',
-                            content: `Generá la variante #${variationSeed} con ángulo "${targetScene.sceneName}" para el producto "${prodName}". Recordá: en las palabras 1 a 4 (0.0 segundos) debe aparecer "${objUpper}" + dolor/solución/placer/oferta, prohibido usar la palabra "contra entrega" (usá "pagás cuando recibís" / "pagás cuando te entregamos"), prohibido decir "hoy mismo en tu puerta" (es entrega en 2 a 3 días hábiles), y la imagen debe mostrar el producto usándose con su resultado real + texto y CTA congruente. Respondé solo JSON puro.`
+                            content: `Generá la variante #${variationSeed} con ángulo "${targetScene.sceneName}" para el producto "${prodName}". Recordá: en la primera estrofa las palabras 1 a 4 nombran "${objUpper}" y todo el resto de la primera estrofa habla exclusivamente del producto, de lo que entrega, del placer y de la solución para el usuario (cero precios y cero hablar de pagos o miedos en la primera estrofa). Respondé solo JSON puro.`
                           }
                         ],
                         temperature: 0.72,

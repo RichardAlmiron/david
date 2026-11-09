@@ -793,8 +793,16 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
   assert.equal(identity.shortCategoryNoun, 'Proyector Navideño');
 
   const dirtyCopy =
-    '🔥 Mirá la imagen: una sola Noelux™ proyectando 70 m². Vos podés tener esto HOY mismo en tu puerta. Tocá en PEDIR CONTRA ENTREGA con cobro contra entrega.\n\n✨ Pedilo hoy.';
+    '🔥 Mirá la imagen: una sola Noelux™ proyectando 70 m² con máxima nitidez por Gs. 189.000 sin miedo a estafas.\n\n✨ Vos podés tener esto HOY mismo en tu puerta. Tocá en PEDIR CONTRA ENTREGA con cobro contra entrega.';
   const cleanCopy = sanitizeAdCopyForParaguayCod(dirtyCopy, brandedProduct, 0);
+  const cleanParagraphs = cleanCopy.split(/\n\s*\n/);
+  // First stanza must talk 100% about product/pleasure/solution with ZERO price and ZERO payment/scam fear
+  assert.ok(cleanParagraphs[0].includes('PROYECTOR NAVIDEÑO EN OFERTA:'));
+  assert.ok(cleanParagraphs[0].includes('proyectando 70 m²'));
+  assert.equal(cleanParagraphs[0].toLowerCase().includes('gs.'), false);
+  assert.equal(cleanParagraphs[0].toLowerCase().includes('estafa'), false);
+  assert.equal(cleanParagraphs[0].toLowerCase().includes('pagás cuando recibís'), false);
+  // Lower stanzas keep sanitized delivery & COD terms
   assert.equal(cleanCopy.toLowerCase().includes('noelux'), false);
   assert.equal(cleanCopy.toLowerCase().includes('mirá la imagen'), false);
   assert.equal(cleanCopy.toLowerCase().includes('hoy mismo en tu puerta'), false);
@@ -802,11 +810,14 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
   assert.ok(cleanCopy.includes('PAGÁS CUANDO RECIBÍS'));
   assert.ok(cleanCopy.includes('pagás cuando recibís en tu puerta'));
   assert.ok(cleanCopy.includes('2 a 3 días hábiles'));
-  assert.ok(cleanCopy.includes('PROYECTOR NAVIDEÑO EN OFERTA:'));
 
-  // Verify default CTA and ad copy never contain merchant jargon "contra entrega"
+  // Verify ALL 6 ads dedicate 100% of their first stanza to the product/pleasure/solution (zero Gs. price, zero payment/scam fear in paragraph 1)
   assert.equal(assets[0].ctaLabel, 'PAGÁS CUANDO RECIBÍS');
   for (const ad of assets) {
+    const firstPara = ad.primaryText.split(/\n\s*\n/)[0] || '';
+    assert.equal(firstPara.toLowerCase().includes('gs.'), false, `Ad ${ad.id} first stanza must not contain Gs. price`);
+    assert.equal(firstPara.toLowerCase().includes('estafa'), false, `Ad ${ad.id} first stanza must not mention scams`);
+    assert.equal(firstPara.toLowerCase().includes('girar'), false, `Ad ${ad.id} first stanza must not mention wiring money`);
     assert.equal(ad.ctaLabel.toLowerCase().includes('contra entrega'), false);
     assert.equal(ad.primaryText.toLowerCase().includes('contra entrega'), false);
   }
@@ -818,7 +829,7 @@ test('AutoAds Supreme Brain extracts all product gallery images, rotates them ac
     precioNormal: 229000
   };
   const liveUpdatedAssets = buildCreativeAssetsFromBrain(liveUpdatedProduct, brain);
-  assert.ok(liveUpdatedAssets[0].headline.includes('159.000'));
+  assert.ok(liveUpdatedAssets[3].primaryText.includes('299.000'));
   assert.ok(liveUpdatedAssets[0].primaryText.includes('159.000'));
   assert.ok(liveUpdatedAssets[0].primaryText.includes('299.000'));
   assert.equal(liveUpdatedAssets[0].primaryText.includes('249.000'), false);

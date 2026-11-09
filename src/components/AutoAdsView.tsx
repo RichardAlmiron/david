@@ -26,6 +26,7 @@ import {
   regenerateSingleCreativeAssetFromBrain,
   extractAllProductImages,
   extractProductCoreIdentity,
+  sanitizeAdCopyForParaguayCod,
   AUTOADS_LLM_MODEL,
   AUTOADS_IMAGE_MODEL,
   AUTOADS_VIDEO_MODEL,
@@ -194,10 +195,21 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     return prodId || productPages[0]?.id || 'default_product';
   };
 
-  const applySavedWorkspaceToState = (ws: any | undefined) => {
+  const applySavedWorkspaceToState = (ws: any | undefined, fallbackProduct?: ProductPage) => {
     if (ws && (ws.brainProfile || (Array.isArray(ws.creatives) && ws.creatives.length > 0))) {
+      const targetProd: ProductPage | undefined =
+        ws.scrapedExternalProduct ||
+        productPages.find(p => p.id === ws.productId) ||
+        fallbackProduct ||
+        productPages[0];
       setBrainProfile(ws.brainProfile || null);
-      const savedCreatives = Array.isArray(ws.creatives) ? ws.creatives : [];
+      const rawSavedCreatives = Array.isArray(ws.creatives) ? ws.creatives : [];
+      const savedCreatives = targetProd
+        ? rawSavedCreatives.map((item: GeneratedAdCreativeAsset, idx: number) => ({
+            ...item,
+            primaryText: sanitizeAdCopyForParaguayCod(item.primaryText || '', targetProd, idx)
+          }))
+        : rawSavedCreatives;
       setCreatives(savedCreatives);
       if (ws.scrapedExternalProduct) {
         setScrapedExternalProduct(ws.scrapedExternalProduct);
@@ -842,7 +854,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             ...asset,
             type: onlyImagesMode && idx >= 4 ? ('image_story_9x16' as const) : asset.type,
             headline: existingCreatives[idx]?.headline || asset.headline,
-            primaryText: existingCreatives[idx]?.primaryText || asset.primaryText,
+            primaryText: sanitizeAdCopyForParaguayCod(
+              existingCreatives[idx]?.primaryText || asset.primaryText,
+              activeProduct,
+              idx
+            ),
             descriptionText: existingCreatives[idx]?.descriptionText || asset.descriptionText,
             ctaLabel: existingCreatives[idx]?.ctaLabel || asset.ctaLabel,
             aiGeneratedImageUrl:
@@ -854,6 +870,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         : baseAssets.map((asset, idx) => ({
             ...asset,
             type: onlyImagesMode && idx >= 4 ? ('image_story_9x16' as const) : asset.type,
+            primaryText: sanitizeAdCopyForParaguayCod(asset.primaryText, activeProduct, idx),
             aiGeneratedImageUrl: idx < imageSliceEnd ? asset.aiGeneratedImageUrl || '' : '',
             aiGeneratedVideoUrl: !onlyImagesMode && idx >= 4 ? asset.aiGeneratedVideoUrl || '' : ''
           }));
