@@ -167,7 +167,7 @@ function readKeyFromEnvFile(keyName: string): string {
     }
   } catch {}
   if (keyName === 'DEEPGRAM_API_KEY') return DEFAULT_DEEPGRAM_API_KEY;
-  if (keyName === 'OPENROUTER_MODEL') return 'z-ai/glm-5.3';
+  if (keyName === 'OPENROUTER_MODEL') return 'openai/gpt-4o';
   if (keyName === 'OPENROUTER_API_KEY') return DEFAULT_OPENROUTER_API_KEY;
   return '';
 }
@@ -1656,15 +1656,10 @@ function registerApiServerMiddlewares(server: any) {
                 const explicitKey = String(parsed.apiKey || '').trim();
                 const envDeepseekKey = readKeyFromEnvFile('DEEPSEEK_API_KEY');
                 const envOpenRouterKey = readKeyFromEnvFile('OPENROUTER_API_KEY');
-                const envOpenRouterModel = readKeyFromEnvFile('OPENROUTER_MODEL');
-                const requestedModel = String(parsed.model || envOpenRouterModel || 'z-ai/glm-5.3').trim();
+                const requestedModel = String(parsed.model || 'z-ai/glm-5.3-flash').trim();
 
-                const resolveOpenRouterModel = (m: string) => {
-                  const lower = m.toLowerCase();
-                  if (lower.includes('flash')) {
-                    return 'z-ai/glm-5.3-flash';
-                  }
-                  return 'z-ai/glm-5.3';
+                const resolveOpenRouterModel = (_m: string) => {
+                  return 'z-ai/glm-5.3-flash';
                 };
 
                 let effectiveKey = explicitKey || envOpenRouterKey || DEFAULT_OPENROUTER_API_KEY;
@@ -1678,7 +1673,7 @@ function registerApiServerMiddlewares(server: any) {
                   model = 'deepseek-chat';
                 } else {
                   endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-                  model = 'z-ai/glm-5.3';
+                  model = 'z-ai/glm-5.3-flash';
                 }
 
                 if (!instruction) {
@@ -1690,7 +1685,7 @@ function registerApiServerMiddlewares(server: any) {
                 const systemPrompt =
                   `Sos el Super-Agente Oficial de DeepSeek Harness (github.com/deepseek-ai/deepseek-harness), ` +
                   `un harness de agentes autónomos basado en el paradigma "Everything is a Plugin" y el kernel Cordis de composabilidad espaciotemporal, ` +
-                  `potenciado exclusivamente por el modelo GLM-5.3 (z-ai/glm-5.3) a través de OpenRouter.\n` +
+                  `potenciado exclusivamente por el modelo GLM-5.3 Flash (z-ai/glm-5.3-flash) a través de OpenRouter.\n` +
                   `Tu rol es actuar como el motor de codificación y mutación reactiva para páginas de producto Mobile-App de ultra-alta conversión para E-Commerce COD (Cobro Contra Entrega en Paraguay).\n` +
                   `El usuario te pide modificar su producto actual ("${currentDraft.nombre || 'Producto'}"). ` +
                   `Respondé en español paraguayo profesional y directo, explicando con precisión qué plugins de Cordis intervinieron y qué cambio técnico o de conversión aplicaste (emblemas, colores, precios, packs con regalo, WhatsApp, voz o caja sellada).`;
@@ -1698,7 +1693,7 @@ function registerApiServerMiddlewares(server: any) {
                 let aiExplanation = '';
                 let usedEngine = isDirectDeepseek
                   ? 'DeepSeek Oficial (api.deepseek.com · deepseek-chat)'
-                  : 'GLM-5.3 (OpenRouter API · z-ai/glm-5.3)';
+                  : 'GLM-5.3 Flash (OpenRouter API · z-ai/glm-5.3-flash)';
 
                 if (effectiveKey) {
                   try {
@@ -2015,11 +2010,7 @@ function registerApiServerMiddlewares(server: any) {
                     readKeyFromEnvFile('OPENROUTE_API_KEY') ||
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
-                const model = String(
-                  parsed.openRouterModel ||
-                    readKeyFromEnvFile('OPENROUTER_MODEL') ||
-                    'z-ai/glm-5.3'
-                ).trim();
+                const model = 'openai/gpt-4o';
 
                 // 0. Si el usuario pegó una URL externa, escrapear y extraer producto + imágenes reales
                 let scrapedSiteData: any = null;
@@ -2590,15 +2581,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
   ]
 }`;
 
-                // Priorizar modelos rápidos sin retardo de razonamiento para responder en 4 a 7 segundos sin timeouts
-                const candidateLlmModels = Array.from(
-                  new Set([
-                    'z-ai/glm-5.3-flash',
-                    'openai/gpt-4o-mini',
-                    model,
-                    'z-ai/glm-5.3'
-                  ].filter(Boolean))
-                );
+                // Ejecución exclusiva con OpenAI GPT-4o (cero mezcla de otros modelos en AutoAds)
+                const candidateLlmModels = ['openai/gpt-4o', 'openai/gpt-4o'];
 
                 for (const llmModel of candidateLlmModels) {
                   try {
@@ -2614,9 +2598,6 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       temperature: 0.72,
                       max_tokens: 4500
                     };
-                    if (llmModel.includes('glm')) {
-                      reqBody.reasoning = { effort: 'low', exclude: true };
-                    }
 
                     const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                       method: 'POST',
@@ -2779,24 +2760,15 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             return;
           }
 
-          // Helper para leer/guardar los modelos de Imagen y Video elegidos por el usuario de forma 100% persistente en Backend (store_config.json + .env)
+          // Modelos exclusivos bloqueados en el código (OpenAI GPT Image 2.6 Sunburst + Google Gemini Omni 1.2 Flash 15s)
           const getPersistedAutoAdsModels = () => {
-            const cfgFile = path.resolve(__dirname, 'store_config.json');
-            let cfg: any = {};
-            if (fs.existsSync(cfgFile)) {
-              try {
-                cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
-              } catch {}
-            }
-            const pb = cfg.pipeboardConfig || {};
-            const rawImg = String(pb.selectedImageModel || readKeyFromEnvFile('OPENROUTER_IMAGE_MODEL') || 'openai/gpt-image-2.6-flare').trim();
-            const rawVid = String(pb.selectedVideoModel || readKeyFromEnvFile('OPENROUTER_VIDEO_MODEL') || 'bytedance/seedance-2.5').trim();
-            const imageModel = !rawImg || rawImg === 'openai/gpt-image-2.6' ? 'openai/gpt-image-2.6-flare' : rawImg;
-            const videoModel = !rawVid || rawVid.includes('minimax') ? 'bytedance/seedance-2.5' : rawVid;
-            return { imageModel, videoModel };
+            return {
+              imageModel: 'openai/gpt-image-2.6-sunburst',
+              videoModel: 'google/gemini-omni-1.2-flash'
+            };
           };
 
-          const persistAutoAdsModels = (newImageModel?: string, newVideoModel?: string) => {
+          const persistAutoAdsModels = (_newImageModel?: string, _newVideoModel?: string) => {
             try {
               const cfgFile = path.resolve(__dirname, 'store_config.json');
               let cfg: any = {};
@@ -2806,16 +2778,12 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 } catch {}
               }
               if (!cfg.pipeboardConfig) cfg.pipeboardConfig = {};
-              if (newImageModel && newImageModel.trim()) {
-                const cleanImg = newImageModel.trim() === 'openai/gpt-image-2.6' ? 'openai/gpt-image-2.6-flare' : newImageModel.trim();
-                cfg.pipeboardConfig.selectedImageModel = cleanImg;
-                saveKeyToEnvFile('OPENROUTER_IMAGE_MODEL', cleanImg);
-              }
-              if (newVideoModel && newVideoModel.trim()) {
-                const cleanVid = newVideoModel.trim();
-                cfg.pipeboardConfig.selectedVideoModel = cleanVid;
-                saveKeyToEnvFile('OPENROUTER_VIDEO_MODEL', cleanVid);
-              }
+              cfg.pipeboardConfig.openRouterModel = 'openai/gpt-4o';
+              cfg.pipeboardConfig.selectedImageModel = 'openai/gpt-image-2.6-sunburst';
+              cfg.pipeboardConfig.selectedVideoModel = 'google/gemini-omni-1.2-flash';
+              saveKeyToEnvFile('OPENROUTER_MODEL', 'openai/gpt-4o');
+              saveKeyToEnvFile('OPENROUTER_IMAGE_MODEL', 'openai/gpt-image-2.6-sunburst');
+              saveKeyToEnvFile('OPENROUTER_VIDEO_MODEL', 'google/gemini-omni-1.2-flash');
               fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
             } catch {}
           };
@@ -2871,14 +2839,13 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             return;
           }
 
-          // Endpoint para guardar inmediatamente en el Backend los modelos de Imagen y Video al seleccionarlos en el selector
+          // Endpoint para sincronizar modelos bloqueados en Backend
           if (req.method === 'POST' && url === '/api/autoads/save-models') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
             req.on('end', () => {
               try {
-                const parsed = JSON.parse(body || '{}');
-                persistAutoAdsModels(parsed.imageModel, parsed.videoModel);
+                persistAutoAdsModels();
                 const current = getPersistedAutoAdsModels();
                 res.end(
                   JSON.stringify({
@@ -2895,18 +2862,48 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             return;
           }
 
-          // Helper Universal para CREAR DIRECTAMENTE el Video Reel .mp4 de los Anuncios #5 y #6 (SIN generar imagen IA previa)
-          // 1) Invoca directamente OpenRouter Video API (/api/v1/videos) con el modelo EXACTO elegido por el usuario (ej. bytedance/seedance-2.5 o google/gemini-omni-1.2-flash)
-          // 2) Descarga desde la ruta oficial /api/v1/videos/{id}/content?index=0 o unsigned_urls, y si la cola de OpenRouter tarda más de 22s, continúa el polling en segundo plano mientras entrega el MP4 H.264 inmediatamente sin fallar jamás.
-          const generateDirectReelVideo = async (
-            productObj: any,
-            promptText: string,
-            idx: number,
-            requestedVideoModel: string,
-            openRouterKey: string,
-            reqObj: any,
-            optionalSourceImageUrl = ''
-          ): Promise<string> => {
+          // Motor EXCLUSIVO de Video IA Real de 15 Segundos con Avatar Hablando + Producto Real en Acción vía OpenRouter (google/gemini-omni-1.2-flash)
+          // PROHIBIDO simular videos moviendo imágenes estáticas (cero FFmpeg zoompan/lavfi) y PROHIBIDO usar modelos de ByteDance/Seedance.
+          const requestOpenRouterReelVideoJob = async (params: {
+            productObj: any;
+            promptText: string;
+            adHeadline?: string;
+            adPrimaryText?: string;
+            adCtaLabel?: string;
+            idx: number;
+            openRouterKey: string;
+            reqObj: any;
+            existingJobId?: string;
+            existingPollUrl?: string;
+            maxPollAttempts?: number;
+          }): Promise<{
+            status: 'completed' | 'processing' | 'failed';
+            videoUrl?: string;
+            jobId?: string;
+            pollUrl?: string;
+            error?: string;
+          }> => {
+            const {
+              productObj,
+              promptText,
+              adHeadline = '',
+              adPrimaryText = '',
+              adCtaLabel = '',
+              idx,
+              openRouterKey,
+              reqObj,
+              existingJobId = '',
+              existingPollUrl = '',
+              maxPollAttempts = 10
+            } = params;
+
+            if (!openRouterKey || !isValidOpenRouterKey(openRouterKey)) {
+              return {
+                status: 'failed',
+                error: 'No se ha detectado una API Key válida de OpenRouter para generar el video de 15s con Google Gemini Omni 1.2 Flash.'
+              };
+            }
+
             const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
             try {
               if (!fs.existsSync(aiAdsDir)) {
@@ -2917,7 +2914,6 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             const mp4FileName = `autoads_reel_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}.mp4`;
             const mp4FullPath = path.join(aiAdsDir, mp4FileName);
 
-            // Helper para descargar el MP4 final de un job completado en OpenRouter (/api/v1/videos/{id}/content?index=0 o unsigned_urls)
             const downloadCompletedOpenRouterVideo = async (jobId: string, pollData: any): Promise<boolean> => {
               const candidateUrls: Array<{ url: string; useAuth: boolean }> = [];
               if (jobId) {
@@ -2945,7 +2941,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 try {
                   const vidDl = await fetch(item.url, {
                     headers: item.useAuth && openRouterKey ? { Authorization: `Bearer ${openRouterKey}` } : {},
-                    signal: AbortSignal.timeout(15000)
+                    signal: AbortSignal.timeout(20000)
                   });
                   if (vidDl.ok) {
                     const vidBuf = Buffer.from(await vidDl.arrayBuffer());
@@ -2959,264 +2955,240 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
               return false;
             };
 
-            try {
-              // 1. Invocar DIRECTAMENTE OpenRouter Video Generation API (/api/v1/videos) respetando 100% el modelo de video elegido por el usuario (CERO llamadas a modelos de imagen)
-              if (openRouterKey && isValidOpenRouterKey(openRouterKey)) {
-                try {
-                  const exactVideoModel =
-                    requestedVideoModel || getPersistedAutoAdsModels().videoModel || 'bytedance/seedance-2.5';
-                  const isOmniModel = exactVideoModel.includes('gemini-omni');
+            const exactVideoModel = 'google/gemini-omni-1.2-flash';
+            let activeJobId = existingJobId.trim();
+            let activePollUrl = existingPollUrl.trim();
 
-                  const videoPayload: Record<string, any> = {
-                    model: exactVideoModel,
-                    prompt: `Dynamic commercial Meta Reel vertical advertisement video showing the product in active use producing its real visible result, with bold Spanish headline and CTA: ${promptText.slice(0, 420)}`,
-                    duration: 4,
-                    resolution: isOmniModel ? '360p' : '480p',
-                    aspect_ratio: '9:16'
-                  };
+            if (!activePollUrl) {
+              const prodName = String(productObj?.nombre || 'Producto').trim();
+              const prodDesc = String(productObj?.descripcion || '').trim().slice(0, 140);
+              const mainBenefit = String(
+                productObj?.landingContent?.benefitCards?.[0]?.title ||
+                  productObj?.agentBrain?.usageSummarySpoken ||
+                  prodDesc
+              ).trim();
+              const p1Formatted = `Gs. ${Number(productObj?.precios?.[1] || 189000).toLocaleString('es-PY')}`;
 
-                  let vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
+              // Extraer las líneas clave de ESTE anuncio específico (#5 o #6) para que el avatar hable y venda acorde al anuncio
+              const cleanLines = String(adPrimaryText || '')
+                .split(/\n+/)
+                .map(l => l.replace(/^[•✅🔥⚡👉👇🎯💰🚚📦⭐]+\s*/, '').trim())
+                .filter(Boolean);
+              const hookLineSpoken = (cleanLines[0] || adHeadline || `Mirá cómo funciona este ${prodName}`).slice(0, 110);
+              const benefitLineSpoken = (cleanLines[1] || mainBenefit || `Resultados reales desde el primer uso`).slice(0, 120);
+              const ctaLineSpoken = `Pedilo hoy por ${p1Formatted} con envío gratis y pagás recién al recibir en tu casa.`;
+
+              const isUnboxingAngle = idx === 5;
+              const avatarActionPrompt =
+                `15-second vertical 9:16 commercial Meta Reel video with synchronized Latin American Spanish spoken dialogue. ` +
+                `A charismatic Latin American presenter holds up and actively demonstrates the exact physical product shown in the reference image ("${prodName}": ${prodDesc}). ` +
+                (isUnboxingAngle
+                  ? `Scene 1 (0-4s): Presenter opens the package holding the exact "${prodName}" towards the camera with an excited expression. ` +
+                    `Scene 2 (4-10s): Presenter turns ON and uses the "${prodName}" live, showing its real moving action (${mainBenefit}). ` +
+                    `Scene 3 (10-15s): Presenter smiles, points at the working product, and gives a thumbs up. `
+                  : `Scene 1 (0-4s): Presenter holds the exact "${prodName}" close to camera, immediately showing its problem-solving power. ` +
+                    `Scene 2 (4-10s): Live hands-on demonstration of the "${prodName}" operating in real time (${mainBenefit}). ` +
+                    `Scene 3 (10-15s): Presenter proudly displays the working "${prodName}" and invites the viewer to order. `) +
+                `The presenter speaks clearly in enthusiastic Latin American Spanish throughout the 15 seconds saying: "${hookLineSpoken}. ${benefitLineSpoken}. ${ctaLineSpoken}" ` +
+                `Visual context: ${promptText}`.slice(0, 1150);
+
+              // Resolver URL pública HTTPS de la foto real del producto para input_references en Google Gemini Omni 1.2 Flash
+              let rawProdImg = String(
+                productObj?.imagen ||
+                  (Array.isArray(productObj?.galleryImages) ? productObj.galleryImages[0] : '') ||
+                  ''
+              ).trim();
+
+              if (rawProdImg.startsWith('/')) {
+                const fwdHost = reqObj?.headers?.['x-forwarded-host'] || reqObj?.headers?.host || '';
+                const hostStr = Array.isArray(fwdHost) ? fwdHost[0] : String(fwdHost).split(',')[0].trim();
+                if (hostStr && !hostStr.includes('localhost') && !hostStr.includes('127.0.0.1')) {
+                  rawProdImg = `https://${hostStr}${rawProdImg}`;
+                }
+              }
+
+              const hasPublicHttpsImg =
+                rawProdImg.startsWith('https://') &&
+                !rawProdImg.includes('localhost') &&
+                !rawProdImg.includes('127.0.0.1');
+
+              const buildVideoPayload = (includeRef: boolean) => {
+                const payload: Record<string, any> = {
+                  model: exactVideoModel,
+                  prompt: avatarActionPrompt,
+                  duration: 15,
+                  resolution: '360p',
+                  aspect_ratio: '9:16',
+                  generate_audio: true
+                };
+                if (includeRef && hasPublicHttpsImg) {
+                  payload.input_references = [
+                    {
+                      type: 'image_url',
+                      image_url: { url: rawProdImg }
+                    }
+                  ];
+                }
+                return payload;
+              };
+
+              try {
+                let vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${openRouterKey}`,
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': getOpenRouterReferer(reqObj),
+                    'X-Title': 'AutoAds Gemini Omni 1.2 Flash 15s Video Generator'
+                  },
+                  body: JSON.stringify(buildVideoPayload(hasPublicHttpsImg)),
+                  signal: AbortSignal.timeout(22000)
+                });
+
+                // Si input_references dio 400 (por URL inaccesible desde OpenRouter), reintentar inmediatamente con google/gemini-omni-1.2-flash sin input_references
+                if (!vidInitRes.ok && vidInitRes.status === 400 && hasPublicHttpsImg) {
+                  vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
                     method: 'POST',
                     headers: {
                       Authorization: `Bearer ${openRouterKey}`,
                       'Content-Type': 'application/json',
                       'HTTP-Referer': getOpenRouterReferer(reqObj),
-                      'X-Title': 'AutoAds OpenRouter Direct Video Reel Generator'
+                      'X-Title': 'AutoAds Gemini Omni 1.2 Flash 15s Video Generator'
                     },
-                    body: JSON.stringify(videoPayload),
-                    signal: AbortSignal.timeout(18000)
+                    body: JSON.stringify(buildVideoPayload(false)),
+                    signal: AbortSignal.timeout(22000)
                   });
+                }
 
-                  // Si hay reserva in-flight previa en OpenRouter, esperamos 3.5s y reintentamos con el MISMO modelo de video elegido
-                  if (!vidInitRes.ok && vidInitRes.status === 402) {
-                    const errTxt = await vidInitRes.text();
-                    if (errTxt.includes('in_flight_budget_exhausted') || errTxt.includes('in-flight')) {
-                      await new Promise(r => setTimeout(r, 3500));
-                      vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
-                        method: 'POST',
-                        headers: {
-                          Authorization: `Bearer ${openRouterKey}`,
-                          'Content-Type': 'application/json',
-                          'HTTP-Referer': getOpenRouterReferer(reqObj),
-                          'X-Title': 'AutoAds OpenRouter Direct Video Reel Generator'
-                        },
-                        body: JSON.stringify(videoPayload),
-                        signal: AbortSignal.timeout(18000)
-                      });
-                    }
-                  }
-
-                  if (vidInitRes.ok) {
-                    const vidJob: any = await vidInitRes.json();
-                    const jobId = String(vidJob?.id || '').trim();
-                    const pollUrl = vidJob?.polling_url
-                      ? vidJob.polling_url.startsWith('http')
-                        ? vidJob.polling_url
-                        : `https://openrouter.ai${vidJob.polling_url}`
-                      : jobId
-                      ? `https://openrouter.ai/api/v1/videos/${jobId}`
-                      : '';
-
-                    if (pollUrl) {
-                      let finishedInForeground = false;
-                      for (let attempt = 0; attempt < 9; attempt++) {
-                        await new Promise(r => setTimeout(r, 2500));
-                        const pollRes = await fetch(pollUrl, {
-                          headers: { Authorization: `Bearer ${openRouterKey}` },
-                          signal: AbortSignal.timeout(8000)
-                        });
-                        if (!pollRes.ok) break;
-                        const pollData: any = await pollRes.json();
-                        const st = String(pollData?.status || '').toLowerCase();
-                        if (st === 'completed' || st === 'succeeded' || st === 'done') {
-                          finishedInForeground = true;
-                          const okDl = await downloadCompletedOpenRouterVideo(jobId, pollData);
-                          if (okDl) {
-                            return `/api/autoads/reel-video?file=${mp4FileName}`;
-                          }
-                          break;
-                        }
-                        if (st === 'failed' || st === 'error' || st === 'cancelled' || st === 'expired') {
-                          finishedInForeground = true;
-                          break;
-                        }
-                      }
-
-                      // Si el job en OpenRouter sigue procesándose ("pending" / "in_progress") tras 22s,
-                      // continuamos el polling en segundo plano hasta que termine y actualice el archivo MP4 automáticamente
-                      if (!finishedInForeground) {
-                        (async () => {
-                          for (let bgAttempt = 0; bgAttempt < 36; bgAttempt++) {
-                            await new Promise(r => setTimeout(r, 4000));
-                            try {
-                              const bgRes = await fetch(pollUrl, {
-                                headers: { Authorization: `Bearer ${openRouterKey}` },
-                                signal: AbortSignal.timeout(8000)
-                              });
-                              if (!bgRes.ok) break;
-                              const bgData: any = await bgRes.json();
-                              const bgSt = String(bgData?.status || '').toLowerCase();
-                              if (bgSt === 'completed' || bgSt === 'succeeded' || bgSt === 'done') {
-                                await downloadCompletedOpenRouterVideo(jobId, bgData);
-                                break;
-                              }
-                              if (bgSt === 'failed' || bgSt === 'error' || bgSt === 'cancelled' || bgSt === 'expired') {
-                                break;
-                              }
-                            } catch {}
-                          }
-                        })();
-                      }
-                    }
-                  }
-                } catch {}
-              }
-
-              // 2. Resolver todas las fuentes visuales candidatas del producto en disco y probar cada una con FFmpeg
-              const candidateVisualSources: string[] = [
-                optionalSourceImageUrl,
-                String(productObj?.imagen || ''),
-                ...(Array.isArray(productObj?.landingContent?.galleryItems)
-                  ? productObj.landingContent.galleryItems.map((g: any) => String(g?.src || ''))
-                  : []),
-                ...(Array.isArray(productObj?.landingContent?.benefitCards)
-                  ? productObj.landingContent.benefitCards.map((b: any) => String(b?.img || ''))
-                  : []),
-                idx === 4 ? '/assets/real/facade-laser-night-4k.jpg' : '/assets/real/12-slides-optical-pro.jpg',
-                idx === 4 ? '/assets/ugc/real-family-facade.jpg' : '/assets/real/galeria-1.jpg',
-                '/assets/real/galeria-1.jpg',
-                '/assets/real/facade-laser-night-4k.jpg'
-              ].filter(Boolean);
-
-              const vfFilter =
-                idx === 4
-                  ? "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,zoompan=z='min(zoom+0.0022,1.30)':d=150:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)+sin(on/10)*18':s=720x1280:fps=25,format=yuv420p"
-                  : "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,zoompan=z='if(lte(zoom,1.0),1.28,max(1.001,zoom-0.0020))':d=150:x='iw/2-(iw/zoom/2)+sin(on/11)*16':y='ih/2-(ih/zoom/2)':s=720x1280:fps=25,format=yuv420p";
-
-              for (const rawSrc of candidateVisualSources) {
-                const trimmedSrc = String(rawSrc || '').trim();
-                if (!trimmedSrc) continue;
-                let localCandidatePath = '';
-                let tempCreatedPath = '';
-
-                try {
-                  if (trimmedSrc.startsWith('/api/autoads/ai-image')) {
-                    const uObj = new URL(trimmedSrc, 'http://localhost:3000');
-                    const fName = path.basename(uObj.searchParams.get('file') || '');
-                    const pAi = path.join(aiAdsDir, fName);
-                    if (fName && fs.existsSync(pAi)) localCandidatePath = pAi;
-                  } else if (trimmedSrc.startsWith('/assets/') || trimmedSrc.startsWith('/src/assets/')) {
-                    const cleanPathOnly = trimmedSrc.split('?')[0].trim();
-                    const candidatesOnDisk = cleanPathOnly.startsWith('/src/')
-                      ? [path.join(__dirname, cleanPathOnly), path.join(process.cwd(), cleanPathOnly)]
-                      : [
-                          path.join(__dirname, 'public', cleanPathOnly),
-                          path.join(process.cwd(), 'public', cleanPathOnly)
-                        ];
-                    for (const diskP of candidatesOnDisk) {
-                      if (fs.existsSync(diskP)) {
-                        localCandidatePath = diskP;
-                        break;
-                      }
-                    }
-                  } else if (trimmedSrc.startsWith('data:image/') && !trimmedSrc.startsWith('data:image/svg')) {
-                    const base64Part = trimmedSrc.split(',')[1] || '';
-                    const buf = Buffer.from(base64Part, 'base64');
-                    if (buf.length > 1000) {
-                      tempCreatedPath = path.join(aiAdsDir, `autoads_reel_tmp_${Date.now()}_${idx}.jpg`);
-                      fs.writeFileSync(tempCreatedPath, buf);
-                      localCandidatePath = tempCreatedPath;
-                    }
-                  } else if (trimmedSrc.startsWith('http://') || trimmedSrc.startsWith('https://')) {
-                    // Conservar los query params (?w=800&auto=format&fit=crop) para evitar descargas gigantes o redirecciones rotas
-                    const dlRes = await fetch(trimmedSrc, { signal: AbortSignal.timeout(8000) });
-                    const cType = String(dlRes.headers.get('content-type') || '').toLowerCase();
-                    if (dlRes.ok && !cType.includes('text/html')) {
-                      const buf = Buffer.from(await dlRes.arrayBuffer());
-                      if (buf.length > 1000) {
-                        tempCreatedPath = path.join(aiAdsDir, `autoads_reel_tmp_${Date.now()}_${idx}.jpg`);
-                        fs.writeFileSync(tempCreatedPath, buf);
-                        localCandidatePath = tempCreatedPath;
-                      }
-                    }
-                  }
-
-                  if (localCandidatePath && fs.existsSync(localCandidatePath)) {
-                    execFileSync(
-                      'ffmpeg',
-                      [
-                        '-y',
-                        '-i',
-                        localCandidatePath,
-                        '-vf',
-                        vfFilter,
-                        '-t',
-                        '6',
-                        '-c:v',
-                        'libx264',
-                        '-preset',
-                        'ultrafast',
-                        '-pix_fmt',
-                        'yuv420p',
-                        '-movflags',
-                        '+faststart',
-                        mp4FullPath
-                      ],
-                      { timeout: 15000, stdio: 'ignore' }
-                    );
-
-                    if (tempCreatedPath && fs.existsSync(tempCreatedPath)) {
-                      try {
-                        fs.unlinkSync(tempCreatedPath);
-                      } catch {}
-                    }
-
-                    if (fs.existsSync(mp4FullPath) && fs.statSync(mp4FullPath).size > 5000) {
-                      return `/api/autoads/reel-video?file=${mp4FileName}`;
-                    }
-                  }
-                } catch {
-                  if (tempCreatedPath && fs.existsSync(tempCreatedPath)) {
-                    try {
-                      fs.unlinkSync(tempCreatedPath);
-                    } catch {}
+                // Si hay reserva in-flight previa en OpenRouter (402), esperar 3.5s y reintentar con google/gemini-omni-1.2-flash
+                if (!vidInitRes.ok && vidInitRes.status === 402) {
+                  const errTxt = await vidInitRes.text();
+                  if (errTxt.includes('in_flight_budget_exhausted') || errTxt.includes('in-flight')) {
+                    await new Promise(r => setTimeout(r, 3500));
+                    vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${openRouterKey}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': getOpenRouterReferer(reqObj),
+                        'X-Title': 'AutoAds Gemini Omni 1.2 Flash 15s Video Generator'
+                      },
+                      body: JSON.stringify(buildVideoPayload(hasPublicHttpsImg)),
+                      signal: AbortSignal.timeout(22000)
+                    });
+                  } else {
+                    return {
+                      status: 'failed',
+                      error: `HTTP 402 (${exactVideoModel}): ${errTxt.slice(0, 260)}`
+                    };
                   }
                 }
-              }
 
-              // 3. Respaldo final garantizado 9:16 H.264 con FFmpeg lavfi por si todas las rutas de imagen fallaran
+                if (!vidInitRes.ok) {
+                  const errBody = await vidInitRes.text();
+                  return {
+                    status: 'failed',
+                    error: `HTTP ${vidInitRes.status} (${exactVideoModel}): ${errBody.slice(0, 260)}`
+                  };
+                }
+
+                const vidJob: any = await vidInitRes.json();
+                activeJobId = String(vidJob?.id || '').trim();
+                activePollUrl = vidJob?.polling_url
+                  ? vidJob.polling_url.startsWith('http')
+                    ? vidJob.polling_url
+                    : `https://openrouter.ai${vidJob.polling_url}`
+                  : activeJobId
+                  ? `https://openrouter.ai/api/v1/videos/${activeJobId}`
+                  : '';
+
+                if (!activePollUrl) {
+                  return {
+                    status: 'failed',
+                    error: `OpenRouter (${exactVideoModel}) no devolvió ID de seguimiento para el video.`
+                  };
+                }
+              } catch (initErr: any) {
+                return {
+                  status: 'failed',
+                  error: `Error al iniciar video en OpenRouter (${exactVideoModel}): ${initErr?.message || 'Error de red'}`
+                };
+              }
+            }
+
+            // Polling del job activo en OpenRouter (/api/v1/videos/{id})
+            for (let attempt = 0; attempt < maxPollAttempts; attempt++) {
+              await new Promise(r => setTimeout(r, 2500));
               try {
-                execFileSync(
-                  'ffmpeg',
-                  [
-                    '-y',
-                    '-f',
-                    'lavfi',
-                    '-i',
-                    'color=c=#0f172a:s=720x1280:r=25:d=5',
-                    '-c:v',
-                    'libx264',
-                    '-preset',
-                    'ultrafast',
-                    '-pix_fmt',
-                    'yuv420p',
-                    '-movflags',
-                    '+faststart',
-                    mp4FullPath
-                  ],
-                  { timeout: 10000, stdio: 'ignore' }
-                );
-                if (fs.existsSync(mp4FullPath) && fs.statSync(mp4FullPath).size > 2000) {
-                  return `/api/autoads/reel-video?file=${mp4FileName}`;
+                const pollRes = await fetch(activePollUrl, {
+                  headers: { Authorization: `Bearer ${openRouterKey}` },
+                  signal: AbortSignal.timeout(10000)
+                });
+                if (!pollRes.ok) continue;
+                const pollData: any = await pollRes.json();
+                const st = String(pollData?.status || '').toLowerCase();
+
+                if (st === 'completed' || st === 'succeeded' || st === 'done') {
+                  const okDl = await downloadCompletedOpenRouterVideo(activeJobId, pollData);
+                  if (okDl) {
+                    return {
+                      status: 'completed',
+                      videoUrl: `/api/autoads/reel-video?file=${mp4FileName}`,
+                      jobId: activeJobId,
+                      pollUrl: activePollUrl
+                    };
+                  }
+                  return {
+                    status: 'failed',
+                    error: `El video de ${exactVideoModel} finalizó pero no se pudo descargar el archivo MP4.`
+                  };
+                }
+
+                if (st === 'failed' || st === 'error' || st === 'cancelled' || st === 'expired') {
+                  const failReason = String(pollData?.error?.message || pollData?.error || pollData?.message || st);
+                  return {
+                    status: 'failed',
+                    error: `OpenRouter (${exactVideoModel}) reportó fallo en el renderizado del video: ${failReason}`
+                  };
                 }
               } catch {}
-            } catch (vidErr: any) {
-              console.warn(`[generateDirectReelVideo] Error creando video Reel #${idx + 1}:`, vidErr?.message);
             }
-            return '';
+
+            // Si tras esta ronda de 25s sigue "pending" o "in_progress" en OpenRouter, devolvemos status: 'processing'
+            // para que el frontend continúe consultando hasta que Google Gemini Omni 1.2 Flash termine el video real de 15s
+            return {
+              status: 'processing',
+              jobId: activeJobId,
+              pollUrl: activePollUrl
+            };
           };
 
-          // Endpoint dedicado para crear DIRECTAMENTE el Video Reel MP4 de los Anuncios #5 y #6 (sin generar ninguna imagen IA previa)
+          const generateDirectReelVideo = async (
+            productObj: any,
+            promptText: string,
+            idx: number,
+            _requestedVideoModel: string,
+            openRouterKey: string,
+            reqObj: any,
+            adHeadline?: string,
+            adPrimaryText?: string,
+            adCtaLabel?: string
+          ): Promise<string> => {
+            const resJob = await requestOpenRouterReelVideoJob({
+              productObj,
+              promptText,
+              adHeadline,
+              adPrimaryText,
+              adCtaLabel,
+              idx,
+              openRouterKey,
+              reqObj,
+              maxPollAttempts: 36
+            });
+            return resJob.status === 'completed' && resJob.videoUrl ? resJob.videoUrl : '';
+          };
+
+          // Endpoint dedicado para crear DIRECTAMENTE el Video Reel MP4 de 15s de los Anuncios #5 y #6 con google/gemini-omni-1.2-flash (soporta polling multi-ronda sin timeouts)
           if (req.method === 'POST' && url === '/api/autoads/generate-reel-video') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
@@ -3225,12 +3197,14 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 const parsed = JSON.parse(body || '{}');
                 const adIndex = Number(parsed.adIndex ?? 4);
                 const product = parsed.product || {};
-                const optionalImageUrl = String(parsed.imageUrl || '').trim();
-                const promptText = String(parsed.prompt || 'Commercial product demonstration in live action').trim();
-                if (parsed.videoModel) {
-                  persistAutoAdsModels(undefined, String(parsed.videoModel));
-                }
-                const { videoModel } = getPersistedAutoAdsModels();
+                const promptText = String(parsed.prompt || 'Commercial product demonstration with human presenter in live action').trim();
+                const adHeadline = String(parsed.adHeadline || '').trim();
+                const adPrimaryText = String(parsed.adPrimaryText || '').trim();
+                const adCtaLabel = String(parsed.adCtaLabel || '').trim();
+                const existingJobId = String(parsed.jobId || '').trim();
+                const existingPollUrl = String(parsed.pollUrl || '').trim();
+                const videoModel = 'google/gemini-omni-1.2-flash';
+
                 const incomingKey = String(parsed.openRouterApiKey || '').trim();
                 if (isValidOpenRouterKey(incomingKey)) {
                   saveKeyToEnvFile('OPENROUTER_API_KEY', incomingKey);
@@ -3241,27 +3215,53 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
 
-                const videoUrl = await generateDirectReelVideo(
-                  product,
+                const jobResult = await requestOpenRouterReelVideoJob({
+                  productObj: product,
                   promptText,
-                  adIndex,
-                  videoModel,
+                  adHeadline,
+                  adPrimaryText,
+                  adCtaLabel,
+                  idx: adIndex,
                   openRouterKey,
-                  req,
-                  optionalImageUrl
-                );
+                  reqObj: req,
+                  existingJobId,
+                  existingPollUrl,
+                  maxPollAttempts: 10
+                });
 
-                if (!videoUrl) {
+                if (jobResult.status === 'processing') {
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      status: 'processing',
+                      adIndex,
+                      jobId: jobResult.jobId,
+                      pollUrl: jobResult.pollUrl,
+                      videoModel
+                    })
+                  );
+                  return;
+                }
+
+                if (jobResult.status === 'failed' || !jobResult.videoUrl) {
                   res.statusCode = 400;
-                  res.end(JSON.stringify({ success: false, error: 'No se pudo generar el Video Reel MP4.' }));
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        jobResult.error ||
+                        `No se pudo generar el Video Reel MP4 con ${videoModel} en OpenRouter.`
+                    })
+                  );
                   return;
                 }
 
                 res.end(
                   JSON.stringify({
                     success: true,
+                    status: 'completed',
                     adIndex,
-                    videoUrl,
+                    videoUrl: jobResult.videoUrl,
                     videoModel
                   })
                 );
@@ -3631,20 +3631,25 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     ? parsed.existingImageUrls
                     : {};
 
+                const onlyImagesMode = Boolean(parsed.onlyImagesMode);
+
                 const generateOneCreativeViaOpenRouter = async (promptText: string, idx: number) => {
-                  const isReel = idx >= 4;
+                  const isReel = idx >= 4 && !onlyImagesMode;
                   const finalPrompt = sanitizePromptForOpenAiImages(promptText);
 
-                  // REGLA ESTRICTA: Los Anuncios #5 y #6 (idx 4 y 5) son REELS DE VIDEO.
-                  // Jamás deben generar una imagen en OpenAI primero; crean directamente el Video Reel MP4 con el modelo de video elegido.
+                  // Si el interruptor de Reels está activo y es Anuncio #5 o #6, se crea el Video Reel MP4 de 15s con google/gemini-omni-1.2-flash
                   if (isReel) {
+                    const briefForIdx = Array.isArray(parsed.creativeBriefs) ? parsed.creativeBriefs[idx] : null;
                     const videoUrl = await generateDirectReelVideo(
                       product,
                       finalPrompt,
                       idx,
                       validEnvVidModel,
                       openRouterKey,
-                      req
+                      req,
+                      String(briefForIdx?.headline || ''),
+                      String(briefForIdx?.primaryText || ''),
+                      String(briefForIdx?.ctaLabel || '')
                     );
                     return {
                       adIndex: idx,
@@ -3686,9 +3691,11 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   };
                 };
 
-                // Por defecto solo los Anuncios #1 a #4 (0, 1, 2, 3) son de Imagen; los #5 y #6 son Videos Reels directos
+                // Si onlyImagesMode está activo, los 6 anuncios pueden generarse como imágenes; de lo contrario #1-#4 son imágenes y #5-#6 son Reels
                 const requestedIndices: number[] = Array.isArray(parsed.targetIndices) && parsed.targetIndices.length > 0
                   ? parsed.targetIndices.map((n: any) => Number(n)).filter((n: number) => n >= 0 && n < 6)
+                  : onlyImagesMode
+                  ? [0, 1, 2, 3, 4, 5]
                   : [0, 1, 2, 3];
 
                 const generatedImages: Array<{
@@ -3718,7 +3725,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       success: false,
                       error:
                         lastOpenRouterImgError ||
-                        `OpenRouter no pudo sintetizar las imágenes con el modelo elegido (${validEnvImgModel}). Verificá tu API Key y créditos en OpenRouter.`
+                        `OpenRouter no pudo sintetizar las imágenes con el modelo exclusivo (${validEnvImgModel}). Verificá tu API Key y créditos en OpenRouter.`
                     })
                   );
                   return;
@@ -3727,7 +3734,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 res.end(
                   JSON.stringify({
                     success: true,
-                    engine: `OpenRouter: ${validEnvImgModel} (Imágenes #1-#4) + ${validEnvVidModel} (Videos Reels Directos #5-#6)`,
+                    engine: `OpenRouter: ${validEnvImgModel} (Imágenes) + ${validEnvVidModel} (Videos Reels)`,
                     imageModel: validEnvImgModel,
                     videoModel: validEnvVidModel,
                     generatedImages
@@ -3741,7 +3748,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
             return;
           }
 
-          // Endpoint Universal para regenerar UN anuncio específico en vivo con OpenRouter (GLM-5.3 + OpenAI GPT Image + Seedance 2.5 / Gemini Omni 1.2 Video)
+          // Endpoint Universal para regenerar UN anuncio específico en vivo con OpenRouter (Exclusivo: openai/gpt-4o + openai/gpt-image-2.6-sunburst + bytedance/seedance-2.5)
           if (req.method === 'POST' && url === '/api/autoads/regenerate-ad') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
@@ -3754,6 +3761,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 const currentHeadline = String(parsed.currentHeadline || '').trim();
                 const customImagePromptInput = String(parsed.customImagePrompt || '').trim();
                 const imageOnlyMode = Boolean(parsed.imageOnly || parsed.videoOnly);
+                const onlyImagesMode = Boolean(parsed.onlyImagesMode);
                 const incomingRegenKey = String(parsed.openRouterApiKey || '').trim();
                 if (isValidOpenRouterKey(incomingRegenKey)) {
                   saveKeyToEnvFile('OPENROUTER_API_KEY', incomingRegenKey);
@@ -3766,9 +3774,6 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
 
-                if (parsed.imageModel || parsed.videoModel) {
-                  persistAutoAdsModels(parsed.imageModel, parsed.videoModel);
-                }
                 const persistedRegenModels = getPersistedAutoAdsModels();
                 const validEnvImgModel = persistedRegenModels.imageModel;
                 const validEnvVidModel = persistedRegenModels.videoModel;
@@ -3951,7 +3956,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 }
 
                 if (!imageOnlyMode) {
-                  const candidateLlmModels = ['z-ai/glm-5.3-flash', 'openai/gpt-4o-mini', 'z-ai/glm-5.3'];
+                  // Ejecución exclusiva con OpenAI GPT-4o (cero mezcla de otros modelos en AutoAds)
+                  const candidateLlmModels = ['openai/gpt-4o', 'openai/gpt-4o'];
                   let llmErrorText = '';
 
                   for (const llmModel of candidateLlmModels) {
@@ -3982,9 +3988,6 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         temperature: 0.72,
                         max_tokens: 1800
                       };
-                      if (llmModel.includes('glm')) {
-                        regenReqBody.reasoning = { effort: 'low', exclude: true };
-                      }
 
                       const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                         method: 'POST',
@@ -4084,27 +4087,30 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   .replace(/\bcash bills?\b/gi, 'delivery package')
                   .replace(/\bpaying cash\b/gi, 'receiving the package at the door');
 
-                const isReel = adIndex >= 4;
+                const isReel = adIndex >= 4 && !onlyImagesMode;
                 let newGeneratedImageUrl = '';
                 let newGeneratedVideoUrl = '';
                 let singleImgError = '';
 
                 if (isReel) {
-                  // Los Anuncios #5 y #6 son Reels: se crea DIRECTAMENTE el video .mp4 sin pasar jamás por el generador de imágenes OpenAI
+                  // Los Anuncios #5 y #6 son Reels: se crea DIRECTAMENTE el video .mp4 de 15s con google/gemini-omni-1.2-flash
                   newGeneratedVideoUrl = await generateDirectReelVideo(
                     product,
                     finalImagePrompt,
                     adIndex,
                     validEnvVidModel,
                     openRouterKey,
-                    req
+                    req,
+                    String(customBrief?.headline || currentHeadline || ''),
+                    String(customBrief?.primaryText || ''),
+                    String(customBrief?.ctaLabel || '')
                   );
                   if (!newGeneratedVideoUrl) {
                     res.statusCode = 400;
                     res.end(
                       JSON.stringify({
                         success: false,
-                        error: `No se pudo crear directamente el Video Reel MP4 para el Anuncio #${adIndex + 1} (${validEnvVidModel}).`
+                        error: `No se pudo crear directamente el Video Reel MP4 de 15s para el Anuncio #${adIndex + 1} (${validEnvVidModel}).`
                       })
                     );
                     return;
@@ -4317,7 +4323,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       pbConfig.pipeboardMcpEndpoint || 'https://meta-ads.mcp.pipeboard.co',
                     metaAccessTokenFallback: '',
                     openRouterApiKey: '',
-                    openRouterModel: pbConfig.openRouterModel || 'z-ai/glm-5.3',
+                    openRouterModel: 'openai/gpt-4o',
                     selectedImageModel: persistedModels.imageModel,
                     selectedVideoModel: persistedModels.videoModel,
                     selectedAdAccountId: pbConfig.selectedAdAccountId || 'act_595884210394',
@@ -5288,7 +5294,7 @@ setTimeout(()=>window.close(),5000);
                     readKeyFromEnvFile('OPENROUTER_API_KEY') ||
                     DEFAULT_OPENROUTER_API_KEY
                 ).trim();
-                const model = String(parsed.openRouterModel || 'z-ai/glm-5.3').trim();
+                const model = 'openai/gpt-4o';
 
                 const prodName = String(product.nombre || 'Producto Estrella').trim();
                 const prodDesc = String(product.descripcion || '').trim();

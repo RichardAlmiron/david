@@ -31,79 +31,34 @@ import { buildHighImpactAdSvgDataUrl } from './pipeboardEngine';
 // Constantes del modelo y configuración
 // ────────────────────────────────────────────────────────────────────────────────
 
-/** Modelos oficiales vía OpenRouter para el sistema AutoAds */
-export const AUTOADS_LLM_MODEL = 'z-ai/glm-5.3';
-export const AUTOADS_IMAGE_MODEL = 'openai/gpt-image-2.6-flare';
-export const AUTOADS_VIDEO_MODEL = 'bytedance/seedance-2.5';
+/** Modelos oficiales exclusivos y bloqueados vía OpenRouter para el sistema AutoAds */
+export const AUTOADS_LLM_MODEL = 'openai/gpt-4o';
+export const AUTOADS_IMAGE_MODEL = 'openai/gpt-image-2.6-sunburst';
+export const AUTOADS_VIDEO_MODEL = 'google/gemini-omni-1.2-flash';
 
 export const AUTOADS_IMAGE_MODEL_CANDIDATES = [
-  'openai/gpt-image-2.6-flare',
-  'openai/gpt-image-2.6-sunburst',
-  'openai/gpt-5-image-mini',
-  'openai/gpt-image-1-mini',
-  'openai/gpt-5.4-image-2',
-  'openai/gpt-image-2'
+  'openai/gpt-image-2.6-sunburst'
 ] as const;
 
 export const AUTOADS_VIDEO_MODEL_CANDIDATES = [
-  'bytedance/seedance-2.5',
-  'google/gemini-omni-1.2-flash',
-  'bytedance/seedance-2.0-fast'
+  'google/gemini-omni-1.2-flash'
 ] as const;
 
 export const AUTOADS_OPENAI_IMAGE_CATALOG = [
   {
-    id: 'openai/gpt-image-2.6-flare',
-    label: 'OpenAI: GPT Image 2.6 Flare (50% más rápido · $8/$30M)',
-    shortLabel: 'GPT Image 2.6 Flare',
-    endpointType: 'images_api' as const,
-    pricingLabel: '$8/M in · $30/M out'
-  },
-  {
     id: 'openai/gpt-image-2.6-sunburst',
-    label: 'OpenAI: GPT Image 2.6 Sunburst (Máximo detalle y edición · $8/$30M)',
+    label: 'OpenAI: GPT Image 2.6 Sunburst (Máximo Detalle y Perfección · Exclusivo)',
     shortLabel: 'GPT Image 2.6 Sunburst',
     endpointType: 'images_api' as const,
-    pricingLabel: '$8/M in · $30/M out'
-  },
-  {
-    id: 'openai/gpt-5-image-mini',
-    label: 'OpenAI: GPT-5 Image Mini (⭐ 4x más económico · $2.50/$8M)',
-    shortLabel: 'GPT-5 Image Mini',
-    endpointType: 'both' as const,
-    pricingLabel: '$2.50/M in · $8/M out'
-  },
-  {
-    id: 'openai/gpt-image-1-mini',
-    label: 'OpenAI: GPT Image 1 Mini (⭐ Económico Images API · $2.50/$8M)',
-    shortLabel: 'GPT Image 1 Mini',
-    endpointType: 'images_api' as const,
-    pricingLabel: '$2.50/M in · $8/M out'
-  },
-  {
-    id: 'openai/gpt-5.4-image-2',
-    label: 'OpenAI: GPT-5.4 Image 2 (Multimodal + GPT Image 2 · $8/$30M)',
-    shortLabel: 'GPT-5.4 Image 2',
-    endpointType: 'both' as const,
     pricingLabel: '$8/M in · $30/M out'
   }
 ] as const;
 
 export const AUTOADS_VIDEO_CATALOG = [
   {
-    id: 'bytedance/seedance-2.5',
-    label: 'ByteDance: Seedance 2.5 (⭐ Toma Foto Producto + Avatar/Video · 100% Uptime)',
-    shortLabel: 'Seedance 2.5'
-  },
-  {
     id: 'google/gemini-omni-1.2-flash',
-    label: 'Google: Gemini Omni 1.2 Flash (Video Multimodal 15s · $1.50/$9M)',
-    shortLabel: 'Gemini Omni 1.2 Flash'
-  },
-  {
-    id: 'bytedance/seedance-2.0-fast',
-    label: 'ByteDance: Seedance 2.0 Fast (Rápido Image-to-Video)',
-    shortLabel: 'Seedance 2.0 Fast'
+    label: 'Google: Gemini Omni 1.2 Flash (⭐ 15 Segundos · Producto Real + Avatar Hablando · Exclusivo)',
+    shortLabel: 'Gemini Omni 1.2 Flash (15s)'
   }
 ] as const;
 
@@ -1322,8 +1277,8 @@ export function buildAiAdImagePromptForBrief(
     `High-Impact Cash-on-Delivery Trust Ad Poster for "${name}" (${desc}): ${stanzaVisualDirective}In the foreground a smiling customer at their front door receives and tests the "${name}" from a friendly delivery courier while the "${name}" is actively working in real use showing its visible result (${mainBenefit}) before paying. Include bold Spanish ad headline text "${topHeadline}" and a CTA button badge "${bottomCta}", ${styleSuffix}`,
     `High-Impact BEFORE vs AFTER Split-Screen Ad Poster for "${name}" (${desc}): ${stanzaVisualDirective}Left side ("ANTES") shows a person struggling with the problem before having "${name}"; right side ("DESPUÉS") shows the person actively using "${name}" and experiencing the immediate solution and visible result (${mainBenefit}). Include bold Spanish header text "${topHeadline}" and CTA button badge "${bottomCta}", ${styleSuffix}`,
     `High-Impact Pack 2x Bundle Ad Poster for "${name}" (${desc}): ${stanzaVisualDirective}Two identical units of "${name}" prominently shown in active use producing double the real-world benefit (${mainBenefit}) for a happy family. Include bold Spanish ad header text "${topHeadline}" and CTA button badge "${bottomCta}", ${styleSuffix}`,
-    `High-Impact Power & Performance Demonstration Ad Poster for "${name}" (${techSpecs}): ${stanzaVisualDirective}Dynamic close-up of "${name}" actively operating at 100% capacity, visibly demonstrating its real physical result (${mainBenefit}) in front of a satisfied user. Include bold Spanish ad header text "${topHeadline}" and CTA button badge "${bottomCta}", ${styleSuffix}`,
-    `High-Impact Complete Kit in Action Ad Poster for "${name}": ${stanzaVisualDirective}Foreground shows the unboxed "${name}" with all its included factory accessories (${boxItems}) while the "${name}" is switched ON and actively producing its visible real-world result (${mainBenefit}). Include bold Spanish ad header text "${topHeadline}" and CTA button badge "${bottomCta}", ${styleSuffix}`
+    `Vertical 9:16 Live-Action Commercial Video Reel for "${name}" (${techSpecs}): ${stanzaVisualDirective}A realistic charismatic Latin American human avatar presenter is filmed on camera holding, installing, and switching ON the physical "${name}" in real time. The camera moves dynamically as the avatar activates the "${name}" and points with excitement at the dramatic real-world result (${mainBenefit}) happening live around them. Full human motion, natural facial expressions, cinematic video action, bold Spanish hook "${topHeadline}" and CTA "${bottomCta}"`,
+    `Vertical 9:16 Live-Action UGC & Avatar Demonstration Video Reel for "${name}": ${stanzaVisualDirective}A happy realistic Latin American customer avatar on camera holds the unboxed "${name}" with its accessories (${boxItems}), plugs and turns it ON right in front of the lens, and demonstrates the live moving transformation (${mainBenefit}) in real time while smiling at the camera. Authentic human avatar movement, smooth handheld video motion, bold Spanish headline "${topHeadline}" and CTA "${bottomCta}"`
   ];
 
   return promptsByArchetype[briefIndex % promptsByArchetype.length];

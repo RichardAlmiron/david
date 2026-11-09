@@ -29,8 +29,6 @@ import {
   AUTOADS_LLM_MODEL,
   AUTOADS_IMAGE_MODEL,
   AUTOADS_VIDEO_MODEL,
-  AUTOADS_OPENAI_IMAGE_CATALOG,
-  AUTOADS_VIDEO_CATALOG,
   PipeboardConnectionConfig,
   PipeboardPublishedCampaignRecord,
   DEFAULT_PIPEBOARD_CONFIG,
@@ -74,50 +72,29 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [openRouterKeyPreview, setOpenRouterKeyPreview] = useState<string>('');
   const [lastTokenSelfDestructAt, setLastTokenSelfDestructAt] = useState<string>('');
 
-  // Modelos activos elegidos por el usuario (persistidos en Backend store_config.json + .env y localStorage)
-  const [selectedImageModel, setSelectedImageModel] = useState<string>(() => {
+  // Modelos exclusivos pre-holdeados en código (cero selectores variables)
+  const selectedImageModel = AUTOADS_IMAGE_MODEL; // 'openai/gpt-image-2.6-sunburst'
+  const selectedVideoModel = AUTOADS_VIDEO_MODEL; // 'google/gemini-omni-1.2-flash'
+
+  // Interruptor (Switch) para que el usuario pueda evitar que se creen los 2 Reels de video y hacer que TODO el paquete sea 100% de Imágenes
+  const [onlyImagesMode, setOnlyImagesMode] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('autoads_selected_image_model');
-      if (saved && saved !== 'openai/gpt-image-2.6') return saved;
-    } catch {}
-    return AUTOADS_IMAGE_MODEL;
-  });
-  const [selectedVideoModel, setSelectedVideoModel] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('autoads_selected_video_model');
-      if (saved && !saved.includes('minimax')) return saved;
-    } catch {}
-    return AUTOADS_VIDEO_MODEL;
+      return localStorage.getItem('autoads_only_images_mode') === 'true';
+    } catch {
+      return false;
+    }
   });
 
-  const handleSelectImageModel = async (newModel: string) => {
-    setSelectedImageModel(newModel);
+  const handleToggleOnlyImagesMode = (nextValue: boolean) => {
+    setOnlyImagesMode(nextValue);
     try {
-      localStorage.setItem('autoads_selected_image_model', newModel);
+      localStorage.setItem('autoads_only_images_mode', nextValue ? 'true' : 'false');
     } catch {}
-    try {
-      await fetch('/api/autoads/save-models', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageModel: newModel, videoModel: selectedVideoModel })
-      });
-      showToast(`✅ Modelo de imagen guardado en el servidor: ${newModel}`);
-    } catch {}
-  };
-
-  const handleSelectVideoModel = async (newModel: string) => {
-    setSelectedVideoModel(newModel);
-    try {
-      localStorage.setItem('autoads_selected_video_model', newModel);
-    } catch {}
-    try {
-      await fetch('/api/autoads/save-models', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageModel: selectedImageModel, videoModel: newModel })
-      });
-      showToast(`✅ Modelo de video guardado en el servidor: ${newModel}`);
-    } catch {}
+    showToast(
+      nextValue
+        ? '🖼️ Modo 100% Solo Imágenes activado: Se evitará crear los 2 Reels de video y todos los anuncios serán de Imagen (Sunburst).'
+        : '🎬 Modo Mixto activado: Se crearán 4 Imágenes (Sunburst) + 2 Videos Reels de 15s con Voz y Producto (Gemini Omni 1.2 Flash).'
+    );
   };
 
   // Modal de Error de OpenRouter (sin fallbacks ficticios)
@@ -214,7 +191,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
   };
 
-  // Cargar configuración de servidor (incluyendo los modelos de imagen y video guardados) y estado CAPI al montar
+  // Cargar configuración de servidor y estado CAPI al montar
   useEffect(() => {
     fetch('/api/pipeboard/config')
       .then(r => r.json())
@@ -227,20 +204,6 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             openRouterApiKey: '',
             metaAccessTokenFallback: ''
           }));
-        }
-        const backendImgModel = String(data?.selectedImageModel || data?.config?.selectedImageModel || '').trim();
-        if (backendImgModel && backendImgModel !== 'openai/gpt-image-2.6') {
-          setSelectedImageModel(backendImgModel);
-          try {
-            localStorage.setItem('autoads_selected_image_model', backendImgModel);
-          } catch {}
-        }
-        const backendVidModel = String(data?.selectedVideoModel || data?.config?.selectedVideoModel || '').trim();
-        if (backendVidModel && !backendVidModel.includes('minimax')) {
-          setSelectedVideoModel(backendVidModel);
-          try {
-            localStorage.setItem('autoads_selected_video_model', backendVidModel);
-          } catch {}
         }
         setHasPipeboardTokenInBackend(Boolean(data?.hasPipeboardToken));
         setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
@@ -259,8 +222,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             body: JSON.stringify({
               ...(data?.config || {}),
               openRouterApiKey: vaultKey,
-              selectedImageModel: backendImgModel || selectedImageModel,
-              selectedVideoModel: backendVidModel || selectedVideoModel
+              selectedImageModel,
+              selectedVideoModel
             })
           })
             .then(r => r.json())
@@ -533,41 +496,112 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
   };
 
+  // Helper de Polling Multi-Ronda para esperar siempre el Video IA real de 15s con Avatar Hablando + Producto en Google Gemini Omni 1.2 Flash (sin inventar jamás imágenes en movimiento)
+  const requestDirectReelVideoWithPolling = async (
+    adIndex: number,
+    promptText: string,
+    onRoundProgress?: (round: number, totalRounds: number) => void,
+    adCopy?: { headline?: string; primaryText?: string; ctaLabel?: string }
+  ): Promise<{ videoUrl: string; error?: string }> => {
+    const vaultKey = getVaultOpenRouterKey();
+    let currentJobId = '';
+    let currentPollUrl = '';
+    const maxRounds = 8; // Hasta ~3.5 minutos de espera limpia en rondas de 25s para video de 15s con voz
+
+    for (let round = 1; round <= maxRounds; round++) {
+      if (onRoundProgress) onRoundProgress(round, maxRounds);
+      try {
+        const vidRes = await fetch('/api/autoads/generate-reel-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adIndex,
+            product: activeProduct,
+            prompt: promptText,
+            adHeadline: adCopy?.headline || '',
+            adPrimaryText: adCopy?.primaryText || '',
+            adCtaLabel: adCopy?.ctaLabel || '',
+            videoModel: selectedVideoModel,
+            openRouterApiKey: vaultKey,
+            jobId: currentJobId,
+            pollUrl: currentPollUrl
+          })
+        });
+        const vidJson = await vidRes.json().catch(() => ({}));
+        if (!vidRes.ok || vidJson?.success === false) {
+          return {
+            videoUrl: '',
+            error: vidJson?.error || `Error al crear el Video Reel de 15s #${adIndex + 1} en ${selectedVideoModel}.`
+          };
+        }
+        if (vidJson?.status === 'completed' && vidJson?.videoUrl) {
+          return { videoUrl: String(vidJson.videoUrl) };
+        }
+        if (vidJson?.status === 'processing' && vidJson?.pollUrl) {
+          currentJobId = String(vidJson.jobId || '');
+          currentPollUrl = String(vidJson.pollUrl || '');
+          continue;
+        }
+        if (vidJson?.videoUrl) {
+          return { videoUrl: String(vidJson.videoUrl) };
+        }
+      } catch (err: any) {
+        return {
+          videoUrl: '',
+          error: err?.message || `Error de red al crear Video Reel #${adIndex + 1}.`
+        };
+      }
+    }
+
+    return {
+      videoUrl: '',
+      error: `El renderizado del Video Reel de 15s #${adIndex + 1} en ${selectedVideoModel} superó el tiempo máximo en OpenRouter.`
+    };
+  };
+
   // ─────────────────────────────────────────────────────────────────────────────
-  // BOTÓN 2: Generar Todos los Anuncios Ganadores + Imágenes GPT-5 Image + Video Gemini Omni 1.2 (OpenRouter)
+  // BOTÓN 2: Generar Todos los Anuncios Ganadores (Exclusivo: openai/gpt-4o + openai/gpt-image-2.6-sunburst + google/gemini-omni-1.2-flash)
   // ─────────────────────────────────────────────────────────────────────────────
   const handleStep2GenerateAds = async () => {
     if (!brainProfile || !activeProduct) return;
     const existingCreatives = [...creatives];
+    const imageSliceEnd = onlyImagesMode ? 6 : 4;
     const hasPendingImages =
-      existingCreatives.length > 0 && existingCreatives.slice(0, 4).some(c => !c.aiGeneratedImageUrl);
+      existingCreatives.length > 0 &&
+      existingCreatives.slice(0, imageSliceEnd).some(c => !c.aiGeneratedImageUrl);
     const hasPendingVideos =
-      existingCreatives.length > 0 && existingCreatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl);
+      !onlyImagesMode &&
+      existingCreatives.length > 0 &&
+      existingCreatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl);
     const isResumeIncomplete = hasPendingImages || hasPendingVideos;
     const isFullRegenerateAll = existingCreatives.length > 0 && !isResumeIncomplete;
     const vaultKey = getVaultOpenRouterKey();
 
     setWorkflowStep('generating');
     setGenerationProgressText(
-      hasPendingVideos && !hasPendingImages
-        ? `🎬 Creando directamente los 2 Videos Reels MP4 de los Anuncios #5 y #6 (${selectedVideoModel})...`
+      onlyImagesMode
+        ? `🖼️ Modo 100% Solo Imágenes: Creando las 6 Imágenes con ${selectedImageModel} (sin crear Reels de video)...`
+        : hasPendingVideos && !hasPendingImages
+        ? `🎬 Creando directamente los 2 Videos Reels con Avatar de los Anuncios #5 y #6 (${selectedVideoModel})...`
         : hasPendingImages
-        ? `🎨 Completando las 4 Imágenes (#1-#4 con ${selectedImageModel}) y los 2 Videos Reels directos (#5-#6 con ${selectedVideoModel})...`
+        ? `🎨 Completando las 4 Imágenes (#1-#4 con ${selectedImageModel}) y los 2 Videos Reels (#5-#6 con ${selectedVideoModel})...`
         : isFullRegenerateAll
         ? `🧠 Redactando 6 nuevos anuncios persuasivos con OpenRouter (${AUTOADS_LLM_MODEL}) para "${activeProduct.nombre}"...`
-        : `🎨 Creando las 4 Imágenes (#1-#4 con ${selectedImageModel}) y los 2 Videos Reels directos (#5-#6 con ${selectedVideoModel}) para "${activeProduct.nombre}"...`
+        : `🎨 Creando las 4 Imágenes (#1-#4 con ${selectedImageModel}) y los 2 Videos Reels (#5-#6 con ${selectedVideoModel}) para "${activeProduct.nombre}"...`
     );
 
     const genTimer1 = setTimeout(() => {
       setGenerationProgressText(
-        `🎬 Generando 4 Imágenes (${selectedImageModel}) + 2 Videos Reels MP4 directos (${selectedVideoModel})...`
+        onlyImagesMode
+          ? `🎨 Generando paquete 100% de Imágenes con ${selectedImageModel} (Cero Videos Reels)...`
+          : `🎬 Generando 4 Imágenes (${selectedImageModel}) + 2 Videos Reels con Avatar (${selectedVideoModel})...`
       );
     }, 2200);
 
     try {
       let currentBrain = brainProfile;
 
-      // Solo pedimos 6 textos nuevos si todas las 4 imágenes y los 2 videos previos ya estaban completos y el usuario quiere regenerar todo desde cero
+      // Solo pedimos 6 textos nuevos si todas las tarjetas previas ya estaban completas y el usuario quiere regenerar todo desde cero
       if (isFullRegenerateAll) {
         try {
           const trainRes = await fetch('/api/autoads/brain-train', {
@@ -601,18 +635,22 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       let workingAssets = isResumeIncomplete
         ? baseAssets.map((asset, idx) => ({
             ...asset,
+            type: onlyImagesMode && idx >= 4 ? ('image_story_9x16' as const) : asset.type,
             headline: existingCreatives[idx]?.headline || asset.headline,
             primaryText: existingCreatives[idx]?.primaryText || asset.primaryText,
             descriptionText: existingCreatives[idx]?.descriptionText || asset.descriptionText,
             ctaLabel: existingCreatives[idx]?.ctaLabel || asset.ctaLabel,
-            aiGeneratedImageUrl: idx < 4 ? existingCreatives[idx]?.aiGeneratedImageUrl || '' : '',
-            aiGeneratedVideoUrl: idx >= 4 ? existingCreatives[idx]?.aiGeneratedVideoUrl || '' : '',
+            aiGeneratedImageUrl:
+              idx < imageSliceEnd ? existingCreatives[idx]?.aiGeneratedImageUrl || '' : '',
+            aiGeneratedVideoUrl:
+              !onlyImagesMode && idx >= 4 ? existingCreatives[idx]?.aiGeneratedVideoUrl || '' : '',
             aiImagePrompt: existingCreatives[idx]?.aiImagePrompt || asset.aiImagePrompt
           }))
         : baseAssets.map((asset, idx) => ({
             ...asset,
-            aiGeneratedImageUrl: idx < 4 ? asset.aiGeneratedImageUrl || '' : '',
-            aiGeneratedVideoUrl: idx >= 4 ? asset.aiGeneratedVideoUrl || '' : ''
+            type: onlyImagesMode && idx >= 4 ? ('image_story_9x16' as const) : asset.type,
+            aiGeneratedImageUrl: idx < imageSliceEnd ? asset.aiGeneratedImageUrl || '' : '',
+            aiGeneratedVideoUrl: !onlyImagesMode && idx >= 4 ? asset.aiGeneratedVideoUrl || '' : ''
           }));
 
       // Mostrar inmediatamente las 6 tarjetas en pantalla
@@ -622,62 +660,54 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         setAdPhotoIndexOverride({});
       }
 
-      // Anuncios #1 a #4 (0..3) requieren Imagen IA; Anuncios #5 y #6 (4..5) requieren directamente Video Reel MP4 (sin generar imagen)
       const singleCardIndices: number[] = isResumeIncomplete
         ? workingAssets
-            .map((a, idx) => ((idx < 4 && !a.aiGeneratedImageUrl) || (idx >= 4 && !a.aiGeneratedVideoUrl) ? idx : -1))
+            .map((a, idx) =>
+              (idx < imageSliceEnd && !a.aiGeneratedImageUrl) ||
+              (!onlyImagesMode && idx >= 4 && !a.aiGeneratedVideoUrl)
+                ? idx
+                : -1
+            )
             .filter(idx => idx !== -1)
         : [0, 1, 2, 3, 4, 5];
       let lastWaveError = '';
 
       for (let i = 0; i < singleCardIndices.length; i++) {
         const cardIdx = singleCardIndices[i];
-        const isReelCard = cardIdx >= 4;
+        const isReelCard = cardIdx >= 4 && !onlyImagesMode;
 
-        // SI ES REEL (Anuncio #5 o #6): Crear DIRECTAMENTE el Video Reel MP4 sin pasar por el generador de imágenes
+        // SI ES REEL (Anuncio #5 o #6 y el interruptor Solo Imágenes está APAGADO): Crear el Video Reel MP4 de 15s con Google Gemini Omni 1.2 Flash
         if (isReelCard) {
-          setGenerationProgressText(
-            `🎬 Creando directamente Video Reel MP4 para Anuncio #${cardIdx + 1} con ${selectedVideoModel} (sin generar imagen previa)...`
+          const { videoUrl, error } = await requestDirectReelVideoWithPolling(
+            cardIdx,
+            workingAssets[cardIdx]?.aiImagePrompt || '',
+            (round, totalRounds) => {
+              setGenerationProgressText(
+                `🎬 Creando Video Reel de 15s con Avatar Hablando + Producto para Anuncio #${cardIdx + 1} en ${selectedVideoModel} (Ronda ${round}/${totalRounds})...`
+              );
+            },
+            {
+              headline: workingAssets[cardIdx]?.headline || '',
+              primaryText: workingAssets[cardIdx]?.primaryText || '',
+              ctaLabel: workingAssets[cardIdx]?.ctaLabel || ''
+            }
           );
-          try {
-            const vidRes = await fetch('/api/autoads/generate-reel-video', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                adIndex: cardIdx,
-                product: activeProduct,
-                prompt: workingAssets[cardIdx]?.aiImagePrompt || '',
-                videoModel: selectedVideoModel,
-                openRouterApiKey: vaultKey
-              })
-            });
-            if (vidRes.ok) {
-              const vidJson = await vidRes.json();
-              if (vidJson?.videoUrl) {
-                workingAssets = workingAssets.map((asset, idx) =>
-                  idx === cardIdx
-                    ? { ...asset, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: vidJson.videoUrl }
-                    : asset
-                );
-                setCreatives([...workingAssets]);
-              }
-            } else {
-              const errData = await vidRes.json().catch(() => ({}));
-              if (!lastWaveError) {
-                lastWaveError = errData?.error || `Error al crear el Video Reel #${cardIdx + 1}.`;
-              }
-            }
-          } catch (vidErr: any) {
-            if (!lastWaveError) {
-              lastWaveError = vidErr?.message || `Error de red al crear Video Reel #${cardIdx + 1}.`;
-            }
+          if (videoUrl) {
+            workingAssets = workingAssets.map((asset, idx) =>
+              idx === cardIdx
+                ? { ...asset, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: videoUrl }
+                : asset
+            );
+            setCreatives([...workingAssets]);
+          } else if (error && !lastWaveError) {
+            lastWaveError = error;
           }
           continue;
         }
 
-        // SI ES ANUNCIO DE IMAGEN (#1, #2, #3 o #4): Generar la Imagen IA con el modelo elegido por el usuario
+        // SI ES ANUNCIO DE IMAGEN: Generar la Imagen IA con openai/gpt-image-2.6-sunburst
         setGenerationProgressText(
-          `🎨 Generando Imagen IA ${cardIdx + 1}/4 en OpenRouter (Anuncio #${cardIdx + 1}) con ${selectedImageModel}...`
+          `🎨 Generando Imagen IA ${cardIdx + 1}/${imageSliceEnd} en OpenRouter (Anuncio #${cardIdx + 1}) con ${selectedImageModel}...`
         );
 
         try {
@@ -690,6 +720,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               forceNewGeneration: true,
               imageModel: selectedImageModel,
               videoModel: selectedVideoModel,
+              onlyImagesMode,
               openRouterApiKey: vaultKey,
               targetIndices: [cardIdx]
             })
@@ -729,55 +760,55 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           }
         }
 
-        if (i + 1 < singleCardIndices.length && singleCardIndices[i + 1] < 4) {
-          // Pausa de 1.5s para que OpenRouter libere la reserva de créditos en vuelo ("in-flight hold") antes de la siguiente imagen
-          await new Promise(r => setTimeout(r, 1500));
+        if (i + 1 < singleCardIndices.length && (onlyImagesMode || singleCardIndices[i + 1] < 4)) {
+          // Pausa de 1.8s para que OpenRouter libere la reserva de créditos en vuelo ("in-flight hold") antes de la siguiente imagen Sunburst
+          await new Promise(r => setTimeout(r, 1800));
         }
       }
 
-      // Segunda pasada de autorrecuperación automática si alguna de las 4 imágenes (#1-#4) o alguno de los 2 videos Reels (#5-#6) quedó pendiente
+      // Segunda pasada de autorrecuperación automática si alguna tarjeta quedó pendiente por reserva in-flight
       const missingIndices = workingAssets
-        .map((asset, idx) => ((idx < 4 && !asset.aiGeneratedImageUrl) || (idx >= 4 && !asset.aiGeneratedVideoUrl) ? idx : -1))
+        .map((asset, idx) =>
+          (idx < imageSliceEnd && !asset.aiGeneratedImageUrl) ||
+          (!onlyImagesMode && idx >= 4 && !asset.aiGeneratedVideoUrl)
+            ? idx
+            : -1
+        )
         .filter(idx => idx !== -1);
 
       if (missingIndices.length > 0) {
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise(r => setTimeout(r, 1800));
         for (const missingIdx of missingIndices) {
-          if (missingIdx >= 4) {
-            setGenerationProgressText(
-              `🎬 Finalizando creación directa del Video Reel MP4 del Anuncio #${missingIdx + 1} (${selectedVideoModel})...`
-            );
-            try {
-              const vidRetry = await fetch('/api/autoads/generate-reel-video', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  adIndex: missingIdx,
-                  product: activeProduct,
-                  prompt: workingAssets[missingIdx]?.aiImagePrompt || '',
-                  videoModel: selectedVideoModel,
-                  openRouterApiKey: vaultKey
-                })
-              });
-              if (vidRetry.ok) {
-                const vidRetryJson = await vidRetry.json();
-                if (vidRetryJson?.videoUrl) {
-                  workingAssets = workingAssets.map((asset, idx) =>
-                    idx === missingIdx
-                      ? { ...asset, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: vidRetryJson.videoUrl }
-                      : asset
-                  );
-                  setCreatives([...workingAssets]);
-                }
+          if (missingIdx >= 4 && !onlyImagesMode) {
+            const { videoUrl } = await requestDirectReelVideoWithPolling(
+              missingIdx,
+              workingAssets[missingIdx]?.aiImagePrompt || '',
+              (round, totalRounds) => {
+                setGenerationProgressText(
+                  `🎬 Finalizando Video Reel de 15s del Anuncio #${missingIdx + 1} (${selectedVideoModel} · Ronda ${round}/${totalRounds})...`
+                );
+              },
+              {
+                headline: workingAssets[missingIdx]?.headline || '',
+                primaryText: workingAssets[missingIdx]?.primaryText || '',
+                ctaLabel: workingAssets[missingIdx]?.ctaLabel || ''
               }
-            } catch {}
+            );
+            if (videoUrl) {
+              workingAssets = workingAssets.map((asset, idx) =>
+                idx === missingIdx
+                  ? { ...asset, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: videoUrl }
+                  : asset
+              );
+              setCreatives([...workingAssets]);
+            }
             continue;
           }
 
           setGenerationProgressText(
             `🔄 Liberando reserva en vuelo y completando Imagen del Anuncio #${missingIdx + 1} en OpenRouter (${selectedImageModel})...`
           );
-          await new Promise(r => setTimeout(r, 1200));
+          await new Promise(r => setTimeout(r, 1500));
           try {
             const retryRes = await fetch('/api/autoads/generate-ad-images', {
               method: 'POST',
@@ -788,6 +819,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 forceNewGeneration: true,
                 imageModel: selectedImageModel,
                 videoModel: selectedVideoModel,
+                onlyImagesMode,
                 openRouterApiKey: vaultKey,
                 targetIndices: [missingIdx]
               })
@@ -813,8 +845,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         }
       }
 
-      const totalGeneratedImagesCount = workingAssets.slice(0, 4).filter(a => Boolean(a.aiGeneratedImageUrl)).length;
-      const totalReelVideosCount = workingAssets.slice(4, 6).filter(a => Boolean(a.aiGeneratedVideoUrl)).length;
+      const totalGeneratedImagesCount = workingAssets
+        .slice(0, imageSliceEnd)
+        .filter(a => Boolean(a.aiGeneratedImageUrl)).length;
+      const totalReelVideosCount = onlyImagesMode
+        ? 0
+        : workingAssets.slice(4, 6).filter(a => Boolean(a.aiGeneratedVideoUrl)).length;
       if (totalGeneratedImagesCount === 0 && lastWaveError) {
         clearTimeout(genTimer1);
         setWorkflowStep('researched');
@@ -838,7 +874,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       setCreatives(workingAssets);
       setWorkflowStep('generated');
       showToast(
-        `🤖 ${totalGeneratedImagesCount}/4 Imágenes IA (${selectedImageModel}) + ${totalReelVideosCount}/2 Videos Reels MP4 directos (${selectedVideoModel}) creados.`
+        onlyImagesMode
+          ? `🖼️ ${totalGeneratedImagesCount}/6 Imágenes IA (${selectedImageModel}) creadas (Modo 100% Solo Imágenes).`
+          : `🤖 ${totalGeneratedImagesCount}/4 Imágenes IA (${selectedImageModel}) + ${totalReelVideosCount}/2 Videos Reels (${selectedVideoModel}) creados.`
       );
     } catch (err: any) {
       clearTimeout(genTimer1);
@@ -857,28 +895,33 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Generar SOLO el Video Reel MP4 directo (Anuncios #5 y #6) SIN crear imagen previa
+  // Generar SOLO el Video Reel MP4 de 15s directo (Anuncios #5 y #6) con Google Gemini Omni 1.2 Flash
   // ─────────────────────────────────────────────────────────────────────────────
   const handleGenerateVideoOnlyForReel = async (adIndex: number, customPromptOverride?: string) => {
     if (!brainProfile || !activeProduct) return;
     const currentAd = creatives[adIndex];
     setRegeneratingAdIdx(adIndex);
     try {
-      const res = await fetch('/api/autoads/generate-reel-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          adIndex,
-          product: activeProduct,
-          prompt: customPromptOverride || currentAd?.aiImagePrompt || '',
-          videoModel: selectedVideoModel,
-          openRouterApiKey: getVaultOpenRouterKey()
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || data?.success === false || !data?.videoUrl) {
+      const { videoUrl, error } = await requestDirectReelVideoWithPolling(
+        adIndex,
+        customPromptOverride || currentAd?.aiImagePrompt || '',
+        undefined,
+        {
+          headline: currentAd?.headline || '',
+          primaryText: currentAd?.primaryText || '',
+          ctaLabel: currentAd?.ctaLabel || ''
+        }
+      );
+      if (!videoUrl) {
         setRegeneratingAdIdx(null);
-        showToast(`⚠️ No se pudo generar el video para el Reel #${adIndex + 1}. Intentá de nuevo.`);
+        setApiErrorModal({
+          isOpen: true,
+          title: '⚠️ Error al Generar Video Reel de 15s en Gemini Omni 1.2 Flash — Trabajo Pausado',
+          errorMessage:
+            error ||
+            `OpenRouter (${selectedVideoModel}) no devolvió el video para el Reel #${adIndex + 1}. Se desactivaron todos los fallbacks ficticios.`,
+          sourceEndpoint: '/api/autoads/generate-reel-video'
+        });
         return;
       }
       setCreatives(prev =>
@@ -887,25 +930,24 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             ? {
                 ...item,
                 aiGeneratedImageUrl: '',
-                aiGeneratedVideoUrl: data.videoUrl
+                aiGeneratedVideoUrl: videoUrl
               }
             : item
         )
       );
       setRegeneratingAdIdx(null);
-      showToast(`🎬 Video Reel MP4 del Anuncio #${adIndex + 1} creado directamente (${selectedVideoModel}).`);
+      showToast(`🎬 Video Reel MP4 de 15s del Anuncio #${adIndex + 1} creado con Voz y Producto en ${selectedVideoModel}.`);
     } catch {
       setRegeneratingAdIdx(null);
     }
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Generar SOLO la imagen IA de una tarjeta (#1 a #4) sin tocar su copywriting actual
+  // Generar SOLO la imagen IA de una tarjeta sin tocar su copywriting actual
   // ─────────────────────────────────────────────────────────────────────────────
   const handleGenerateImageOnlyForAd = async (adIndex: number, customPromptOverride?: string) => {
     if (!brainProfile || !activeProduct) return;
-    // Si es un Reel (#5 o #6), jamás generamos imagen: creamos directamente el Video Reel MP4
-    if (adIndex >= 4) {
+    if (adIndex >= 4 && !onlyImagesMode) {
       return handleGenerateVideoOnlyForReel(adIndex, customPromptOverride);
     }
     setRegeneratingAdIdx(adIndex);
@@ -922,6 +964,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           customImagePrompt: customPromptOverride || currentAd?.aiImagePrompt || '',
           imageModel: selectedImageModel,
           videoModel: selectedVideoModel,
+          onlyImagesMode,
           openRouterApiKey: getVaultOpenRouterKey(),
           imageOnly: true
         })
@@ -964,9 +1007,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
   };
 
-  // Auto-creación directa e inmediata de los Videos Reels MP4 (Anuncios #5 y #6) si aún no tienen su archivo .mp4 (sin requerir ni crear imagen previa)
+  // Auto-creación directa de los Videos Reels MP4 (Anuncios #5 y #6) solo si onlyImagesMode está desactivado
   useEffect(() => {
     if (
+      onlyImagesMode ||
       !activeProduct ||
       !brainProfile ||
       workflowStep === 'generating' ||
@@ -983,25 +1027,21 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     (async () => {
       try {
         const targetAd = creatives[missingReelIdx];
-        const res = await fetch('/api/autoads/generate-reel-video', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            adIndex: missingReelIdx,
-            product: activeProduct,
-            prompt: targetAd?.aiImagePrompt || '',
-            videoModel: selectedVideoModel,
-            openRouterApiKey: getVaultOpenRouterKey()
-          })
-        });
-        if (cancelled || !res.ok) return;
-        const data = await res.json();
-        const vidUrl = data?.videoUrl;
-        if (vidUrl && !cancelled) {
+        const { videoUrl } = await requestDirectReelVideoWithPolling(
+          missingReelIdx,
+          targetAd?.aiImagePrompt || '',
+          undefined,
+          {
+            headline: targetAd?.headline || '',
+            primaryText: targetAd?.primaryText || '',
+            ctaLabel: targetAd?.ctaLabel || ''
+          }
+        );
+        if (videoUrl && !cancelled) {
           setCreatives(prev =>
             prev.map((item, idx) =>
               idx === missingReelIdx
-                ? { ...item, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: vidUrl }
+                ? { ...item, aiGeneratedImageUrl: '', aiGeneratedVideoUrl: videoUrl }
                 : item
             )
           );
@@ -1012,11 +1052,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [creatives, activeProduct, brainProfile, workflowStep, regeneratingAdIdx, selectedVideoModel]);
+  }, [creatives, activeProduct, brainProfile, workflowStep, regeneratingAdIdx, onlyImagesMode]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Cambiar / Regenerar UN anuncio específico ("🔄 Cambiar")
-  // Si es #1-#4 regenera Texto + Imagen IA; si es #5-#6 (Reel) regenera Texto + Video Reel directo
   // ─────────────────────────────────────────────────────────────────────────────
   const handleRegenerateSingleAd = async (adIndex: number, customPromptOverride?: string) => {
     if (!brainProfile || !activeProduct) return;
@@ -1038,6 +1077,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           customImagePrompt: customPromptOverride || '',
           imageModel: selectedImageModel,
           videoModel: selectedVideoModel,
+          onlyImagesMode,
           openRouterApiKey: getVaultOpenRouterKey()
         })
       });
@@ -1075,6 +1115,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       nextSeed,
       customBrief || undefined
     );
+    if (onlyImagesMode && adIndex >= 4) {
+      freshAsset.type = 'image_story_9x16';
+    }
 
     // Limpiar cualquier override manual de índice
     setAdPhotoIndexOverride(prev => {
@@ -1086,8 +1129,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     setCreatives(prev => prev.map((item, idx) => (idx === adIndex ? freshAsset : item)));
     setRegeneratingAdIdx(null);
     showToast(
-      adIndex >= 4
-        ? `🎬 Reel #${adIndex + 1} regenerado directamente en Video MP4 (${selectedVideoModel}) con nuevo ángulo de venta.`
+      adIndex >= 4 && !onlyImagesMode
+        ? `🎬 Reel #${adIndex + 1} regenerado en Video MP4 (${selectedVideoModel}) con nuevo ángulo de venta.`
         : `🤖 Anuncio #${adIndex + 1} regenerado con nueva Imagen IA (${selectedImageModel}) y nuevo ángulo de venta.`
     );
   };
@@ -1519,40 +1562,65 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           </div>
         )}
 
-        {/* Selector directo de Modelo de Imagen OpenAI y Modelo de Video en OpenRouter (Persistido en Servidor) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-          <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-1">
-            <label className="block text-[11px] font-bold text-emerald-300 font-mono">
-              🎨 Generador de Imagen OpenAI (Guardado en Servidor):
-            </label>
-            <select
-              value={selectedImageModel}
-              onChange={e => handleSelectImageModel(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-950 text-xs font-mono text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
-            >
-              {AUTOADS_OPENAI_IMAGE_CATALOG.map(m => (
-                <option key={m.id} value={m.id} className="bg-zinc-950 text-zinc-100">
-                  {m.label}
-                </option>
-              ))}
-            </select>
+        {/* Motores Exclusivos Fijos en Código + Interruptor para Evitar los 2 Reels de Video */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-1">
+          <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[11px] font-bold text-emerald-300 font-mono">
+                🔒 Motores Exclusivos Fijos en Código (Sin Fallbacks ni Imágenes Ficticias):
+              </span>
+              <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700/70 text-[10px] font-mono text-emerald-300">
+                100% Oficial OpenRouter
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
+              <span className="px-2 py-1 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200">
+                🧠 Copy + Investigación: <strong className="text-emerald-400">{AUTOADS_LLM_MODEL}</strong>
+              </span>
+              <span className="px-2 py-1 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200">
+                🎨 Imagen: <strong className="text-emerald-400">{selectedImageModel}</strong>
+              </span>
+              {!onlyImagesMode && (
+                <span className="px-2 py-1 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200">
+                  🎬 Video Reel: <strong className="text-blue-400">{selectedVideoModel}</strong>
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-1">
-            <label className="block text-[11px] font-bold text-blue-300 font-mono">
-              🎬 Generador de Video Reels (Guardado en Servidor):
-            </label>
-            <select
-              value={selectedVideoModel}
-              onChange={e => handleSelectVideoModel(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-950 text-xs font-mono text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
+          {/* INTERRUPTOR (SWITCH) PARA EVITAR CREAR LOS 2 REELS DE VIDEO Y USAR 100% IMÁGENES */}
+          <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-zinc-100">
+                  {onlyImagesMode
+                    ? '🖼️ Modo 100% Solo Imágenes Activo (6 Imágenes · Cero Reels de Video)'
+                    : '🎬 Modo Mixto: 4 Imágenes + 2 Reels de 15s (Gemini Omni 1.2 Flash)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-400 leading-snug">
+                {onlyImagesMode
+                  ? 'Se evita crear los 2 videos Reels (#5 y #6). Los 6 anuncios se generan como imágenes estáticas con GPT Image 2.6 Sunburst (aptos para Feed, Stories y Reels en Meta Ads).'
+                  : 'Los Reels #5 y #6 se crean de 15 segundos con Avatar hablando + tu Producto real en Google Gemini Omni 1.2 Flash. Activá este interruptor si preferís usar 100% solo imágenes.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={onlyImagesMode}
+              data-testid="autoads-only-images-switch"
+              onClick={() => handleToggleOnlyImagesMode(!onlyImagesMode)}
+              className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                onlyImagesMode ? 'bg-emerald-500' : 'bg-zinc-700'
+              }`}
+              title="Interruptor para evitar crear los 2 Reels de video y usar 100% imágenes"
             >
-              {AUTOADS_VIDEO_CATALOG.map(m => (
-                <option key={m.id} value={m.id} className="bg-zinc-950 text-zinc-100">
-                  {m.label}
-                </option>
-              ))}
-            </select>
+              <span
+                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  onlyImagesMode ? 'translate-x-7' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
         </div>
 
@@ -1611,16 +1679,22 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             {workflowStep === 'generating' ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                <span>Creando Anuncios, Fotos y Reels MP4...</span>
+                <span>
+                  {onlyImagesMode
+                    ? 'Creando 6 Anuncios de Imagen IA (Sunburst)...'
+                    : 'Creando Anuncios, Fotos y Reels MP4...'}
+                </span>
               </>
             ) : (
               <>
                 <Sparkles className="w-4 h-4 shrink-0" />
                 <span>
-                  {creatives.length > 0 && creatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl)
+                  {!onlyImagesMode && creatives.length > 0 && creatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl)
                     ? '🎬 2. Crear Videos Reels (#5 y #6)'
                     : creatives.length > 0
                     ? `✓ 2. Regenerar los ${creatives.length} Anuncios`
+                    : onlyImagesMode
+                    ? '2. Generar las 6 Imágenes IA (Sin Videos)'
                     : '2. Generar Todos los Anuncios IA'}
                 </span>
               </>
@@ -1749,7 +1823,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           {/* Grid de los 6 Anuncios con Diseño Idéntico al Feed de Facebook / Instagram + Imágenes Limpias sin Capas Rotativas */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {creatives.map((ad, idx) => {
-              const isReel = ad.type === 'video_reel_9x16' || idx >= 4;
+              const isReel = !onlyImagesMode && (ad.type === 'video_reel_9x16' || idx >= 4);
               const aiGeneratedPhotoUrl = !isReel ? ad.aiGeneratedImageUrl || '' : '';
               const isEditingThis = editingAdIdx === idx;
               const isRegeneratingThis = regeneratingAdIdx === idx;

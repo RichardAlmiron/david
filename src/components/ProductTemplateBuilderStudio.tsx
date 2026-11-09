@@ -534,7 +534,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
           body: JSON.stringify({
             instruction,
             currentDraft: liveDraft,
-            model: 'z-ai/glm-5.3'
+            model: 'z-ai/glm-5.3-flash'
           })
         });
         if (resp.ok) {

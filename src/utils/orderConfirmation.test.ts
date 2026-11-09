@@ -555,7 +555,7 @@ import { ProductPage } from '../types';
 
 test('Pipeboard + OpenRouter engine generates 4 creatives (1:1 Feed, 1:1 Comparison, 9:16 Story, and 4-scene Animated Video) and regenerates images with variantSeed', () => {
   assert.equal(DEFAULT_PIPEBOARD_CONFIG.pipeboardMcpEndpoint, 'https://meta-ads.mcp.pipeboard.co');
-  assert.equal(DEFAULT_PIPEBOARD_CONFIG.openRouterModel, 'z-ai/glm-5.3');
+  assert.equal(DEFAULT_PIPEBOARD_CONFIG.openRouterModel, 'openai/gpt-4o');
   assert.ok(PIPEBOARD_MCP_TOOLS_CATALOG.length >= 6);
   assert.ok(PIPEBOARD_MCP_TOOLS_CATALOG.some(t => t.toolName === 'create_campaign'));
   assert.ok(PIPEBOARD_MCP_TOOLS_CATALOG.some(t => t.toolName === 'create_ad_creative'));

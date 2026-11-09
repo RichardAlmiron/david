@@ -99,7 +99,7 @@ export const DEFAULT_PIPEBOARD_CONFIG: PipeboardConnectionConfig = {
   pipeboardMcpEndpoint: 'https://meta-ads.mcp.pipeboard.co',
   metaAccessTokenFallback: '',
   openRouterApiKey: '',
-  openRouterModel: 'z-ai/glm-5.3',
+  openRouterModel: 'openai/gpt-4o',
   selectedAdAccountId: 'act_595884210394',
   selectedFacebookPageId: '104928374650192',
   dailyBudgetGs: 65000,
