@@ -687,7 +687,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
   };
 
-  // Helper de Polling Multi-Ronda para esperar siempre el Video IA real de 15s con Avatar Hablando + Producto en Google Gemini Omni 1.2 Flash (sin inventar jamás imágenes en movimiento)
+  // Helper de Polling Multi-Ronda para esperar siempre el Video IA real de 15s con Avatar Hablando + Producto en Google Gemini Omni 1.2 Flash (absorbe reservas in-flight automáticamente)
   const requestDirectReelVideoWithPolling = async (
     adIndex: number,
     promptText: string,
@@ -697,7 +697,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     const vaultKey = getVaultOpenRouterKey();
     let currentJobId = '';
     let currentPollUrl = '';
-    const maxRounds = 8; // Hasta ~3.5 minutos de espera limpia en rondas de 25s para video de 15s con voz
+    const maxRounds = 14; // Rondas elásticas para absorber liberación de reservas in-flight + renderizado de 15s con voz
 
     for (let round = 1; round <= maxRounds; round++) {
       if (onRoundProgress) onRoundProgress(round, maxRounds);
@@ -720,23 +720,37 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         });
         const vidJson = await vidRes.json().catch(() => ({}));
         if (!vidRes.ok || vidJson?.success === false) {
+          const errStr = String(vidJson?.error || '');
+          // Si OpenRouter reporta reserva temporal in-flight de otra tarjeta, esperamos 4s y seguimos en la siguiente ronda sin tirar error
+          if (errStr.includes('in_flight_budget_exhausted') || errStr.includes('in-flight')) {
+            await new Promise(r => setTimeout(r, 4000));
+            continue;
+          }
           return {
             videoUrl: '',
-            error: vidJson?.error || `Error al crear el Video Reel de 15s #${adIndex + 1} en ${selectedVideoModel}.`
+            error: errStr || `Error al crear el Video Reel de 15s #${adIndex + 1} en ${selectedVideoModel}.`
           };
         }
         if (vidJson?.status === 'completed' && vidJson?.videoUrl) {
           return { videoUrl: String(vidJson.videoUrl) };
         }
-        if (vidJson?.status === 'processing' && vidJson?.pollUrl) {
-          currentJobId = String(vidJson.jobId || '');
-          currentPollUrl = String(vidJson.pollUrl || '');
+        if (vidJson?.status === 'processing') {
+          if (vidJson?.jobId) currentJobId = String(vidJson.jobId);
+          if (vidJson?.pollUrl) currentPollUrl = String(vidJson.pollUrl);
+          // Si aún no tiene pollUrl porque está esperando que OpenRouter libere la reserva in-flight de otra petición, aguardar 3.5s
+          if (!currentPollUrl) {
+            await new Promise(r => setTimeout(r, 3500));
+          }
           continue;
         }
         if (vidJson?.videoUrl) {
           return { videoUrl: String(vidJson.videoUrl) };
         }
       } catch (err: any) {
+        if (round < maxRounds) {
+          await new Promise(r => setTimeout(r, 3000));
+          continue;
+        }
         return {
           videoUrl: '',
           error: err?.message || `Error de red al crear Video Reel #${adIndex + 1}.`
@@ -865,12 +879,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       let completedCardsCount = 6 - singleCardIndices.length;
 
       setGenerationProgressText(
-        `⚡ Ráfaga Simultánea De Un Tiro Activa: Disparando los ${singleCardIndices.length} creativos en paralelo (${selectedImageModel}${onlyImagesMode ? '' : ` + ${selectedVideoModel}`})...`
+        `⚡ Ráfaga Turbo De Un Tiro Activa: Generando los ${singleCardIndices.length} creativos automáticamente (${selectedImageModel}${onlyImagesMode ? '' : ` + ${selectedVideoModel}`})...`
       );
 
-      // Helper individual para generar 1 Imagen IA con reintento automático inmediato sin bloquear al resto
+      // Helper individual para generar 1 Imagen IA con absorción automática de reserva in-flight
       const generateSingleImageCardInParallel = async (cardIdx: number) => {
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             const res = await fetch('/api/autoads/generate-ad-images', {
               method: 'POST',
@@ -885,27 +899,32 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 openRouterApiKey: vaultKey,
                 targetIndices: [cardIdx]
               }),
-              signal: AbortSignal.timeout(45000)
+              signal: AbortSignal.timeout(75000)
             });
             const rawText = await res.text();
             let imgData: any = null;
             try {
               imgData = JSON.parse(rawText);
             } catch {
-              if (attempt === 2 && !lastWaveError) {
+              if (attempt === 3 && !lastWaveError) {
                 lastWaveError = `Respuesta inválida al generar Anuncio #${cardIdx + 1} (HTTP ${res.status}).`;
               }
               continue;
             }
 
             if (!res.ok || imgData?.success === false) {
-              if (attempt === 2 && !lastWaveError) {
+              const errMsg = String(imgData?.error || '');
+              if (errMsg.includes('in_flight_budget_exhausted') || errMsg.includes('in-flight')) {
+                await new Promise(r => setTimeout(r, 3500));
+                continue;
+              }
+              if (attempt === 3 && !lastWaveError) {
                 lastWaveError =
-                  imgData?.error ||
+                  errMsg ||
                   `Error ${res.status}: Fallo en la API de ${selectedImageModel} en OpenRouter.`;
               }
-              if (attempt === 1) {
-                await new Promise(r => setTimeout(r, 900));
+              if (attempt < 3) {
+                await new Promise(r => setTimeout(r, 1500));
               }
               continue;
             }
@@ -933,29 +952,29 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 )
               );
               setGenerationProgressText(
-                `⚡ Ráfaga Simultánea (${completedCardsCount}/6 listos): Anuncio #${cardIdx + 1} completado al instante...`
+                `⚡ Ráfaga Turbo (${completedCardsCount}/6 listos): Imagen del Anuncio #${cardIdx + 1} completada...`
               );
               return;
             }
           } catch (cardErr: any) {
-            if (attempt === 2 && !lastWaveError) {
+            if (attempt === 3 && !lastWaveError) {
               lastWaveError = cardErr?.message || `Error de red al generar imagen #${cardIdx + 1}.`;
             }
-            if (attempt === 1) {
-              await new Promise(r => setTimeout(r, 900));
+            if (attempt < 3) {
+              await new Promise(r => setTimeout(r, 1500));
             }
           }
         }
       };
 
-      // Helper individual para generar 1 Video Reel de 15s en paralelo sin bloquear a ninguna otra tarjeta
+      // Helper individual para generar 1 Video Reel de 15s
       const generateSingleReelCardInParallel = async (cardIdx: number) => {
         const { videoUrl, error } = await requestDirectReelVideoWithPolling(
           cardIdx,
           workingAssets[cardIdx]?.aiImagePrompt || '',
           (round, totalRounds) => {
             setGenerationProgressText(
-              `⚡ Ráfaga Simultánea (${completedCardsCount}/6 listos) · 🎬 Renderizando Reel 15s #${cardIdx + 1} en ${selectedVideoModel} (${round}/${totalRounds})...`
+              `⚡ Ráfaga Turbo (${completedCardsCount}/6 listos) · 🎬 Renderizando Video Reel 15s #${cardIdx + 1} en ${selectedVideoModel} (${round}/${totalRounds})...`
             );
           },
           {
@@ -979,28 +998,41 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             )
           );
           setGenerationProgressText(
-            `⚡ Ráfaga Simultánea (${completedCardsCount}/6 listos): Video Reel 15s #${cardIdx + 1} completado...`
+            `⚡ Ráfaga Turbo (${completedCardsCount}/6 listos): Video Reel 15s #${cardIdx + 1} completado...`
           );
         } else if (error && !lastWaveError) {
           lastWaveError = error;
         }
       };
 
-      // DISPARO SIMULTÁNEO DE UN SOLO TIRO (Promise.allSettled): Cero fila india, todas las tarjetas arrancan a la vez
-      await Promise.allSettled(
-        singleCardIndices.map(async (cardIdx, staggerOrder) => {
-          // Micro-escalonado de 120ms solo para evitar colisión de socket TCP simultáneo en el navegador
-          if (staggerOrder > 0) {
-            await new Promise(r => setTimeout(r, staggerOrder * 120));
+      // Separar las tarjetas pendientes en Imágenes (#1-#4 o #1-#6) y Videos Reels (#5-#6)
+      const pendingImageIndices = singleCardIndices.filter(idx => onlyImagesMode || idx < 4);
+      const pendingReelIndices = singleCardIndices.filter(idx => !onlyImagesMode && idx >= 4);
+
+      // 1. RÁFAGA PARALELA DÚO-TURBO DE IMÁGENES:
+      // Ejecuta de a 2 imágenes en paralelo simultáneo (~7s por par) para que terminen volando sin exceder la reserva temporal "in-flight" de OpenRouter
+      if (pendingImageIndices.length > 0) {
+        const imgQueue = [...pendingImageIndices];
+        const imgWorkers = Array.from({ length: Math.min(2, imgQueue.length) }, async (_, workerIdx) => {
+          if (workerIdx > 0) {
+            await new Promise(r => setTimeout(r, 250));
           }
-          const isReelCard = cardIdx >= 4 && !onlyImagesMode;
-          if (isReelCard) {
-            await generateSingleReelCardInParallel(cardIdx);
-          } else {
-            await generateSingleImageCardInParallel(cardIdx);
+          while (imgQueue.length > 0) {
+            const nextImgIdx = imgQueue.shift();
+            if (nextImgIdx !== undefined) {
+              await generateSingleImageCardInParallel(nextImgIdx);
+            }
           }
-        })
-      );
+        });
+        await Promise.allSettled(imgWorkers);
+      }
+
+      // 2. RÁFAGA CONTINUA DE VIDEOS REELS DE 15S (Anuncios #5 y #6):
+      // Apenas las imágenes liberan su reserva in-flight (~$0.70 reales cobrados), se disparan los Videos Reels en el mismo clic
+      // liberando la reserva temporal de ~$2.50 de cada video para no chocar jamás con HTTP 402 in_flight_budget_exhausted
+      for (const reelIdx of pendingReelIndices) {
+        await generateSingleReelCardInParallel(reelIdx);
+      }
 
       const totalGeneratedImagesCount = workingAssets
         .slice(0, imageSliceEnd)
@@ -1008,7 +1040,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       const totalReelVideosCount = onlyImagesMode
         ? 0
         : workingAssets.slice(4, 6).filter(a => Boolean(a.aiGeneratedVideoUrl)).length;
-      if (totalGeneratedImagesCount === 0 && lastWaveError) {
+      if (totalGeneratedImagesCount === 0 && totalReelVideosCount === 0 && lastWaveError) {
         clearTimeout(genTimer1);
         setWorkflowStep('researched');
         setGenerationProgressText('');
@@ -1032,8 +1064,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       setWorkflowStep('generated');
       showToast(
         onlyImagesMode
-          ? `⚡ Ráfaga Simultánea: ${totalGeneratedImagesCount}/6 Imágenes IA (${selectedImageModel}) creadas de un tiro.`
-          : `⚡ Ráfaga Simultánea: ${totalGeneratedImagesCount}/4 Imágenes IA (${selectedImageModel}) + ${totalReelVideosCount}/2 Videos Reels (${selectedVideoModel}) creados de un tiro.`
+          ? `⚡ Ráfaga Turbo: ${totalGeneratedImagesCount}/6 Imágenes IA (${selectedImageModel}) creadas de un tiro.`
+          : `⚡ Ráfaga Turbo: ${totalGeneratedImagesCount}/4 Imágenes IA (${selectedImageModel}) + ${totalReelVideosCount}/2 Videos Reels (${selectedVideoModel}) creados de un tiro.`
       );
     } catch (err: any) {
       clearTimeout(genTimer1);

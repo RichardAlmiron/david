@@ -3241,11 +3241,16 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   });
                 }
 
-                // Si hay reserva in-flight previa en OpenRouter (402), esperar 3.5s y reintentar con google/gemini-omni-1.2-flash
+                // Si hay reserva in-flight activa en OpenRouter (402 in_flight_budget_exhausted) por las otras tarjetas en paralelo:
+                // Reintentamos hasta 3 veces cada 4s, y si las otras peticiones en paralelo siguen liquidando su reserva temporal,
+                // devolvemos status: 'processing' para que la siguiente ronda lo inicie automáticamente apenas se libere la reserva, ¡CERO ERROR!
                 if (!vidInitRes.ok && vidInitRes.status === 402) {
-                  const errTxt = await vidInitRes.text();
-                  if (errTxt.includes('in_flight_budget_exhausted') || errTxt.includes('in-flight')) {
-                    await new Promise(r => setTimeout(r, 3500));
+                  let errTxt = await vidInitRes.text();
+                  for (let holdAttempt = 0; holdAttempt < 3; holdAttempt++) {
+                    if (!(errTxt.includes('in_flight_budget_exhausted') || errTxt.includes('in-flight'))) {
+                      break;
+                    }
+                    await new Promise(r => setTimeout(r, 4000));
                     vidInitRes = await fetch('https://openrouter.ai/api/v1/videos', {
                       method: 'POST',
                       headers: {
@@ -3257,7 +3262,19 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                       body: JSON.stringify(buildVideoPayload(hasPublicHttpsImg)),
                       signal: AbortSignal.timeout(22000)
                     });
-                  } else {
+                    if (vidInitRes.ok) break;
+                    errTxt = await vidInitRes.text();
+                  }
+
+                  if (!vidInitRes.ok) {
+                    if (errTxt.includes('in_flight_budget_exhausted') || errTxt.includes('in-flight')) {
+                      // Las tarjetas hermanas siguen en vuelo reservando saldo temporal: mantener en 'processing' sin lanzar error
+                      return {
+                        status: 'processing',
+                        jobId: '',
+                        pollUrl: ''
+                      };
+                    }
                     return {
                       status: 'failed',
                       error: `HTTP 402 (${exactVideoModel}): ${errTxt.slice(0, 260)}`
@@ -3267,6 +3284,18 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
 
                 if (!vidInitRes.ok) {
                   const errBody = await vidInitRes.text();
+                  if (
+                    vidInitRes.status === 429 ||
+                    vidInitRes.status >= 500 ||
+                    errBody.includes('in_flight_budget_exhausted') ||
+                    errBody.includes('in-flight')
+                  ) {
+                    return {
+                      status: 'processing',
+                      jobId: '',
+                      pollUrl: ''
+                    };
+                  }
                   return {
                     status: 'failed',
                     error: `HTTP ${vidInitRes.status} (${exactVideoModel}): ${errBody.slice(0, 260)}`
@@ -3502,7 +3531,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                 ).trim();
                 const boxItems = String(
                   product?.physicalTruth?.boxContents ||
-                    product?.agentBrain?.boxContentsSpoken ||
+                  product?.agentBrain?.boxContentsSpoken ||
                     `${prodName} and all included factory accessories`
                 ).trim();
 
@@ -3674,7 +3703,7 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                   return '';
                 };
 
-                // Helper unificado que respeta 100% el modelo elegido por el usuario y reintenta sobre ESE MISMO MODELO si hay reserva in-flight en OpenRouter
+                // Helper unificado que respeta 100% el modelo elegido por el usuario y absorbe reservas in-flight en OpenRouter (hasta 5 reintentos elásticos)
                 const invokeOpenRouterImageModel = async (
                   imgModel: string,
                   prompt: string,
@@ -3712,9 +3741,9 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                             (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))) ||
                           imgApiRes.status === 429 ||
                           imgApiRes.status >= 500;
-                        if (isRetryableHoldOrRate && retryAttempt < 2) {
-                          const waitMs = 1800 + retryAttempt * 1200;
-                          console.log(`[generate-ad-images] Reintento rápido en ${waitMs}ms para ${imgModel} (intento ${retryAttempt + 1}/2)...`);
+                        if (isRetryableHoldOrRate && retryAttempt < 5) {
+                          const waitMs = 3000 + retryAttempt * 1500;
+                          console.log(`[generate-ad-images] Esperando liberación de reserva in-flight (${waitMs}ms) para Anuncio #${idx + 1} (${imgModel}, intento ${retryAttempt + 1}/5)...`);
                           await new Promise(r => setTimeout(r, waitMs));
                           return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
                         }
@@ -3734,8 +3763,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                         fatalAuth: false
                       };
                     } catch (err: any) {
-                      if (retryAttempt < 1) {
-                        await new Promise(r => setTimeout(r, 1200));
+                      if (retryAttempt < 2) {
+                        await new Promise(r => setTimeout(r, 1500));
                         return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
                       }
                       return {
@@ -3777,8 +3806,8 @@ Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) co
                           (errBody.includes('in_flight_budget_exhausted') || errBody.includes('in-flight'))) ||
                         orImgRes.status === 429 ||
                         orImgRes.status >= 500;
-                      if (isRetryableHoldOrRate && retryAttempt < 2) {
-                        const waitMs = 1800 + retryAttempt * 1200;
+                      if (isRetryableHoldOrRate && retryAttempt < 5) {
+                        const waitMs = 3000 + retryAttempt * 1500;
                         await new Promise(r => setTimeout(r, waitMs));
                         return invokeOpenRouterImageModel(imgModel, prompt, idx, prefix, retryAttempt + 1);
                       }
