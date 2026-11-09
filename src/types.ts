@@ -95,6 +95,21 @@ export interface Order {
   archivado?: boolean;
   fechaArchivado?: string | null;
   actualizado_en?: string;
+  promoPagoAdelantadoStage?: string;
+  pagoAdelantadoComprobanteRecibido?: boolean;
+  pagoAdelantadoVerificadoAdmin?: boolean;
+  pagoAdelantadoEstado?: 'pago_enviado_por_verificar' | 'pagado_adelantado_confirmado' | string;
+  pagoAdelantadoFecha?: string;
+  pagoAdelantadoFechaVerificado?: string;
+  pagoAdelantadoBanco?: string;
+  pagoAdelantadoAlias?: string;
+  pagoAdelantadoTitular?: string;
+  modalidadPagoElegida?: string;
+  montoOriginalSinDescuento?: number;
+  montoConDescuentoAdelantado?: number;
+  comprobantePagoDataUrl?: string;
+  comprobantePagoMimeType?: string;
+  comprobantePagoNombreArchivo?: string;
 }
 
 export interface AppConfig {

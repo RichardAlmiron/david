@@ -3027,6 +3027,56 @@ export async function transcribeWhatsAppAudioMessage(
   }
 }
 
+export async function downloadWhatsAppReceiptMedia(
+  msg: any
+): Promise<{ dataUrl: string | null; mimeType: string; fileName: string }> {
+  try {
+    const innerMsg: any =
+      msg?.message?.ephemeralMessage?.message ||
+      msg?.message?.viewOnceMessage?.message ||
+      msg?.message?.viewOnceMessageV2?.message ||
+      msg?.message?.viewOnceMessageV2Extension?.message ||
+      msg?.message?.documentWithCaptionMessage?.message ||
+      msg?.message?.editedMessage?.message?.protocolMessage?.editedMessage ||
+      msg?.message;
+
+    const imgNode = innerMsg?.imageMessage;
+    const docNode = innerMsg?.documentMessage || innerMsg?.documentWithCaptionMessage?.message?.documentMessage;
+    const rawMime = String(imgNode?.mimetype || docNode?.mimetype || 'image/jpeg').split(';')[0].trim();
+    const fileName = String(docNode?.fileName || (rawMime.includes('pdf') ? 'comprobante.pdf' : 'comprobante.jpg')).trim();
+
+    const msgToDownload = {
+      key: msg?.key,
+      message: innerMsg
+    };
+
+    let rawBuffer: Buffer | null = null;
+    try {
+      const downloadPromise = downloadMediaMessage(msgToDownload as any, 'buffer', {}) as Promise<Buffer>;
+      const timeoutPromise = new Promise<Buffer>((_, reject) =>
+        setTimeout(() => reject(new Error('Receipt media download timeout')), 6000)
+      );
+      rawBuffer = await Promise.race([downloadPromise, timeoutPromise]);
+    } catch {
+      try {
+        rawBuffer = (await downloadMediaMessage(msg, 'buffer', {})) as Buffer;
+      } catch (e) {
+        console.error('[Receipt Media Download Error]:', e);
+      }
+    }
+
+    if (!rawBuffer || rawBuffer.length < 32) {
+      return { dataUrl: null, mimeType: rawMime, fileName };
+    }
+
+    const dataUrl = `data:${rawMime};base64,${rawBuffer.toString('base64')}`;
+    return { dataUrl, mimeType: rawMime, fileName };
+  } catch (err) {
+    console.error('[downloadWhatsAppReceiptMedia Error]:', err);
+    return { dataUrl: null, mimeType: 'image/jpeg', fileName: 'comprobante.jpg' };
+  }
+}
+
 
 // Open-Source Conversational Voice Synthesis (Deepgram Aura-2 -> OGG/Opus 48kHz VoIP & MP3 Web)
 export async function synthesizeSpeechSelfHosted(
@@ -4867,14 +4917,21 @@ function handleVipPrepaymentNegotiationTurn(
   ) {
     matchedOrder.promoPagoAdelantadoStage = 'receipt_received_verifying';
     matchedOrder.pagoAdelantadoComprobanteRecibido = true;
-    matchedOrder.pagoAdelantadoEstado = 'comprobante_recibido';
-    matchedOrder.pagoAdelantadoFecha = new Date().toISOString();
+    matchedOrder.pagoAdelantadoVerificadoAdmin = Boolean(matchedOrder.pagoAdelantadoVerificadoAdmin);
+    matchedOrder.pagoAdelantadoEstado = matchedOrder.pagoAdelantadoVerificadoAdmin
+      ? 'pagado_adelantado_confirmado'
+      : 'pago_enviado_por_verificar';
+    matchedOrder.pagoAdelantadoFecha = matchedOrder.pagoAdelantadoFecha || new Date().toISOString();
+    matchedOrder.pagoAdelantadoBanco = VIP_BANK_NAME;
+    matchedOrder.pagoAdelantadoAlias = `${VIP_BANK_ALIAS_RAW} (${VIP_BANK_ALIAS_DOTTED})`;
+    matchedOrder.pagoAdelantadoTitular = VIP_BANK_HOLDER;
     matchedOrder.modalidadPagoElegida = 'pago_adelantado_promo_50k';
     matchedOrder.montoOriginalSinDescuento = rawMontoNum;
     matchedOrder.montoConDescuentoAdelantado = discountedMontoNum;
 
     const audioReply = `Muchísimas gracias, ${displayFirstName}, acabo de recibir tu comprobante de pago por acá. Aguardame un ratito por favor mientras nuestro sector administrativo verifica e ingresa tu transferencia con los cincuenta mil guaraníes de descuento, y en unos momentos te avisamos apenas quede cien por ciento confirmado tu pago.`;
     matchedOrder.ultimoMensajeIA = audioReply;
+    matchedOrder.actualizado_en = new Date().toISOString();
     savePedidos(pedidos);
     syncOrderUpdateToCloud(matchedOrder).catch(() => {});
     notifySellerOfOrderEvent(matchedOrder, 'green').catch(() => {});
@@ -6610,6 +6667,57 @@ export async function connectWhatsAppEngine(
               innerMsg?.documentWithCaptionMessage?.message?.documentMessage?.caption ||
               '';
             text = `🧾 [COMPROBANTE_PAGO_ADELANTADO: El cliente envió el comprobante de transferencia bancaria${captionExtra ? ` (${captionExtra})` : ''}]`;
+
+            // Descargar y guardar la imagen/PDF real del comprobante en el pedido activo para que el vendedor lo vea en su panel
+            if (matchedOrderForPhone) {
+              const receiptMedia = await downloadWhatsAppReceiptMedia(msg);
+              const allPedidos = loadPedidos();
+              const targetOrd = allPedidos.find(p => p.reservaid === matchedOrderForPhone.reservaid);
+              const rawMontoNum =
+                Number(String(matchedOrderForPhone.montoOriginalSinDescuento || matchedOrderForPhone.monto || '189000').replace(/\D/g, '')) || 189000;
+              const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
+              const nowIso = new Date().toISOString();
+
+              if (targetOrd) {
+                if (receiptMedia.dataUrl) {
+                  targetOrd.comprobantePagoDataUrl = receiptMedia.dataUrl;
+                  targetOrd.comprobantePagoMimeType = receiptMedia.mimeType;
+                  targetOrd.comprobantePagoNombreArchivo = receiptMedia.fileName;
+                }
+                targetOrd.promoPagoAdelantadoStage = 'receipt_received_verifying';
+                targetOrd.pagoAdelantadoComprobanteRecibido = true;
+                targetOrd.pagoAdelantadoEstado = targetOrd.pagoAdelantadoVerificadoAdmin
+                  ? 'pagado_adelantado_confirmado'
+                  : 'pago_enviado_por_verificar';
+                targetOrd.pagoAdelantadoFecha = nowIso;
+                targetOrd.pagoAdelantadoBanco = VIP_BANK_NAME;
+                targetOrd.pagoAdelantadoAlias = `${VIP_BANK_ALIAS_RAW} (${VIP_BANK_ALIAS_DOTTED})`;
+                targetOrd.pagoAdelantadoTitular = VIP_BANK_HOLDER;
+                targetOrd.montoOriginalSinDescuento = rawMontoNum;
+                targetOrd.montoConDescuentoAdelantado = discountedMontoNum;
+                targetOrd.actualizado_en = nowIso;
+                savePedidos(allPedidos);
+                syncOrderUpdateToCloud(targetOrd).catch(() => {});
+              }
+
+              if (receiptMedia.dataUrl) {
+                matchedOrderForPhone.comprobantePagoDataUrl = receiptMedia.dataUrl;
+                matchedOrderForPhone.comprobantePagoMimeType = receiptMedia.mimeType;
+                matchedOrderForPhone.comprobantePagoNombreArchivo = receiptMedia.fileName;
+              }
+              matchedOrderForPhone.promoPagoAdelantadoStage = 'receipt_received_verifying';
+              matchedOrderForPhone.pagoAdelantadoComprobanteRecibido = true;
+              matchedOrderForPhone.pagoAdelantadoEstado = matchedOrderForPhone.pagoAdelantadoVerificadoAdmin
+                ? 'pagado_adelantado_confirmado'
+                : 'pago_enviado_por_verificar';
+              matchedOrderForPhone.pagoAdelantadoFecha = nowIso;
+              matchedOrderForPhone.pagoAdelantadoBanco = VIP_BANK_NAME;
+              matchedOrderForPhone.pagoAdelantadoAlias = `${VIP_BANK_ALIAS_RAW} (${VIP_BANK_ALIAS_DOTTED})`;
+              matchedOrderForPhone.pagoAdelantadoTitular = VIP_BANK_HOLDER;
+              matchedOrderForPhone.montoOriginalSinDescuento = rawMontoNum;
+              matchedOrderForPhone.montoConDescuentoAdelantado = discountedMontoNum;
+              matchedOrderForPhone.actualizado_en = nowIso;
+            }
           } else if (isImageWithoutCaption && !isFromAdmin) {
             text = '📷 [El cliente envió una foto de la fachada/referencia de su casa]';
           }

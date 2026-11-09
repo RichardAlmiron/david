@@ -27,6 +27,8 @@ import { Order, ProductPage } from '../types';
 import { formatGs } from '../config';
 import {
   isOrderConfirmedByAgent,
+  isOrderPrepaymentSentPendingVerification,
+  isOrderPrepaymentVerifiedAndPaid,
   buildOrderComparisonSummary,
   filterAdminOrders
 } from '../utils/orderConfirmation';
@@ -125,9 +127,367 @@ export function downloadConfirmedOrdersExcelCsv(product: ProductPage, rawOrders:
   return targetList.length;
 }
 
+export interface PrepaymentVerificationSectionProps {
+  order: Order;
+  onUpdateOrder: (
+    orderId: string,
+    updates: Partial<Order>,
+    toastMessage?: string
+  ) => Promise<void>;
+  onMovedToPrepaidTab?: () => void;
+}
+
+export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSectionProps> = ({
+  order,
+  onUpdateOrder,
+  onMovedToPrepaidTab
+}) => {
+  const [togglingSwitch, setTogglingSwitch] = useState(false);
+  const [showFullReceiptModal, setShowFullReceiptModal] = useState(false);
+
+  const isSentPending = isOrderPrepaymentSentPendingVerification(order);
+  const isVerifiedPaid = isOrderPrepaymentVerifiedAndPaid(order);
+
+  const rawMontoNum =
+    Number(String(order.montoOriginalSinDescuento || order.monto || 189000).replace(/\D/g, '')) || 189000;
+  const discountedMontoNum =
+    Number(order.montoConDescuentoAdelantado) || Math.max(50000, rawMontoNum - 50000);
+  const bancoNombre = order.pagoAdelantadoBanco || 'Banco Familiar';
+  const aliasCuenta = order.pagoAdelantadoAlias || '3856033 (3.856.033)';
+  const titularCuenta = order.pagoAdelantadoTitular || 'Richard Almirón';
+
+  const handleToggleVerifiedSwitch = async () => {
+    setTogglingSwitch(true);
+    try {
+      const nextVerified = !isVerifiedPaid;
+      const nowIso = new Date().toISOString();
+      await onUpdateOrder(
+        order.reservaid,
+        {
+          datosConfirmados: true,
+          empaquetado: true,
+          pagoAdelantadoComprobanteRecibido: true,
+          pagoAdelantadoVerificadoAdmin: nextVerified,
+          pagoAdelantadoEstado: nextVerified
+            ? 'pagado_adelantado_confirmado'
+            : 'pago_enviado_por_verificar',
+          pagoAdelantadoFecha: order.pagoAdelantadoFecha || nowIso,
+          pagoAdelantadoFechaVerificado: nextVerified ? nowIso : undefined,
+          pagoAdelantadoBanco: bancoNombre,
+          pagoAdelantadoAlias: aliasCuenta,
+          pagoAdelantadoTitular: titularCuenta,
+          montoOriginalSinDescuento: rawMontoNum,
+          montoConDescuentoAdelantado: discountedMontoNum
+        },
+        nextVerified
+          ? `💎 ¡Pago Adelantado de ${order.nombre} CONFIRMADO! El pedido se movió automáticamente a la pestaña "💎 Pago Adelantado".`
+          : `⏳ Pedido #${order.reservaid} devuelto a estado "Pago Enviado (Por Verificar)" en Confirmados.`
+      );
+      if (nextVerified && onMovedToPrepaidTab) {
+        onMovedToPrepaidTab();
+      }
+    } finally {
+      setTogglingSwitch(false);
+    }
+  };
+
+  const handleMarkPaymentSentPending = async () => {
+    setTogglingSwitch(true);
+    try {
+      const nowIso = new Date().toISOString();
+      await onUpdateOrder(
+        order.reservaid,
+        {
+          pagoAdelantadoComprobanteRecibido: true,
+          pagoAdelantadoVerificadoAdmin: false,
+          pagoAdelantadoEstado: 'pago_enviado_por_verificar',
+          pagoAdelantadoFecha: order.pagoAdelantadoFecha || nowIso,
+          pagoAdelantadoBanco: bancoNombre,
+          pagoAdelantadoAlias: aliasCuenta,
+          pagoAdelantadoTitular: titularCuenta,
+          montoOriginalSinDescuento: rawMontoNum,
+          montoConDescuentoAdelantado: discountedMontoNum
+        },
+        `⚡ Pedido #${order.reservaid} marcado con brillo "Pago Enviado (Por Verificar)".`
+      );
+    } finally {
+      setTogglingSwitch(false);
+    }
+  };
+
+  const handleUploadReceiptFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = String(reader.result || '');
+      if (!dataUrl) return;
+      const nowIso = new Date().toISOString();
+      await onUpdateOrder(
+        order.reservaid,
+        {
+          comprobantePagoDataUrl: dataUrl,
+          comprobantePagoMimeType: file.type || 'image/jpeg',
+          comprobantePagoNombreArchivo: file.name || 'comprobante.jpg',
+          pagoAdelantadoComprobanteRecibido: true,
+          pagoAdelantadoEstado: isVerifiedPaid
+            ? 'pagado_adelantado_confirmado'
+            : 'pago_enviado_por_verificar',
+          pagoAdelantadoFecha: order.pagoAdelantadoFecha || nowIso,
+          pagoAdelantadoBanco: bancoNombre,
+          pagoAdelantadoAlias: aliasCuenta,
+          pagoAdelantadoTitular: titularCuenta,
+          montoOriginalSinDescuento: rawMontoNum,
+          montoConDescuentoAdelantado: discountedMontoNum
+        },
+        `🧾 Comprobante de pago adjuntado al pedido de ${order.nombre}.`
+      );
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div
+      data-testid={`prepayment-verification-box-${order.reservaid}`}
+      className={`p-3.5 sm:p-4 rounded-2xl border transition-all space-y-3 ${
+        isVerifiedPaid
+          ? 'bg-gradient-to-r from-cyan-950/70 via-indigo-950/60 to-amber-950/60 border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.28)]'
+          : isSentPending
+            ? 'bg-gradient-to-r from-amber-950/80 via-fuchsia-950/50 to-amber-950/80 border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.38)]'
+            : 'bg-zinc-900/90 border-amber-500/40'
+      }`}
+    >
+      {/* CABECERA DEL PANEL DE VERIFICACIÓN DE PAGO ADELANTADO */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-white/10">
+        <div className="flex items-center gap-2 flex-wrap">
+          {isVerifiedPaid ? (
+            <span className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 text-[11px] font-black uppercase tracking-wider shadow-[0_0_14px_rgba(34,211,238,0.6)]">
+              💎 PAGO ADELANTADO CONFIRMADO
+            </span>
+          ) : isSentPending ? (
+            <span className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 text-black text-[11px] font-black uppercase tracking-wider shadow-[0_0_14px_rgba(251,191,36,0.7)] animate-pulse">
+              ⚡ PAGO ENVIADO · FALTA TU VERIFICACIÓN
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 rounded-lg bg-amber-950 text-amber-300 border border-amber-700 text-[10px] font-black uppercase tracking-wider">
+              🏦 Verificación de Transferencia / Pago Adelantado (-Gs. 50.000)
+            </span>
+          )}
+          <span className="text-xs font-black text-white">
+            {isVerifiedPaid
+              ? 'Transferencia comprobada por el vendedor · Movido a pestaña Pago Adelantado'
+              : isSentPending
+                ? '¡Este cliente envió comprobante de transferencia! Revisá tu cuenta de Banco Familiar por el nombre y activá el interruptor:'
+                : 'Si el cliente transfirió con la promo de -50.000 Gs., verificá sus datos y activá el interruptor:'}
+          </span>
+        </div>
+
+        {/* INTERRUPTOR OFICIAL (SWITCH) PARA CONFIRMAR PAGO ADELANTADO */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {!isSentPending && !isVerifiedPaid && (
+            <button
+              type="button"
+              disabled={togglingSwitch}
+              onClick={handleMarkPaymentSentPending}
+              className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-200 text-[11px] font-black cursor-pointer transition-all"
+              title="Marcar que el cliente avisó o envió pago adelantado pendiente de revisar en el banco"
+            >
+              ⚡ Marcar &quot;Pago Enviado&quot;
+            </button>
+          )}
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isVerifiedPaid}
+            data-testid={`switch-verify-prepayment-${order.reservaid}`}
+            disabled={togglingSwitch}
+            onClick={handleToggleVerifiedSwitch}
+            className={`px-3.5 py-2 rounded-xl font-black text-xs inline-flex items-center gap-2.5 cursor-pointer transition-all border ${
+              isVerifiedPaid
+                ? 'bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 border-white shadow-[0_0_18px_rgba(34,211,238,0.65)]'
+                : 'bg-zinc-950 hover:bg-zinc-900 text-amber-200 border-amber-400/80 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+            }`}
+          >
+            {/* Switch Track & Thumb */}
+            <span
+              className={`w-9 h-5 rounded-full p-0.5 flex items-center transition-colors ${
+                isVerifiedPaid ? 'bg-slate-950 justify-end' : 'bg-zinc-700 justify-start'
+              }`}
+            >
+              <span
+                className={`w-4 h-4 rounded-full transition-transform ${
+                  isVerifiedPaid ? 'bg-cyan-400' : 'bg-amber-400'
+                }`}
+              />
+            </span>
+            <span>
+              {isVerifiedPaid
+                ? '💎 Pago Adelantado Confirmado (Activo)'
+                : 'Confirmar Pago Adelantado (Pasar a Pestaña Pago Adelantado)'}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* GRILLA DE DATOS DE LA TRANSFERENCIA + VISTA DEL COMPROBANTE */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+        {/* Datos del Cliente y Cuenta Bancaria a Verificar */}
+        <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+          <div className="p-3 rounded-xl bg-black/50 border border-white/15 space-y-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 block">
+              👤 1. Nombre Completo del Cliente (Buscar en tu Banco)
+            </span>
+            <div className="text-sm font-black text-white">{order.nombre}</div>
+            <div className="text-[11px] font-mono text-zinc-300">
+              📱 WhatsApp: {order.celular}
+            </div>
+            {order.pagoAdelantadoFecha && (
+              <div className="text-[10px] text-zinc-400">
+                🕒 Enviado: {new Date(order.pagoAdelantadoFecha).toLocaleString('es-PY', { hour12: false })}
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 rounded-xl bg-black/50 border border-white/15 space-y-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-cyan-300 block">
+              🏛️ 2. Cuenta y Banco Destino Transferido
+            </span>
+            <div className="text-xs font-black text-white">
+              Banco: <span className="text-cyan-300">{bancoNombre}</span>
+            </div>
+            <div className="text-xs font-mono font-black text-amber-300">
+              🔑 Alias: {aliasCuenta}
+            </div>
+            <div className="text-[11px] text-zinc-200">
+              🎯 Titular: <strong>{titularCuenta}</strong>
+            </div>
+          </div>
+
+          <div className="sm:col-span-2 p-2.5 rounded-xl bg-black/60 border border-white/15 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="text-[10px] font-black uppercase text-zinc-400 block">
+                💰 Monto con Promo Exclusiva (-Gs. 50.000)
+              </span>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xs line-through text-zinc-500 font-mono">
+                  Normal: {formatGs(rawMontoNum)}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-400/50 text-amber-300 font-mono text-xs font-black">
+                  Transferido: {formatGs(discountedMontoNum)}
+                </span>
+              </div>
+            </div>
+
+            <label className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 text-[11px] font-bold cursor-pointer inline-flex items-center gap-1.5 transition-colors">
+              <span>📷 {order.comprobantePagoDataUrl ? 'Cambiar Comprobante' : 'Subir Captura Comprobante'}</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleUploadReceiptFile}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Vista Previa del Comprobante Enviado por WhatsApp */}
+        <div className="lg:col-span-5 p-3 rounded-xl bg-black/60 border border-white/15 flex flex-col justify-between gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+              🧾 3. Comprobante del Pago Recibido
+            </span>
+            {order.comprobantePagoDataUrl && (
+              <button
+                type="button"
+                onClick={() => setShowFullReceiptModal(true)}
+                className="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 text-[10px] font-black cursor-pointer"
+              >
+                🔍 Ampliar Comprobante
+              </button>
+            )}
+          </div>
+
+          {order.comprobantePagoDataUrl ? (
+            <div className="flex items-center gap-3">
+              {order.comprobantePagoDataUrl.startsWith('data:image/') ? (
+                <img
+                  src={order.comprobantePagoDataUrl}
+                  alt={`Comprobante de ${order.nombre}`}
+                  onClick={() => setShowFullReceiptModal(true)}
+                  className="w-20 h-20 rounded-xl object-cover border-2 border-amber-400 cursor-pointer hover:opacity-90 shrink-0 shadow-md"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-xl bg-zinc-900 border border-amber-400 flex items-center justify-center text-center p-1 text-[10px] font-black text-amber-300 shrink-0">
+                  📄 PDF / Doc Adjunto
+                </div>
+              )}
+              <div className="space-y-1 text-[11px] text-zinc-200 min-w-0">
+                <div className="font-black text-emerald-300">
+                  ✓ Captura recibida y guardada en la ficha
+                </div>
+                <p className="text-zinc-400 text-[10px] leading-snug">
+                  Hacé clic en la imagen para ver el comprobante en grande y corroborar el pago de{' '}
+                  <strong className="text-white">{order.nombre}</strong> en {bancoNombre}.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="py-3 px-2 rounded-lg border border-dashed border-zinc-700 text-center text-[11px] text-zinc-400">
+              {isSentPending
+                ? '⚡ El cliente avisó que ya realizó la transferencia por chat. Verificá en tu app de Banco Familiar por el nombre del cliente o adjuntá la captura acá.'
+                : 'Aún no se recibió captura de comprobante por WhatsApp en este pedido.'}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* MODAL PARA VER EL COMPROBANTE EN PANTALLA COMPLETA */}
+      {showFullReceiptModal && order.comprobantePagoDataUrl && (
+        <div
+          onClick={() => setShowFullReceiptModal(false)}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="max-w-lg w-full bg-zinc-950 border border-amber-400/80 rounded-2xl p-4 space-y-3 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <div>
+                <h4 className="text-sm font-black text-white">
+                  🧾 Comprobante de Pago — {order.nombre}
+                </h4>
+                <p className="text-[11px] text-amber-300 font-mono">
+                  {bancoNombre} · Alias {aliasCuenta} · Titular: {titularCuenta} · {formatGs(discountedMontoNum)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFullReceiptModal(false)}
+                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-black cursor-pointer"
+              >
+                ✕ Cerrar
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-auto flex justify-center bg-black rounded-xl p-2">
+              <img
+                src={order.comprobantePagoDataUrl}
+                alt={`Comprobante completo ${order.nombre}`}
+                className="max-w-full h-auto rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface ProductConfirmedOrdersPanelProps {
   product: ProductPage;
   orders: Order[];
+  panelMode?: 'confirmados' | 'pagos_adelantados';
+  onSwitchSubTab?: (tab: 'confirmados' | 'pagos_adelantados') => void;
   onUpdateOrderLogistics: (
     orderId: string,
     updates: Partial<Order>,
@@ -140,14 +500,24 @@ interface ProductConfirmedOrdersPanelProps {
 export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelProps> = ({
   product,
   orders,
+  panelMode = 'confirmados',
+  onSwitchSubTab,
   onUpdateOrderLogistics,
   onRequestDeleteOrders,
   onClose
 }) => {
-  // Filtrar estrictamente SOLO los pedidos confirmados por el Agente para este producto
+  const isPrepaidTab = panelMode === 'pagos_adelantados';
+
+  // REGLA ESTRICTA DEL USUARIO:
+  // - En la pestaña "✅ Confirmados": están los pedidos confirmados que TODAVÍA NO pasaron a "💎 Pago Adelantado".
+  //   (Si un pedido recibió pago enviado pero aún no fue verificado con el interruptor, brilla acá con color característico ámbar/dorado para que el vendedor lo vea y lo verifique).
+  // - Una vez que el vendedor activa el interruptor de "Confirmado Pago Adelantado", ese pedido YA NO FIGURA en "✅ Confirmados" y pasa exclusivamente a la nueva pestaña "💎 Pago Adelantado".
   const allConfirmedOrders = useMemo(() => {
-    return orders.filter(o => isOrderConfirmedByAgent(o));
-  }, [orders]);
+    if (isPrepaidTab) {
+      return orders.filter(o => isOrderPrepaymentVerifiedAndPaid(o));
+    }
+    return orders.filter(o => isOrderConfirmedByAgent(o) && !isOrderPrepaymentVerifiedAndPaid(o));
+  }, [orders, isPrepaidTab]);
 
   // Filtros compactos desplegables con un simple botón
   const [showFiltersBar, setShowFiltersBar] = useState<boolean>(false);
@@ -332,18 +702,32 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
   const hasActiveFilter = Boolean(filterName || filterPhone || filterLogisticsState !== 'todos' || selectedFilteredIds.length > 0);
 
   return (
-    <div className="p-3 sm:p-4 rounded-2xl bg-[#0d0d0f] border border-emerald-900/60 shadow-md space-y-3 animate-fadeIn text-zinc-100">
+    <div
+      className={`p-3 sm:p-4 rounded-2xl bg-[#0d0d0f] border shadow-md space-y-3 animate-fadeIn text-zinc-100 ${
+        isPrepaidTab
+          ? 'border-cyan-400/70 shadow-[0_0_25px_rgba(34,211,238,0.18)]'
+          : 'border-emerald-900/60'
+      }`}
+    >
       {/* Cabecera Compacta con Descarga 1-Clic en Excel + Copiar p/ Despacho + Botón Compacto de Filtros */}
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="px-2 py-0.5 rounded-md bg-[#16a34a] text-white text-[10px] font-black uppercase tracking-wider shrink-0">
-            ✅ Confirmados ({confirmedOrders.length})
-          </span>
+          {isPrepaidTab ? (
+            <span className="px-2.5 py-0.5 rounded-md bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 text-[10px] font-black uppercase tracking-wider shrink-0 shadow-[0_0_12px_rgba(34,211,238,0.5)]">
+              💎 Pago Adelantado ({confirmedOrders.length})
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-md bg-[#16a34a] text-white text-[10px] font-black uppercase tracking-wider shrink-0">
+              ✅ Confirmados ({confirmedOrders.length})
+            </span>
+          )}
           <h4 className="text-xs sm:text-sm font-black text-zinc-100 truncate">
             {product.nombre}
           </h4>
           <span className="hidden xl:inline text-[11px] text-zinc-400 truncate">
-            — Listos para empaquetar y enviar con todos los datos validados
+            {isPrepaidTab
+              ? '— Pedidos confirmados que YA PAGARON por adelantado en Banco Familiar (Alias 3856033)'
+              : '— Listos para empaquetar y enviar (los que ya pagaron por adelantado pasan a su propia pestaña)'}
           </span>
         </div>
 
@@ -611,10 +995,17 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
       {/* LISTA DE TARJETAS HORIZONTALES ENUMERADAS (#1, #2, #3...) CON CASILLA DE SELECCIÓN Y ELIMINADO */}
       {confirmedOrders.length === 0 ? (
         <div className="p-8 rounded-2xl bg-[#09090b] border border-dashed border-zinc-800 text-center space-y-2">
-          <PackageCheck className="w-8 h-8 text-emerald-500 mx-auto opacity-70" />
+          <PackageCheck className={`w-8 h-8 mx-auto opacity-70 ${isPrepaidTab ? 'text-cyan-400' : 'text-emerald-500'}`} />
           <div className="text-sm font-black text-zinc-300">
-            No se encontraron pedidos confirmados con el filtro actual
+            {isPrepaidTab
+              ? 'Aún no hay pedidos verificados en la pestaña de Pago Adelantado'
+              : 'No se encontraron pedidos confirmados pendientes de pago contra entrega con el filtro actual'}
           </div>
+          {isPrepaidTab && (
+            <p className="text-xs text-zinc-400 max-w-lg mx-auto">
+              Cuando un cliente envíe su comprobante de transferencia a Banco Familiar (Alias 3856033) y actives el interruptor de confirmación dentro del pedido, aparecerá automáticamente en esta lista exclusiva.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -627,19 +1018,29 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
             const isEnviado = Boolean(
               isConcretado || ord.estadoEnvioProducto === 'enviado' || ord.estado === 'en_camino'
             );
+            const isPrepaySentPending = isOrderPrepaymentSentPendingVerification(ord);
+            const isPrepayVerified = isOrderPrepaymentVerifiedAndPaid(ord);
+            const displayAmount =
+              isPrepaySentPending || isPrepayVerified
+                ? Number(ord.montoConDescuentoAdelantado) || Math.max(50000, (Number(ord.monto) || 189000) - 50000)
+                : Number(ord.monto) || 189000;
 
             return (
               <div key={ord.reservaid} className="w-full">
-                {/* Tarjeta Horizontal Compacta en Vercel Dark con Checkbox */}
+                {/* Tarjeta Horizontal Compacta con Brillo Característico (NO verde) cuando tiene Pago Enviado o Pago Adelantado */}
                 <div
                   onClick={() => {
                     setExpandedOrderId(isCardOpen ? null : ord.reservaid);
                     setSelectedUniversalOrderId(ord.reservaid);
                   }}
-                  className={`w-full h-11 min-h-[44px] max-h-[44px] px-3 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer select-none transition-colors overflow-hidden ${
-                    isChecked
-                      ? 'border-emerald-600 bg-emerald-950/70 ring-1 ring-emerald-500/30 text-emerald-100'
-                      : 'border-zinc-800 bg-[#0d0d0f] hover:bg-zinc-900/90 text-zinc-100'
+                  className={`w-full h-11 min-h-[44px] max-h-[44px] px-3 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer select-none transition-all overflow-hidden ${
+                    isPrepayVerified
+                      ? 'border-cyan-400 bg-gradient-to-r from-cyan-950/75 via-indigo-950/60 to-amber-950/60 shadow-[0_0_20px_rgba(34,211,238,0.32)] ring-1 ring-cyan-400/50 text-white'
+                      : isPrepaySentPending
+                        ? 'border-amber-400 bg-gradient-to-r from-amber-950/80 via-fuchsia-950/55 to-amber-950/80 shadow-[0_0_22px_rgba(245,158,11,0.42)] ring-1 ring-amber-400/60 text-amber-50'
+                        : isChecked
+                          ? 'border-emerald-600 bg-emerald-950/70 ring-1 ring-emerald-500/30 text-emerald-100'
+                          : 'border-zinc-800 bg-[#0d0d0f] hover:bg-zinc-900/90 text-zinc-100'
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
@@ -656,21 +1057,39 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                     <span className="font-mono text-[11px] font-bold text-zinc-300 shrink-0 tabular-nums">
                       {ord.reservaid}
                     </span>
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[9px] font-black uppercase tracking-tight shrink-0">
-                      <CheckCircle2 className="w-2.5 h-2.5" />
-                      <span>Confirmado</span>
-                    </span>
+                    {isPrepayVerified ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 text-[9px] font-black uppercase tracking-tight shrink-0 shadow-[0_0_10px_rgba(34,211,238,0.6)]">
+                        <span>💎 PAGO ADELANTADO</span>
+                      </span>
+                    ) : isPrepaySentPending ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 text-black text-[9px] font-black uppercase tracking-tight shrink-0 shadow-[0_0_12px_rgba(251,191,36,0.75)] animate-pulse">
+                        <span>⚡ PAGO ENVIADO (VERIFICAR)</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[9px] font-black uppercase tracking-tight shrink-0">
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        <span>Confirmado</span>
+                      </span>
+                    )}
                     <span className="font-extrabold text-xs text-zinc-100 truncate max-w-[140px] sm:max-w-[180px] shrink-0">
                       {ord.nombre}
                     </span>
-                    <span className="hidden sm:inline-block font-mono text-[11px] font-bold text-zinc-400 tabular-nums whitespace-nowrap shrink-0">
+                    <span className="hidden sm:inline-block font-mono text-[11px] font-bold text-zinc-300 tabular-nums whitespace-nowrap shrink-0">
                       {comparison.celularConfirmado}
                     </span>
-                    <span className="hidden md:inline-block text-[11px] font-medium text-zinc-400 truncate max-w-[170px]">
+                    <span className="hidden md:inline-block text-[11px] font-medium text-zinc-300 truncate max-w-[170px]">
                       📍 {ord.ciudad}
                     </span>
-                    <span className="hidden lg:inline-block font-mono text-[11px] font-black text-emerald-400 tabular-nums whitespace-nowrap shrink-0">
-                      {ord.cantidad}u · {formatGs(ord.monto)}
+                    <span
+                      className={`hidden lg:inline-block font-mono text-[11px] font-black tabular-nums whitespace-nowrap shrink-0 ${
+                        isPrepayVerified
+                          ? 'text-cyan-300'
+                          : isPrepaySentPending
+                            ? 'text-amber-300'
+                            : 'text-emerald-400'
+                      }`}
+                    >
+                      {ord.cantidad}u · {formatGs(displayAmount)}
                     </span>
                   </div>
 
@@ -703,8 +1122,16 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                       </button>
                     )}
 
-                    <span className="h-7 px-2.5 rounded-lg bg-[#15803d] text-white text-[10px] font-black inline-flex items-center gap-1">
-                      <span>{isCardOpen ? 'Cerrar' : 'Abrir Pedido'}</span>
+                    <span
+                      className={`h-7 px-2.5 rounded-lg text-[10px] font-black inline-flex items-center gap-1 ${
+                        isPrepayVerified
+                          ? 'bg-cyan-400 text-slate-950'
+                          : isPrepaySentPending
+                            ? 'bg-amber-400 text-black'
+                            : 'bg-[#15803d] text-white'
+                      }`}
+                    >
+                      <span>{isCardOpen ? 'Cerrar' : isPrepaySentPending ? 'Ver Comprobante' : 'Abrir Pedido'}</span>
                       <ChevronDown
                         className={`w-3.5 h-3.5 transition-transform ${isCardOpen ? 'rotate-180' : ''}`}
                       />
@@ -712,9 +1139,20 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                   </div>
                 </div>
 
-                {/* Detalle Desplegable: Ficha Completa del Cliente + Comparativa Web vs Chat IA */}
+                {/* Detalle Desplegable: Panel de Verificación de Pago Adelantado + Ficha Completa del Cliente */}
                 {isCardOpen && (
                   <div className="mt-1 p-3.5 sm:p-4 rounded-xl border border-zinc-800 bg-[#09090b] space-y-3.5">
+                    {/* PANEL DE VERIFICACIÓN DE PAGO ADELANTADO Y COMPROBANTE CON INTERRUPTOR */}
+                    <PrepaymentVerificationSection
+                      order={ord}
+                      onUpdateOrder={onUpdateOrderLogistics}
+                      onMovedToPrepaidTab={() => {
+                        if (!isPrepaidTab && onSwitchSubTab) {
+                          onSwitchSubTab('pagos_adelantados');
+                        }
+                      }}
+                    />
+
                     <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-800/60 flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         <FileCheck2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />

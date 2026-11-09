@@ -44,7 +44,11 @@ import {
 import { useStore } from '../context/StoreContext';
 import { formatGs, formatWaPhone } from '../config';
 import { Order, ProductPage, OrderStatus } from '../types';
-import { ProductConfirmedOrdersPanel, downloadConfirmedOrdersExcelCsv } from '../components/ProductConfirmedOrdersPanel';
+import {
+  ProductConfirmedOrdersPanel,
+  PrepaymentVerificationSection,
+  downloadConfirmedOrdersExcelCsv
+} from '../components/ProductConfirmedOrdersPanel';
 import { ProductSellerAgentPanel } from '../components/ProductSellerAgentPanel';
 import { ProductTemplateBuilderModal } from '../components/ProductTemplateBuilderModal';
 import { ProductTemplateBuilderStudio } from '../components/ProductTemplateBuilderStudio';
@@ -57,6 +61,8 @@ import {
 } from '../utils/metaPixelEngine';
 import {
   isOrderConfirmedByAgent,
+  isOrderPrepaymentSentPendingVerification,
+  isOrderPrepaymentVerifiedAndPaid,
   buildOrderComparisonSummary,
   filterAdminOrders,
   formatParaguayanPhone433
@@ -533,18 +539,18 @@ export const AdminView: React.FC = () => {
   const [showSellerAgentPanel, setShowSellerAgentPanel] = useState<boolean>(false);
   const [expandedBottomSummaryOrderId, setExpandedBottomSummaryOrderId] = useState<string | null>(null);
   const [productSubTabMap, setProductSubTabMap] = useState<
-    Record<string, 'pedidos' | 'confirmados' | 'precios' | 'pixel' | 'voz'>
+    Record<string, 'pedidos' | 'confirmados' | 'pagos_adelantados' | 'precios' | 'pixel' | 'voz'>
   >({});
 
   const getProductSubTab = (
     productId: string
-  ): 'pedidos' | 'confirmados' | 'precios' | 'pixel' | 'voz' => {
+  ): 'pedidos' | 'confirmados' | 'pagos_adelantados' | 'precios' | 'pixel' | 'voz' => {
     return productSubTabMap[productId] || 'pedidos';
   };
 
   const setProductSubTab = (
     productId: string,
-    tab: 'pedidos' | 'confirmados' | 'precios' | 'pixel' | 'voz'
+    tab: 'pedidos' | 'confirmados' | 'pagos_adelantados' | 'precios' | 'pixel' | 'voz'
   ) => {
     setProductSubTabMap(prev => ({ ...prev, [productId]: tab }));
   };
@@ -2548,8 +2554,14 @@ export const AdminView: React.FC = () => {
                   const totalVentasProd = allProdOrders
                     .filter(o => !o.archivado)
                     .reduce((s, o) => s + (Number(o.monto) || 0), 0);
-                  const confirmedProdOrdersCount = allProdOrders.filter(o =>
-                    !o.archivado && isOrderConfirmedByAgent(o)
+                  const confirmedProdOrdersCount = allProdOrders.filter(
+                    o => !o.archivado && isOrderConfirmedByAgent(o) && !isOrderPrepaymentVerifiedAndPaid(o)
+                  ).length;
+                  const prepaidPendingVerifyCount = allProdOrders.filter(
+                    o => !o.archivado && isOrderPrepaymentSentPendingVerification(o)
+                  ).length;
+                  const prepaidVerifiedOrdersCount = allProdOrders.filter(
+                    o => !o.archivado && isOrderPrepaymentVerifiedAndPaid(o)
                   ).length;
 
                   // Paginación de 10 en 10 sobre los pedidos filtrados
@@ -2632,6 +2644,16 @@ export const AdminView: React.FC = () => {
                               {confirmedProdOrdersCount > 0 && (
                                 <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded bg-[#16a34a] text-white shrink-0">
                                   ✅ {confirmedProdOrdersCount} Confirmado{confirmedProdOrdersCount === 1 ? '' : 's'}
+                                </span>
+                              )}
+                              {prepaidPendingVerifyCount > 0 && (
+                                <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 text-black shadow-[0_0_10px_rgba(251,191,36,0.7)] animate-pulse shrink-0">
+                                  ⚡ {prepaidPendingVerifyCount} Pago Enviado
+                                </span>
+                              )}
+                              {prepaidVerifiedOrdersCount > 0 && (
+                                <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 shadow-[0_0_10px_rgba(34,211,238,0.6)] shrink-0">
+                                  💎 {prepaidVerifiedOrdersCount} Pago Adelantado
                                 </span>
                               )}
                               {isJustCreated && (
@@ -2759,10 +2781,29 @@ export const AdminView: React.FC = () => {
                                     ? 'bg-[#16a34a] text-white shadow-xs'
                                     : 'bg-emerald-950/50 text-emerald-300 border border-emerald-800/60 hover:bg-emerald-900/60'
                                 }`}
-                                title="Ver solo los pedidos ya confirmados por IA listos para preparar y descargar en Excel"
+                                title="Ver pedidos confirmados pendientes de cobro al recibir (si alguno envió pago adelantado brilla aquí para que lo verifiques)"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 <span>✅ Confirmados ({confirmedProdOrdersCount})</span>
+                                {prepaidPendingVerifyCount > 0 && (
+                                  <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-black text-[9px] font-black animate-pulse">
+                                    ⚡ {prepaidPendingVerifyCount} por verificar
+                                  </span>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                data-testid={`tab-prepaid-orders-${prod.id}`}
+                                onClick={() => setProductSubTab(prod.id, 'pagos_adelantados')}
+                                className={`h-8 px-2.5 rounded-lg text-[11px] font-black transition-all inline-flex items-center gap-1.5 cursor-pointer ${
+                                  getProductSubTab(prod.id) === 'pagos_adelantados'
+                                    ? 'bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 shadow-[0_0_16px_rgba(34,211,238,0.55)]'
+                                    : 'bg-cyan-950/60 text-cyan-200 border border-cyan-500/60 hover:bg-cyan-900/60 shadow-[0_0_10px_rgba(34,211,238,0.2)]'
+                                }`}
+                                title="Pestaña exclusiva de pedidos confirmados que YA PAGARON por adelantado en Banco Familiar (Alias 3856033)"
+                              >
+                                <span>💎 Pago Adelantado ({prepaidVerifiedOrdersCount})</span>
                               </button>
 
                               <button
@@ -3252,11 +3293,19 @@ export const AdminView: React.FC = () => {
                             </div>
                           )}
 
-                          {/* INTERFAZ 1: Pestaña Exclusiva de Pedidos Confirmados + Descarga Excel 1-Clic + Función Universal de Logística */}
-                          {(getProductSubTab(prod.id) === 'confirmados' || showConfirmedOrdersPanel) && (
+                          {/* INTERFAZ 1: Pestaña Exclusiva de Pedidos Confirmados o Pestaña Exclusiva de Pago Adelantado */}
+                          {(getProductSubTab(prod.id) === 'confirmados' ||
+                            getProductSubTab(prod.id) === 'pagos_adelantados' ||
+                            showConfirmedOrdersPanel) && (
                             <ProductConfirmedOrdersPanel
                               product={prod}
                               orders={allProdOrders}
+                              panelMode={
+                                getProductSubTab(prod.id) === 'pagos_adelantados'
+                                  ? 'pagos_adelantados'
+                                  : 'confirmados'
+                              }
+                              onSwitchSubTab={tab => setProductSubTab(prod.id, tab)}
                               onUpdateOrderLogistics={async (orderId, updates, toastMsg) => {
                                 await updateOrder(orderId, updates);
                                 if (toastMsg) showToast(toastMsg);
@@ -3308,7 +3357,15 @@ export const AdminView: React.FC = () => {
                                   className="h-7 px-2.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700 text-emerald-200 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
                                 >
                                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                  <span>Ver Solo Confirmados ({confirmedProdOrdersCount})</span>
+                                  <span>Confirmados ({confirmedProdOrdersCount})</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setProductSubTab(prod.id, 'pagos_adelantados')}
+                                  className="h-7 px-2.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/70 text-cyan-200 text-[11px] font-black inline-flex items-center gap-1 cursor-pointer transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)]"
+                                >
+                                  <span>💎 Pago Adelantado ({prepaidVerifiedOrdersCount})</span>
                                 </button>
 
                                 <button
@@ -3559,6 +3616,14 @@ export const AdminView: React.FC = () => {
                                   <span className="truncate">Pedidos (Tocá cualquier tarjeta para abrir toda la información)</span>
                                 </div>
                                 <div className="hidden sm:flex items-center gap-3 text-[10px] font-bold text-zinc-400 shrink-0">
+                                  <span className="inline-flex items-center gap-1 text-amber-300">
+                                    <span className="w-2.5 h-2.5 rounded-xs bg-amber-400 border border-yellow-200 inline-block shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                                    Brillo Ámbar = Pago Enviado (Verificar)
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 text-cyan-300">
+                                    <span className="w-2.5 h-2.5 rounded-xs bg-cyan-400 border border-sky-200 inline-block shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                                    Brillo Celeste = Pago Adelantado
+                                  </span>
                                   <span className="inline-flex items-center gap-1 text-emerald-400">
                                     <span className="w-2.5 h-2.5 rounded-xs bg-emerald-950 border border-emerald-500 inline-block" />
                                     Verde = Confirmado
@@ -3591,6 +3656,8 @@ export const AdminView: React.FC = () => {
                                   const chatInfo = chatsSummary[cleanOrdPhone];
                                   const msgCount = chatInfo?.totalMessages || 0;
                                   const isConfirmedByAgent = isOrderConfirmedByAgent(ord);
+                                  const isPrepaySentPending = isOrderPrepaymentSentPendingVerification(ord);
+                                  const isPrepayVerified = isOrderPrepaymentVerifiedAndPaid(ord);
                                   const comparison = isConfirmedByAgent
                                     ? buildOrderComparisonSummary(ord)
                                     : null;
@@ -3603,10 +3670,15 @@ export const AdminView: React.FC = () => {
                                     (typeof ord.gpsLat === 'number' && typeof ord.gpsLng === 'number'
                                       ? `https://www.google.com/maps?q=${ord.gpsLat.toFixed(6)},${ord.gpsLng.toFixed(6)}`
                                       : null);
+                                  const displayAmount =
+                                    isPrepaySentPending || isPrepayVerified
+                                      ? Number(ord.montoConDescuentoAdelantado) ||
+                                        Math.max(50000, (Number(ord.monto) || 189000) - 50000)
+                                      : Number(ord.monto) || 189000;
 
                                   return (
                                     <div key={ord.reservaid} className="w-full">
-                                      {/* TARJETA HORIZONTAL ULTRA-COMPACTA DE ALTURA FIJA E IDÉNTICA (44px) */}
+                                      {/* TARJETA HORIZONTAL ULTRA-COMPACTA DE ALTURA FIJA E IDÉNTICA (44px) CON BRILLO CARACTERÍSTICO */}
                                       <div
                                         role="button"
                                         tabIndex={0}
@@ -3625,10 +3697,14 @@ export const AdminView: React.FC = () => {
                                             );
                                           }
                                         }}
-                                        className={`w-full h-11 min-h-[44px] max-h-[44px] px-2.5 rounded-xl border flex items-center justify-between gap-2 transition-colors cursor-pointer select-none overflow-hidden ${
-                                          isConfirmedByAgent
-                                            ? 'bg-[#0d0d0f] hover:bg-zinc-900/90 border-emerald-800/80 text-zinc-100'
-                                            : 'bg-[#0d0d0f] hover:bg-zinc-900/90 border-zinc-800 text-zinc-200'
+                                        className={`w-full h-11 min-h-[44px] max-h-[44px] px-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer select-none overflow-hidden ${
+                                          isPrepayVerified
+                                            ? 'bg-gradient-to-r from-cyan-950/75 via-indigo-950/60 to-amber-950/60 border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.32)] text-white'
+                                            : isPrepaySentPending
+                                              ? 'bg-gradient-to-r from-amber-950/80 via-fuchsia-950/55 to-amber-950/80 border-amber-400 shadow-[0_0_22px_rgba(245,158,11,0.42)] text-amber-50'
+                                              : isConfirmedByAgent
+                                                ? 'bg-[#0d0d0f] hover:bg-zinc-900/90 border-emerald-800/80 text-zinc-100'
+                                                : 'bg-[#0d0d0f] hover:bg-zinc-900/90 border-zinc-800 text-zinc-200'
                                         } ${isRowSelected ? 'ring-1 ring-emerald-500/50' : ''}`}
                                       >
                                         {/* IZQUIERDA Y CENTRO: Pequeñas informaciones bien alineadas en 1 sola línea */}
@@ -3645,9 +3721,13 @@ export const AdminView: React.FC = () => {
 
                                           <span
                                             className={`font-mono text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 tabular-nums ${
-                                              isConfirmedByAgent
-                                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                                                : 'bg-zinc-800 text-zinc-400'
+                                              isPrepayVerified
+                                                ? 'bg-cyan-950 text-cyan-300 border border-cyan-500'
+                                                : isPrepaySentPending
+                                                  ? 'bg-amber-950 text-amber-300 border border-amber-400'
+                                                  : isConfirmedByAgent
+                                                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                                    : 'bg-zinc-800 text-zinc-400'
                                             }`}
                                           >
                                             #{rowNumber}
@@ -3657,8 +3737,16 @@ export const AdminView: React.FC = () => {
                                             {ord.reservaid}
                                           </span>
 
-                                          {/* Estado Compacto */}
-                                          {isConfirmedByAgent ? (
+                                          {/* Estado Compacto con Brillo Especial NO Verde para Pagos Enviados / Adelantados */}
+                                          {isPrepayVerified ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 text-[9px] font-black uppercase tracking-tight shrink-0 shadow-[0_0_10px_rgba(34,211,238,0.6)]">
+                                              <span>💎 PAGO ADELANTADO</span>
+                                            </span>
+                                          ) : isPrepaySentPending ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 text-black text-[9px] font-black uppercase tracking-tight shrink-0 shadow-[0_0_12px_rgba(251,191,36,0.75)] animate-pulse">
+                                              <span>⚡ PAGO ENVIADO (VERIFICAR)</span>
+                                            </span>
+                                          ) : isConfirmedByAgent ? (
                                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[9px] font-black uppercase tracking-tight shrink-0">
                                               <CheckCircle2 className="w-2.5 h-2.5" />
                                               <span>Confirmado</span>
@@ -3686,7 +3774,13 @@ export const AdminView: React.FC = () => {
                                           {/* Teléfono 4-3-3 */}
                                           <span
                                             className={`hidden sm:inline-block font-mono text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0 ${
-                                              isConfirmedByAgent ? 'text-emerald-400' : 'text-zinc-400'
+                                              isPrepayVerified
+                                                ? 'text-cyan-300'
+                                                : isPrepaySentPending
+                                                  ? 'text-amber-300'
+                                                  : isConfirmedByAgent
+                                                    ? 'text-emerald-400'
+                                                    : 'text-zinc-400'
                                             }`}
                                           >
                                             {formatParaguayanPhone433(ord.celular)}
@@ -3696,7 +3790,13 @@ export const AdminView: React.FC = () => {
                                           {shortCity && (
                                             <span
                                               className={`hidden md:inline-block text-[11px] font-semibold truncate min-w-0 max-w-[120px] ${
-                                                isConfirmedByAgent ? 'text-emerald-400' : 'text-zinc-400'
+                                                isPrepayVerified
+                                                  ? 'text-cyan-200'
+                                                  : isPrepaySentPending
+                                                    ? 'text-amber-200'
+                                                    : isConfirmedByAgent
+                                                      ? 'text-emerald-400'
+                                                      : 'text-zinc-400'
                                               }`}
                                               title={`${ord.ciudad}, ${ord.departamento}`}
                                             >
@@ -3710,12 +3810,16 @@ export const AdminView: React.FC = () => {
                                           {/* Pack y Monto siempre 100% visible */}
                                           <span
                                             className={`hidden lg:inline-block font-mono text-[11px] font-black tabular-nums whitespace-nowrap px-1.5 py-0.5 rounded ${
-                                              isConfirmedByAgent
-                                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
-                                                : 'bg-zinc-900 text-emerald-400 border border-zinc-800'
+                                              isPrepayVerified
+                                                ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/80'
+                                                : isPrepaySentPending
+                                                  ? 'bg-amber-950 text-amber-300 border border-amber-400/80'
+                                                  : isConfirmedByAgent
+                                                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
+                                                    : 'bg-zinc-900 text-emerald-400 border border-zinc-800'
                                             }`}
                                           >
-                                            {ord.cantidad}u · {formatGs(ord.monto)}
+                                            {ord.cantidad}u · {formatGs(displayAmount)}
                                           </span>
                                           <button
                                             type="button"
@@ -3775,14 +3879,18 @@ export const AdminView: React.FC = () => {
 
                                           <span
                                             className={`h-7 px-2 rounded-lg text-[10px] font-black inline-flex items-center gap-1 border ${
-                                              isConfirmedByAgent
-                                                ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                                                : 'bg-zinc-900 text-zinc-300 border-zinc-800'
+                                              isPrepayVerified
+                                                ? 'bg-cyan-400 text-slate-950 border-cyan-300'
+                                                : isPrepaySentPending
+                                                  ? 'bg-amber-400 text-black border-amber-300'
+                                                  : isConfirmedByAgent
+                                                    ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                                    : 'bg-zinc-900 text-zinc-300 border-zinc-800'
                                             }`}
                                             title="Clic para ver u ocultar toda la información dentro del pedido"
                                           >
                                             <span className="hidden md:inline">
-                                              {isOrderOpen ? 'Cerrar' : 'Abrir'}
+                                              {isOrderOpen ? 'Cerrar' : isPrepaySentPending ? 'Ver Comprobante' : 'Abrir'}
                                             </span>
                                             <ChevronDown
                                               className={`w-3.5 h-3.5 transition-transform ${
@@ -3798,11 +3906,27 @@ export const AdminView: React.FC = () => {
                                         <div
                                           data-testid={`admin-order-detail-panel-${ord.reservaid}`}
                                           className={`mt-1 p-3.5 sm:p-4 rounded-xl border space-y-3 animate-fadeIn ${
-                                            isConfirmedByAgent
-                                              ? 'bg-[#09090b] border-emerald-800/80'
-                                              : 'bg-[#09090b] border-zinc-800'
+                                            isPrepayVerified
+                                              ? 'bg-[#09090b] border-cyan-400/90'
+                                              : isPrepaySentPending
+                                                ? 'bg-[#09090b] border-amber-400/90'
+                                                : isConfirmedByAgent
+                                                  ? 'bg-[#09090b] border-emerald-800/80'
+                                                  : 'bg-[#09090b] border-zinc-800'
                                           }`}
                                         >
+                                          {/* PANEL DE VERIFICACIÓN DE PAGO ADELANTADO Y COMPROBANTE CON INTERRUPTOR */}
+                                          <PrepaymentVerificationSection
+                                            order={ord}
+                                            onUpdateOrder={async (orderId, updates, toastMsg) => {
+                                              await updateOrder(orderId, updates);
+                                              if (toastMsg) showToast(toastMsg);
+                                            }}
+                                            onMovedToPrepaidTab={() => {
+                                              setProductSubTab(prod.id, 'pagos_adelantados');
+                                            }}
+                                          />
+
                                           {/* Fila Superior del Detalle: Cabecera + Controles de Unidades, Estado y Acciones */}
                                           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
                                             <div className="flex items-center gap-2 flex-wrap">

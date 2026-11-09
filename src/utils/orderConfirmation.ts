@@ -508,7 +508,38 @@ export function isOrderConfirmedByAgent(order?: Partial<Order> | null): boolean 
   return Boolean(
     order.datosConfirmados ||
     (order.convStep && order.convStep >= 5) ||
-    (order.empaquetado && order.referenciaCasa)
+    (order.empaquetado && order.referenciaCasa) ||
+    order.pagoAdelantadoVerificadoAdmin ||
+    order.pagoAdelantadoEstado === 'pagado_adelantado_confirmado'
+  );
+}
+
+/**
+ * Devuelve true cuando el cliente YA ENVIÓ el comprobante / aviso de pago adelantado,
+ * pero el vendedor todavía NO activó el interruptor de verificación ("Pago Enviado / Pago Adelantado por Verificar").
+ */
+export function isOrderPrepaymentSentPendingVerification(order?: Partial<Order> | null): boolean {
+  if (!order) return false;
+  if (isOrderPrepaymentVerifiedAndPaid(order)) return false;
+  return Boolean(
+    order.pagoAdelantadoComprobanteRecibido ||
+    order.promoPagoAdelantadoStage === 'receipt_received_verifying' ||
+    order.pagoAdelantadoEstado === 'pago_enviado_por_verificar' ||
+    order.pagoAdelantadoEstado === 'comprobante_recibido'
+  );
+}
+
+/**
+ * Devuelve true únicamente cuando el vendedor YA COMPROBÓ la transferencia en su cuenta
+ * de Banco Familiar y activó el interruptor ("Confirmado Pago Adelantado").
+ * Cuando esto es true, el pedido pasa automáticamente de la pestaña "✅ Confirmados"
+ * a la pestaña exclusiva "💎 Pago Adelantado".
+ */
+export function isOrderPrepaymentVerifiedAndPaid(order?: Partial<Order> | null): boolean {
+  if (!order) return false;
+  return Boolean(
+    order.pagoAdelantadoVerificadoAdmin ||
+    order.pagoAdelantadoEstado === 'pagado_adelantado_confirmado'
   );
 }
 
