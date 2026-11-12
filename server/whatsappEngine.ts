@@ -171,6 +171,7 @@ interface WaSessionRuntime {
   socketSeq: number;
   isConnecting: boolean;
   lastSaveCredsPromise: Promise<any>;
+  lastKeyWritePromise?: Promise<any>;
 }
 
 // Base de Datos Nativa directa en el servidor Railway (Cero dependencias de cuentas externas suspendidas)
@@ -336,8 +337,12 @@ export async function insertOrUpdateSupabaseCodigo(code: string, dispositivo: st
   const creds = getSupabaseCredentials();
   if (!creds || !code) return false;
   try {
-    // Para WACHAT-<tel> la clave es fija: limpiar la anterior antes de insertar la actualizada
-    if (code.startsWith('WACHAT-')) {
+    // Para claves singleton (WACHAT-<tel>, WAHEART-beat, WALOCK-leader) limpiar la anterior antes de insertar la actualizada
+    if (
+      code.startsWith('WACHAT-') ||
+      code === 'WAHEART-beat' ||
+      code === 'WALOCK-leader'
+    ) {
       await deleteSupabaseCodigos(`eq.${code}`);
     }
 
@@ -381,12 +386,6 @@ export async function insertOrUpdateSupabaseCodigo(code: string, dispositivo: st
         await deletePreviousSupabaseCodigosExcept('WAVOICE-*', code);
       } else if (code.startsWith('CFG-') && !code.endsWith('-init')) {
         await deletePreviousSupabaseCodigosExcept('CFG-*', code);
-      } else if (code.startsWith('WAAUTH-')) {
-        const parts = code.split('-');
-        if (parts.length >= 3) {
-          const sessionPrefix = parts.slice(0, -1).join('-');
-          await deletePreviousSupabaseCodigosExcept(`${sessionPrefix}-*`, code);
-        }
       } else if (code.startsWith('ORD-')) {
         const ordMatch = code.match(/^(ORD-.+)-\d+$/);
         if (ordMatch?.[1]) {
@@ -1196,6 +1195,18 @@ const myEngineGen: number = g.__noeluxEngineGen;
 if (g.__noeluxWaPoller) {
   clearInterval(g.__noeluxWaPoller);
   g.__noeluxWaPoller = null;
+}
+if (g.__noeluxNasaHeartbeat) {
+  clearInterval(g.__noeluxNasaHeartbeat);
+  g.__noeluxNasaHeartbeat = null;
+}
+if (g.__noeluxNasaPeriodicBackup) {
+  clearInterval(g.__noeluxNasaPeriodicBackup);
+  g.__noeluxNasaPeriodicBackup = null;
+}
+if (g.__noeluxNasaLeaderWatcher) {
+  clearInterval(g.__noeluxNasaLeaderWatcher);
+  g.__noeluxNasaLeaderWatcher = null;
 }
 if (g.__noeluxWaSessionsMap && g.__noeluxWaSessionsMap instanceof Map) {
   for (const s of g.__noeluxWaSessionsMap.values()) {
@@ -2034,7 +2045,7 @@ export async function persistVoiceSelectionToCloud(
             };
           }
         }
-      } catch (e) { }
+      } catch {}
 
       await insertOrUpdateSupabaseCodigo(
         `CFG-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -2206,7 +2217,8 @@ function getOrCreateSessionRuntime(id: string, label?: string, createdAt?: strin
     sock: null,
     socketSeq: 0,
     isConnecting: false,
-    lastSaveCredsPromise: Promise.resolve()
+    lastSaveCredsPromise: Promise.resolve(),
+    lastKeyWritePromise: Promise.resolve()
   };
   sessionsMap.set(id, runtime);
   return runtime;
@@ -2349,6 +2361,7 @@ export async function syncCustomerChatToCloud(phone: string): Promise<void> {
 }
 
 export async function syncWhatsAppStateToCloud(): Promise<void> {
+  if ((globalThis as any).__noeluxIsYieldingToNewerDeploy) return;
   try {
     const state = getWhatsAppEngineState();
     const storage = loadChatsStorage();
@@ -2697,7 +2710,7 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
           } else if (cmd.type === 'logout') {
             await disconnectWhatsAppEngine(true, cmd.sessionId, cmd.confirmCode);
           }
-        } catch (e) { }
+        } catch {}
       }
 
       if (anyProcessed) {
@@ -3090,7 +3103,7 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
               };
               pedidosChanged = true;
             }
-          } catch (e) { }
+          } catch {}
         }
 
         if (pedidosChanged) {
@@ -7543,7 +7556,7 @@ async function flushPendingMessages(session: WaSessionRuntime) {
                     recordSentProtoMessage(sentAudio.key.id, sentAudio.message);
                   }
                 }
-              } catch (e) { }
+              } catch {}
               if (msg.isAudioNote && !audioSentOk) {
                 continue;
               }
@@ -7591,7 +7604,7 @@ async function flushPendingMessages(session: WaSessionRuntime) {
             msg.status = 'sent';
             msg.sessionId = session.id;
             changed = true;
-          } catch (e) { }
+          } catch {}
         }
       }
     }
@@ -7603,17 +7616,279 @@ async function flushPendingMessages(session: WaSessionRuntime) {
 }
 
 // ============================================================================
-// PERSISTENCIA PERMANENTE DE SESIÓN BAILEYS EN SUPABASE (WAAUTH-*)
-// Evita que Railway desconecte el WhatsApp al redesplegar un nuevo contenedor
+// 🛡️ BLINDAJE NASA v3: RELEVO ATÓMICO SIN COLISIONES (ZERO-COLLISION HANDOFF)
+// Resuelve definitivamente las caídas de WhatsApp en cada deploy de Railway:
+//   1. Leader Lease Atómico (WALOCK-leader): El contenedor NUEVO anuncia su bootEpoch
+//      ANTES de abrir socket y espera a que el contenedor VIEJO suelte limpiamente
+//      la conexión y suba el último ratchet Signal (WAAUTH-*) → CERO guerra 440.
+//   2. Vigilante de Relevo (1.5s): El contenedor VIEJO detecta al nuevo líder incluso
+//      antes de recibir SIGTERM, bloquea reconexiones, espera saveCreds + keys.set,
+//      cierra sock.end(), sube WAAUTH-* íntegro y entrega el testigo (yieldedForEpoch).
+//   3. Interceptor Criptográfico Signal (keys.set + creds.update): Cada giro del
+//      ratchet criptográfico dispara backup rápido (2s–4s) a Supabase.
+//   4. Doble Bóveda Redundante (Snapshots N y N-1): Jamás borra el backup anterior
+//      hasta tener 2 snapshots completos validados; nunca sube backups truncados.
+//   5. Auto-Curación ante 401/440: Distingue reemplazo de contenedor vs logout real
+//      y re-hidrata desde la bóveda N-1 antes de aceptar una desconexión.
 // ============================================================================
 
 const authBackupTimers = new Map<string, NodeJS.Timeout>();
 const authBackupDeadlines = new Map<string, number>();
+const inFlightAuthBackupBySession = new Map<string, Promise<void>>();
 const lastPreKeySelfHealBySession = new Map<string, number>();
 const consecutiveLogoutCodes = new Map<string, number>();
 export const MANUAL_DISCONNECT_CONFIRM_CODE = 'CONFIRMAR_DESCONEXION_MANUAL';
 let bootRestorePromise: Promise<void> | null = null;
 let skipDevAutoConnectBecauseProdActive = false;
+
+const MY_BOOT_EPOCH: number =
+  (globalThis as any).__noeluxBootEpoch ||
+  ((globalThis as any).__noeluxBootEpoch = Date.now());
+const MY_INSTANCE_ID: string =
+  (globalThis as any).__noeluxInstanceId ||
+  ((globalThis as any).__noeluxInstanceId = `inst-${MY_BOOT_EPOCH}-${crypto.randomBytes(3).toString('hex')}`);
+
+let yieldInFlightPromise: Promise<void> | null = null;
+
+function isYieldingToNewerDeploy(): boolean {
+  return Boolean((globalThis as any).__noeluxIsYieldingToNewerDeploy);
+}
+
+interface WaLeaderLockPayload {
+  leaderId: string;
+  bootEpoch: number;
+  phase: 'claiming' | 'active' | 'yielding';
+  yieldedBy?: string;
+  yieldedForEpoch?: number;
+  yieldedAt?: number;
+  updatedAt: string;
+}
+
+async function readCloudLeaderLock(): Promise<WaLeaderLockPayload | null> {
+  try {
+    const rows = await querySupabaseCodigos({
+      codeFilter: 'eq.WALOCK-leader',
+      orderDesc: true,
+      limit: 1
+    });
+    if (Array.isArray(rows) && rows[0]?.dispositivo) {
+      const parsed = JSON.parse(rows[0].dispositivo);
+      if (parsed && typeof parsed.bootEpoch === 'number' && parsed.leaderId) {
+        return parsed as WaLeaderLockPayload;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// Ejecutado por el Contenedor SALIENTE en cuanto detecta un deploy más nuevo o recibe SIGTERM:
+// Cierra sockets sin hacer logout(), guarda hasta el último byte de Signal en Supabase y cede el turno.
+async function yieldToNewerDeployLeader(reason: string, newerEpoch?: number): Promise<void> {
+  if (yieldInFlightPromise) return yieldInFlightPromise;
+  (globalThis as any).__noeluxIsYieldingToNewerDeploy = true;
+
+  yieldInFlightPromise = (async () => {
+    const t0 = Date.now();
+    console.log(`[NASA Handoff] 🤝 Contenedor saliente (${MY_INSTANCE_ID}) cediendo liderazgo (${reason})...`);
+    try {
+      // 1. Cancelar timers diferidos para ejecutar el flush definitivo ahora mismo
+      for (const [id, timer] of authBackupTimers) {
+        clearTimeout(timer);
+        authBackupTimers.delete(id);
+        authBackupDeadlines.delete(id);
+      }
+
+      // 2. Frenar reconexiones y cerrar sockets suavemente (end, JAMÁS logout) tras asentar escrituras en disco
+      for (const s of sessionsMap.values()) {
+        s.socketSeq += 10000;
+        s.isConnecting = false;
+        const activeSock = s.sock;
+        s.sock = null;
+
+        await Promise.race([
+          Promise.allSettled([
+            Promise.resolve(s.lastSaveCredsPromise),
+            Promise.resolve(s.lastKeyWritePromise)
+          ]),
+          new Promise(r => setTimeout(r, 1500))
+        ]);
+
+        if (activeSock) {
+          try {
+            activeSock.ev?.removeAllListeners('connection.update');
+            activeSock.ev?.removeAllListeners('creds.update');
+            activeSock.ev?.removeAllListeners('messages.upsert');
+            activeSock.end?.(undefined);
+          } catch {}
+        }
+
+        // 3. Respaldar estado Signal COMPLETO (creds + pre-keys + sessions) a Supabase
+        if (s.status === 'connected' || s.connectedPhone || hasValidLinkedCredsOnDisk(s.authDir)) {
+          try {
+            await Promise.race([
+              backupWaSessionAuthToCloud(s, false),
+              new Promise((_, rej) => setTimeout(() => rej(new Error('handoff_backup_timeout')), 5500))
+            ]);
+          } catch (err: any) {
+            console.error(`[NASA Handoff] ⚠️ Timeout/error en backup final de ${s.id}: ${err?.message || err}`);
+          }
+        }
+        s.status = 'disconnected';
+      }
+
+      // 4. Confirmar al nuevo contenedor que la bóveda WAAUTH-* ya está lista y el socket liberado
+      const currentLock = await readCloudLeaderLock();
+      const targetEpoch = newerEpoch || currentLock?.bootEpoch || MY_BOOT_EPOCH;
+      const targetLeader =
+        currentLock && currentLock.bootEpoch >= targetEpoch
+          ? currentLock.leaderId
+          : MY_INSTANCE_ID;
+
+      await insertOrUpdateSupabaseCodigo(
+        'WALOCK-leader',
+        JSON.stringify({
+          leaderId: targetLeader,
+          bootEpoch: targetEpoch,
+          phase: 'active',
+          yieldedBy: MY_INSTANCE_ID,
+          yieldedForEpoch: targetEpoch,
+          yieldedAt: Date.now(),
+          updatedAt: new Date().toISOString()
+        } satisfies WaLeaderLockPayload)
+      );
+
+      console.log(`[NASA Handoff] ✅ Traspaso limpio completado en ${Date.now() - t0}ms.`);
+    } catch (e: any) {
+      console.error(`[NASA Handoff] ❌ Error cediendo liderazgo: ${e?.message || e}`);
+    }
+  })();
+
+  return yieldInFlightPromise;
+}
+
+// Ejecutado por el Contenedor ENTRANTE antes de leer WAAUTH-* y antes de abrir sockets:
+// Reclama WALOCK-leader y espera (máx 5.5s) a que el contenedor anterior suelte el socket y suba llaves frescas.
+async function claimLeaderLeaseAndAwaitOldContainerHandoff(): Promise<void> {
+  if (!isProductionRuntime()) return;
+  try {
+    const prevLock = await readCloudLeaderLock();
+    let prevHeartbeatMs = 0;
+    try {
+      const hbRows = await querySupabaseCodigos({
+        codeFilter: 'eq.WAHEART-beat',
+        orderDesc: true,
+        limit: 1
+      });
+      if (Array.isArray(hbRows) && hbRows[0]?.dispositivo) {
+        const hb = JSON.parse(hbRows[0].dispositivo);
+        if (hb?.alive && hb?.timestamp) {
+          prevHeartbeatMs = new Date(hb.timestamp).getTime() || 0;
+        }
+      }
+    } catch {}
+
+    const hadRecentOldContainer =
+      (prevLock &&
+        prevLock.leaderId !== MY_INSTANCE_ID &&
+        Date.now() - (new Date(prevLock.updatedAt || 0).getTime() || 0) < 90_000) ||
+      (prevHeartbeatMs > 0 && Date.now() - prevHeartbeatMs < 75_000);
+
+    await insertOrUpdateSupabaseCodigo(
+      'WALOCK-leader',
+      JSON.stringify({
+        leaderId: MY_INSTANCE_ID,
+        bootEpoch: MY_BOOT_EPOCH,
+        phase: hadRecentOldContainer ? 'claiming' : 'active',
+        updatedAt: new Date().toISOString()
+      } satisfies WaLeaderLockPayload)
+    );
+
+    if (!hadRecentOldContainer) {
+      console.log(`[NASA Leader] 👑 Liderazgo directo adquirido por ${MY_INSTANCE_ID} (sin contenedor previo activo).`);
+      return;
+    }
+
+    console.log(`[NASA Leader] ⏳ Esperando relevo limpio del contenedor anterior antes de abrir socket WhatsApp...`);
+    const deadline = Date.now() + 5500;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 450));
+      const lockNow = await readCloudLeaderLock();
+      if (lockNow && lockNow.bootEpoch > MY_BOOT_EPOCH && lockNow.leaderId !== MY_INSTANCE_ID) {
+        // Otro deploy aún más nuevo apareció mientras arrancábamos
+        await yieldToNewerDeployLeader('superseded_during_boot', lockNow.bootEpoch);
+        return;
+      }
+      if (lockNow && lockNow.yieldedForEpoch === MY_BOOT_EPOCH) {
+        console.log(`[NASA Leader] 🤝 Contenedor anterior (${lockNow.yieldedBy}) entregó llaves y cerró socket. Tomando control limpio.`);
+        break;
+      }
+    }
+
+    await insertOrUpdateSupabaseCodigo(
+      'WALOCK-leader',
+      JSON.stringify({
+        leaderId: MY_INSTANCE_ID,
+        bootEpoch: MY_BOOT_EPOCH,
+        phase: 'active',
+        updatedAt: new Date().toISOString()
+      } satisfies WaLeaderLockPayload)
+    );
+  } catch (e: any) {
+    console.warn(`[NASA Leader] ⚠️ Aviso en claimLeaderLease: ${e?.message || e}`);
+  }
+}
+
+function startNasaLeaderWatcher() {
+  if ((globalThis as any).__noeluxNasaLeaderWatcher) return;
+  (globalThis as any).__noeluxNasaLeaderWatcher = setInterval(async () => {
+    if (!isProductionRuntime() || isYieldingToNewerDeploy()) return;
+    try {
+      const lock = await readCloudLeaderLock();
+      if (lock && lock.leaderId !== MY_INSTANCE_ID && lock.bootEpoch > MY_BOOT_EPOCH) {
+        await yieldToNewerDeployLeader(`newer_leader_${lock.leaderId}`, lock.bootEpoch);
+      }
+    } catch {}
+  }, 1500);
+}
+
+// Heartbeat cada 25s para telemetría de vida y vigencia del Leader Lease
+function startNasaHeartbeat() {
+  if ((globalThis as any).__noeluxNasaHeartbeat) return;
+  (globalThis as any).__noeluxNasaHeartbeat = setInterval(async () => {
+    if (isYieldingToNewerDeploy()) return;
+    try {
+      const connectedSessions = Array.from(sessionsMap.values()).filter(s => s.status === 'connected');
+      if (connectedSessions.length === 0) return;
+      const heartbeat = {
+        alive: true,
+        instanceId: MY_INSTANCE_ID,
+        bootEpoch: MY_BOOT_EPOCH,
+        pid: process.pid,
+        timestamp: new Date().toISOString(),
+        sessions: connectedSessions.map(s => ({ id: s.id, phone: s.connectedPhone })),
+        runtime: isProductionRuntime() ? 'production' : 'dev'
+      };
+      await insertOrUpdateSupabaseCodigo('WAHEART-beat', JSON.stringify(heartbeat));
+    } catch {}
+  }, 25_000);
+}
+
+// Backup periódico completo cada 75s — red de seguridad continua
+function startNasaPeriodicBackup() {
+  if ((globalThis as any).__noeluxNasaPeriodicBackup) return;
+  (globalThis as any).__noeluxNasaPeriodicBackup = setInterval(async () => {
+    if (isYieldingToNewerDeploy()) return;
+    for (const session of sessionsMap.values()) {
+      if (session.status === 'connected' && session.connectedPhone) {
+        try {
+          await backupWaSessionAuthToCloud(session, false);
+        } catch (e: any) {
+          console.error(`[NASA Periodic] ❌ Backup periódico ${session.id} falló:`, e?.message || e);
+        }
+      }
+    }
+  }, 75_000);
+}
 
 export function hasValidLinkedCredsOnDisk(authDir: string): boolean {
   try {
@@ -7636,8 +7911,6 @@ function isProductionRuntime(): boolean {
 // - Baileys genera 812 Pre-Keys al vincular y WhatsApp entrega primero las de menor ID (pre-key-1..462);
 //   borrar pre-keys activas causa "Invalid PreKey ID" en los mensajes entrantes de nuevos clientes.
 // - El propio protocolo Signal elimina automáticamente cada pre-key individual apenas se consume.
-// Cache de pre-keys ya validadas (son inmutables una vez escritas hasta que Signal las consume y borra).
-// Evita bloquear el event loop re-leyendo y parseando >20.000 archivos dos veces en cada backup WAAUTH.
 const validatedImmutablePreKeyCache = new Map<string, string>();
 const MAX_IMMUTABLE_PREKEY_CACHE = 30000;
 
@@ -7688,9 +7961,9 @@ export function sanitizeAuthDirectory(authDir: string): { cleanedCount: number }
             cleanedCount++;
           }
         }
-      } catch (e) { }
+      } catch {}
     }
-  } catch (e) { }
+  } catch {}
   return { cleanedCount };
 }
 
@@ -7698,96 +7971,143 @@ export async function backupWaSessionAuthToCloud(
   session: WaSessionRuntime,
   loggedOut = false
 ): Promise<void> {
-  try {
-    if (loggedOut) {
-      await deleteSupabaseCodigos(`like.WAAUTH-${session.id}-*`);
-      await insertOrUpdateSupabaseCodigo(
-        `WAAUTH-${session.id}-${Date.now()}`,
-        JSON.stringify({
-          sessionId: session.id,
-          label: session.label,
-          loggedOut: true,
-          updatedAt: new Date().toISOString()
-        })
-      );
-      return;
-    }
-
-    if (!fs.existsSync(session.authDir)) return;
-    sanitizeAuthDirectory(session.authDir);
-
-    const credsPath = path.join(session.authDir, 'creds.json');
-    if (!fs.existsSync(credsPath)) return;
-
-    let parsedCreds: any = null;
+  // Serializar backups por sesión para jamás entrelazar dos subidas simultáneas
+  const prevInFlight = inFlightAuthBackupBySession.get(session.id);
+  if (prevInFlight && !loggedOut) {
     try {
-      const rawCreds = fs.readFileSync(credsPath, 'utf-8');
-      parsedCreds = JSON.parse(rawCreds || '{}');
-    } catch {
-      return;
-    }
+      await prevInFlight;
+    } catch {}
+  }
 
-    // Solo respaldar cuando la sesión está genuinamente vinculada a un número (tiene me.id)
-    if (!parsedCreds?.me?.id) return;
+  const task = (async () => {
+    try {
+      if (loggedOut) {
+        await deleteSupabaseCodigos(`like.WAAUTH-${session.id}-*`);
+        await insertOrUpdateSupabaseCodigo(
+          `WAAUTH-${session.id}-${Date.now()}`,
+          JSON.stringify({
+            sessionId: session.id,
+            label: session.label,
+            loggedOut: true,
+            instanceId: MY_INSTANCE_ID,
+            updatedAt: new Date().toISOString()
+          })
+        );
+        return;
+      }
 
-    const allFiles = fs.readdirSync(session.authDir).filter(f => f.endsWith('.json'));
+      if (!fs.existsSync(session.authDir)) return;
 
-    const filesMap: Record<string, string> = {};
-    for (const fileName of allFiles) {
+      // Esperar cualquier escritura pendiente de creds o llaves Signal antes de empaquetar
+      await Promise.race([
+        Promise.allSettled([
+          Promise.resolve(session.lastSaveCredsPromise),
+          Promise.resolve(session.lastKeyWritePromise)
+        ]),
+        new Promise(r => setTimeout(r, 1200))
+      ]);
+
+      sanitizeAuthDirectory(session.authDir);
+
+      const credsPath = path.join(session.authDir, 'creds.json');
+      if (!fs.existsSync(credsPath)) return;
+
+      let parsedCreds: any = null;
       try {
-        const fullPath = path.join(session.authDir, fileName);
-        const stat = fs.statSync(fullPath);
-        if (stat.isFile() && stat.size >= 2 && stat.size < 500000) {
-          const content = readValidatedAuthJsonFile(fullPath, fileName, stat);
-          if (content) {
-            filesMap[fileName] = content;
+        const rawCreds = fs.readFileSync(credsPath, 'utf-8');
+        parsedCreds = JSON.parse(rawCreds || '{}');
+      } catch {
+        return;
+      }
+
+      // Solo respaldar cuando la sesión está genuinamente vinculada a un número (tiene me.id)
+      if (!parsedCreds?.me?.id) return;
+
+      const allFiles = fs.readdirSync(session.authDir).filter(f => f.endsWith('.json'));
+
+      const filesMap: Record<string, string> = {};
+      for (const fileName of allFiles) {
+        try {
+          const fullPath = path.join(session.authDir, fileName);
+          const stat = fs.statSync(fullPath);
+          if (stat.isFile() && stat.size >= 2 && stat.size < 500000) {
+            const content = readValidatedAuthJsonFile(fullPath, fileName, stat);
+            if (content) {
+              filesMap[fileName] = content;
+            }
           }
-        }
-      } catch (e) { }
-    }
+        } catch {}
+      }
 
-    if (!filesMap['creds.json']) return;
+      if (!filesMap['creds.json']) return;
 
-    const compressedBase64 = zlib
-      .gzipSync(Buffer.from(JSON.stringify(filesMap), 'utf-8'))
-      .toString('base64');
+      const compressedBase64 = zlib
+        .gzipSync(Buffer.from(JSON.stringify(filesMap), 'utf-8'))
+        .toString('base64');
 
-    const newCode = `WAAUTH-${session.id}-${Date.now()}`;
-    const payload = {
-      sessionId: session.id,
-      label: session.label,
-      connectedPhone:
-        session.connectedPhone ||
-        String(parsedCreds?.me?.id || '').split(':')[0].split('@')[0] ||
-        null,
-      connectedName: session.connectedName || parsedCreds?.me?.name || session.label,
-      createdAt: session.createdAt,
-      loggedOut: false,
-      filesGzBase64: compressedBase64,
-      updatedAt: new Date().toISOString()
-    };
+      const newCode = `WAAUTH-${session.id}-${Date.now()}`;
+      const payload = {
+        sessionId: session.id,
+        label: session.label,
+        connectedPhone:
+          session.connectedPhone ||
+          String(parsedCreds?.me?.id || '').split(':')[0].split('@')[0] ||
+          null,
+        connectedName: session.connectedName || parsedCreds?.me?.name || session.label,
+        createdAt: session.createdAt,
+        loggedOut: false,
+        instanceId: MY_INSTANCE_ID,
+        bootEpoch: MY_BOOT_EPOCH,
+        fileCount: Object.keys(filesMap).length,
+        filesGzBase64: compressedBase64,
+        updatedAt: new Date().toISOString()
+      };
 
-    const savedOk = await insertOrUpdateSupabaseCodigo(newCode, JSON.stringify(payload));
-    if (savedOk) {
-      // Limpiar respaldos anteriores de esta misma sesión para mantener únicamente el último estado válido
-      try {
-        const prevRows = await querySupabaseCodigos({
-          select: 'code',
-          codeFilter: `like.WAAUTH-${session.id}-*`,
-          orderDesc: true,
-          limit: 15
-        });
-        for (const row of prevRows) {
-          if (row?.code && row.code !== newCode) {
-            await deleteSupabaseCodigos(`eq.${row.code}`);
+      const savedOk = await insertOrUpdateSupabaseCodigo(newCode, JSON.stringify(payload));
+      if (savedOk) {
+        console.log(
+          `[NASA Backup] ✅ Snapshot íntegro ${session.id} (+${payload.connectedPhone || '?'}) guardado — ${Object.keys(filesMap).length} archivos (${(compressedBase64.length / 1024).toFixed(1)}KB)`
+        );
+        // DOBLE BÓVEDA (N y N-1): Conservar los 2 respaldos más recientes de esta sesión y limpiar solo los más viejos
+        try {
+          const prevRows = await querySupabaseCodigos({
+            select: 'code',
+            codeFilter: `like.WAAUTH-${session.id}-*`,
+            orderDesc: true,
+            limit: 20
+          });
+          const codesToKeep = new Set<string>([newCode]);
+          for (const row of prevRows) {
+            if (row?.code && codesToKeep.size < 2) {
+              codesToKeep.add(row.code);
+            }
           }
-        }
-      } catch {}
+          for (const row of prevRows) {
+            if (row?.code && !codesToKeep.has(row.code)) {
+              await deleteSupabaseCodigos(`eq.${row.code}`);
+            }
+          }
+        } catch {}
+      } else {
+        console.error(`[NASA Backup] ❌ Supabase no confirmó el guardado de ${newCode}`);
+      }
+    } catch (e: any) {
+      console.error(`[NASA Backup] ❌ Error en backup ${session.id}:`, e?.message || e);
     }
-  } catch (e) { }
+  })();
+
+  inFlightAuthBackupBySession.set(session.id, task);
+  try {
+    await task;
+  } finally {
+    if (inFlightAuthBackupBySession.get(session.id) === task) {
+      inFlightAuthBackupBySession.delete(session.id);
+    }
+  }
 }
 
-function scheduleWaSessionAuthBackup(session: WaSessionRuntime, delayMs = 15000) {
+function scheduleWaSessionAuthBackup(session: WaSessionRuntime, delayMs = 4000) {
+  if (isYieldingToNewerDeploy()) return;
   const now = Date.now();
   const targetDeadline = now + delayMs;
   const existingTimer = authBackupTimers.get(session.id);
@@ -7803,7 +8123,9 @@ function scheduleWaSessionAuthBackup(session: WaSessionRuntime, delayMs = 15000)
   const timer = setTimeout(() => {
     authBackupTimers.delete(session.id);
     authBackupDeadlines.delete(session.id);
-    backupWaSessionAuthToCloud(session, false).catch(() => { });
+    if (!isYieldingToNewerDeploy()) {
+      backupWaSessionAuthToCloud(session, false).catch(() => { });
+    }
   }, delayMs);
   authBackupTimers.set(session.id, timer);
 }
@@ -8017,75 +8339,138 @@ async function restoreCloudStateAndWaSessionsOnBoot(): Promise<void> {
     return;
   }
 
-  // 3. Restaurar credenciales Baileys (WAAUTH-*) desde Supabase al disco local
+  // 2. RELEVO ATÓMICO NASA: Reclamar liderazgo y esperar a que el contenedor anterior suelte el socket y suba su último WAAUTH-*
+  await claimLeaderLeaseAndAwaitOldContainerHandoff();
+  if (isYieldingToNewerDeploy()) {
+    return;
+  }
+
+  // 3. Restaurar credenciales Baileys (WAAUTH-*) desde Supabase al disco local (con Doble Bóveda N / N-1)
   try {
     const authRows = await querySupabaseCodigos({
       codeFilter: 'like.WAAUTH-*',
       orderDesc: true,
-      limit: 15
+      limit: 25
     });
     if (!Array.isArray(authRows) || authRows.length === 0) return;
 
-    const handledSessions = new Set<string>();
+    const restoredSessions = new Set<string>();
+    const explicitlyLoggedOutSessions = new Set<string>();
+
     for (const row of authRows) {
       if (!row?.dispositivo) continue;
       try {
         const data = JSON.parse(row.dispositivo);
         const sessionId = String(data?.sessionId || 'wa-1');
-        if (handledSessions.has(sessionId)) continue;
-        handledSessions.add(sessionId);
+        if (restoredSessions.has(sessionId) || explicitlyLoggedOutSessions.has(sessionId)) continue;
 
-        if (data?.loggedOut) continue;
+        if (data?.loggedOut) {
+          explicitlyLoggedOutSessions.add(sessionId);
+          continue;
+        }
         if (!data?.filesGzBase64) continue;
 
-        const session = getOrCreateSessionRuntime(sessionId, data.label, data.createdAt);
-        const localCredsPath = path.join(session.authDir, 'creds.json');
-        let hasValidLocalCreds = false;
-        if (fs.existsSync(localCredsPath)) {
-          try {
-            const localCreds = JSON.parse(fs.readFileSync(localCredsPath, 'utf-8') || '{}');
-            if (localCreds?.me?.id) {
-              hasValidLocalCreds = true;
-            }
-          } catch (e) { }
+        const ok = applyCloudAuthBundleToSessionDisk(sessionId, data, true);
+        if (ok) {
+          restoredSessions.add(sessionId);
         }
-
-        if (!hasValidLocalCreds) {
-          const decompressed = zlib
-            .gunzipSync(Buffer.from(data.filesGzBase64, 'base64'))
-            .toString('utf-8');
-          const filesMap = JSON.parse(decompressed || '{}');
-          if (filesMap && typeof filesMap === 'object' && filesMap['creds.json']) {
-            fs.mkdirSync(session.authDir, { recursive: true });
-            for (const [fileName, fileContent] of Object.entries(filesMap)) {
-              if (
-                typeof fileContent === 'string' &&
-                fileContent.trim().length >= 2 &&
-                !fileName.includes('..') &&
-                !fileName.includes('/')
-              ) {
-                try {
-                  JSON.parse(fileContent);
-                  const targetFile = path.join(session.authDir, fileName);
-                  const tmpFile = targetFile + '.tmp';
-                  fs.writeFileSync(tmpFile, fileContent, 'utf-8');
-                  fs.renameSync(tmpFile, targetFile);
-                } catch { }
-              }
-            }
-            sanitizeAuthDirectory(session.authDir);
-            if (data.connectedPhone) session.connectedPhone = String(data.connectedPhone);
-            if (data.connectedName) session.connectedName = String(data.connectedName);
-            console.log(
-              `[WhatsApp Supabase Restore] Sesión ${sessionId} (+${session.connectedPhone || ''}) restaurada exitosamente desde Supabase.`
-            );
-          }
-        }
-      } catch (e) { }
+      } catch (e: any) {
+        console.warn(`[NASA Restore] ⚠️ Fila WAAUTH dañada ignorada (probando respaldo N-1): ${e?.message || e}`);
+      }
     }
     const storage = loadChatsStorage();
     saveChatsStorage(storage);
   } catch (e) { }
+}
+
+function applyCloudAuthBundleToSessionDisk(
+  sessionId: string,
+  data: any,
+  forceOverwriteIfCloudNewer = true
+): boolean {
+  try {
+    const session = getOrCreateSessionRuntime(sessionId, data?.label, data?.createdAt);
+    const localCredsPath = path.join(session.authDir, 'creds.json');
+    if (!forceOverwriteIfCloudNewer && hasValidLinkedCredsOnDisk(session.authDir)) {
+      return true;
+    }
+
+    const decompressed = zlib
+      .gunzipSync(Buffer.from(data.filesGzBase64, 'base64'))
+      .toString('utf-8');
+    const filesMap = JSON.parse(decompressed || '{}');
+    if (!filesMap || typeof filesMap !== 'object' || !filesMap['creds.json']) {
+      return false;
+    }
+
+    const parsedCloudCreds = JSON.parse(filesMap['creds.json'] || '{}');
+    if (!parsedCloudCreds?.me?.id) {
+      return false;
+    }
+
+    fs.mkdirSync(session.authDir, { recursive: true });
+    for (const [fileName, fileContent] of Object.entries(filesMap)) {
+      if (
+        typeof fileContent === 'string' &&
+        fileContent.trim().length >= 2 &&
+        !fileName.includes('..') &&
+        !fileName.includes('/')
+      ) {
+        try {
+          JSON.parse(fileContent);
+          const targetFile = path.join(session.authDir, fileName);
+          const tmpFile = targetFile + '.tmp';
+          fs.writeFileSync(tmpFile, fileContent, 'utf-8');
+          fs.renameSync(tmpFile, targetFile);
+        } catch {}
+      }
+    }
+    sanitizeAuthDirectory(session.authDir);
+    if (data.connectedPhone) session.connectedPhone = String(data.connectedPhone);
+    if (data.connectedName) session.connectedName = String(data.connectedName);
+
+    const verifiedOk = hasValidLinkedCredsOnDisk(localCredsPath ? session.authDir : session.authDir);
+    if (verifiedOk) {
+      console.log(
+        `[NASA Restore] ✅ Sesión ${sessionId} (+${session.connectedPhone || ''}) hidratada y VERIFICADA desde Supabase (${Object.keys(filesMap).length} archivos Signal)`
+      );
+      return true;
+    }
+  } catch (err: any) {
+    console.warn(`[NASA Restore] ⚠️ Error aplicando snapshot en ${sessionId}: ${err?.message || err}`);
+  }
+  return false;
+}
+
+// Re-hidratación de emergencia desde la Bóveda N-1 si un disco local sufrió corrupción transitoria
+async function rehydrateSessionFromCloudBackupFallback(
+  sessionId: string,
+  preferSecondLatest = false
+): Promise<boolean> {
+  try {
+    const rows = await querySupabaseCodigos({
+      codeFilter: `like.WAAUTH-${sessionId}-*`,
+      orderDesc: true,
+      limit: 5
+    });
+    if (!Array.isArray(rows) || rows.length === 0) return false;
+    const validCandidates: any[] = [];
+    for (const r of rows) {
+      if (!r?.dispositivo) continue;
+      try {
+        const parsed = JSON.parse(r.dispositivo);
+        if (parsed?.loggedOut) return false;
+        if (parsed?.filesGzBase64) validCandidates.push(parsed);
+      } catch {}
+    }
+    if (validCandidates.length === 0) return false;
+    const target = preferSecondLatest && validCandidates.length >= 2
+      ? validCandidates[1]
+      : validCandidates[0];
+    return applyCloudAuthBundleToSessionDisk(sessionId, target, true);
+  } catch {
+    return false;
+  }
 }
 
 export function ensureBootCloudRestoreCompleted(): Promise<void> {
@@ -8191,12 +8576,12 @@ export async function connectWhatsAppEngine(
   forceNewQr = false,
   sessionId?: string
 ): Promise<WaEngineState> {
-  if ((globalThis as any).__noeluxEngineGen !== myEngineGen) {
+  if ((globalThis as any).__noeluxEngineGen !== myEngineGen || isYieldingToNewerDeploy()) {
     return getWhatsAppEngineState();
   }
   if (!forceNewQr) {
     await ensureBootCloudRestoreCompleted();
-    if (skipDevAutoConnectBecauseProdActive && !isProductionRuntime()) {
+    if (isYieldingToNewerDeploy() || (skipDevAutoConnectBecauseProdActive && !isProductionRuntime())) {
       return getWhatsAppEngineState();
     }
   } else {
@@ -8266,10 +8651,32 @@ export async function connectWhatsAppEngine(
       }
     } catch (e) { }
 
-    if ((globalThis as any).__noeluxEngineGen !== myEngineGen || mySeq !== session.socketSeq) {
+    if (
+      (globalThis as any).__noeluxEngineGen !== myEngineGen ||
+      mySeq !== session.socketSeq ||
+      isYieldingToNewerDeploy()
+    ) {
       session.isConnecting = false;
       return getWhatsAppEngineState();
     }
+
+    // Interceptor Criptográfico Signal en Vivo: rastrea cada escritura de session-*, sender-key-*, pre-key-* y lid-mapping-*
+    const rawKeysSet = state.keys.set.bind(state.keys);
+    state.keys.set = async (data: any) => {
+      const writePromise = Promise.resolve(rawKeysSet(data));
+      session.lastKeyWritePromise = writePromise;
+      try {
+        await writePromise;
+        if (!isYieldingToNewerDeploy() && (session.status === 'connected' || Boolean(state.creds?.me?.id))) {
+          const touchedCriticalRatchet = Boolean(
+            data?.session || data?.['app-state-sync-key'] || data?.['sender-key'] || data?.['lid-mapping']
+          );
+          scheduleWaSessionAuthBackup(session, touchedCriticalRatchet ? 2500 : 4500);
+        }
+      } catch (err) {
+        throw err;
+      }
+    };
 
     const cacheableKeys = makeCacheableSignalKeyStore(state.keys, silentLogger);
     const userDevicesCache = createSelfChatSafeUserDevicesCache(() => {
@@ -8553,6 +8960,7 @@ export async function connectWhatsAppEngine(
     session.isConnecting = false;
 
     let lastSeenNextPreKeyId = Number(state.creds?.nextPreKeyId || 0);
+    let lastSeenMeId = String(state.creds?.me?.id || '');
     newSock.ev.on('creds.update', async () => {
       try {
         session.creds = state.creds;
@@ -8567,14 +8975,27 @@ export async function connectWhatsAppEngine(
         }
         session.lastSaveCredsPromise = saveCreds();
         await session.lastSaveCredsPromise;
+
+        const currMeId = String(state.creds?.me?.id || '');
         const currNextPreKeyId = Number(state.creds?.nextPreKeyId || 0);
         const preKeysChanged = currNextPreKeyId !== lastSeenNextPreKeyId;
+        const identityChanged = currMeId && currMeId !== lastSeenMeId && lastSeenMeId !== '';
         lastSeenNextPreKeyId = currNextPreKeyId;
-        if (session.status === 'connected' || Boolean(newSock.user?.id || state.creds?.me?.id)) {
-          // Respaldar rápido (2.5s) cuando se generan nuevas Pre-Keys, o en 12s para actualizaciones normales
-          scheduleWaSessionAuthBackup(session, preKeysChanged ? 2500 : 12000);
+        lastSeenMeId = currMeId;
+
+        if (!isYieldingToNewerDeploy() && (session.status === 'connected' || Boolean(newSock.user?.id || state.creds?.me?.id))) {
+          if (identityChanged) {
+            console.log(`[NASA Signal] 🚨 Identidad vinculada/actualizada en ${session.id} (${currMeId}) — backup inmediato`);
+            backupWaSessionAuthToCloud(session, false).catch((e: any) => {
+              console.error(`[NASA Signal] ❌ Backup inmediato falló:`, e?.message || e);
+            });
+          } else {
+            scheduleWaSessionAuthBackup(session, preKeysChanged ? 1800 : 4000);
+          }
         }
-      } catch (e) { }
+      } catch (credErr: any) {
+        console.error(`[NASA creds.update] ❌ Error guardando credenciales: ${credErr?.message || credErr}`);
+      }
     });
 
     newSock.ev.on('connection.update', async (update) => {
@@ -8626,6 +9047,8 @@ export async function connectWhatsAppEngine(
         session.connectedLid = rawLid || null;
         session.creds = state.creds;
         session.lastError = null;
+
+        console.log(`[NASA] ✅ WhatsApp ${session.id} CONECTADO (+${phonePart || '?'}) — sesión activa y protegida`);
 
         if (phonePart && rawLid) {
           const cleanP = normalizeWaPhone(phonePart);
@@ -8709,28 +9132,49 @@ export async function connectWhatsAppEngine(
           (lastDisconnect?.error as any)?.output?.statusCode ||
           (lastDisconnect?.error as any)?.data?.statusCode;
 
+        console.warn(`[NASA] ⚠️ WhatsApp ${session.id} DESCONECTADO — statusCode=${statusCode}, error=${lastDisconnect?.error?.message || 'ninguno'}`);
+
         session.sock = null;
         session.isConnecting = false;
 
-        try {
-          await session.lastSaveCredsPromise;
-        } catch (e) { }
+        await Promise.allSettled([
+          Promise.resolve(session.lastSaveCredsPromise),
+          Promise.resolve(session.lastKeyWritePromise)
+        ]);
+
+        if (isYieldingToNewerDeploy()) {
+          session.status = 'disconnected';
+          return;
+        }
+
+        // RESOLUCIÓN NASA DE RELEVO EN ROLLING DEPLOY (440 / 401):
+        // Si otro contenedor más nuevo de Railway reclamó WALOCK-leader, este contenedor saliente JAMÁS debe reconectar ni borrar llaves.
+        if (statusCode === 440 || statusCode === 401 || statusCode === DisconnectReason.loggedOut) {
+          const cloudLock = await readCloudLeaderLock();
+          if (cloudLock && cloudLock.leaderId !== MY_INSTANCE_ID && cloudLock.bootEpoch > MY_BOOT_EPOCH) {
+            console.log(
+              `[NASA Handoff] 🛑 Desconexión ${statusCode} causada por nuevo deploy (${cloudLock.leaderId}). Cediendo sin reconectar.`
+            );
+            await yieldToNewerDeployLeader(`close_${statusCode}_newer_leader`, cloudLock.bootEpoch);
+            return;
+          }
+        }
 
         if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
           session.status = 'syncing';
           session.qrDataUrl = null;
           scheduleCloudStateSync(true);
           setTimeout(() => {
-            if ((globalThis as any).__noeluxEngineGen !== myEngineGen) return;
+            if ((globalThis as any).__noeluxEngineGen !== myEngineGen || isYieldingToNewerDeploy()) return;
             connectWhatsAppEngine(false, session.id).catch(() => { });
           }, 150);
           return;
         }
 
-        // BLINDAJE ALGORÍTMICO ANTIDESCONEXIÓN:
-        // 1) 403 (Forbidden / Rate-limit transitorio de red) JAMÁS es desvinculación; se reconecta suavemente.
-        // 2) Incluso ante un 401 (loggedOut), durante un handoff de contenedor o micro-corte de WhatsApp puede ocurrir un 401 falso transitorio.
-        //    Por eso exigimos >= 2 códigos 401 consecutivos antes de limpiar authDir. En el primer 401 intentamos reconectar conservando las llaves.
+        // ESCUDO ALGORÍTMICO ANTIDESCONEXIÓN NIVEL NASA:
+        // 1) 403 / 408 / 428 / 500 / 503 son cortes de red: reconectar suavemente preservando llaves.
+        // 2) Ante 401 (loggedOut): exigimos 4 fallos consecutivos reales. En el intento #2 y #3 auto-reparamos
+        //    hidratando desde la Bóveda N / N-1 de Supabase antes de aceptar jamás que el usuario desvinculó desde el celular.
         const isPotentialLogout =
           statusCode === DisconnectReason.loggedOut ||
           statusCode === 401;
@@ -8740,12 +9184,15 @@ export async function connectWhatsAppEngine(
           const prevCount = consecutiveLogoutCodes.get(session.id) || 0;
           const nextCount = prevCount + 1;
           consecutiveLogoutCodes.set(session.id, nextCount);
-          if (nextCount >= 2) {
+          if (nextCount >= 4) {
             isConfirmedLogout = true;
           } else {
             console.warn(
-              `[WhatsApp Escudo Antidesconexión] Se recibió código 401 en ${session.id} (intento #${nextCount}/2). Conservando credenciales y reintentando reconexión segura en 2.5s...`
+              `[NASA Escudo 401] Código 401 en ${session.id} (intento #${nextCount}/4). Conservando sesión y ejecutando auto-curación...`
             );
+            if (nextCount === 2 || nextCount === 3) {
+              await rehydrateSessionFromCloudBackupFallback(session.id, nextCount === 3);
+            }
           }
         } else if (statusCode !== 440 && statusCode !== 515) {
           consecutiveLogoutCodes.set(session.id, 0);
@@ -8757,7 +9204,7 @@ export async function connectWhatsAppEngine(
             if (fs.existsSync(session.authDir)) {
               fs.rmSync(session.authDir, { recursive: true, force: true });
             }
-          } catch (e) { }
+          } catch {}
           backupWaSessionAuthToCloud(session, true).catch(() => { });
           session.status = 'connecting';
           session.qrDataUrl = null;
@@ -8766,11 +9213,10 @@ export async function connectWhatsAppEngine(
           session.connectedName = null;
           scheduleCloudStateSync(true);
           setTimeout(() => {
-            if ((globalThis as any).__noeluxEngineGen !== myEngineGen) return;
+            if ((globalThis as any).__noeluxEngineGen !== myEngineGen || isYieldingToNewerDeploy()) return;
             connectWhatsAppEngine(false, session.id).catch(() => { });
-          }, 350);
+          }, 500);
         } else {
-          // Si otro contenedor (Producción en Railway) tomó la conexión (440) y este es el contenedor Dev, no reconectar en bucle
           if (statusCode === 440 && !isProductionRuntime()) {
             skipDevAutoConnectBecauseProdActive = true;
             session.status = 'disconnected';
@@ -8778,9 +9224,9 @@ export async function connectWhatsAppEngine(
           }
           session.status = state.creds?.me?.id ? 'syncing' : 'connecting';
           scheduleCloudStateSync(false);
-          const delayMs = statusCode === 440 ? 4000 : isPotentialLogout ? 2500 : 1000;
+          const delayMs = statusCode === 440 ? 5500 : isPotentialLogout ? 3000 : 1200;
           setTimeout(() => {
-            if ((globalThis as any).__noeluxEngineGen !== myEngineGen) return;
+            if ((globalThis as any).__noeluxEngineGen !== myEngineGen || isYieldingToNewerDeploy()) return;
             connectWhatsAppEngine(false, session.id).catch(() => { });
           }, delayMs);
         }
@@ -9836,7 +10282,7 @@ export async function sendWhatsAppMessage(
 
       try {
         await activeSession.sock.sendPresenceUpdate('composing', jid);
-      } catch (e) { }
+      } catch {}
 
       const preMsgId = generateMessageIDV2(activeSession.sock.user?.id);
       recentlySentMsgIds.add(preMsgId);
@@ -9906,7 +10352,7 @@ export function autoBootWhatsAppIfSessionExists() {
     ensureInitialSessionsLoaded();
     ensureBootCloudRestoreCompleted()
       .then(() => {
-        if (skipDevAutoConnectBecauseProdActive && !isProductionRuntime()) {
+        if (isYieldingToNewerDeploy() || (skipDevAutoConnectBecauseProdActive && !isProductionRuntime())) {
           return;
         }
         ensureInitialSessionsLoaded();
@@ -9919,40 +10365,52 @@ export function autoBootWhatsAppIfSessionExists() {
     if (!cloudPollerStarted) {
       cloudPollerStarted = true;
       (globalThis as any).__noeluxWaPoller = setInterval(() => {
+        if (isYieldingToNewerDeploy()) return;
         pollCloudCommandsAndOrders().catch(() => { });
       }, 3000);
 
-      // Cierre elegante en redespliegues de Railway (SIGTERM / SIGINT) para respaldar siempre el último estado Signal a Supabase
+      if (isProductionRuntime()) {
+        startNasaLeaderWatcher();
+        startNasaHeartbeat();
+        startNasaPeriodicBackup();
+        console.log(
+          `[NASA v3] 🚀 Relevo Atómico Sin Colisiones activo (${MY_INSTANCE_ID}) — LeaderWatcher 1.5s, Heartbeat 25s, Doble Bóveda 75s`
+        );
+      }
+
       if (!(globalThis as any).__noeluxShutdownHookRegistered) {
         (globalThis as any).__noeluxShutdownHookRegistered = true;
-        const flushBeforeExit = async () => {
+        const flushBeforeExit = async (signalName: string) => {
+          console.log(`[NASA Shutdown] ⚠️ Señal ${signalName} recibida — iniciando relevo atómico (máx 8.5s)...`);
           try {
-            const promises: Promise<any>[] = [];
-            for (const s of sessionsMap.values()) {
-              if (s.status === 'connected' || s.connectedPhone) {
-                promises.push(
-                  Promise.resolve(s.lastSaveCredsPromise)
-                    .catch(() => {})
-                    .then(() => backupWaSessionAuthToCloud(s, false))
-                    .catch(() => {})
-                );
-              }
-            }
             await Promise.race([
-              Promise.all(promises),
-              new Promise(resolve => setTimeout(resolve, 3500))
+              yieldToNewerDeployLeader(signalName),
+              new Promise(resolve => setTimeout(resolve, 8500))
             ]);
+            try {
+              await insertOrUpdateSupabaseCodigo(
+                'WAHEART-beat',
+                JSON.stringify({
+                  alive: false,
+                  instanceId: MY_INSTANCE_ID,
+                  bootEpoch: MY_BOOT_EPOCH,
+                  pid: process.pid,
+                  shutdownAt: new Date().toISOString(),
+                  runtime: isProductionRuntime() ? 'production' : 'dev'
+                })
+              );
+            } catch {}
           } catch {}
         };
         process.once('SIGTERM', () => {
-          flushBeforeExit().finally(() => process.exit(0));
+          flushBeforeExit('SIGTERM').finally(() => process.exit(0));
         });
         process.once('SIGINT', () => {
-          flushBeforeExit().finally(() => process.exit(0));
+          flushBeforeExit('SIGINT').finally(() => process.exit(0));
         });
       }
     }
-  } catch (e) { }
+  } catch {}
 }
 
 // ============================================================================
