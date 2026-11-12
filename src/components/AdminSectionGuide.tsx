@@ -40,7 +40,7 @@ export const AdminSectionGuide: React.FC<AdminSectionGuideProps> = ({
       {/* Barra de Cabecera Ultra-Compacta: Título a la izquierda + Botón Simple de Guía (y acciones extra como Filtros) a la derecha */}
       <div className="flex flex-wrap items-center justify-between gap-2 py-1 px-0.5">
         <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-xs sm:text-sm font-black text-zinc-100 truncate">
+          <h3 className="text-xs sm:text-sm font-semibold text-zinc-100 truncate">
             {title}
           </h3>
           <span className="hidden md:inline text-[11px] text-zinc-500 truncate">
@@ -56,8 +56,8 @@ export const AdminSectionGuide: React.FC<AdminSectionGuideProps> = ({
             onClick={() => setIsOpen(prev => !prev)}
             className={`h-8 px-2.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer select-none transition-all ${
               isOpen
-                ? 'bg-emerald-950/90 border-emerald-600 text-emerald-200 shadow-xs'
-                : 'bg-[#0d0d0f] hover:bg-zinc-900 border-zinc-800 text-zinc-300'
+                ? 'bg-emerald-950/90 border-emerald-600 text-emerald-200 shadow-sm'
+                : 'bg-[#0f0f11] hover:bg-zinc-900 border-zinc-800 text-zinc-300'
             }`}
             title={isOpen ? 'Ocultar guía de esta sección' : 'Abrir guía rápida de esta sección'}
           >
@@ -74,7 +74,7 @@ export const AdminSectionGuide: React.FC<AdminSectionGuideProps> = ({
 
       {/* Panel Desplegable solo al hacer clic en el botón Guía */}
       {isOpen && (
-        <div className="mt-2 p-3.5 rounded-2xl bg-[#0d0d0f] border border-zinc-800 shadow-lg space-y-3 animate-fadeIn">
+        <div className="mt-2 p-3.5 rounded-lg bg-[#0f0f11] border border-zinc-800 shadow-lg space-y-3">
           <div className="flex items-center justify-between gap-2 pb-2 border-b border-zinc-800/80">
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-300 border border-emerald-800/70 shrink-0">
@@ -98,7 +98,7 @@ export const AdminSectionGuide: React.FC<AdminSectionGuideProps> = ({
             {steps.map((st, i) => (
               <div
                 key={i}
-                className="p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800/90 flex items-start gap-2"
+                className="p-2.5 rounded-lg bg-zinc-900/70 border border-zinc-800/90 flex items-start gap-2"
               >
                 <span className="text-sm shrink-0 mt-0.5">
                   {st.icon || '📌'}
@@ -116,11 +116,11 @@ export const AdminSectionGuide: React.FC<AdminSectionGuideProps> = ({
           </div>
 
           {proTip && (
-            <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-800/40 flex items-start gap-2 text-xs text-emerald-200">
+            <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-800/40 flex items-start gap-2 text-xs text-emerald-200">
               <Lightbulb className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <div className="leading-snug text-[11px]">
                 <strong className="text-emerald-300 font-bold mr-1">
-                  💡 Consejo Pro:
+                  Consejo Pro:
                 </strong>
                 <span className="text-zinc-300">{proTip}</span>
               </div>

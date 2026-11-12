@@ -2343,7 +2343,7 @@ export const AdminView: React.FC = () => {
       {mobileSidebarOpen && (
         <div
           onClick={() => setMobileSidebarOpen(false)}
-          className="fixed inset-0 bg-black/80 z-40 lg:hidden backdrop-blur-xs"
+          className="fixed inset-0 bg-black/80 z-40 lg:hidden backdrop-blur-sm"
         />
       )}
 
@@ -2574,13 +2574,13 @@ export const AdminView: React.FC = () => {
                 selectedProductPageIds.length > 0) && (
               <div
                 data-testid="product-pages-filter-bar"
-                className="p-3 rounded-2xl bg-[#0d0d0f] border border-zinc-800/80 shadow-xs space-y-2.5 animate-fadeIn"
+                className="p-3 rounded-lg bg-[#0f0f11] border border-zinc-800/80 shadow-sm space-y-2.5"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-end">
                   <div className="lg:col-span-4">
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1 flex items-center justify-between">
+                    <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1 flex items-center justify-between">
                       <span>Filtrar por Nombre o Slug</span>
-                      <span className="text-[9px] text-zinc-500 font-normal">Búsqueda rápida</span>
+                      <span className="text-[10px] text-zinc-500 font-normal">Búsqueda rápida</span>
                     </label>
                     <div className="relative">
                       <input
@@ -2589,14 +2589,14 @@ export const AdminView: React.FC = () => {
                         value={filterProductName}
                         onChange={e => setFilterProductName(e.target.value)}
                         placeholder="Ej: Proyector, Taladro, ?p=..."
-                        className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-zinc-800 text-xs font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                        className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
                         title="Escribí el nombre del producto o parte de su link para filtrar"
                       />
                       {filterProductName && (
                         <button
                           type="button"
                           onClick={() => setFilterProductName('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-zinc-300 text-xs font-black cursor-pointer"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs font-semibold cursor-pointer"
                           title="Limpiar filtro"
                         >
                           ✕
@@ -2606,8 +2606,8 @@ export const AdminView: React.FC = () => {
                   </div>
 
                   <div className="lg:col-span-4">
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-                      🎯 Filtrar por ID de Píxel o WhatsApp
+                    <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                      Filtrar por ID de Píxel o WhatsApp
                     </label>
                     <div className="relative">
                       <input
@@ -2616,13 +2616,13 @@ export const AdminView: React.FC = () => {
                         value={filterProductPhoneOrPixel}
                         onChange={e => setFilterProductPhoneOrPixel(e.target.value)}
                         placeholder="Ej: 123456789012345 o 595973..."
-                        className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-zinc-800 text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                        className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
                       />
                       {filterProductPhoneOrPixel && (
                         <button
                           type="button"
                           onClick={() => setFilterProductPhoneOrPixel('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-zinc-300 text-xs font-black cursor-pointer"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs font-semibold cursor-pointer"
                           title="Limpiar filtro"
                         >
                           ✕
@@ -2632,17 +2632,17 @@ export const AdminView: React.FC = () => {
                   </div>
 
                   <div className="lg:col-span-4">
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-                    📋 Filtro Rápido de Páginas
+                    <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                    Filtro Rápido de Páginas
                     </label>
                     <div className="grid grid-cols-3 gap-1 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
                       <button
                         type="button"
                         data-testid="admin-product-tab-todas"
                         onClick={() => setFilterProductTab('todas')}
-                        className={`py-1.5 px-2 rounded-lg text-[11px] font-black cursor-pointer transition-all whitespace-nowrap ${
+                        className={`py-1.5 px-2 rounded-lg text-[11px] font-medium cursor-pointer transition-all whitespace-nowrap ${
                           filterProductTab === 'todas'
-                            ? 'bg-zinc-800 text-white shadow-xs'
+                            ? 'bg-zinc-800 text-white shadow-sm'
                             : 'text-zinc-400 hover:text-zinc-200'
                         }`}
                       >
@@ -2652,25 +2652,25 @@ export const AdminView: React.FC = () => {
                         type="button"
                         data-testid="admin-product-tab-pixel"
                         onClick={() => setFilterProductTab('con_pixel')}
-                        className={`py-1.5 px-2 rounded-lg text-[11px] font-black cursor-pointer transition-all whitespace-nowrap ${
+                        className={`py-1.5 px-2 rounded-lg text-[11px] font-medium cursor-pointer transition-all whitespace-nowrap ${
                           filterProductTab === 'con_pixel'
-                            ? 'bg-zinc-800 text-emerald-400 shadow-xs'
+                            ? 'bg-zinc-800 text-emerald-400 shadow-sm'
                             : 'text-zinc-400 hover:text-zinc-200'
                         }`}
                       >
-                        🎯 Con Píxel ({productPages.filter(p => Boolean(p.metaTracking?.pixelId?.trim())).length})
+                        Con Píxel ({productPages.filter(p => Boolean(p.metaTracking?.pixelId?.trim())).length})
                       </button>
                       <button
                         type="button"
                         data-testid="admin-product-tab-free-shipping"
                         onClick={() => setFilterProductTab('envio_gratis')}
-                        className={`py-1.5 px-2 rounded-lg text-[11px] font-black cursor-pointer transition-all whitespace-nowrap ${
+                        className={`py-1.5 px-2 rounded-lg text-[11px] font-medium cursor-pointer transition-all whitespace-nowrap ${
                           filterProductTab === 'envio_gratis'
-                            ? 'bg-zinc-800 text-white shadow-xs'
+                            ? 'bg-zinc-800 text-white shadow-sm'
                             : 'text-zinc-400 hover:text-zinc-200'
                         }`}
                       >
-                        🚚 Envío Gratis ({productPages.filter(p => p.freeShipping !== false).length})
+                        Envío Gratis ({productPages.filter(p => p.freeShipping !== false).length})
                       </button>
                     </div>
                   </div>
@@ -2690,7 +2690,7 @@ export const AdminView: React.FC = () => {
                           data-testid="admin-select-all-products-btn"
                           onClick={() => toggleSelectAllProductPages(allFilteredProductIds)}
                           disabled={allFilteredProductIds.length === 0}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-black border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
                             isAllProductsSelected
                               ? 'bg-zinc-800 text-white border-zinc-700'
                               : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
@@ -2700,7 +2700,7 @@ export const AdminView: React.FC = () => {
                             type="checkbox"
                             readOnly
                             checked={isAllProductsSelected}
-                            className="w-3.5 h-3.5 accent-[#16a34a] pointer-events-none"
+                            className="w-3.5 h-3.5 accent-emerald-500 pointer-events-none"
                           />
                           <span>
                             {isAllProductsSelected
@@ -2713,7 +2713,7 @@ export const AdminView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setSelectedProductPageIds([])}
-                            className="px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-zinc-800 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-zinc-800 cursor-pointer"
                           >
                             Limpiar selección ({selectedProductPageIds.length})
                           </button>
@@ -2726,7 +2726,7 @@ export const AdminView: React.FC = () => {
                           data-testid="admin-bulk-delete-products-btn"
                           disabled={selectedProductPageIds.length === 0}
                           onClick={() => openRedDeleteProductsModal(selectedProductPageIds)}
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-red-950/40 hover:bg-red-900/60 disabled:opacity-40 text-red-300 border border-red-900/50 shadow-xs inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                          className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-red-950/40 hover:bg-red-900/60 disabled:opacity-40 text-red-300 border border-red-900/50 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
                           title="Eliminar todas las páginas de producto seleccionadas directamente de la Base de Datos"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -3197,13 +3197,13 @@ export const AdminView: React.FC = () => {
                           <form
                             onSubmit={e => handleSaveProductPixelConfig(e, prod)}
                             data-testid={`product-pixel-token-box-${prod.id}`}
-                            className="p-3.5 sm:p-4 rounded-2xl bg-[#0d0d0f] border border-zinc-800 shadow-xs space-y-3"
+                            className="p-3.5 sm:p-4 rounded-lg bg-[#0f0f11] border border-zinc-800 shadow-sm space-y-3"
                           >
                             {/* Referencia oficial en vivo sincronizada con Meta Graph API */}
-                            <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/70 space-y-2 text-xs">
+                            <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 space-y-2 text-xs">
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="font-black text-emerald-300 text-[11px] uppercase tracking-wider">
-                                  📌 Tu Referencia Oficial de Meta Ads en Vivo (1 Clic para Copiar o Usar)
+                                <span className="font-semibold text-emerald-300 text-[11px] uppercase tracking-wider">
+                                  Referencia Meta Ads
                                 </span>
                                 <span className="text-[10px] font-mono text-zinc-400">
                                   Portafolio: <strong className="text-white">Landingcod</strong> · Cuenta (834): <strong className="text-white">{liveMetaRef.adAccountName}</strong>
@@ -3223,7 +3223,7 @@ export const AdminView: React.FC = () => {
                                     }}
                                     className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[10px] font-bold cursor-pointer"
                                   >
-                                    📋 Copiar
+                                    Copiar
                                   </button>
                                 </div>
                                 <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2">
@@ -3239,7 +3239,7 @@ export const AdminView: React.FC = () => {
                                     }}
                                     className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
                                   >
-                                    📋 Copiar 834
+                                    Copiar 834
                                   </button>
                                 </div>
                                 <div className="p-2 rounded-lg bg-zinc-900/90 border border-emerald-700/70 flex items-center justify-between gap-2">
@@ -3256,7 +3256,7 @@ export const AdminView: React.FC = () => {
                                       }}
                                       className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
                                     >
-                                      📋 Copiar
+                                      Copiar
                                     </button>
                                     <button
                                       type="button"
@@ -3264,9 +3264,9 @@ export const AdminView: React.FC = () => {
                                         setEditPixelId(liveMetaRef.pixelId);
                                         showToast(`🎯 Píxel ${liveMetaRef.pixelName} (${liveMetaRef.pixelId}) colocado en el campo.`);
                                       }}
-                                      className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-black cursor-pointer"
+                                      className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-medium cursor-pointer"
                                     >
-                                      ⚡ Usar 377
+                                      Usar 377
                                     </button>
                                   </div>
                                 </div>
@@ -3276,7 +3276,7 @@ export const AdminView: React.FC = () => {
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-zinc-900 text-zinc-300 border border-zinc-800">
-                                  🎯 Píxel de Facebook & Token de API (Servidor Anti-Apple CAPI)
+                                  Píxel de Facebook & Token API (CAPI)
                                 </span>
                                 <span className="text-[11px] text-zinc-400 font-medium">
                                   Pegá acá el Píxel y el Token de este producto ({prod.nombre})
@@ -3288,7 +3288,7 @@ export const AdminView: React.FC = () => {
                                   disabled={testingProductCapi}
                                   data-testid={`test-product-capi-btn-${prod.id}`}
                                   onClick={() => handleTestProductCapi(prod)}
-                                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 font-medium text-xs cursor-pointer transition-colors"
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 font-medium text-xs cursor-pointer transition-colors"
                                 >
                                   {testingProductCapi ? 'Probando...' : 'Probar CAPI'}
                                 </button>
@@ -3297,9 +3297,9 @@ export const AdminView: React.FC = () => {
                                   disabled={savingToDb}
                                   data-testid={`save-product-pixel-btn-${prod.id}`}
                                   onClick={undefined}
-                                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
                                 >
-                                  <Save className="w-3.5 h-3.5 text-[#e8b23a]" />
+                                  <Save className="w-3.5 h-3.5 text-emerald-400" />
                                   <span>{savingToDb ? 'Guardando...' : 'Guardar Píxel y Token'}</span>
                                 </button>
                               </div>
@@ -3307,7 +3307,7 @@ export const AdminView: React.FC = () => {
 
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-start">
                               <div className="sm:col-span-5">
-                                <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
+                                <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
                                   ID del Píxel de Facebook ({liveMetaRef.pixelName}: {liveMetaRef.pixelId})
                                 </label>
                                 <input
@@ -3316,12 +3316,12 @@ export const AdminView: React.FC = () => {
                                   value={editPixelId}
                                   onChange={e => setEditPixelId(e.target.value)}
                                   placeholder={`${liveMetaRef.pixelId} (Píxel ${liveMetaRef.pixelName})`}
-                                  className="w-full px-3 py-2.5 border border-zinc-800 rounded-xl text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                                  className="w-full px-3 py-2.5 border border-zinc-800 rounded-lg text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
                                 />
                               </div>
 
                               <div className="sm:col-span-7">
-                                <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
+                                <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
                                   Token de API de Conversiones (CAPI Access Token)
                                 </label>
                                 <input
@@ -3330,7 +3330,7 @@ export const AdminView: React.FC = () => {
                                   value={editCapiToken}
                                   onChange={e => setEditCapiToken(e.target.value)}
                                   placeholder="Pegá aquí tu Token EAAB... de Meta Events Manager"
-                                  className="w-full px-3 py-2.5 border border-zinc-800 rounded-xl text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                                  className="w-full px-3 py-2.5 border border-zinc-800 rounded-lg text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
                                 />
                               </div>
                             </div>
@@ -3341,12 +3341,12 @@ export const AdminView: React.FC = () => {
                           {(getProductSubTab(prod.id) === 'precios' || showPriceConfig) && (
                             <form
                               onSubmit={handleSaveProductConfig}
-                              className="p-3.5 sm:p-4 rounded-2xl bg-[#0d0d0f] border border-zinc-800 shadow-xs space-y-3 animate-fadeIn"
+                              className="p-3.5 sm:p-4 rounded-lg bg-[#0f0f11] border border-zinc-800 shadow-sm space-y-3"
                             >
                               <div className="p-2.5 rounded-xl bg-amber-950/30 border border-amber-900/50 flex items-start gap-2.5 text-xs text-amber-200">
                                 <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                                 <div className="leading-relaxed">
-                                  <strong className="text-amber-300 font-bold block text-[11px] uppercase tracking-wide">
+                                  <strong className="text-amber-400 font-bold block text-[11px] uppercase tracking-wide">
                                     💰 Estrategia de Precios Psicológicos y Número de WhatsApp
                                   </strong>
                                   <span className="text-[11px] text-zinc-300 mt-0.5 block">
@@ -3358,9 +3358,9 @@ export const AdminView: React.FC = () => {
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-300 border border-zinc-800">
-                                    📦 Configuración de Producto
+                                    Configuración de Producto
                                   </span>
-                                  <h4 className="text-xs sm:text-sm font-black text-zinc-100 truncate max-w-sm">
+                                  <h4 className="text-xs sm:text-sm font-semibold text-zinc-100 truncate max-w-sm">
                                     {prod.nombre}
                                   </h4>
                                 </div>
@@ -3376,9 +3376,9 @@ export const AdminView: React.FC = () => {
                                   <button
                                     type="submit"
                                     disabled={savingToDb}
-                                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-all shrink-0"
+                                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition-all shrink-0"
                                   >
-                                    <Save className="w-3.5 h-3.5 text-[#e8b23a]" />
+                                    <Save className="w-3.5 h-3.5 text-emerald-400" />
                                     <span>{savingToDb ? 'Guardando...' : 'Guardar Configuración'}</span>
                                   </button>
                                 </div>
@@ -3387,55 +3387,55 @@ export const AdminView: React.FC = () => {
                               {/* 5 Campos en 1 sola fila responsiva horizontal compacta */}
                               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 items-start">
                                 <div>
-                                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-0.5">
-                                    📱 WhatsApp Ventas
+                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-0.5">
+                                    WhatsApp Ventas
                                   </label>
                                   <input
                                     type="text"
                                     value={editWa}
                                     onChange={e => setEditWa(e.target.value)}
                                     placeholder="Ej: 595973532550"
-                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-xl text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
+                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
                                   />
-                                  <span className="text-[9px] text-stone-400 block mt-0.5 truncate font-mono">
+                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate font-mono">
                                     +{formatWaPhone(editWa)}
                                   </span>
                                 </div>
 
                                 <div>
-                                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-0.5">
-                                    🏷️ Normal (Tachado)
+                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-0.5">
+                                    Normal (Tachado)
                                   </label>
                                   <input
                                     type="number"
                                     value={editPriceNormal}
                                     onChange={e => setEditPriceNormal(Number(e.target.value))}
-                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-xl text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
+                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
                                   />
-                                  <span className="text-[9px] text-stone-400 block mt-0.5 truncate line-through">
+                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate line-through">
                                     {formatGs(editPriceNormal)}
                                   </span>
                                 </div>
 
                                 <div>
-                                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-0.5">
-                                    📦 Pack 1 un.
+                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-0.5">
+                                    Pack 1 un.
                                   </label>
                                   <input
                                     type="number"
                                     value={editPricePack1}
                                     onChange={e => setEditPricePack1(Number(e.target.value))}
-                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-xl text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
+                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
                                   />
-                                  <span className="text-[9px] text-stone-400 block mt-0.5 truncate">
+                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate">
                                     {formatGs(editPricePack1)}
                                   </span>
                                 </div>
 
                                 <div className="bg-zinc-900/60 p-1.5 rounded-xl border border-emerald-900/60">
-                                  <label className="block text-[10px] font-black uppercase tracking-wider text-[#0a7a4a] mb-0.5 flex items-center justify-between">
-                                    <span>📦 Pack 2 un.</span>
-                                    <span className="text-[9px] bg-[#0a7a4a] text-white px-1 rounded font-bold">
+                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-[#0a7a4a] mb-0.5 flex items-center justify-between">
+                                    <span>Pack 2 un.</span>
+                                    <span className="text-[10px] bg-[#0a7a4a] text-white px-1 rounded font-bold">
                                       Popular
                                     </span>
                                   </label>
@@ -3443,24 +3443,24 @@ export const AdminView: React.FC = () => {
                                     type="number"
                                     value={editPricePack2}
                                     onChange={e => setEditPricePack2(Number(e.target.value))}
-                                    className="w-full px-2.5 py-2 border border-emerald-800 rounded-xl text-xs font-bold outline-none bg-zinc-900 text-emerald-400 focus:border-emerald-500"
+                                    className="w-full px-2.5 py-2 border border-emerald-800 rounded-lg text-xs font-bold outline-none bg-zinc-900 text-emerald-400 focus:border-emerald-500"
                                   />
-                                  <span className="text-[9px] text-emerald-700 block mt-0.5 truncate font-bold">
+                                  <span className="text-[10px] text-emerald-700 block mt-0.5 truncate font-bold">
                                     {formatGs(editPricePack2)}
                                   </span>
                                 </div>
 
                                 <div>
-                                  <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-0.5">
-                                    📦 Pack 3 un.
+                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-0.5">
+                                    Pack 3 un.
                                   </label>
                                   <input
                                     type="number"
                                     value={editPricePack3}
                                     onChange={e => setEditPricePack3(Number(e.target.value))}
-                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-xl text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
+                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
                                   />
-                                  <span className="text-[9px] text-stone-400 block mt-0.5 truncate">
+                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate">
                                     {formatGs(editPricePack3)}
                                   </span>
                                 </div>
@@ -3470,12 +3470,12 @@ export const AdminView: React.FC = () => {
 
                           {/* TAB VOZ & OPCIONES */}
                           {(getProductSubTab(prod.id) === 'voz' || showVoiceCatalog) && (
-                            <div className="p-3.5 sm:p-4 rounded-2xl bg-[#0d0d0f] text-zinc-100 border border-zinc-800 shadow-xs space-y-3 animate-fadeIn">
-                              <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-900/50 flex items-start gap-2.5 text-xs text-purple-200">
-                                <Info className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                            <div className="p-3.5 sm:p-4 rounded-lg bg-[#0f0f11] text-zinc-100 border border-zinc-800 shadow-sm space-y-3">
+                              <div className="p-2.5 rounded-lg bg-zinc-900/30 border border-zinc-900/50 flex items-start gap-2.5 text-xs text-zinc-300">
+                                <Info className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
                                 <div className="leading-relaxed">
-                                  <strong className="text-purple-300 font-bold block text-[11px] uppercase tracking-wide">
-                                    🎙️ Selección de Voz Humana para Confirmación Telefónica
+                                  <strong className="text-zinc-300 font-bold block text-[11px] uppercase tracking-wide">
+                                    Selección de Voz Humana para Confirmación Telefónica
                                   </strong>
                                   <span className="text-[11px] text-zinc-300 mt-0.5 block">
                                     El Agente Telefónico llamará automáticamente al comprador usando la voz que selecciones aquí para confirmar su horario de recepción del paquete.
@@ -3485,7 +3485,7 @@ export const AdminView: React.FC = () => {
 
                               <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800 text-xs">
                                 <div className="flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
                                   <span className="font-bold text-zinc-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
                                     <Bot className="w-4 h-4 text-emerald-400" />
                                     <span>Voces Oficiales · Deepgram Aura-2</span>
@@ -3508,12 +3508,12 @@ export const AdminView: React.FC = () => {
                                       key={voice.id}
                                       className={`p-2.5 rounded-xl border text-[11px] transition-all flex flex-col justify-between gap-2 ${
                                         isSelected
-                                          ? 'bg-emerald-950/70 border-emerald-600 shadow-xs'
+                                          ? 'bg-emerald-950/70 border-emerald-600 shadow-sm'
                                           : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'
                                       }`}
                                     >
                                       <div>
-                                        <div className="flex items-center justify-between text-[9px] font-bold">
+                                        <div className="flex items-center justify-between text-[10px] font-bold">
                                           <span className={voice.gender === 'Femenina' ? 'text-pink-400' : 'text-blue-400'}>
                                             {voice.gender === 'Femenina' ? '👩 Mujer' : '👨 Hombre'}
                                           </span>
@@ -3604,8 +3604,8 @@ export const AdminView: React.FC = () => {
                             {/* Barra Superior Compacta de Pedidos: Total Ventas + Botón Rápido a Confirmados + Botón Compacto de Filtros */}
                             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h5 className="text-xs font-black uppercase tracking-wider text-zinc-100">
-                                  📦 Clientes ({prodOrders.length} de {allProdOrders.length})
+                                <h5 className="text-xs font-semibold uppercase tracking-wider text-zinc-100">
+                                  Clientes ({prodOrders.length} de {allProdOrders.length})
                                 </h5>
                                 <span className="text-[11px] font-mono text-zinc-400">
                                   Ventas Activas:{' '}
@@ -3628,16 +3628,16 @@ export const AdminView: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => setProductSubTab(prod.id, 'pagos_adelantados')}
-                                  className="h-7 px-2.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/70 text-cyan-200 text-[11px] font-black inline-flex items-center gap-1 cursor-pointer transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)]"
+                                  className="h-7 px-2.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/70 text-cyan-200 text-[11px] font-medium inline-flex items-center gap-1 cursor-pointer transition-colors "
                                 >
-                                  <span>💎 Pago Adelantado ({prepaidVerifiedOrdersCount})</span>
+                                  <span>Pago Adelantado ({prepaidVerifiedOrdersCount})</span>
                                 </button>
 
                                 <button
                                   type="button"
                                   data-testid={`btn-manual-order-${prod.id}`}
                                   onClick={() => openManualOrderModal(prod)}
-                                  className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black text-[11px] font-black inline-flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                  className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black text-[11px] font-medium inline-flex items-center gap-1 cursor-pointer transition-all shadow-sm"
                                   title="Cargar rápidamente un cliente que te contactó por WhatsApp"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
@@ -3655,12 +3655,11 @@ export const AdminView: React.FC = () => {
                                     filterArchiveMode !== 'activos' ||
                                     selectedIdsForProd.length > 0
                                       ? 'bg-emerald-950 border-emerald-600 text-emerald-200'
-                                      : 'bg-[#0d0d0f] hover:bg-zinc-900 border-zinc-800 text-zinc-300'
+                                      : 'bg-[#0f0f11] hover:bg-zinc-900 border-zinc-800 text-zinc-300'
                                   }`}
                                 >
                                   <Filter className="w-3 h-3 text-emerald-400" />
-                                  <span>
-                                    🔍 Filtrar / Seleccionar
+                                  <span>Filtrar / Seleccionar
                                     {selectedIdsForProd.length > 0 ? ` (${selectedIdsForProd.length})` : ''}
                                   </span>
                                 </button>
@@ -3690,13 +3689,13 @@ export const AdminView: React.FC = () => {
                                         setProductCurrentPage(prod.id, 1);
                                       }}
                                       placeholder="Ej: Christopher, María o NX-..."
-                                      className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-zinc-800 text-xs font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                                      className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
                                     />
                                     {filterOrderName && (
                                       <button
                                         type="button"
                                         onClick={() => setFilterOrderName('')}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-zinc-300 text-xs font-black cursor-pointer"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs font-semibold cursor-pointer"
                                         title="Limpiar filtro de nombre"
                                       >
                                         ✕
@@ -3719,13 +3718,13 @@ export const AdminView: React.FC = () => {
                                         setProductCurrentPage(prod.id, 1);
                                       }}
                                       placeholder="Ej: 0973 857 397 o 0981..."
-                                      className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-zinc-800 text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                                      className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
                                     />
                                     {filterOrderPhone && (
                                       <button
                                         type="button"
                                         onClick={() => setFilterOrderPhone('')}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-zinc-300 text-xs font-black cursor-pointer"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs font-semibold cursor-pointer"
                                         title="Limpiar filtro de teléfono"
                                       >
                                         ✕
@@ -3776,13 +3775,13 @@ export const AdminView: React.FC = () => {
                                         setFilterArchiveMode('todos');
                                         setProductCurrentPage(prod.id, 1);
                                       }}
-                                      className={`py-1.5 px-2 rounded-lg text-[11px] font-black cursor-pointer transition-all whitespace-nowrap ${
+                                      className={`py-1.5 px-2 rounded-lg text-[11px] font-medium cursor-pointer transition-all whitespace-nowrap ${
                                         filterArchiveMode === 'todos'
-                                          ? 'bg-zinc-800 text-white shadow-xs'
+                                          ? 'bg-zinc-800 text-white shadow-sm'
                                           : 'text-zinc-400 hover:text-zinc-200'
                                       }`}
                                     >
-                                      📋 Todos ({allProdOrders.length})
+                                      Todos ({allProdOrders.length})
                                     </button>
                                   </div>
                                 </div>
@@ -3796,7 +3795,7 @@ export const AdminView: React.FC = () => {
                                     data-testid="admin-select-all-btn"
                                     onClick={() => toggleSelectAllOrdersInList(allFilteredIdsForProd)}
                                     disabled={allFilteredIdsForProd.length === 0}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-black border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
                                       isAllFilteredSelected
                                         ? 'bg-zinc-800 text-white border-zinc-700'
                                         : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
@@ -3806,7 +3805,7 @@ export const AdminView: React.FC = () => {
                                       type="checkbox"
                                       readOnly
                                       checked={isAllFilteredSelected}
-                                      className="w-3.5 h-3.5 accent-[#16a34a] pointer-events-none"
+                                      className="w-3.5 h-3.5 accent-emerald-500 pointer-events-none"
                                     />
                                     <span>
                                       {isAllFilteredSelected
@@ -3819,7 +3818,7 @@ export const AdminView: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => setSelectedOrderIds([])}
-                                      className="px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-zinc-800 cursor-pointer"
+                                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-zinc-800 cursor-pointer"
                                     >
                                       Limpiar selección ({selectedIdsForProd.length})
                                     </button>
@@ -3833,10 +3832,10 @@ export const AdminView: React.FC = () => {
                                       data-testid="admin-bulk-archive-btn"
                                       disabled={selectedIdsForProd.length === 0 || isArchivingBatch}
                                       onClick={() => handleArchiveOrders(selectedIdsForProd, true)}
-                                      className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 text-amber-300 border border-zinc-800 shadow-xs inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                                      className="px-3.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 text-amber-400 border border-zinc-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
                                       title="Archivar todos los pedidos seleccionados directamente en la Base de Datos"
                                     >
-                                      <span>🗄️</span>
+                                      <span></span>
                                       <span>
                                         Archivar seleccionados ({selectedIdsForProd.length})
                                       </span>
@@ -3849,7 +3848,7 @@ export const AdminView: React.FC = () => {
                                       data-testid="admin-bulk-unarchive-btn"
                                       disabled={selectedIdsForProd.length === 0 || isArchivingBatch}
                                       onClick={() => handleArchiveOrders(selectedIdsForProd, false)}
-                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white border border-emerald-800 shadow-2xs inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white border border-emerald-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
                                       title="Restaurar los pedidos seleccionados a Activos en la Base de Datos"
                                     >
                                       <span>📤</span>
@@ -3864,7 +3863,7 @@ export const AdminView: React.FC = () => {
                                     data-testid="admin-bulk-delete-btn"
                                     disabled={selectedIdsForProd.length === 0}
                                     onClick={() => openRedDeleteConfirmModal(selectedIdsForProd)}
-                                    className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#dc2626] hover:bg-[#b91c1c] disabled:opacity-40 text-white border border-red-800 shadow-xs inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[#dc2626] hover:bg-[#b91c1c] disabled:opacity-40 text-white border border-red-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
                                     title="Eliminar los pedidos seleccionados de la Base de Datos (abre confirmación roja)"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -3879,7 +3878,7 @@ export const AdminView: React.FC = () => {
 
                             <div className="space-y-1.5">
                               {/* Cabecera Compacta de la Lista de Tarjetas Horizontales */}
-                              <div className="px-3 py-2 rounded-xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                              <div className="px-3 py-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                                 <div className="flex items-center gap-2.5 min-w-0">
                                   <input
                                     type="checkbox"
@@ -3887,17 +3886,17 @@ export const AdminView: React.FC = () => {
                                     checked={isAllFilteredSelected}
                                     onChange={() => toggleSelectAllOrdersInList(allFilteredIdsForProd)}
                                     title="Seleccionar o deseleccionar todos los pedidos filtrados"
-                                    className="w-3.5 h-3.5 accent-[#16a34a] cursor-pointer shrink-0"
+                                    className="w-3.5 h-3.5 accent-emerald-500 cursor-pointer shrink-0"
                                   />
                                   <span className="truncate">Pedidos (Tocá cualquier tarjeta para abrir toda la información)</span>
                                 </div>
                                 <div className="hidden sm:flex items-center gap-3 text-[10px] font-bold text-zinc-400 shrink-0">
-                                  <span className="inline-flex items-center gap-1 text-amber-300">
-                                    <span className="w-2.5 h-2.5 rounded-xs bg-amber-400 border border-yellow-200 inline-block shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                                  <span className="inline-flex items-center gap-1 text-amber-400">
+                                    <span className="w-2.5 h-2.5 rounded-xs bg-amber-400 border border-yellow-200 inline-block " />
                                     Brillo Ámbar = Pago Enviado (Verificar)
                                   </span>
                                   <span className="inline-flex items-center gap-1 text-cyan-300">
-                                    <span className="w-2.5 h-2.5 rounded-xs bg-cyan-400 border border-sky-200 inline-block shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                                    <span className="w-2.5 h-2.5 rounded-xs bg-cyan-400 border border-sky-200 inline-block " />
                                     Brillo Celeste = Pago Adelantado
                                   </span>
                                   <span className="inline-flex items-center gap-1 text-emerald-400">
@@ -3912,7 +3911,7 @@ export const AdminView: React.FC = () => {
                               </div>
 
                               {paginatedOrders.length === 0 ? (
-                                <div className="py-8 px-4 rounded-xl border border-zinc-800 bg-[#0d0d0f] text-center text-zinc-500 text-xs">
+                                <div className="py-8 px-4 rounded-xl border border-zinc-800 bg-[#0f0f11] text-center text-zinc-500 text-xs">
                                   {filterOrderName || filterOrderPhone
                                     ? 'No se encontraron pedidos que coincidan con el nombre o teléfono buscado.'
                                     : filterArchiveMode === 'archivados'
@@ -3975,12 +3974,12 @@ export const AdminView: React.FC = () => {
                                         }}
                                         className={`w-full h-11 min-h-[44px] max-h-[44px] px-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer select-none overflow-hidden ${
                                           isPrepayVerified
-                                            ? 'bg-gradient-to-r from-cyan-950/75 via-indigo-950/60 to-amber-950/60 border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.32)] text-white'
+                                            ? 'bg-cyan-950/70 border-cyan-400 text-white'
                                             : isPrepaySentPending
-                                              ? 'bg-gradient-to-r from-amber-950/80 via-fuchsia-950/55 to-amber-950/80 border-amber-400 shadow-[0_0_22px_rgba(245,158,11,0.42)] text-amber-50'
+                                              ? 'bg-amber-950/70 border-amber-400 text-amber-50'
                                               : isConfirmedByAgent
-                                                ? 'bg-[#0d0d0f] hover:bg-zinc-900/90 border-emerald-800/80 text-zinc-100'
-                                                : 'bg-[#0d0d0f] hover:bg-zinc-900/90 border-zinc-800 text-zinc-200'
+                                                ? 'bg-[#0f0f11] hover:bg-zinc-900/90 border-emerald-800/80 text-zinc-100'
+                                                : 'bg-[#0f0f11] hover:bg-zinc-900/90 border-zinc-800 text-zinc-200'
                                         } ${isRowSelected ? 'ring-1 ring-emerald-500/50' : ''}`}
                                       >
                                         {/* IZQUIERDA Y CENTRO: Pequeñas informaciones bien alineadas en 1 sola línea */}
@@ -3991,16 +3990,16 @@ export const AdminView: React.FC = () => {
                                             checked={isRowSelected}
                                             onClick={e => e.stopPropagation()}
                                             onChange={() => toggleSelectOrder(ord.reservaid)}
-                                            className="w-3.5 h-3.5 accent-[#16a34a] cursor-pointer shrink-0"
+                                            className="w-3.5 h-3.5 accent-emerald-500 cursor-pointer shrink-0"
                                             title={`Seleccionar pedido ${ord.reservaid}`}
                                           />
 
                                           <span
-                                            className={`font-mono text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 tabular-nums ${
+                                            className={`font-mono text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 tabular-nums ${
                                               isPrepayVerified
                                                 ? 'bg-cyan-950 text-cyan-300 border border-cyan-500'
                                                 : isPrepaySentPending
-                                                  ? 'bg-amber-950 text-amber-300 border border-amber-400'
+                                                  ? 'bg-amber-950 text-amber-400 border border-amber-400'
                                                   : isConfirmedByAgent
                                                     ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                                                     : 'bg-zinc-800 text-zinc-400'
@@ -4009,33 +4008,33 @@ export const AdminView: React.FC = () => {
                                             #{rowNumber}
                                           </span>
 
-                                          <span className="font-mono text-[11px] font-black shrink-0 tabular-nums">
+                                          <span className="font-mono text-[11px] font-medium shrink-0 tabular-nums">
                                             {ord.reservaid}
                                           </span>
 
                                           {/* Estado Compacto con Brillo Especial NO Verde para Pagos Enviados / Adelantados */}
                                           {isPrepayVerified ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 text-[9px] font-black uppercase tracking-tight shrink-0 shadow-[0_0_10px_rgba(34,211,238,0.6)]">
-                                              <span>💎 PAGO ADELANTADO</span>
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60 text-[10px] font-semibold uppercase tracking-tight shrink-0 ">
+                                              <span>PAGO ADELANTADO</span>
                                             </span>
                                           ) : isPrepaySentPending ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 text-black text-[9px] font-black uppercase tracking-tight shrink-0 shadow-[0_0_12px_rgba(251,191,36,0.75)] animate-pulse">
-                                              <span>⚡ PAGO ENVIADO (VERIFICAR)</span>
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800/60 text-[10px] font-semibold uppercase tracking-tight shrink-0 ">
+                                              <span>PAGO ENVIADO (VERIFICAR)</span>
                                             </span>
                                           ) : isConfirmedByAgent ? (
-                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[9px] font-black uppercase tracking-tight shrink-0">
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-semibold uppercase tracking-tight shrink-0">
                                               <CheckCircle2 className="w-2.5 h-2.5" />
                                               <span>Confirmado</span>
                                             </span>
                                           ) : (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-950/70 border border-amber-800/70 text-amber-300 text-[9px] font-bold uppercase tracking-tight shrink-0">
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-950/70 border border-amber-800/70 text-amber-400 text-[10px] font-bold uppercase tracking-tight shrink-0">
                                               Pendiente
                                             </span>
                                           )}
 
                                           {ord.archivado && (
-                                            <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 text-[9px] font-black uppercase shrink-0">
-                                              🗄️ Arch.
+                                            <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-amber-400 text-[10px] font-semibold uppercase shrink-0">
+                                              Arch.
                                             </span>
                                           )}
 
@@ -4053,7 +4052,7 @@ export const AdminView: React.FC = () => {
                                               isPrepayVerified
                                                 ? 'text-cyan-300'
                                                 : isPrepaySentPending
-                                                  ? 'text-amber-300'
+                                                  ? 'text-amber-400'
                                                   : isConfirmedByAgent
                                                     ? 'text-emerald-400'
                                                     : 'text-zinc-400'
@@ -4085,11 +4084,11 @@ export const AdminView: React.FC = () => {
                                         <div className="flex items-center gap-1.5 shrink-0">
                                           {/* Pack y Monto siempre 100% visible */}
                                           <span
-                                            className={`hidden lg:inline-block font-mono text-[11px] font-black tabular-nums whitespace-nowrap px-1.5 py-0.5 rounded ${
+                                            className={`hidden lg:inline-block font-mono text-[11px] font-medium tabular-nums whitespace-nowrap px-1.5 py-0.5 rounded ${
                                               isPrepayVerified
                                                 ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/80'
                                                 : isPrepaySentPending
-                                                  ? 'bg-amber-950 text-amber-300 border border-amber-400/80'
+                                                  ? 'bg-amber-950 text-amber-400 border border-amber-400/80'
                                                   : isConfirmedByAgent
                                                     ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
                                                     : 'bg-zinc-900 text-emerald-400 border border-zinc-800'
@@ -4107,9 +4106,9 @@ export const AdminView: React.FC = () => {
                                                 e.stopPropagation();
                                                 handleQuickApprovePrepayment(ord);
                                               }}
-                                              className={`h-8 px-2.5 text-[11px] font-black rounded-lg inline-flex items-center gap-1 cursor-pointer transition-all border ${
+                                              className={`h-8 px-2.5 text-[11px] font-medium rounded-lg inline-flex items-center gap-1 cursor-pointer transition-all border ${
                                                 isPrepaySentPending
-                                                  ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.55)]'
+                                                  ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-200 '
                                                   : 'bg-cyan-950/90 hover:bg-cyan-900 text-cyan-200 border-cyan-500/70'
                                               }`}
                                               title="Aprobar transferencia con descuento de Gs. 30.000 y enviar audio de confirmación y empaquetado al cliente"
@@ -4125,10 +4124,10 @@ export const AdminView: React.FC = () => {
                                           ) : (
                                             <span
                                               data-testid={`badge-approved-prepayment-${ord.reservaid}`}
-                                              className="h-8 px-2.5 text-[10px] font-black rounded-lg inline-flex items-center gap-1 bg-cyan-950 text-cyan-300 border border-cyan-500/70"
+                                              className="h-8 px-2.5 text-[10px] font-medium rounded-lg inline-flex items-center gap-1 bg-cyan-950 text-cyan-300 border border-cyan-500/70"
                                               title="Pago adelantado aprobado (-Gs. 30.000) y audio enviado"
                                             >
-                                              💎 Pago Aprobado
+                                              Pago Aprobado
                                             </span>
                                           )}
 
@@ -4138,13 +4137,13 @@ export const AdminView: React.FC = () => {
                                               e.stopPropagation();
                                               handleOpenOrderWhatsAppChat(ord, preferredChannel);
                                             }}
-                                            className="h-8 px-3 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer transition-all bg-[#25D366] hover:bg-[#1ebd5a] text-[#041911] shadow-xs"
+                                            className="h-8 px-3 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer transition-all bg-[#25D366] hover:bg-[#1ebd5a] text-black shadow-sm"
                                             title="Abrir chat de este pedido"
                                           >
-                                            <MessageCircle className="w-3 h-3 text-[#041911]" />
+                                            <MessageCircle className="w-3 h-3 text-black" />
                                             <span className="hidden sm:inline">Chatear</span>
                                             {msgCount > 0 && (
-                                              <span className="px-1 rounded-full bg-[#0b3d2e] text-[#25D366] text-[9px] font-black tabular-nums">
+                                              <span className="px-1 rounded-full bg-[#0b3d2e] text-[#25D366] text-[10px] font-bold tabular-nums">
                                                 {msgCount}
                                               </span>
                                             )}
@@ -4158,7 +4157,7 @@ export const AdminView: React.FC = () => {
                                               e.stopPropagation();
                                               handleArchiveOrders([ord.reservaid], !ord.archivado);
                                             }}
-                                            className={`h-7 px-2 rounded-lg text-[10px] font-black border transition-all cursor-pointer inline-flex items-center gap-1 ${
+                                            className={`h-7 px-2 rounded-lg text-[10px] font-medium border transition-all cursor-pointer inline-flex items-center gap-1 ${
                                               ord.archivado
                                                 ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border-emerald-800'
                                                 : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-700'
@@ -4189,7 +4188,7 @@ export const AdminView: React.FC = () => {
                                           </button>
 
                                           <span
-                                            className={`h-7 px-2 rounded-lg text-[10px] font-black inline-flex items-center gap-1 border ${
+                                            className={`h-7 px-2 rounded-lg text-[10px] font-medium inline-flex items-center gap-1 border ${
                                               isPrepayVerified
                                                 ? 'bg-cyan-400 text-slate-950 border-cyan-300'
                                                 : isPrepaySentPending
@@ -4216,7 +4215,7 @@ export const AdminView: React.FC = () => {
                                       {isOrderOpen && (
                                         <div
                                           data-testid={`admin-order-detail-panel-${ord.reservaid}`}
-                                          className={`mt-1 p-3.5 sm:p-4 rounded-xl border space-y-3 animate-fadeIn ${
+                                          className={`mt-1 p-3.5 sm:p-4 rounded-xl border space-y-3 ${
                                             isPrepayVerified
                                               ? 'bg-[#09090b] border-cyan-400/90'
                                               : isPrepaySentPending
@@ -4241,7 +4240,7 @@ export const AdminView: React.FC = () => {
                                           {/* Fila Superior del Detalle: Cabecera + Controles de Unidades, Estado y Acciones */}
                                           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
                                             <div className="flex items-center gap-2 flex-wrap">
-                                              <span className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-emerald-400 font-mono text-xs font-black">
+                                              <span className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-emerald-400 font-mono text-xs font-semibold">
                                                 Pedido #{rowNumber} · {ord.reservaid}
                                               </span>
                                               <span className="text-xs font-bold text-zinc-400">
@@ -4257,7 +4256,7 @@ export const AdminView: React.FC = () => {
                                             {/* Controles de Pack (+/-), Precio y Estado */}
                                             <div className="flex items-center gap-2 flex-wrap">
                                               <div className="inline-flex items-center gap-1 bg-zinc-900 rounded-lg px-2 py-1 border border-zinc-800">
-                                                <span className="text-[10px] font-black uppercase text-zinc-400 mr-1">
+                                                <span className="text-[10px] font-medium uppercase text-zinc-400 mr-1">
                                                   Pack:
                                                 </span>
                                                 <button
@@ -4287,11 +4286,11 @@ export const AdminView: React.FC = () => {
                                                       `✏️ Pedido ${ord.reservaid} actualizado a ${nextQty} un. (${formatGs(nextMonto)}).`
                                                     );
                                                   }}
-                                                  className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-black text-xs flex items-center justify-center cursor-pointer"
+                                                  className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center cursor-pointer"
                                                 >
                                                   -
                                                 </button>
-                                                <span className="px-1.5 text-xs font-black text-zinc-100 tabular-nums">
+                                                <span className="px-1.5 text-xs font-semibold text-zinc-100 tabular-nums">
                                                   {ord.cantidad} un.
                                                 </span>
                                                 <button
@@ -4320,11 +4319,11 @@ export const AdminView: React.FC = () => {
                                                       `✏️ Pedido ${ord.reservaid} actualizado a ${nextQty} un. (${formatGs(nextMonto)}).`
                                                     );
                                                   }}
-                                                  className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-black text-xs flex items-center justify-center cursor-pointer"
+                                                  className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center cursor-pointer"
                                                 >
                                                   +
                                                 </button>
-                                                <span className="ml-1.5 font-mono text-xs font-black text-emerald-400 tabular-nums">
+                                                <span className="ml-1.5 font-mono text-xs font-semibold text-emerald-400 tabular-nums">
                                                   {formatGs(ord.monto)}
                                                 </span>
                                               </div>
@@ -4343,9 +4342,9 @@ export const AdminView: React.FC = () => {
                                                   isConfirmedByAgent
                                                     ? 'text-emerald-300 border-emerald-700'
                                                     : ord.estado === 'reservado'
-                                                      ? 'text-amber-300 border-amber-800'
+                                                      ? 'text-amber-400 border-amber-800'
                                                       : ord.estado === 'en_camino'
-                                                        ? 'text-blue-300 border-blue-800'
+                                                        ? 'text-sky-300 border-blue-800'
                                                         : ord.estado === 'entregado_pagado'
                                                           ? 'text-emerald-300 border-emerald-800'
                                                           : 'text-red-300 border-red-800'
@@ -4362,17 +4361,17 @@ export const AdminView: React.FC = () => {
                                           {/* Grilla de Información Completa del Pedido */}
                                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                                             {/* Columna 1: Cliente y Contacto */}
-                                            <div className="p-2.5 sm:p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-1.5 flex flex-col justify-between">
+                                            <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-1.5 flex flex-col justify-between">
                                               <div className="space-y-1">
-                                                <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                                                <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
                                                   <span>👤 Datos del Cliente</span>
                                                   <CopyFieldBtn text={ord.nombre} label="Copiar" tooltip="Copiar Nombre" />
                                                 </div>
-                                                <div className="font-black text-zinc-100 text-sm truncate" title={ord.nombre}>
+                                                <div className="font-semibold text-zinc-100 text-sm truncate" title={ord.nombre}>
                                                   {ord.nombre}
                                                 </div>
                                                 <div className="font-mono text-xs font-bold text-emerald-400 flex items-center justify-between">
-                                                  <span>📱 {formatParaguayanPhone433(ord.celular)}</span>
+                                                  <span>{formatParaguayanPhone433(ord.celular)}</span>
                                                   <CopyFieldBtn text={ord.celular} label="Copiar" tooltip="Copiar Teléfono" />
                                                 </div>
                                                 <div className="text-[11px] text-zinc-400">
@@ -4382,10 +4381,10 @@ export const AdminView: React.FC = () => {
                                             </div>
 
                                             {/* Columna 2: Dirección y Vivienda */}
-                                            <div className="p-2.5 sm:p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-1.5 flex flex-col justify-between">
+                                            <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-1.5 flex flex-col justify-between">
                                               <div className="space-y-1">
-                                                <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400 flex items-center justify-between">
-                                                  <span>📍 Ubicación y Dirección</span>
+                                                <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                                                  <span>Ubicación y Dirección</span>
                                                   <CopyFieldBtn text={`${ord.ciudad}, ${ord.departamento} — ${ord.direccion}`} label="Copiar" tooltip="Copiar Dirección Completa" />
                                                 </div>
                                                 <div className="font-bold text-zinc-100 truncate" title={`${ord.ciudad}, ${ord.departamento}`}>
@@ -4406,9 +4405,9 @@ export const AdminView: React.FC = () => {
                                             </div>
 
                                             {/* Columna 3: Referencia de Fachada y Mapa GPS */}
-                                            <div className="p-2.5 sm:p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2 flex flex-col justify-between">
+                                            <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-2 flex flex-col justify-between">
                                               <div className="space-y-1">
-                                                <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                                                <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
                                                   <span>🏠 Referencia y GPS</span>
                                                   {ord.referenciaCasa && (
                                                     <CopyFieldBtn text={ord.referenciaCasa} label="Copiar" tooltip="Copiar Referencia" />
@@ -4434,7 +4433,7 @@ export const AdminView: React.FC = () => {
                                                       href={gpsUrl}
                                                       target="_blank"
                                                       rel="noreferrer"
-                                                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-[#041911] font-black text-[11px] inline-flex items-center justify-center gap-1 shadow-2xs"
+                                                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold text-[11px] inline-flex items-center justify-center gap-1 shadow-sm"
                                                     >
                                                       <span>Abrir GPS</span>
                                                       <ExternalLink className="w-3 h-3" />
@@ -4458,29 +4457,29 @@ export const AdminView: React.FC = () => {
                                                   showToast(`📋 Ficha completa de ${ord.nombre} copiada al portapapeles.`);
                                                 } catch {}
                                               }}
-                                              className="w-full py-1.5 px-3 rounded-xl bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer select-none"
+                                              className="w-full py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer select-none"
                                               title="Copiar todos los datos de este pedido (Nombre, Teléfono, Ciudad, Dirección, Referencia, GPS y Total) de una sola vez"
                                             >
                                               <Copy className="w-3.5 h-3.5" />
-                                              <span>📋 Copiar Ficha Completa del Pedido (1 Clic)</span>
+                                              <span>Copiar Ficha Completa del Pedido (1 Clic)</span>
                                             </button>
                                           </div>
 
                                           {/* Si está confirmado por el Agente IA, mostrar Comparativa Formulario Web vs Chat IA */}
                                           {isConfirmedByAgent && comparison && (
-                                            <div className="p-3 rounded-xl bg-zinc-900/80 border border-emerald-800/70 space-y-2">
+                                            <div className="p-3 rounded-lg bg-zinc-900/80 border border-emerald-800/70 space-y-2">
                                               <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-zinc-800">
-                                                <span className="text-[11px] font-black uppercase text-zinc-100 flex items-center gap-1.5">
+                                                <span className="text-[11px] font-medium uppercase text-zinc-100 flex items-center gap-1.5">
                                                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                                                   Resumen del Agente IA: Datos Formulario Web vs. Datos Confirmados en Chat
                                                 </span>
-                                                <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-black uppercase">
+                                                <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-medium uppercase">
                                                   ✓ 100% Verificado por IA
                                                 </span>
                                               </div>
                                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px]">
                                                 <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
-                                                  <div className="text-[9px] font-black uppercase text-zinc-400">
+                                                  <div className="text-[10px] font-semibold uppercase text-zinc-400">
                                                     1. Datos Formulario Web
                                                   </div>
                                                   <div className="font-bold text-zinc-100 mt-0.5">
@@ -4491,7 +4490,7 @@ export const AdminView: React.FC = () => {
                                                   </div>
                                                 </div>
                                                 <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-900/60">
-                                                  <div className="text-[9px] font-black uppercase text-emerald-400">
+                                                  <div className="text-[10px] font-semibold uppercase text-emerald-400">
                                                     2. Datos Confirmados Chat IA
                                                   </div>
                                                   <div className="font-bold text-emerald-200 mt-0.5">
@@ -4500,12 +4499,12 @@ export const AdminView: React.FC = () => {
                                                   <div className="text-zinc-300">
                                                     {comparison.ubicacionConfirmada} — {comparison.direccionConfirmada}
                                                   </div>
-                                                  <div className="text-emerald-300 font-black mt-0.5">
+                                                  <div className="text-emerald-300 font-semibold mt-0.5">
                                                     🏠 Ref: {comparison.referenciaConfirmada}
                                                   </div>
                                                 </div>
                                                 <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200">
-                                                  <div className="text-[9px] font-black uppercase text-amber-400">
+                                                  <div className="text-[10px] font-semibold uppercase text-amber-400">
                                                     3. Dictamen del Agente IA
                                                   </div>
                                                   <p className="text-[11px] text-zinc-300 mt-0.5 leading-snug">
@@ -4553,8 +4552,8 @@ export const AdminView: React.FC = () => {
                                         key={pageNum}
                                         type="button"
                                         onClick={() => setProductCurrentPage(prod.id, pageNum)}
-                                        className={`w-8 h-8 rounded-xl text-xs font-black cursor-pointer transition-all ${pageNum === currentPage
-                                            ? 'bg-emerald-500 text-black shadow-xs'
+                                        className={`w-8 h-8 rounded-lg text-xs font-semibold cursor-pointer transition-all ${pageNum === currentPage
+                                            ? 'bg-emerald-500 text-black shadow-sm'
                                             : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800'
                                           }`}
                                       >
@@ -4617,7 +4616,7 @@ export const AdminView: React.FC = () => {
               />
 
               {/* Top Banner: Add Unlimited WhatsApp Lines */}
-              <div className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[11px] font-mono uppercase tracking-wider">
                     <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
@@ -4641,12 +4640,12 @@ export const AdminView: React.FC = () => {
                     value={newSessionLabel}
                     onChange={e => setNewSessionLabel(e.target.value)}
                     placeholder="Nombre (ej: WhatsApp Ventas #2)..."
-                    className="px-3.5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 text-xs font-medium outline-none min-w-[230px] focus:border-emerald-500"
+                    className="px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 text-xs font-medium outline-none min-w-[230px] focus:border-emerald-500"
                   />
                   <button
                     type="submit"
                     disabled={addingSession}
-                    className="px-5 py-2.5 rounded-2xl bg-[#25D366] hover:bg-[#1ebd5a] text-[#041911] font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shrink-0 transition-all"
+                    className="px-5 py-2.5 rounded-lg bg-[#25D366] hover:bg-[#1ebd5a] text-black font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm shrink-0 transition-all"
                   >
                     <Plus className="w-4 h-4" />
                     <span>{addingSession ? 'Agregando...' : 'Agregar Nuevo WhatsApp'}</span>
@@ -4663,20 +4662,20 @@ export const AdminView: React.FC = () => {
                   return (
                     <div
                       key={session.id}
-                      className="bg-[#0d0d0f] rounded-2xl border border-zinc-800 shadow-xs overflow-hidden flex flex-col justify-between"
+                      className="bg-[#0f0f11] rounded-lg border border-zinc-800 shadow-sm overflow-hidden flex flex-col justify-between"
                     >
                       {/* Card Header */}
-                      <div className="p-5 bg-gradient-to-r from-[#075E54] to-[#0b3d2e] text-white flex items-center justify-between gap-2">
+                      <div className="p-5 bg-[#075E54] text-white flex items-center justify-between gap-2">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-2xl bg-[#25D366] text-[#041911] flex items-center justify-center font-black shrink-0 shadow-xs">
+                          <div className="w-10 h-10 rounded-lg bg-[#25D366] text-black flex items-center justify-center font-bold shrink-0 shadow-sm">
                             #{idx + 1}
                           </div>
                           <div className="min-w-0">
-                            <h3 className="text-sm font-black truncate">{session.label}</h3>
+                            <h3 className="text-sm font-semibold truncate">{session.label}</h3>
                             <span className="text-[11px] text-emerald-200 font-bold flex items-center gap-1.5">
                               <span
                                 className={`w-2 h-2 rounded-full ${session.status === 'connected'
-                                    ? 'bg-[#25D366] animate-pulse'
+                                    ? 'bg-[#25D366]'
                                     : 'bg-amber-400'
                                   }`}
                               />
@@ -4707,13 +4706,13 @@ export const AdminView: React.FC = () => {
                       {/* Card Body */}
                       <div className="p-5 space-y-4 flex-1 flex flex-col justify-between">
                         {session.status === 'connected' ? (
-                          <div className="p-5 rounded-2xl bg-zinc-900 border border-emerald-500/50 text-center space-y-3 my-auto">
-                            <div className="w-14 h-14 rounded-full bg-[#25D366] text-white flex items-center justify-center mx-auto shadow-md">
+                          <div className="p-5 rounded-lg bg-zinc-900 border border-emerald-500/50 text-center space-y-3 my-auto">
+                            <div className="w-14 h-14 rounded-full bg-[#25D366] text-white flex items-center justify-center mx-auto shadow-sm">
                               <CheckCircle2 className="w-8 h-8" />
                             </div>
                             <div>
-                              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-950">
-                                🛡️ Línea Blindada Activa 24/7
+                              <span className="text-[10px] font-medium uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-950">
+                                Línea Blindada Activa 24/7
                               </span>
                               <h4 className="text-lg font-bold text-zinc-100 mt-2">
                                 +{session.connectedPhone}
@@ -4727,10 +4726,10 @@ export const AdminView: React.FC = () => {
                                 type="button"
                                 disabled={isLoading}
                                 onClick={() => handleRepairSession(session.id)}
-                                className="w-full px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-black uppercase tracking-wide shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                className="w-full px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold uppercase tracking-wide shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
                               >
                                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                                <span>🛡️ Reparar / Refrescar Señal (Sin Desconectar)</span>
+                                <span>Reparar / Refrescar Señal (Sin Desconectar)</span>
                               </button>
                               <button
                                 type="button"
@@ -4745,14 +4744,14 @@ export const AdminView: React.FC = () => {
                                 }
                                 className="w-full px-3 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-red-950/80 border border-zinc-700 hover:border-red-500/60 text-zinc-400 hover:text-red-300 text-[11px] font-bold transition-colors cursor-pointer"
                               >
-                                🔒 Desvincular / Cambiar Número (Protegido)
+                                Desvincular / Cambiar Número (Protegido)
                               </button>
                             </div>
                           </div>
                         ) : session.status === 'syncing' ? (
-                          <div className="p-6 rounded-2xl bg-emerald-50 border-2 border-emerald-400 text-center space-y-3 my-auto">
+                          <div className="p-6 rounded-lg bg-emerald-50 border-2 border-emerald-400 text-center space-y-3 my-auto">
                             <RefreshCw className="w-10 h-10 text-[#0a7a4a] animate-spin mx-auto" />
-                            <h4 className="text-sm font-black text-zinc-100">
+                            <h4 className="text-sm font-semibold text-zinc-100">
                               ¡Sincronizando con tu celular!
                             </h4>
                             <p className="text-xs text-zinc-400">
@@ -4769,17 +4768,17 @@ export const AdminView: React.FC = () => {
                                   <img
                                     src={session.qrDataUrl}
                                     alt={`QR ${session.label}`}
-                                    className="w-52 h-52 rounded-2xl border-4 border-[#0b3d2e] shadow-md bg-white p-1"
+                                    className="w-52 h-52 rounded-lg border-4 border-[#0b3d2e] shadow-sm bg-white p-1"
                                   />
                                   <div className="flex items-center gap-2 pt-1">
-                                    <span className="text-[11px] font-black text-[#0a7a4a]">
+                                    <span className="text-[11px] font-medium text-[#0a7a4a]">
                                       Escaneá este QR con tu WhatsApp
                                     </span>
                                     <button
                                       type="button"
                                       disabled={isLoading}
                                       onClick={() => handleConnectSession(session.id, true)}
-                                      className="text-[11px] font-black text-zinc-400 hover:text-zinc-100 underline cursor-pointer"
+                                      className="text-[11px] font-medium text-zinc-400 hover:text-zinc-100 underline cursor-pointer"
                                     >
                                       Refrescar QR
                                     </button>
@@ -4795,7 +4794,7 @@ export const AdminView: React.FC = () => {
                                     type="button"
                                     disabled={isLoading}
                                     onClick={() => handleConnectSession(session.id, true)}
-                                    className="px-4 py-2 rounded-xl bg-[#0b3d2e] text-white text-xs font-black cursor-pointer"
+                                    className="px-4 py-2 rounded-lg bg-[#0b3d2e] text-white text-xs font-semibold cursor-pointer"
                                   >
                                     Generar Nuevo QR
                                   </button>
@@ -4825,17 +4824,17 @@ export const AdminView: React.FC = () => {
                                   type="button"
                                   disabled={isLoading || !phoneInputVal.trim()}
                                   onClick={() => handleRequestSessionPairingCode(session.id)}
-                                  className="px-3 py-1.5 rounded-xl bg-[#0b3d2e] hover:bg-[#135944] disabled:opacity-50 text-white text-[11px] font-black cursor-pointer shrink-0"
+                                  className="px-3 py-1.5 rounded-lg bg-[#0b3d2e] hover:bg-[#135944] disabled:opacity-50 text-white text-[11px] font-medium cursor-pointer shrink-0"
                                 >
                                   Pedir Código
                                 </button>
                               </div>
                               {session.pairingCode && (
-                                <div className="p-2.5 rounded-xl bg-emerald-100 border border-emerald-300 text-center">
+                                <div className="p-2.5 rounded-lg bg-emerald-100 border border-emerald-300 text-center">
                                   <span className="text-[10px] font-bold text-emerald-900 block">
                                     Ingresá este código en tu celular:
                                   </span>
-                                  <strong className="text-lg font-mono font-black tracking-widest text-zinc-100">
+                                  <strong className="text-lg font-mono font-semibold tracking-widest text-zinc-100">
                                     {session.pairingCode}
                                   </strong>
                                 </div>
@@ -4886,10 +4885,10 @@ export const AdminView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setActiveMenu("deepgram")}
-                  className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-zinc-800 text-white shadow-xs flex items-center justify-center gap-2"
+                  className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-zinc-800 text-white shadow-sm flex items-center justify-center gap-2"
                 >
-                  <Zap className="w-3.5 h-3.5 text-[#e8b23a]" />
-                  <span>🎙️ Deepgram Todo-en-Uno</span>
+                  <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Deepgram Todo-en-Uno</span>
                 </button>
                 <button
                   type="button"
@@ -4897,29 +4896,29 @@ export const AdminView: React.FC = () => {
                   className="flex-1 py-2 px-3 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Bot className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>🤖 Cerebro GLM-5.3</span>
+                  <span>Cerebro GLM-5.3</span>
                 </button>
               </div>
 
-              <div className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
+              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-lg">
-                    <Zap className="w-6 h-6 text-[#e8b23a]" />
+                  <div className="w-12 h-12 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-lg">
+                    <Zap className="w-6 h-6 text-emerald-400" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-black text-zinc-100">Infraestructura de Voz Deepgram (STT + TTS)</h2>
+                    <h2 className="text-lg font-semibold text-zinc-100">Infraestructura de Voz Deepgram (STT + TTS)</h2>
                     <p className="text-xs text-zinc-400">Deepgram impulsa la escucha (Nova-3 STT) y la voz humana ultra-realista (Aura-2 TTS) para llamadas automáticas a compradores.</p>
                   </div>
                 </div>
-                <div className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold ${deepgramHasKey ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80' : 'bg-amber-950/80 text-amber-300 border border-amber-800/80'}`}>
-                  <span className={`w-2.5 h-2.5 rounded-full ${deepgramHasKey ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                <div className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold ${deepgramHasKey ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80' : 'bg-amber-950/80 text-amber-400 border border-amber-800/80'}`}>
+                  <span className={`w-2.5 h-2.5 rounded-full ${deepgramHasKey ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                   {deepgramHasKey ? `✅ Deepgram Activo (${deepgramApiKeyPreview})` : '⚠️ No hay API Key configurada — Las funciones de voz están deshabilitadas'}
                 </div>
               </div>
 
-              <div className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
-                <h3 className="text-sm font-black text-zinc-100 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#e8b23a]" />
+              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
+                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
                   API Key de Deepgram
                 </h3>
                 <p className="text-xs text-zinc-400">
@@ -4930,7 +4929,7 @@ export const AdminView: React.FC = () => {
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <input type={deepgramShowKey ? 'text' : 'password'} value={deepgramApiKey} onChange={e => setDeepgramApiKey(e.target.value)} placeholder="Pegar tu API Key aquí..." className="w-full px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 focus:border-[#25D366] focus:ring-1 focus:ring-[#25D366]/40 outline-none text-sm font-mono placeholder-zinc-500" />
-                    <button type="button" onClick={() => setDeepgramShowKey(prev => !prev)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-stone-400 hover:text-zinc-300 cursor-pointer" title={deepgramShowKey ? 'Ocultar' : 'Mostrar'}>
+                    <button type="button" onClick={() => setDeepgramShowKey(prev => !prev)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-500 hover:text-zinc-300 cursor-pointer" title={deepgramShowKey ? 'Ocultar' : 'Mostrar'}>
                       <Eye className="w-4 h-4" />
                     </button>
                   </div>
@@ -4943,15 +4942,15 @@ export const AdminView: React.FC = () => {
                       else { showToast(`❌ Error: ${data?.error || 'Error desconocido'}`); }
                     } catch (e) { showToast('❌ Error al guardar la API Key'); }
                     setDeepgramSaving(false);
-                  }} className="px-5 py-3 rounded-xl bg-[#25D366] hover:bg-[#1ebd5a] text-[#041911] font-black text-sm cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-xs">
+                  }} className="px-5 py-3 rounded-lg bg-[#25D366] hover:bg-[#1ebd5a] text-black font-bold text-sm cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm">
                     <Save className="w-4 h-4" />
                     {deepgramSaving ? 'Guardando...' : 'Guardar'}
                   </button>
                 </div>
               </div>
 
-              <div className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
-                <h3 className="text-sm font-black text-zinc-100 flex items-center gap-2">
+              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
+                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
                   <Volume2 className="w-4 h-4 text-[#25D366]" />
                   Probar Conexión
                 </h3>
@@ -4965,31 +4964,31 @@ export const AdminView: React.FC = () => {
                     else { showToast(`❌ Error: ${data?.error || 'No se pudo conectar'}`); }
                   } catch (e) { showToast('❌ Error al probar la conexión'); }
                   setDeepgramTesting(false);
-                }} className="px-5 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-300 font-bold text-sm cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-xs">
+                }} className="px-5 py-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-300 font-bold text-sm cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm">
                   <Volume2 className="w-4 h-4" />
                   {deepgramTesting ? 'Probando...' : 'Probar Conexión'}
                 </button>
               </div>
 
-              <div className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
-                <h3 className="text-sm font-black text-zinc-100 flex items-center gap-2">
-                  <Mic className="w-4 h-4 text-[#e8b23a]" />
+              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
+                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                  <Mic className="w-4 h-4 text-emerald-400" />
                   Voces Disponibles (Deepgram Aura-2 · Español)
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {DEFAULT_DEEPGRAM_CATALOG.map(voice => (
                     <div key={voice.id} className="p-3 rounded-xl border border-zinc-800 bg-zinc-900/80 hover:border-zinc-700 transition-all">
                       <div className="flex items-center justify-between mb-1">
-                        <span className={`text-[10px] font-black uppercase ${voice.gender === 'Femenina' ? 'text-pink-400' : 'text-blue-400'}`}>{voice.gender === 'Femenina' ? '👩 Mujer' : '👨 Hombre'}</span>
-                        <span className="text-[9px] font-mono text-zinc-500">{voice.deepgramModel}</span>
+                        <span className={`text-[10px] font-medium uppercase ${voice.gender === 'Femenina' ? 'text-rose-400' : 'text-sky-400'}`}>{voice.gender === 'Femenina' ? 'Mujer' : 'Hombre'}</span>
+                        <span className="text-[10px] font-mono text-zinc-500">{voice.deepgramModel}</span>
                       </div>
-                      <div className="font-black text-sm text-zinc-100">{voice.name.split(' (')[0]}</div>
+                      <div className="font-semibold text-sm text-zinc-100">{voice.name.split(' (')[0]}</div>
                       <div className="text-[11px] text-zinc-400 mt-0.5">{voice.description}</div>
                       <div className="text-[10px] text-zinc-500 mt-1">{voice.accent}</div>
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-zinc-500">💡 Podés seleccionar la voz activa desde el panel del Agente IA dentro de cada página de producto.</p>
+                <p className="text-[10px] text-zinc-500">Podés seleccionar la voz activa desde el panel del Agente IA dentro de cada página de producto.</p>
               </div>
             </div>
           )}
@@ -5032,41 +5031,41 @@ export const AdminView: React.FC = () => {
                   onClick={() => setActiveMenu('deepgram')}
                   className="flex-1 py-2 px-3 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Zap className="w-3.5 h-3.5 text-[#e8b23a]" />
-                  <span>🎙️ Deepgram Todo-en-Uno</span>
+                  <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Deepgram Todo-en-Uno</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveMenu('openrouter')}
-                  className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-zinc-800 text-white shadow-xs flex items-center justify-center gap-2"
+                  className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-zinc-800 text-white shadow-sm flex items-center justify-center gap-2"
                 >
                   <Bot className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>🤖 Cerebro GLM-5.3</span>
+                  <span>Cerebro GLM-5.3</span>
                 </button>
               </div>
 
               {/* Header */}
-              <div className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-3">
+              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-3">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-xs">
+                  <div className="w-12 h-12 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-sm">
                     <Bot className="w-6 h-6 text-emerald-400" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-black text-zinc-100">Cerebro LLM · GLM-5.3 (OpenRouter)</h2>
+                    <h2 className="text-lg font-semibold text-zinc-100">Cerebro LLM · GLM-5.3 (OpenRouter)</h2>
                     <p className="text-xs text-zinc-400">
                       Modelo conversacional inteligente que atiende dudas de compradores, confirma reservas y asiste al Agente de Codificación en tiempo real.
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-xs font-semibold">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-xs font-semibold">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                   <span>Modelo Activo: GLM-5.3 · Conexión directa vía OpenRouter</span>
                 </div>
               </div>
 
               {/* Test Connection */}
-              <div className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-3">
-                <h3 className="text-sm font-black text-zinc-100 flex items-center gap-2">
+              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-3">
+                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
                   <Zap className="w-4 h-4 text-emerald-600" />
                   Probar Razonamiento del LLM de Deepgram en Vivo
                 </h3>
@@ -5093,7 +5092,7 @@ export const AdminView: React.FC = () => {
                     }
                     setOpenRouterTesting(false);
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 disabled:opacity-50 text-emerald-300 font-bold text-sm inline-flex items-center gap-2 cursor-pointer transition-all shadow-xs"
+                  className="px-5 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 disabled:opacity-50 text-emerald-300 font-bold text-sm inline-flex items-center gap-2 cursor-pointer transition-all shadow-sm"
                 >
                   <Bot className="w-4 h-4 text-emerald-400" />
                   <span>{openRouterTesting ? 'Probando LLM GLM-5.3...' : 'Probar LLM GLM-5.3'}</span>
@@ -5107,8 +5106,8 @@ export const AdminView: React.FC = () => {
               </div>
 
               {/* Info */}
-              <div className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-2">
-                <h3 className="text-sm font-black text-zinc-100">ℹ️ Arquitectura Todo-en-Uno de Deepgram</h3>
+              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-2">
+                <h3 className="text-sm font-semibold text-zinc-100">ℹ️ Arquitectura Todo-en-Uno de Deepgram</h3>
                 <ul className="text-xs text-zinc-400 space-y-1.5 list-disc pl-4">
                   <li><strong>STT (Voz a Texto):</strong> Deepgram Nova-3 Español transcribe al instante los audios que envía el cliente.</li>
                   <li><strong>LLM (Cerebro IA):</strong> Deepgram Voice Agent (`open_ai / gpt-4o-mini` gestionado por Deepgram) razona cada paso sin depender de OpenRouter.</li>
@@ -5191,7 +5190,7 @@ export const AdminView: React.FC = () => {
       {/* ============================================================== */}
       {activeAiOrder && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-[#0a0a0a] rounded-t-2xl sm:rounded-xl max-w-4xl w-full shadow-2xl border border-zinc-800 overflow-hidden max-h-[95vh] sm:max-h-[92vh] flex flex-col">
+          <div className="bg-[#0a0a0a] rounded-t-2xl sm:rounded-xl max-w-4xl w-full shadow-lg border border-zinc-800 overflow-hidden max-h-[95vh] sm:max-h-[92vh] flex flex-col">
             {/* CABECERA */}
             <div className="px-4 sm:px-6 py-3 bg-zinc-900 text-zinc-100 flex flex-wrap items-center justify-between gap-3 shrink-0 border-b border-zinc-800">
               <div className="flex items-center gap-3 min-w-0">
@@ -5212,7 +5211,7 @@ export const AdminView: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-[11px] text-zinc-500 truncate mt-0.5">
-                    📍 {activeAiOrder.ciudad}, {activeAiOrder.departamento} —{' '}
+                    {activeAiOrder.ciudad}, {activeAiOrder.departamento} —{' '}
                     {activeAiOrder.direccion}
                     {activeAiOrder.referenciaCasa
                       ? ` | 🏠 Ref: ${activeAiOrder.referenciaCasa}`
@@ -5228,9 +5227,9 @@ export const AdminView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'manual', modalAiChannel)}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-black flex items-center gap-1.5 cursor-pointer transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 cursor-pointer transition-all ${
                       modalAiMode === 'manual'
-                        ? 'bg-amber-400 text-black shadow-xs'
+                        ? 'bg-amber-400 text-black shadow-sm'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
                     }`}
                     title="Modo Manual: Vos escribís y respondés con tus propias palabras (La IA no responde sola)"
@@ -5243,30 +5242,30 @@ export const AdminView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'texto')}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-all ${
                       modalAiMode === 'automatico' && modalAiChannel === 'texto'
-                        ? 'bg-emerald-500 text-black shadow-xs'
+                        ? 'bg-emerald-500 text-black shadow-sm'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
                     }`}
                     title="Activar que el Agente IA responda automáticamente por texto"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>💬 IA Texto</span>
+                    <span>IA Texto</span>
                   </button>
 
                   {/* 3. AUDIO IA */}
                   <button
                     type="button"
                     onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'audio')}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black flex items-center gap-1 cursor-pointer transition-all ${
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-all ${
                       modalAiMode === 'automatico' && modalAiChannel === 'audio'
-                        ? 'bg-emerald-500 text-black shadow-xs'
+                        ? 'bg-emerald-500 text-black shadow-sm'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
                     }`}
                     title="Activar que el Agente IA responda con notas de voz OGG/Opus"
                   >
                     <Volume2 className="w-3.5 h-3.5" />
-                    <span>🎤 IA Audio</span>
+                    <span>IA Audio</span>
                   </button>
                 </div>
 
@@ -5300,7 +5299,7 @@ export const AdminView: React.FC = () => {
               className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#09090b]"
             >
               <div className="text-center">
-                <span className="inline-block px-3.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-300 text-[11px] font-bold border border-amber-500/25">
+                <span className="inline-block px-3.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/25">
                   {modalAiMode === 'automatico'
                     ? modalAiChannel === 'audio'
                       ? '🎤 Modo Audio IA Activo: El Agente IA envía y responde con Notas de Voz OGG/Opus (Deepgram Aura-2) al WhatsApp del cliente.'
@@ -5310,20 +5309,20 @@ export const AdminView: React.FC = () => {
               </div>
 
               {liveChatMessages.length === 0 ? (
-                <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800 max-w-xl mx-auto space-y-3 mt-4 text-center">
-                  <div className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800 max-w-xl mx-auto space-y-3 mt-4 text-center">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
                     Pedido recibido de {activeAiOrder.nombre} ({activeAiOrder.producto})
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
                     Elegí cómo querés que el Agente IA atienda este pedido ahora mismo: mandando{' '}
-                    <strong>🎤 Audio de Voz</strong> o chateando con{' '}
-                    <strong>💬 Texto</strong>:
+                    <strong>Audio de Voz</strong> o chateando con{' '}
+                    <strong>Texto</strong>:
                   </p>
                   <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
                     <button
                       type="button"
                       onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'audio')}
-                      className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-semibold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       <Volume2 className="w-4 h-4" />
                       <span>1. Mandar 🎤 Audio de Voz IA</span>
@@ -5331,7 +5330,7 @@ export const AdminView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'texto')}
-                      className="px-3.5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      className="px-3.5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       <MessageCircle className="w-4 h-4" />
                       <span>2. Chatear con 💬 Texto IA</span>
@@ -5363,7 +5362,7 @@ export const AdminView: React.FC = () => {
                               : `📱 ${activeAiOrder.nombre} (Cliente)`}
                       </span>
                       <div
-                        className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-2xl text-xs sm:text-[13px] whitespace-pre-line leading-relaxed shadow-xs ${isOutgoing
+                        className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-lg text-xs sm:text-[13px] whitespace-pre-line leading-relaxed shadow-sm ${isOutgoing
                             ? 'bg-emerald-950/80 text-emerald-100 rounded-tr-xs border border-emerald-500/30'
                             : 'bg-zinc-900 text-zinc-100 rounded-tl-xs border border-zinc-800'
                           }`}
@@ -5377,7 +5376,7 @@ export const AdminView: React.FC = () => {
                               className="w-full aspect-square object-cover"
                             />
                             {msg.commercialPackQty && msg.commercialFramedPriceGs && (
-                              <div className="px-2.5 py-1.5 bg-zinc-950 text-[11px] font-mono tabular-nums text-amber-300 flex items-center justify-between">
+                              <div className="px-2.5 py-1.5 bg-zinc-950 text-[11px] font-mono tabular-nums text-amber-400 flex items-center justify-between">
                                 <span>Pack {msg.commercialPackQty}x verificado</span>
                                 <span>{formatGs(msg.commercialFramedPriceGs)}</span>
                               </div>
@@ -5390,7 +5389,7 @@ export const AdminView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => playSpokenAudio(msg.text, msg.audioDataUrl)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black text-[9px] cursor-pointer hover:bg-emerald-500/30"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-semibold text-[10px] cursor-pointer hover:bg-emerald-500/30"
                             >
                               <Volume2 className="w-3 h-3 text-emerald-400" />
                               <span>Escuchar Voz (Deepgram Aura-2)</span>
@@ -5399,7 +5398,7 @@ export const AdminView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => playSpokenAudio(msg.text, msg.audioDataUrl)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500 text-black font-black text-[9px] cursor-pointer hover:bg-amber-400"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500 text-black font-semibold text-[10px] cursor-pointer hover:bg-amber-400"
                             >
                               <Volume2 className="w-3 h-3" />
                               <span>Escuchar Audio del Cliente</span>
@@ -5410,7 +5409,7 @@ export const AdminView: React.FC = () => {
                           <div className="flex items-center gap-1">
                             <span>{timeStr}</span>
                             {isOutgoing && (
-                              <span className="text-emerald-400 font-black">
+                              <span className="text-emerald-400 font-semibold">
                                 {msg.status === 'pending_connection' ? '✓' : '✓✓'}
                               </span>
                             )}
@@ -5453,7 +5452,7 @@ export const AdminView: React.FC = () => {
                     setEmbeddedWaInput('');
                     handleSendOrderAudioNote(activeAiOrder, text || undefined);
                   }}
-                  className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-sm transition-all shrink-0"
+                  className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-sm transition-all shrink-0"
                   title={
                     embeddedWaInput.trim()
                       ? 'Sintetizar y enviar este mensaje como Nota de Voz IA (Deepgram Aura-2)'
@@ -5467,7 +5466,7 @@ export const AdminView: React.FC = () => {
                 <button
                   type="submit"
                   disabled={sendingWaMsg || !embeddedWaInput.trim()}
-                  className="px-4 sm:px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-black text-xs sm:text-sm flex items-center gap-2 cursor-pointer shadow-md shrink-0 transition-all"
+                  className="px-4 sm:px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-semibold text-xs sm:text-sm flex items-center gap-2 cursor-pointer shadow-sm shrink-0 transition-all"
                 >
                   <Send className="w-4 h-4" />
                   <span>{sendingWaMsg ? 'Enviando...' : 'Enviar'}</span>
@@ -5528,20 +5527,20 @@ export const AdminView: React.FC = () => {
       {deleteConfirmModal.open && (
         <div
           data-testid="admin-red-delete-modal"
-          className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+          className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
         >
-          <div className="bg-[#991b1b] border-4 border-[#ef4444] rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl text-white">
+          <div className="bg-[#991b1b] border-4 border-[#ef4444] rounded-3xl w-full max-w-lg overflow-hidden shadow-lg text-white">
             {/* Cabecera Roja Impactante */}
             <div className="bg-[#dc2626] px-6 py-5 border-b-2 border-red-400/40 flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-white text-[#dc2626] flex items-center justify-center font-black text-2xl shrink-0 shadow-md">
+                <div className="w-12 h-12 rounded-lg bg-white text-[#dc2626] flex items-center justify-center font-semibold text-2xl shrink-0 shadow-sm">
                   ⚠️
                 </div>
                 <div>
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-black/30 text-red-100 text-[10px] font-black uppercase tracking-widest mb-1">
+                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-black/30 text-red-100 text-[10px] font-medium uppercase tracking-widest mb-1">
                     ALERTA ROJA · ELIMINACIÓN DIRECTA EN BASE DE DATOS
                   </span>
-                  <h3 className="text-base sm:text-lg font-black uppercase tracking-wide leading-tight text-white">
+                  <h3 className="text-base sm:text-lg font-semibold uppercase tracking-wide leading-tight text-white">
                     ¿Estás seguro de que querés ejecutar el eliminado?
                   </h3>
                 </div>
@@ -5557,14 +5556,14 @@ export const AdminView: React.FC = () => {
                     isDeleting: false
                   })
                 }
-                className="w-8 h-8 rounded-xl bg-black/25 hover:bg-black/40 text-white flex items-center justify-center font-black cursor-pointer shrink-0"
+                className="w-8 h-8 rounded-xl bg-black/25 hover:bg-black/40 text-white flex items-center justify-center font-semibold cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
             {/* Cuerpo del Pop-Up Rojo */}
-            <div className="p-6 space-y-4 bg-gradient-to-b from-[#991b1b] to-[#7f1d1d]">
+            <div className="p-6 space-y-4 bg-red-900">
               <p className="text-xs sm:text-sm font-bold text-red-100 leading-relaxed">
                 Vas a eliminar de forma <strong className="text-white underline">permanente e irreversible</strong>{' '}
                 {deleteConfirmModal.orderIds.length === 1
@@ -5573,22 +5572,22 @@ export const AdminView: React.FC = () => {
                 directamente de la Base de Datos (Supabase + Servidor Central):
               </p>
 
-              <div className="max-h-48 overflow-y-auto rounded-2xl bg-black/35 border border-red-400/30 divide-y divide-red-400/20 p-2 space-y-1.5">
+              <div className="max-h-48 overflow-y-auto rounded-lg bg-black/35 border border-red-400/30 divide-y divide-red-400/20 p-2 space-y-1.5">
                 {deleteConfirmModal.ordersPreview.length > 0 ? (
                   deleteConfirmModal.ordersPreview.map(ord => (
                     <div
                       key={ord.reservaid}
-                      className="px-3 py-2 rounded-xl bg-red-950/60 flex items-center justify-between gap-2 text-xs"
+                      className="px-3 py-2 rounded-lg bg-red-950/60 flex items-center justify-between gap-2 text-xs"
                     >
                       <div className="min-w-0">
-                        <div className="font-black text-white truncate">
-                          {ord.nombre || 'Cliente'} · <span className="font-mono text-amber-300">{ord.reservaid}</span>
+                        <div className="font-semibold text-white truncate">
+                          {ord.nombre || 'Cliente'} · <span className="font-mono text-amber-400">{ord.reservaid}</span>
                         </div>
                         <div className="text-[11px] text-red-200 font-mono">
-                          📱 {formatParaguayanPhone433(ord.celular)} · 📍 {ord.ciudad}
+                          {formatParaguayanPhone433(ord.celular)} · 📍 {ord.ciudad}
                         </div>
                       </div>
-                      <span className="font-black text-amber-300 shrink-0">
+                      <span className="font-semibold text-amber-400 shrink-0">
                         {formatGs(ord.monto)}
                       </span>
                     </div>
@@ -5613,7 +5612,7 @@ export const AdminView: React.FC = () => {
                       isDeleting: false
                     })
                   }
-                  className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-black text-xs uppercase tracking-wider cursor-pointer transition-all"
+                  className="w-full sm:w-auto px-5 py-3 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs uppercase tracking-wider cursor-pointer transition-all"
                 >
                   No, Cancelar
                 </button>
@@ -5622,7 +5621,7 @@ export const AdminView: React.FC = () => {
                   data-testid="admin-confirm-delete-btn"
                   disabled={deleteConfirmModal.isDeleting}
                   onClick={handleConfirmExecuteDelete}
-                  className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-[#ef4444] hover:bg-[#dc2626] text-white font-black text-xs sm:text-sm uppercase tracking-wider border-2 border-white shadow-xl inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                  className="w-full sm:w-auto px-6 py-3 rounded-lg bg-[#ef4444] hover:bg-[#dc2626] text-white font-semibold text-xs sm:text-sm uppercase tracking-wider border-2 border-white shadow-xl inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>
@@ -5641,19 +5640,19 @@ export const AdminView: React.FC = () => {
       {deleteProductsConfirmModal.open && (
         <div
           data-testid="admin-red-delete-products-modal"
-          className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+          className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
         >
-          <div className="bg-[#991b1b] border-4 border-[#ef4444] rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl text-white">
+          <div className="bg-[#991b1b] border-4 border-[#ef4444] rounded-3xl w-full max-w-lg overflow-hidden shadow-lg text-white">
             <div className="bg-[#dc2626] px-6 py-5 border-b-2 border-red-400/40 flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-white text-[#dc2626] flex items-center justify-center font-black text-2xl shrink-0 shadow-md">
+                <div className="w-12 h-12 rounded-lg bg-white text-[#dc2626] flex items-center justify-center font-semibold text-2xl shrink-0 shadow-sm">
                   ⚠️
                 </div>
                 <div>
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-black/30 text-red-100 text-[10px] font-black uppercase tracking-widest mb-1">
+                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-black/30 text-red-100 text-[10px] font-medium uppercase tracking-widest mb-1">
                     ALERTA ROJA · ELIMINAR PÁGINAS DE PRODUCTO
                   </span>
-                  <h3 className="text-base sm:text-lg font-black uppercase tracking-wide leading-tight text-white">
+                  <h3 className="text-base sm:text-lg font-semibold uppercase tracking-wide leading-tight text-white">
                     ¿Estás seguro de eliminar {deleteProductsConfirmModal.productIds.length === 1 ? 'esta página' : `estas ${deleteProductsConfirmModal.productIds.length} páginas`}?
                   </h3>
                 </div>
@@ -5669,13 +5668,13 @@ export const AdminView: React.FC = () => {
                     isDeleting: false
                   })
                 }
-                className="w-8 h-8 rounded-xl bg-black/25 hover:bg-black/40 text-white flex items-center justify-center font-black cursor-pointer shrink-0"
+                className="w-8 h-8 rounded-xl bg-black/25 hover:bg-black/40 text-white flex items-center justify-center font-semibold cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-6 space-y-4 bg-gradient-to-b from-[#991b1b] to-[#7f1d1d]">
+            <div className="p-6 space-y-4 bg-red-900">
               <p className="text-xs sm:text-sm font-bold text-red-100 leading-relaxed">
                 Vas a eliminar de forma <strong className="text-white underline">permanente</strong>{' '}
                 {deleteProductsConfirmModal.productIds.length === 1
@@ -5684,21 +5683,21 @@ export const AdminView: React.FC = () => {
                 directamente de la Base de Datos:
               </p>
 
-              <div className="max-h-48 overflow-y-auto rounded-2xl bg-black/35 border border-red-400/30 divide-y divide-red-400/20 p-2 space-y-1.5">
+              <div className="max-h-48 overflow-y-auto rounded-lg bg-black/35 border border-red-400/30 divide-y divide-red-400/20 p-2 space-y-1.5">
                 {deleteProductsConfirmModal.productsPreview.map(p => (
                   <div
                     key={p.id}
-                    className="px-3 py-2 rounded-xl bg-red-950/60 flex items-center justify-between gap-2 text-xs"
+                    className="px-3 py-2 rounded-lg bg-red-950/60 flex items-center justify-between gap-2 text-xs"
                   >
                     <div className="min-w-0">
-                      <div className="font-black text-white truncate">
+                      <div className="font-semibold text-white truncate">
                         {p.nombre}
                       </div>
                       <div className="text-[11px] text-red-200 font-mono">
                         /?p={p.slug} · ID: {p.id}
                       </div>
                     </div>
-                    <span className="font-black text-amber-300 shrink-0">
+                    <span className="font-semibold text-amber-400 shrink-0">
                       {formatGs(p.precios?.[1] || 189000)}
                     </span>
                   </div>
@@ -5718,7 +5717,7 @@ export const AdminView: React.FC = () => {
                       isDeleting: false
                     })
                   }
-                  className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-black text-xs uppercase tracking-wider cursor-pointer transition-all"
+                  className="w-full sm:w-auto px-5 py-3 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs uppercase tracking-wider cursor-pointer transition-all"
                 >
                   No, Cancelar
                 </button>
@@ -5727,7 +5726,7 @@ export const AdminView: React.FC = () => {
                   data-testid="admin-confirm-delete-products-btn"
                   disabled={deleteProductsConfirmModal.isDeleting}
                   onClick={handleConfirmExecuteDeleteProducts}
-                  className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-[#ef4444] hover:bg-[#dc2626] text-white font-black text-xs sm:text-sm uppercase tracking-wider border-2 border-white shadow-xl inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                  className="w-full sm:w-auto px-6 py-3 rounded-lg bg-[#ef4444] hover:bg-[#dc2626] text-white font-semibold text-xs sm:text-sm uppercase tracking-wider border-2 border-white shadow-xl inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>
@@ -5746,16 +5745,16 @@ export const AdminView: React.FC = () => {
       {showManualOrderModal && manualOrderProduct && (
         <div
           data-testid="admin-manual-order-modal"
-          className="fixed inset-0 z-[95] bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn"
+          className="fixed inset-0 z-[95] bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
         >
-          <div className="bg-[#0f0f12] border-2 border-emerald-500/60 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl text-white">
+          <div className="bg-[#0f0f12] border-2 border-emerald-500/60 rounded-3xl w-full max-w-lg overflow-hidden shadow-lg text-white">
             <div className="bg-emerald-950/80 px-5 py-4 border-b border-emerald-700/50 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500 text-black flex items-center justify-center font-black text-lg shrink-0 shadow-md">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500 text-black flex items-center justify-center font-semibold text-lg shrink-0 shadow-sm">
                   📲
                 </div>
                 <div>
-                  <h3 className="text-sm sm:text-base font-black uppercase tracking-wide text-emerald-200">
+                  <h3 className="text-sm sm:text-base font-semibold uppercase tracking-wide text-emerald-200">
                     Registrar Cliente de WhatsApp
                   </h3>
                   <p className="text-[11px] text-zinc-300 font-medium truncate max-w-xs">
@@ -5766,21 +5765,21 @@ export const AdminView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowManualOrderModal(false)}
-                className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center font-black cursor-pointer shrink-0 transition-colors"
+                className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center font-semibold cursor-pointer shrink-0 transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateManualOrder} className="p-5 space-y-3.5 bg-[#0d0d0f] max-h-[80vh] overflow-y-auto">
-              <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-[11px] text-emerald-200 leading-relaxed">
-                💡 <strong>Guardado Directo en Base de Datos:</strong> Este cliente se registrará de inmediato en la base de datos de tu servidor y tu Agente IA lo vinculará automáticamente para continuar la confirmación.
+            <form onSubmit={handleCreateManualOrder} className="p-5 space-y-3.5 bg-[#0f0f11] max-h-[80vh] overflow-y-auto">
+              <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-[11px] text-emerald-200 leading-relaxed">
+                <strong>Guardado Directo en Base de Datos:</strong> Este cliente se registrará de inmediato en la base de datos de tu servidor y tu Agente IA lo vinculará automáticamente para continuar la confirmación.
               </div>
 
               {/* Nombre y Teléfono */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-300 mb-1">
+                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
                     👤 Nombre del Cliente *
                   </label>
                   <input
@@ -5789,13 +5788,13 @@ export const AdminView: React.FC = () => {
                     placeholder="Ej. María Benítez"
                     value={manualNombre}
                     onChange={e => setManualNombre(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white font-bold text-xs focus:border-emerald-500 outline-none"
+                    className="w-full px-3 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-bold text-xs focus:border-emerald-500 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-300 mb-1">
-                    📱 WhatsApp / Celular *
+                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
+                    WhatsApp / Celular *
                   </label>
                   <input
                     type="tel"
@@ -5803,15 +5802,15 @@ export const AdminView: React.FC = () => {
                     placeholder="0981 123 456"
                     value={manualCelular}
                     onChange={e => setManualCelular(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white font-bold text-xs focus:border-emerald-500 outline-none"
+                    className="w-full px-3 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-bold text-xs focus:border-emerald-500 outline-none"
                   />
                 </div>
               </div>
 
               {/* Selector de Pack */}
               <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-300 mb-1">
-                  📦 Pack Seleccionado
+                <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
+                  Pack Seleccionado
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[1, 2, 3].map(packNum => {
@@ -5824,11 +5823,11 @@ export const AdminView: React.FC = () => {
                         onClick={() => setManualPack(packNum)}
                         className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-md ring-1 ring-emerald-500'
+                            ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-sm ring-1 ring-emerald-500'
                             : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
                         }`}
                       >
-                        <div className="text-xs font-black">{packNum} un.</div>
+                        <div className="text-xs font-semibold">{packNum} un.</div>
                         <div className="text-[10px] font-mono font-bold text-emerald-400 mt-0.5">
                           {formatGs(price)}
                         </div>
@@ -5840,7 +5839,7 @@ export const AdminView: React.FC = () => {
 
               {/* Tipo de Vivienda */}
               <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-300 mb-1">
+                <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
                   🏠 Tipo de Vivienda
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -5872,25 +5871,25 @@ export const AdminView: React.FC = () => {
               {/* Ciudad y Departamento */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-300 mb-1">
-                    📍 Ciudad / Barrio
+                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
+                    Ciudad / Barrio
                   </label>
                   <input
                     type="text"
                     placeholder="Ej. Asunción, San Lorenzo..."
                     value={manualCiudad}
                     onChange={e => setManualCiudad(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white font-medium text-xs focus:border-emerald-500 outline-none"
+                    className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-medium text-xs focus:border-emerald-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-300 mb-1">
+                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
                     🏛️ Departamento
                   </label>
                   <select
                     value={manualDepartamento}
                     onChange={e => setManualDepartamento(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white font-medium text-xs focus:border-emerald-500 outline-none"
+                    className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-medium text-xs focus:border-emerald-500 outline-none"
                   >
                     <option value="Central">Central</option>
                     <option value="Capital (Asunción)">Capital (Asunción)</option>
@@ -5916,7 +5915,7 @@ export const AdminView: React.FC = () => {
 
               {/* Dirección / Referencia */}
               <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-300 mb-1">
+                <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
                   🧭 Dirección / Calle / Referencia
                 </label>
                 <input
@@ -5924,7 +5923,7 @@ export const AdminView: React.FC = () => {
                   placeholder="Calle, número de casa, color de portón..."
                   value={manualDireccion}
                   onChange={e => setManualDireccion(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white font-medium text-xs focus:border-emerald-500 outline-none"
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-medium text-xs focus:border-emerald-500 outline-none"
                 />
               </div>
 
@@ -5941,7 +5940,7 @@ export const AdminView: React.FC = () => {
                 <button
                   type="submit"
                   disabled={manualSubmitting}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
                 >
                   <span>{manualSubmitting ? 'Guardando...' : '💾 Registrar Cliente en Base de Datos'}</span>
                 </button>
@@ -5958,20 +5957,20 @@ export const AdminView: React.FC = () => {
           onClick={() => setDisconnectSecurityModal(null)}
         >
           <div
-            className="w-full max-w-lg rounded-3xl bg-zinc-950 border-2 border-red-500 shadow-[0_0_60px_rgba(239,68,68,0.45)] overflow-hidden"
+            className="w-full max-w-lg rounded-3xl bg-zinc-950 border-2 border-red-500  overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             {/* Header de Alerta Máxima */}
-            <div className="bg-gradient-to-r from-red-700 via-red-600 to-amber-600 px-6 py-4 flex items-center justify-between">
+            <div className="bg-red-700 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-black/30 border border-white/25 flex items-center justify-center text-white shrink-0">
-                  <AlertTriangle className="w-6 h-6 animate-pulse" />
+                <div className="w-11 h-11 rounded-lg bg-black/30 border border-white/25 flex items-center justify-center text-white shrink-0">
+                  <AlertTriangle className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-black/40 text-amber-200">
-                    🛡️ Escudo de Blindaje Antidesconexión
+                  <span className="text-[10px] font-medium uppercase tracking-widest px-2 py-0.5 rounded bg-black/40 text-amber-200">
+                    Escudo de Blindaje Antidesconexión
                   </span>
-                  <h3 className="text-base font-black text-white uppercase tracking-tight mt-0.5">
+                  <h3 className="text-base font-semibold text-white uppercase tracking-tight mt-0.5">
                     ¡Alto! Protección de Campañas y Ventas Activa
                   </h3>
                 </div>
@@ -5987,13 +5986,13 @@ export const AdminView: React.FC = () => {
 
             {/* Body */}
             <div className="p-6 space-y-4">
-              <div className="p-4 rounded-2xl bg-red-950/60 border border-red-500/50 space-y-1.5">
-                <p className="text-xs font-black text-red-200 uppercase">
+              <div className="p-4 rounded-lg bg-red-950/60 border border-red-500/50 space-y-1.5">
+                <p className="text-xs font-semibold text-red-200 uppercase">
                   ⚠️ Advertencia Crítica sobre tus Anuncios Activos:
                 </p>
                 <p className="text-xs text-red-100/90 leading-relaxed">
                   Estás intentando desvincular la línea{' '}
-                  <span className="font-black text-white">
+                  <span className="font-semibold text-white">
                     {disconnectSecurityModal.label}{' '}
                     {disconnectSecurityModal.phone ? `(+${disconnectSecurityModal.phone})` : ''}
                   </span>
@@ -6002,12 +6001,12 @@ export const AdminView: React.FC = () => {
               </div>
 
               {/* Opción Recomendada: Reparar SIN desconectar */}
-              <div className="p-4 rounded-2xl bg-emerald-950/60 border-2 border-emerald-500/70 space-y-2.5">
+              <div className="p-4 rounded-lg bg-emerald-950/60 border-2 border-emerald-500/70 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-300">
-                    ✅ Alternativa Segura (Sin perder vinculación)
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-emerald-300">
+                    Alternativa Segura (Sin perder vinculación)
                   </span>
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500 text-zinc-950 uppercase">
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500 text-zinc-950 uppercase">
                     Recomendado
                   </span>
                 </div>
@@ -6017,17 +6016,17 @@ export const AdminView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleRepairSession(disconnectSecurityModal.sessionId)}
-                  className="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  className="w-full py-3 px-4 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
                 >
                   <RefreshCw className="w-4 h-4" />
-                  <span>🛡️ Reparar y Refrescar Señal SIN Desconectar</span>
+                  <span>Reparar y Refrescar Señal SIN Desconectar</span>
                 </button>
               </div>
 
               {/* Doble llave de confirmación manual */}
-              <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
-                <p className="text-[11px] font-black uppercase tracking-wider text-zinc-400">
-                  🔒 Desbloqueo Manual de Seguridad (Solo si vas a cambiar de número):
+              <div className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 space-y-3">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                  Desbloqueo Manual de Seguridad (Solo si vas a cambiar de número):
                 </p>
 
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
@@ -6044,14 +6043,14 @@ export const AdminView: React.FC = () => {
 
                 <div>
                   <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                    Escribí la palabra <span className="text-red-400 font-black">DESCONECTAR</span> para desbloquear el botón:
+                    Escribí la palabra <span className="text-red-400 font-semibold">DESCONECTAR</span> para desbloquear el botón:
                   </label>
                   <input
                     type="text"
                     value={disconnectConfirmText}
                     onChange={e => setDisconnectConfirmText(e.target.value)}
                     placeholder="Escribí DESCONECTAR aquí..."
-                    className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 focus:border-red-500 text-white font-black text-xs tracking-wider uppercase outline-none"
+                    className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 focus:border-red-500 text-white font-semibold text-xs tracking-wider uppercase outline-none"
                   />
                 </div>
               </div>
@@ -6061,7 +6060,7 @@ export const AdminView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setDisconnectSecurityModal(null)}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-black text-xs uppercase cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs uppercase cursor-pointer"
                 >
                   Cancelar y Mantener Conectado
                 </button>
@@ -6086,7 +6085,7 @@ export const AdminView: React.FC = () => {
                       );
                     }
                   }}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-black text-xs uppercase tracking-wider shadow-lg cursor-pointer disabled:cursor-not-allowed transition-all"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-semibold text-xs uppercase tracking-wider shadow-lg cursor-pointer disabled:cursor-not-allowed transition-all"
                 >
                   🔓 Confirmar Desconexión Definitiva
                 </button>

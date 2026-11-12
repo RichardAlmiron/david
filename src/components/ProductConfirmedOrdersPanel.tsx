@@ -161,7 +161,7 @@ export const CopyFieldBtn: React.FC<{
       title={tooltip || `Copiar: ${text}`}
       className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all select-none shrink-0 ${
         copied
-          ? 'bg-emerald-500 text-black shadow-xs font-black'
+          ? 'bg-emerald-500 text-black shadow-sm font-semibold'
           : 'bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/80'
       } ${className || ''}`}
     >
@@ -321,9 +321,9 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
       data-testid={`prepayment-verification-box-${order.reservaid}`}
       className={`p-2.5 sm:p-3 rounded-xl border transition-all space-y-2.5 ${
         isVerifiedPaid
-          ? 'bg-gradient-to-r from-cyan-950/70 via-indigo-950/60 to-amber-950/60 border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.22)]'
+          ? 'bg-cyan-950/70 border-cyan-400 '
           : isSentPending
-            ? 'bg-gradient-to-r from-amber-950/80 via-fuchsia-950/50 to-amber-950/80 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.3)]'
+            ? 'bg-amber-950/70 border-amber-400 '
             : 'bg-zinc-900/90 border-amber-500/40'
       }`}
     >
@@ -331,15 +331,15 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
         <div className="flex items-center gap-2 flex-wrap">
           {isVerifiedPaid ? (
-            <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 text-[10px] font-black uppercase tracking-wider shadow-[0_0_12px_rgba(34,211,238,0.55)]">
-              💎 PAGO ADELANTADO CONFIRMADO
+            <span className="px-2 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-800/60 text-[10px] font-medium uppercase tracking-wider ">
+              PAGO ADELANTADO CONFIRMADO
             </span>
           ) : isSentPending ? (
-            <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 text-black text-[10px] font-black uppercase tracking-wider shadow-[0_0_12px_rgba(251,191,36,0.65)] animate-pulse">
-              ⚡ PAGO ENVIADO · FALTA TU VERIFICACIÓN
+            <span className="px-2 py-0.5 rounded-md bg-amber-950 text-amber-400 border border-amber-800/60 text-[10px] font-medium uppercase tracking-wider ">
+              PAGO ENVIADO · FALTA TU VERIFICACIÓN
             </span>
           ) : (
-            <span className="px-2 py-0.5 rounded-md bg-amber-950 text-amber-300 border border-amber-700 text-[9px] font-black uppercase tracking-wider">
+            <span className="px-2 py-0.5 rounded-md bg-amber-950 text-amber-400 border border-amber-700 text-[10px] font-semibold uppercase tracking-wider">
               🏦 Verificación Transferencia (-Gs. 30.000)
             </span>
           )}
@@ -359,10 +359,10 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
               type="button"
               disabled={togglingSwitch}
               onClick={handleMarkPaymentSentPending}
-              className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-200 text-[10px] font-black cursor-pointer transition-all"
+              className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-200 text-[10px] font-medium cursor-pointer transition-all"
               title="Marcar que el cliente avisó que envió pago adelantado"
             >
-              ⚡ Marcar &quot;Pago Enviado&quot;
+              Marcar &quot;Pago Enviado&quot;
             </button>
           )}
 
@@ -373,10 +373,10 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
             data-testid={`switch-verify-prepayment-${order.reservaid}`}
             disabled={togglingSwitch}
             onClick={handleToggleVerifiedSwitch}
-            className={`px-3 py-1.5 rounded-xl font-black text-xs inline-flex items-center gap-2 cursor-pointer transition-all border ${
+            className={`px-3 py-1.5 rounded-xl font-semibold text-xs inline-flex items-center gap-2 cursor-pointer transition-all border ${
               isVerifiedPaid
-                ? 'bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 border-white shadow-[0_0_14px_rgba(34,211,238,0.55)]'
-                : 'bg-zinc-950 hover:bg-zinc-900 text-amber-200 border-amber-400/80 shadow-[0_0_10px_rgba(245,158,11,0.25)]'
+                ? 'bg-sky-950 text-sky-300 border border-sky-800/60 border-white '
+                : 'bg-zinc-950 hover:bg-zinc-900 text-amber-200 border-amber-400/80 '
             }`}
           >
             {/* Switch Track & Thumb */}
@@ -404,19 +404,19 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
         {/* Micro-Tarjeta 1: Cliente a verificar en tu banco */}
         <div className="p-2.5 rounded-xl bg-black/50 border border-white/15 space-y-1">
-          <div className="flex items-center justify-between text-[10px] font-black uppercase text-amber-300">
+          <div className="flex items-center justify-between text-[10px] font-medium uppercase text-amber-400">
             <span>👤 1. Cliente en tu Banco</span>
             <CopyFieldBtn text={order.nombre} label="Copiar" tooltip="Copiar nombre para buscar en tu app bancaria" />
           </div>
-          <div className="text-xs font-black text-white truncate" title={order.nombre}>
+          <div className="text-xs font-semibold text-white truncate" title={order.nombre}>
             {order.nombre}
           </div>
           <div className="flex items-center justify-between gap-1 text-[11px] font-mono text-zinc-300">
-            <span>📱 {order.celular}</span>
+            <span>{order.celular}</span>
             <CopyFieldBtn text={order.celular} label="Copiar" tooltip="Copiar WhatsApp" />
           </div>
           {order.pagoAdelantadoFecha && (
-            <div className="text-[9px] text-zinc-400">
+            <div className="text-[10px] text-zinc-400">
               🕒 {new Date(order.pagoAdelantadoFecha).toLocaleDateString('es-PY')} {new Date(order.pagoAdelantadoFecha).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit', hour12: false })}hs
             </div>
           )}
@@ -424,7 +424,7 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
 
         {/* Micro-Tarjeta 2: Cuenta y Monto Transferido */}
         <div className="p-2.5 rounded-xl bg-black/50 border border-white/15 space-y-1">
-          <div className="flex items-center justify-between text-[10px] font-black uppercase text-cyan-300">
+          <div className="flex items-center justify-between text-[10px] font-medium uppercase text-cyan-300">
             <span>🏛️ 2. Cuenta Destino</span>
             <CopyFieldBtn text={aliasCuenta} label="Copiar Alias" tooltip="Copiar Alias bancario" />
           </div>
@@ -438,7 +438,7 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
             <span className="text-[10px] line-through text-zinc-500 font-mono">
               {formatGs(rawMontoNum)}
             </span>
-            <span className="px-1.5 py-0.2 rounded bg-amber-400/20 border border-amber-400/50 text-amber-300 font-mono text-[11px] font-black">
+            <span className="px-1.5 py-0.2 rounded bg-amber-400/20 border border-amber-400/50 text-amber-400 font-mono text-[11px] font-medium">
               Transferido: {formatGs(discountedMontoNum)}
             </span>
           </div>
@@ -446,15 +446,14 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
 
         {/* Micro-Tarjeta 3: Comprobante Recibido */}
         <div className="p-2.5 rounded-xl bg-black/50 border border-white/15 flex flex-col justify-between gap-1.5">
-          <div className="flex items-center justify-between text-[10px] font-black uppercase text-amber-300">
+          <div className="flex items-center justify-between text-[10px] font-medium uppercase text-amber-400">
             <span>🧾 3. Comprobante</span>
             {order.comprobantePagoDataUrl && (
               <button
                 type="button"
                 onClick={() => setShowFullReceiptModal(true)}
-                className="px-1.5 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 text-[9px] font-black cursor-pointer"
-              >
-                🔍 Ampliar
+                className="px-1.5 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 text-[10px] font-semibold cursor-pointer"
+              >Ampliar
               </button>
             )}
           </div>
@@ -471,7 +470,7 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
                 <span className="text-[10px] font-bold text-emerald-300 block truncate">
                   ✓ Captura adjuntada
                 </span>
-                <label className="text-[9px] text-zinc-400 hover:text-white underline cursor-pointer mt-0.5 block">
+                <label className="text-[10px] text-zinc-400 hover:text-white underline cursor-pointer mt-0.5 block">
                   Cambiar foto
                   <input
                     type="file"
@@ -505,25 +504,25 @@ export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSecti
       {showFullReceiptModal && order.comprobantePagoDataUrl && (
         <div
           onClick={() => setShowFullReceiptModal(false)}
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="max-w-lg w-full bg-zinc-950 border border-amber-400/80 rounded-2xl p-4 space-y-3 shadow-2xl"
+            className="max-w-lg w-full bg-zinc-950 border border-amber-400/80 rounded-lg p-4 space-y-3 shadow-lg"
           >
             <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
               <div>
-                <h4 className="text-sm font-black text-white">
+                <h4 className="text-sm font-semibold text-white">
                   🧾 Comprobante de Pago — {order.nombre}
                 </h4>
-                <p className="text-[11px] text-amber-300 font-mono">
+                <p className="text-[11px] text-amber-400 font-mono">
                   {bancoNombre} · Alias {aliasCuenta} · Titular: {titularCuenta} · {formatGs(discountedMontoNum)}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowFullReceiptModal(false)}
-                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-black cursor-pointer"
+                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold cursor-pointer"
               >
                 ✕ Cerrar
               </button>
@@ -800,9 +799,9 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
 
   return (
     <div
-      className={`p-3 sm:p-4 rounded-2xl bg-[#0d0d0f] border shadow-md space-y-3 animate-fadeIn text-zinc-100 ${
+      className={`p-3 sm:p-4 rounded-lg bg-[#0f0f11] border shadow-sm space-y-3 text-zinc-100 ${
         isPrepaidTab
-          ? 'border-cyan-400/70 shadow-[0_0_25px_rgba(34,211,238,0.18)]'
+          ? 'border-cyan-400/70 '
           : 'border-emerald-900/60'
       }`}
     >
@@ -810,15 +809,15 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
         <div className="flex items-center gap-2 min-w-0">
           {isPrepaidTab ? (
-            <span className="px-2.5 py-0.5 rounded-md bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 text-[10px] font-black uppercase tracking-wider shrink-0 shadow-[0_0_12px_rgba(34,211,238,0.5)]">
-              💎 Pago Adelantado ({confirmedOrders.length})
+            <span className="px-2.5 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-800/60 text-[10px] font-medium uppercase tracking-wider shrink-0 ">
+              Pago Adelantado ({confirmedOrders.length})
             </span>
           ) : (
-            <span className="px-2 py-0.5 rounded-md bg-[#16a34a] text-white text-[10px] font-black uppercase tracking-wider shrink-0">
-              ✅ Confirmados ({confirmedOrders.length})
+            <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-medium uppercase tracking-wider shrink-0">
+              Confirmados ({confirmedOrders.length})
             </span>
           )}
-          <h4 className="text-xs sm:text-sm font-black text-zinc-100 truncate">
+          <h4 className="text-xs sm:text-sm font-semibold text-zinc-100 truncate">
             {product.nombre}
           </h4>
           <span className="hidden xl:inline text-[11px] text-zinc-400 truncate">
@@ -834,18 +833,18 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
             data-testid="download-confirmed-excel-btn"
             disabled={confirmedOrders.length === 0}
             onClick={() => downloadConfirmedOrdersExcelCsv(product, confirmedOrders)}
-            className="h-8 px-3 rounded-xl bg-[#16a34a] hover:bg-[#15803d] disabled:opacity-40 text-white text-[11px] font-black inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+            className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-[11px] font-medium inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
             title="Descargar planilla Excel (.csv) con todos los pedidos confirmados y datos completos para despacho"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>📥 Descargar Excel ({confirmedOrders.length})</span>
+            <span>Descargar Excel ({confirmedOrders.length})</span>
           </button>
 
           <button
             type="button"
             disabled={confirmedOrders.length === 0}
             onClick={handleCopyDispatchList}
-            className="h-8 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 border border-zinc-700 text-zinc-200 text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all"
+            className="h-8 px-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 border border-zinc-700 text-zinc-200 text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all"
             title="Copiar fichas completas en texto para enviar por WhatsApp al empaquetador o courier"
           >
             <Copy className="w-3.5 h-3.5 text-emerald-400" />
@@ -863,7 +862,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
             title="Mostrar u ocultar filtros y selección múltiple"
           >
             <Filter className="w-3.5 h-3.5 text-emerald-400" />
-            <span>🔍 Filtrar</span>
+            <span>Filtrar</span>
           </button>
 
           {onClose && (
@@ -880,11 +879,10 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
 
       {/* BARRA DE FILTROS + SELECCIÓN MÚLTIPLE (Se abre solo al tocar el botón Filtrar) */}
       {(showFiltersBar || hasActiveFilter) && (
-      <div className="p-3 rounded-2xl bg-zinc-900/80 border border-zinc-800 shadow-xs space-y-2.5 animate-fadeIn">
+      <div className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800 shadow-sm space-y-2.5">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-end">
           <div className="lg:col-span-4">
-            <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-              🔍 Filtrar Confirmados por Nombre o Reserva
+            <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">Filtrar Confirmados por Nombre o Reserva
             </label>
             <div className="relative">
               <input
@@ -893,13 +891,13 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                 value={filterName}
                 onChange={e => setFilterName(e.target.value)}
                 placeholder="Ej: Nombre del cliente o NX-..."
-                className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-zinc-800 text-xs font-medium text-zinc-100 bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-medium text-zinc-100 bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
               />
               {filterName && (
                 <button
                   type="button"
                   onClick={() => setFilterName('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-stone-700 text-xs font-semibold cursor-pointer"
                 >
                   ✕
                 </button>
@@ -908,8 +906,8 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
           </div>
 
           <div className="lg:col-span-3">
-            <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-              📱 Filtrar por Teléfono
+            <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+              Filtrar por Teléfono
             </label>
             <div className="relative">
               <input
@@ -918,13 +916,13 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                 value={filterPhone}
                 onChange={e => setFilterPhone(e.target.value)}
                 placeholder="Ej: 0973... o 595..."
-                className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-zinc-800 text-xs font-mono font-medium text-zinc-100 bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-mono font-medium text-zinc-100 bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
               />
               {filterPhone && (
                 <button
                   type="button"
                   onClick={() => setFilterPhone('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-black cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-stone-700 text-xs font-semibold cursor-pointer"
                 >
                   ✕
                 </button>
@@ -933,8 +931,8 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
           </div>
 
           <div className="lg:col-span-5">
-            <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-              🚚 Filtrar por Estado de Entrega
+            <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+              Filtrar por Estado de Entrega
             </label>
             <div className="grid grid-cols-4 gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
               {[
@@ -947,9 +945,9 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                   key={tab.id}
                   type="button"
                   onClick={() => setFilterLogisticsState(tab.id)}
-                  className={`py-1.5 px-1.5 rounded-lg text-[10px] font-black cursor-pointer transition-all truncate ${
+                  className={`py-1.5 px-1.5 rounded-lg text-[10px] font-medium cursor-pointer transition-all truncate ${
                     filterLogisticsState === tab.id
-                      ? 'bg-[#16a34a] text-white shadow-2xs'
+                      ? 'bg-emerald-600 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-100'
                   }`}
                 >
@@ -968,7 +966,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
               data-testid="confirmed-select-all-btn"
               onClick={toggleSelectAllConfirmed}
               disabled={allFilteredIds.length === 0}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
                 isAllConfirmedSelected
                   ? 'bg-emerald-950 text-white border-emerald-700'
                   : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-750'
@@ -978,7 +976,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                 type="checkbox"
                 readOnly
                 checked={isAllConfirmedSelected}
-                className="w-3.5 h-3.5 accent-[#16a34a] pointer-events-none"
+                className="w-3.5 h-3.5 accent-emerald-500 pointer-events-none"
               />
               <span>
                 {isAllConfirmedSelected
@@ -991,7 +989,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
               <button
                 type="button"
                 onClick={() => setSelectedConfirmedIds([])}
-                className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 border border-zinc-800 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 border border-zinc-800 cursor-pointer"
               >
                 Limpiar selección ({selectedFilteredIds.length})
               </button>
@@ -1004,7 +1002,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
               data-testid="confirmed-bulk-delete-btn"
               disabled={selectedFilteredIds.length === 0}
               onClick={() => onRequestDeleteOrders(selectedFilteredIds)}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#dc2626] hover:bg-[#b91c1c] disabled:opacity-40 text-white border border-red-800 shadow-xs inline-flex items-center gap-1.5 cursor-pointer transition-all"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[#dc2626] hover:bg-[#b91c1c] disabled:opacity-40 text-white border border-red-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
               title="Eliminar los pedidos confirmados seleccionados"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -1016,19 +1014,19 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
       )}
 
       {/* FUNCIÓN UNIVERSAL SEPARADA DEL PRODUCTO: MARCAR ENVIADO / NO ENVIADO / CONCRETADO (En 1 fila compacta) */}
-      <div className="p-2.5 sm:p-3 rounded-xl bg-[#062319] text-white border border-[#25D366]/40 shadow-xs space-y-2">
+      <div className="p-2.5 sm:p-3 rounded-lg bg-emerald-950 text-white border border-[#25D366]/40 shadow-sm space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-[11px] font-black uppercase tracking-wider text-[#25D366] flex items-center gap-1.5">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-[#25D366] flex items-center gap-1.5">
             <Truck className="w-3.5 h-3.5" />
             <span>Logística y Despacho ({selectedFilteredIds.length > 0 ? `${selectedFilteredIds.length} seleccionados` : 'Selector Rápido'})</span>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] font-black shrink-0 flex-wrap">
-            <span className="px-2.5 py-1 rounded-lg bg-white/10 text-amber-300">
+          <div className="flex items-center gap-2 text-[11px] font-medium shrink-0 flex-wrap">
+            <span className="px-2.5 py-1 rounded-lg bg-white/10 text-amber-400">
               ⏳ No Enviados: {stats.noEnviados}
             </span>
             <span className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-200 border border-blue-400/30">
-              📦 Enviados: {stats.enviados}
+              Enviados: {stats.enviados}
             </span>
             <span className="px-2.5 py-1 rounded-lg bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/40">
               💰 Concretados: {stats.concretados}
@@ -1044,13 +1042,13 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
             className="w-full lg:flex-1 lg:max-w-md px-3 py-2 rounded-xl bg-black/40 border border-white/20 text-xs font-bold text-white outline-none focus:border-[#25D366] truncate"
           >
             {confirmedOrders.map((ord, idx) => (
-              <option key={ord.reservaid} value={ord.reservaid} className="bg-[#062319] text-white">
+              <option key={ord.reservaid} value={ord.reservaid} className="bg-emerald-950 text-white">
                 #{idx + 1} · Reserva {ord.reservaid} — {ord.nombre} ({ord.ciudad.split(',')[0]})
               </option>
             ))}
             {confirmedOrders.length > 1 && (
-              <option value="TODOS" className="bg-[#062319] text-[#e8b23a] font-black">
-                ⚡ Aplicar a TODOS los pedidos confirmados ({confirmedOrders.length})
+              <option value="TODOS" className="bg-emerald-950 text-emerald-400 font-semibold">
+                Aplicar a TODOS los pedidos confirmados ({confirmedOrders.length})
               </option>
             )}
           </select>
@@ -1060,7 +1058,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
               type="button"
               disabled={updatingLogistics || confirmedOrders.length === 0}
               onClick={() => handleUniversalStepMark('no_enviado')}
-              className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-200 text-xs font-black inline-flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50 whitespace-nowrap"
+              className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-200 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50 whitespace-nowrap"
             >
               <Clock className="w-3.5 h-3.5" />
               <span>Marcar No Enviado</span>
@@ -1070,7 +1068,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
               type="button"
               disabled={updatingLogistics || confirmedOrders.length === 0}
               onClick={() => handleUniversalStepMark('enviado')}
-              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-all disabled:opacity-50 whitespace-nowrap"
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition-all disabled:opacity-50 whitespace-nowrap"
             >
               <Truck className="w-3.5 h-3.5" />
               <span>Marcar Enviado</span>
@@ -1080,7 +1078,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
               type="button"
               disabled={updatingLogistics || confirmedOrders.length === 0}
               onClick={() => handleUniversalStepMark('concretado')}
-              className="px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-[#041911] text-xs font-black inline-flex items-center gap-1.5 shadow-xs cursor-pointer transition-all disabled:opacity-50 whitespace-nowrap"
+              className="px-3.5 py-2 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-black text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition-all disabled:opacity-50 whitespace-nowrap"
             >
               <DollarSign className="w-3.5 h-3.5" />
               <span>Marcar Concretado (Entregado y Cobrado)</span>
@@ -1091,9 +1089,9 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
 
       {/* LISTA DE TARJETAS HORIZONTALES ENUMERADAS (#1, #2, #3...) CON CASILLA DE SELECCIÓN Y ELIMINADO */}
       {confirmedOrders.length === 0 ? (
-        <div className="p-8 rounded-2xl bg-[#09090b] border border-dashed border-zinc-800 text-center space-y-2">
+        <div className="p-8 rounded-lg bg-[#09090b] border border-dashed border-zinc-800 text-center space-y-2">
           <PackageCheck className={`w-8 h-8 mx-auto opacity-70 ${isPrepaidTab ? 'text-cyan-400' : 'text-emerald-500'}`} />
-          <div className="text-sm font-black text-zinc-300">
+          <div className="text-sm font-semibold text-zinc-300">
             {isPrepaidTab
               ? 'Aún no hay pedidos verificados en la pestaña de Pago Adelantado'
               : 'No se encontraron pedidos confirmados pendientes de pago contra entrega con el filtro actual'}
@@ -1132,12 +1130,12 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                   }}
                   className={`w-full h-11 min-h-[44px] max-h-[44px] px-3 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer select-none transition-all overflow-hidden ${
                     isPrepayVerified
-                      ? 'border-cyan-400 bg-gradient-to-r from-cyan-950/75 via-indigo-950/60 to-amber-950/60 shadow-[0_0_20px_rgba(34,211,238,0.32)] ring-1 ring-cyan-400/50 text-white'
+                      ? 'border-cyan-400 bg-cyan-950/70 ring-1 ring-cyan-400/50 text-white'
                       : isPrepaySentPending
-                        ? 'border-amber-400 bg-gradient-to-r from-amber-950/80 via-fuchsia-950/55 to-amber-950/80 shadow-[0_0_22px_rgba(245,158,11,0.42)] ring-1 ring-amber-400/60 text-amber-50'
+                        ? 'border-amber-400 bg-amber-950/70 ring-1 ring-amber-400/60 text-amber-50'
                         : isChecked
                           ? 'border-emerald-600 bg-emerald-950/70 ring-1 ring-emerald-500/30 text-emerald-100'
-                          : 'border-zinc-800 bg-[#0d0d0f] hover:bg-zinc-900/90 text-zinc-100'
+                          : 'border-zinc-800 bg-[#0f0f11] hover:bg-zinc-900/90 text-zinc-100'
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
@@ -1146,24 +1144,24 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                       checked={isChecked}
                       onClick={e => e.stopPropagation()}
                       onChange={() => toggleSelectConfirmedOrder(ord.reservaid)}
-                      className="w-4 h-4 accent-[#16a34a] cursor-pointer shrink-0"
+                      className="w-4 h-4 accent-emerald-500 cursor-pointer shrink-0"
                     />
-                    <span className="font-mono text-[10px] font-black px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 shrink-0 tabular-nums">
+                    <span className="font-mono text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 shrink-0 tabular-nums">
                       #{numOrder}
                     </span>
                     <span className="font-mono text-[11px] font-bold text-zinc-300 shrink-0 tabular-nums">
                       {ord.reservaid}
                     </span>
                     {isPrepayVerified ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gradient-to-r from-cyan-400 via-sky-300 to-amber-300 text-slate-950 text-[9px] font-black uppercase tracking-tight shrink-0 shadow-[0_0_10px_rgba(34,211,238,0.6)]">
-                        <span>💎 PAGO ADELANTADO</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60 text-[10px] font-semibold uppercase tracking-tight shrink-0 ">
+                        <span>PAGO ADELANTADO</span>
                       </span>
                     ) : isPrepaySentPending ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 text-black text-[9px] font-black uppercase tracking-tight shrink-0 shadow-[0_0_12px_rgba(251,191,36,0.75)] animate-pulse">
-                        <span>⚡ PAGO ENVIADO (VERIFICAR)</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800/60 text-[10px] font-semibold uppercase tracking-tight shrink-0 ">
+                        <span>PAGO ENVIADO (VERIFICAR)</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[9px] font-black uppercase tracking-tight shrink-0">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-semibold uppercase tracking-tight shrink-0">
                         <CheckCircle2 className="w-2.5 h-2.5" />
                         <span>Confirmado</span>
                       </span>
@@ -1175,14 +1173,14 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                       {comparison.celularConfirmado}
                     </span>
                     <span className="hidden md:inline-block text-[11px] font-medium text-zinc-300 truncate max-w-[170px]">
-                      📍 {ord.ciudad}
+                      {ord.ciudad}
                     </span>
                     <span
-                      className={`hidden lg:inline-block font-mono text-[11px] font-black tabular-nums whitespace-nowrap shrink-0 ${
+                      className={`hidden lg:inline-block font-mono text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0 ${
                         isPrepayVerified
                           ? 'text-cyan-300'
                           : isPrepaySentPending
-                            ? 'text-amber-300'
+                            ? 'text-amber-400'
                             : 'text-emerald-400'
                       }`}
                     >
@@ -1202,9 +1200,9 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                           handleQuickApprovePrepaymentCard(ord);
                         }}
                         title="Comprobar pago en banco, aprobar descuento de Gs. 30.000 y enviar audio de aprobación al WhatsApp del cliente"
-                        className={`h-7 px-2.5 rounded-lg text-[10px] font-black inline-flex items-center gap-1 cursor-pointer transition-all border ${
+                        className={`h-7 px-2.5 rounded-lg text-[10px] font-medium inline-flex items-center gap-1 cursor-pointer transition-all border ${
                           isPrepaySentPending
-                            ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.55)]'
+                            ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-200 '
                             : 'bg-cyan-950/90 hover:bg-cyan-900 text-cyan-200 border-cyan-500/70'
                         }`}
                       >
@@ -1217,21 +1215,21 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                         </span>
                       </button>
                     ) : (
-                      <span className="h-7 px-2 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/70 text-[10px] font-black inline-flex items-center gap-1">
-                        💎 Aprobado (-30k)
+                      <span className="h-7 px-2 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/70 text-[10px] font-medium inline-flex items-center gap-1">
+                        Aprobado (-30k)
                       </span>
                     )}
 
                     {isConcretado ? (
-                      <span className="hidden xl:inline-block bg-[#e8b23a] text-[#041911] px-2 py-0.5 rounded text-[10px] font-black uppercase">
+                      <span className="hidden xl:inline-block bg-emerald-500 text-black px-2 py-0.5 rounded text-[10px] font-medium uppercase">
                         💰 Concretado
                       </span>
                     ) : isEnviado ? (
-                      <span className="hidden xl:inline-block bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase">
-                        📦 Enviado
+                      <span className="hidden xl:inline-block bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-medium uppercase">
+                        Enviado
                       </span>
                     ) : (
-                      <span className="hidden xl:inline-block bg-amber-200 text-amber-950 px-2 py-0.5 rounded text-[10px] font-black uppercase">
+                      <span className="hidden xl:inline-block bg-amber-200 text-amber-950 px-2 py-0.5 rounded text-[10px] font-medium uppercase">
                         ⏳ Listo p/ Envío
                       </span>
                     )}
@@ -1244,14 +1242,14 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                           onRequestDeleteOrders([ord.reservaid]);
                         }}
                         title="Eliminar este pedido"
-                        className="h-7 px-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-black inline-flex items-center gap-1 cursor-pointer"
+                        className="h-7 px-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-medium inline-flex items-center gap-1 cursor-pointer"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
                     )}
 
                     <span
-                      className={`h-7 px-2.5 rounded-lg text-[10px] font-black inline-flex items-center gap-1 ${
+                      className={`h-7 px-2.5 rounded-lg text-[10px] font-medium inline-flex items-center gap-1 ${
                         isPrepayVerified
                           ? 'bg-cyan-400 text-slate-950'
                           : isPrepaySentPending
@@ -1269,7 +1267,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
 
                 {/* Detalle Desplegable: Panel de Verificación de Pago Adelantado + Ficha Completa del Cliente */}
                 {isCardOpen && (
-                  <div className="mt-1 p-2.5 sm:p-3 rounded-xl border border-zinc-800 bg-[#09090b] space-y-2.5 animate-fadeIn">
+                  <div className="mt-1 p-2.5 sm:p-3 rounded-xl border border-zinc-800 bg-[#09090b] space-y-2.5">
                     {/* PANEL DE VERIFICACIÓN DE PAGO ADELANTADO Y COMPROBANTE CON INTERRUPTOR */}
                     <PrepaymentVerificationSection
                       order={ord}
@@ -1282,10 +1280,10 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                     />
 
                     {/* BANNER COMPACTO: RESUMEN DE CONFIRMACIÓN DEL AGENTE IA */}
-                    <div className="p-2 sm:p-2.5 rounded-xl bg-emerald-950/35 border border-emerald-800/60 flex items-center justify-between gap-2 text-xs">
+                    <div className="p-2 sm:p-2.5 rounded-lg bg-emerald-950/35 border border-emerald-800/60 flex items-center justify-between gap-2 text-xs">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <FileCheck2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300 shrink-0">
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-300 shrink-0">
                           Resumen IA:
                         </span>
                         <p className="text-[11px] text-zinc-200 truncate leading-tight font-medium" title={comparison.resumenTexto}>
@@ -1315,14 +1313,14 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                     {/* 2 COLUMNAS COMPACTAS Y EQUILIBRADAS: DATOS WEB VS DATOS CONFIRMADOS EN CHAT */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 items-stretch">
                       {/* COLUMNA 1: DATOS CARGADOS POR EL CLIENTE (WEB) */}
-                      <div className="p-2.5 sm:p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between space-y-2">
+                      <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between space-y-2">
                         <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-zinc-300 border-b border-zinc-800 pb-1.5 flex items-center justify-between">
+                          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-300 border-b border-zinc-800 pb-1.5 flex items-center justify-between">
                             <span className="flex items-center gap-1.5">
                               <User className="w-3.5 h-3.5 text-zinc-400" />
                               <span>1. Datos Cargados por el Cliente (Web)</span>
                             </span>
-                            <span className="text-[9px] text-zinc-400 font-mono bg-zinc-800 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] text-zinc-400 font-mono bg-zinc-800 px-1.5 py-0.5 rounded">
                               Reserva #{ord.reservaid}
                             </span>
                           </div>
@@ -1381,7 +1379,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                             <div className="flex items-center justify-between gap-1.5 py-0.5">
                               <span className="text-zinc-400 text-[11px]">Pack / Total Web:</span>
                               <div className="flex items-center gap-1.5">
-                                <strong className="text-emerald-400 font-mono text-xs font-black">
+                                <strong className="text-emerald-400 font-mono text-xs font-semibold">
                                   {ord.cantidad || 1} un. · {formatGs(ord.monto || 189000)}
                                 </strong>
                                 <CopyFieldBtn text={`${ord.cantidad || 1} un. · ${formatGs(ord.monto || 189000)}`} tooltip="Copiar Pack y Total" />
@@ -1403,19 +1401,19 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                           title="Copiar todos los datos cargados por el cliente (Nombre, Teléfono, Ciudad, Dirección) de una vez"
                         >
                           <Copy className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>📋 Copiar Todos los Datos Web (1 Clic)</span>
+                          <span>Copiar Todos los Datos Web (1 Clic)</span>
                         </button>
                       </div>
 
                       {/* COLUMNA 2: DATOS CONFIRMADOS POR EL AGENTE EN CHAT */}
-                      <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-950/20 border border-emerald-900/60 flex flex-col justify-between space-y-2">
+                      <div className="p-2.5 sm:p-3 rounded-lg bg-emerald-950/20 border border-emerald-900/60 flex flex-col justify-between space-y-2">
                         <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-emerald-300 border-b border-emerald-900/60 pb-1.5 flex items-center justify-between">
+                          <div className="text-[10px] font-medium uppercase tracking-wider text-emerald-300 border-b border-emerald-900/60 pb-1.5 flex items-center justify-between">
                             <span className="flex items-center gap-1.5">
                               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                               <span>2. Datos Confirmados en Chat IA</span>
                             </span>
-                            <span className="text-[9px] bg-emerald-900/90 text-emerald-200 border border-emerald-700/80 px-1.5 py-0.5 rounded font-black">
+                            <span className="text-[10px] bg-emerald-900/90 text-emerald-200 border border-emerald-700/80 px-1.5 py-0.5 rounded font-semibold">
                               ✓ COINCIDEN
                             </span>
                           </div>
@@ -1466,7 +1464,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                               <div className="flex items-start gap-1.5 min-w-0 flex-1">
                                 <Home className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                                 <div className="min-w-0">
-                                  <span className="text-[10px] font-black uppercase text-amber-300 block">
+                                  <span className="text-[10px] font-medium uppercase text-amber-400 block">
                                     Fachada / Referencia Casa:
                                   </span>
                                   <span className="text-amber-100 text-xs font-medium leading-snug break-words">
@@ -1481,10 +1479,10 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
 
                             {/* Mapa GPS */}
                             {comparison.gpsLink ? (
-                              <div className="flex items-center justify-between gap-1.5 py-1 px-2 rounded-lg bg-[#062319] border border-[#25D366]/50">
+                              <div className="flex items-center justify-between gap-1.5 py-1 px-2 rounded-lg bg-emerald-950 border border-[#25D366]/50">
                                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                  <span className="text-[10px] font-black uppercase text-[#25D366] shrink-0">
-                                    📍 GPS:
+                                  <span className="text-[10px] font-medium uppercase text-[#25D366] shrink-0">
+                                    GPS:
                                   </span>
                                   <span className="font-mono text-[10px] text-zinc-300 truncate" title={comparison.gpsLink}>
                                     {comparison.gpsLink}
@@ -1496,7 +1494,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                                     href={comparison.gpsLink}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="px-2 py-0.5 rounded bg-[#25D366] hover:bg-[#20bd5a] text-[#041911] font-black text-[10px] inline-flex items-center gap-1 shrink-0 shadow-2xs"
+                                    className="px-2 py-0.5 rounded bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold text-[10px] inline-flex items-center gap-1 shrink-0 shadow-sm"
                                     title="Abrir mapa en Google Maps"
                                   >
                                     <span>Abrir</span>
@@ -1521,19 +1519,19 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                               navigator.clipboard.writeText(fullCourierText);
                             } catch {}
                           }}
-                          className="w-full mt-2 py-1.5 px-2.5 rounded-lg bg-[#16a34a] hover:bg-[#15803d] text-white text-[11px] font-black flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer select-none"
+                          className="w-full mt-2 py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer select-none"
                           title="Copiar la ficha completa confirmada para enviar por WhatsApp al courier o empaquetador"
                         >
                           <Copy className="w-3.5 h-3.5" />
-                          <span>📋 Copiar Ficha Completa p/ Courier (1 Clic)</span>
+                          <span>Copiar Ficha Completa p/ Courier (1 Clic)</span>
                         </button>
                       </div>
                     </div>
 
                     {/* PANEL DE EDICIÓN MANUAL POST-LLAMADA (COMPACTO) */}
-                    <div className="p-2.5 sm:p-3 rounded-xl bg-zinc-900/90 text-white border border-zinc-800 space-y-2.5">
+                    <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 text-white border border-zinc-800 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-[#e8b23a] flex items-center gap-1.5">
+                        <div className="text-[10px] font-medium uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                           <Edit3 className="w-3.5 h-3.5" />
                           <span>Edición Manual del Vendedor (Post-Llamada)</span>
                         </div>
@@ -1542,10 +1540,10 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                           <button
                             type="button"
                             onClick={() => openManualEditor(ord)}
-                            className="px-2.5 py-1.5 rounded-lg bg-[#e8b23a] hover:bg-[#ffd778] text-[#041911] text-[11px] font-black inline-flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-medium inline-flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
                           >
                             <Edit3 className="w-3 h-3" />
-                            <span>✏️ Modificar Unidades / Datos / Cancelar</span>
+                            <span>Modificar Unidades / Datos / Cancelar</span>
                           </button>
                         )}
                       </div>
@@ -1554,7 +1552,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                         <div className="pt-2 border-t border-white/15 space-y-3">
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="p-2.5 rounded-xl bg-black/40 border border-white/15 space-y-1.5">
-                              <label className="text-[10px] font-black uppercase text-stone-300 block">
+                              <label className="text-[10px] font-medium uppercase text-stone-300 block">
                                 Cantidad de Piezas / Unidades
                               </label>
                               <div className="flex items-center gap-2">
@@ -1569,7 +1567,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                                 >
                                   <Minus className="w-3.5 h-3.5" />
                                 </button>
-                                <span className="text-sm font-black text-[#25D366] px-2">
+                                <span className="text-sm font-semibold text-[#25D366] px-2">
                                   {editCantidad} {editCantidad === 1 ? 'unidad' : 'unidades'}
                                 </span>
                                 <button
@@ -1587,19 +1585,19 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                             </div>
 
                             <div className="p-2.5 rounded-xl bg-black/40 border border-white/15 space-y-1.5">
-                              <label className="text-[10px] font-black uppercase text-stone-300 block">
+                              <label className="text-[10px] font-medium uppercase text-stone-300 block">
                                 Monto Total a Cobrar (Gs.)
                               </label>
                               <input
                                 type="number"
                                 value={editMonto}
                                 onChange={e => setEditMonto(Number(e.target.value) || 0)}
-                                className="w-full px-2.5 py-1.5 rounded-lg bg-stone-950 border border-white/20 text-xs font-black text-[#e8b23a] outline-none focus:border-[#25D366]"
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-stone-950 border border-white/20 text-xs font-semibold text-emerald-400 outline-none focus:border-[#25D366]"
                               />
                             </div>
 
                             <div className="p-2.5 rounded-xl bg-black/40 border border-white/15 space-y-1.5">
-                              <label className="text-[10px] font-black uppercase text-stone-300 block">
+                              <label className="text-[10px] font-medium uppercase text-stone-300 block">
                                 Ciudad de Entrega
                               </label>
                               <input
@@ -1613,7 +1611,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <label className="text-[10px] font-black uppercase text-stone-300 block mb-1">
+                              <label className="text-[10px] font-medium uppercase text-stone-300 block mb-1">
                                 Dirección de Entrega
                               </label>
                               <input
@@ -1624,7 +1622,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                               />
                             </div>
                             <div>
-                              <label className="text-[10px] font-black uppercase text-stone-300 block mb-1">
+                              <label className="text-[10px] font-medium uppercase text-stone-300 block mb-1">
                                 Referencia de la Casa / Fachada
                               </label>
                               <input
@@ -1657,7 +1655,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                                   setUpdatingLogistics(false);
                                 }
                               }}
-                              className="px-3 py-2 rounded-xl bg-red-600/90 hover:bg-red-500 text-white text-xs font-black inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                              className="px-3 py-2 rounded-lg bg-red-600/90 hover:bg-red-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
                             >
                               <Ban className="w-3.5 h-3.5" />
                               <span>Cancelar / Anular este Pedido</span>
@@ -1693,7 +1691,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                                     setUpdatingLogistics(false);
                                   }
                                 }}
-                                className="px-4 py-2 rounded-xl bg-[#25D366] hover:bg-[#1ebd5a] text-[#041911] text-xs font-black inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                                className="px-4 py-2 rounded-lg bg-[#25D366] hover:bg-[#1ebd5a] text-black text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
                               >
                                 <Save className="w-3.5 h-3.5" />
                                 <span>Guardar Modificación del Pedido</span>

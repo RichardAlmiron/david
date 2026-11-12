@@ -84,19 +84,19 @@ export const ProductSellerAgentPanel: React.FC<ProductSellerAgentPanelProps> = (
   const activeCleanPhone = formatWaPhone(sellerPhoneInput);
 
   return (
-    <div className="p-4 sm:p-5 rounded-2xl bg-[#0d0d0f] text-zinc-100 border border-zinc-800 shadow-lg space-y-4 animate-fadeIn">
+    <div className="p-4 sm:p-5 rounded-lg bg-[#0f0f11] text-zinc-100 border border-zinc-800 shadow-lg space-y-4">
       {/* Cabecera */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-zinc-800 text-zinc-100 flex items-center justify-center shadow-xs shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-zinc-800 text-zinc-100 flex items-center justify-center shadow-sm shrink-0">
             <BellRing className="w-5 h-5 text-emerald-400" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-700 text-emerald-300">
+              <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-700 text-emerald-300">
                 📲 Reportes Automáticos en el WhatsApp del Vendedor
               </span>
-              <h4 className="text-xs sm:text-sm font-black text-white">
+              <h4 className="text-xs sm:text-sm font-semibold text-white">
                 {product.nombre}
               </h4>
             </div>
@@ -109,7 +109,7 @@ export const ProductSellerAgentPanel: React.FC<ProductSellerAgentPanelProps> = (
         <button
           type="button"
           onClick={onClose}
-          className="self-end sm:self-auto px-3 py-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-xs font-black text-white inline-flex items-center gap-1 cursor-pointer transition-colors"
+          className="self-end sm:self-auto px-3 py-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-xs font-semibold text-white inline-flex items-center gap-1 cursor-pointer transition-colors"
         >
           <X className="w-3.5 h-3.5" />
           <span>Cerrar</span>
@@ -121,12 +121,12 @@ export const ProductSellerAgentPanel: React.FC<ProductSellerAgentPanelProps> = (
         {/* Columna Izquierda: Formulario exclusivo para introducir el número */}
         <form
           onSubmit={handleSavePhone}
-          className="lg:col-span-5 p-4 rounded-2xl bg-black/40 border border-white/15 flex flex-col justify-between gap-3"
+          className="lg:col-span-5 p-4 rounded-lg bg-black/40 border border-white/15 flex flex-col justify-between gap-3"
         >
           <div className="space-y-2">
             <label
               htmlFor={`seller-report-phone-${product.id}`}
-              className="block text-xs font-black uppercase tracking-wider text-[#e8b23a] flex items-center gap-1.5"
+              className="block text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5"
             >
               <Smartphone className="w-4 h-4 text-[#25D366]" />
               <span>Número de WhatsApp donde el Vendedor recibe los Avisos y Reportes:</span>
@@ -148,7 +148,7 @@ export const ProductSellerAgentPanel: React.FC<ProductSellerAgentPanelProps> = (
               <button
                 type="submit"
                 disabled={savingPhone}
-                className="px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#1ebd5a] text-[#041911] font-black text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 shadow-xs"
+                className="px-4 py-2.5 rounded-lg bg-[#25D366] hover:bg-[#1ebd5a] text-black font-bold text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 shadow-sm"
               >
                 <Save className="w-4 h-4" />
                 <span>{savingPhone ? 'Guardando...' : 'Guardar Número'}</span>
@@ -164,7 +164,7 @@ export const ProductSellerAgentPanel: React.FC<ProductSellerAgentPanelProps> = (
               </strong>
             </span>
             {activeCleanPhone && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-full">
                 <CheckCircle2 className="w-3 h-3 text-[#25D366]" />
                 Vinculado al WhatsApp del Vendedor
               </span>
@@ -173,8 +173,8 @@ export const ProductSellerAgentPanel: React.FC<ProductSellerAgentPanelProps> = (
         </form>
 
         {/* Columna Derecha: Descripción clara y detallada de para qué sirve esta funcionalidad */}
-        <div className="lg:col-span-7 p-4 rounded-2xl bg-white/5 border border-white/15 space-y-3">
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#e8b23a]">
+        <div className="lg:col-span-7 p-4 rounded-lg bg-white/5 border border-white/15 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
             <Sparkles className="w-4 h-4 text-[#25D366]" />
             <span>¿Para qué sirve esta funcionalidad y cómo trabaja el Agente?</span>
           </div>
@@ -185,7 +185,7 @@ export const ProductSellerAgentPanel: React.FC<ProductSellerAgentPanelProps> = (
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
             <div className="p-3 rounded-xl bg-black/35 border border-white/10 space-y-1">
-              <div className="text-[11px] font-black text-[#25D366] flex items-center gap-1.5">
+              <div className="text-[11px] font-medium text-[#25D366] flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5" />
                 <span>1. Reportes Ejecutivos Bien Diseñados</span>
               </div>
@@ -195,7 +195,7 @@ export const ProductSellerAgentPanel: React.FC<ProductSellerAgentPanelProps> = (
             </div>
 
             <div className="p-3 rounded-xl bg-black/35 border border-white/10 space-y-1">
-              <div className="text-[11px] font-black text-[#e8b23a] flex items-center gap-1.5">
+              <div className="text-[11px] font-medium text-emerald-400 flex items-center gap-1.5">
                 <MessageCircle className="w-3.5 h-3.5" />
                 <span>2. Interacción Humana desde WhatsApp</span>
               </div>

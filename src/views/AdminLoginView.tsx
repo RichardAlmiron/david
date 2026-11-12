@@ -49,13 +49,13 @@ export const AdminLoginView: React.FC = () => {
       </div>
 
       {/* Main Login Card */}
-      <div className="w-full max-w-md bg-[#0d0d0f] text-zinc-100 rounded-2xl shadow-2xl border border-zinc-800 overflow-hidden">
+      <div className="w-full max-w-md bg-[#0f0f11] text-zinc-100 rounded-lg shadow-lg border border-zinc-800 overflow-hidden">
         {/* Header */}
         <div className="bg-zinc-900/80 border-b border-zinc-800 p-6 text-center text-white relative">
-          <div className="w-12 h-12 rounded-2xl bg-zinc-800 border border-zinc-700 mx-auto flex items-center justify-center text-emerald-400 shadow-lg mb-3">
+          <div className="w-12 h-12 rounded-lg bg-zinc-800 border border-zinc-700 mx-auto flex items-center justify-center text-emerald-400 shadow-lg mb-3">
             <Lock className="w-6 h-6" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
             Panel <span className="text-emerald-400">Administrativo</span>
           </h1>
           <p className="text-xs text-zinc-400 mt-1 font-medium">
