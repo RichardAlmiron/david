@@ -141,3 +141,10 @@ Una vez que el pedido está confirmado (`datosConfirmados === true`) y fuera de 
    - **Sesiones Baileys (`WAAUTH-*`):** Respaldo automático comprimido con GZIP en Base64 dentro de `public.codigos` en **Supabase Oficial (`https://pgpmopannzzubunuhlmb.supabase.co`)**, restaurado en el arranque antes de abrir sockets.
    - **Voz Neuronal por Producto (`WAVOICE-*` y `CFG-*`):** Conserva de forma inmutable la voz **Deepgram Aura-2** (`Estrella`, `Celeste`, `Sirio`, `Néstor`) elegida para cada producto.
    - **Doble Motor STT (`Deepgram Nova-3` + `Nova-2` en español):** Desenvuelve mensajes efímeros/`viewOnce`, autodetecta el contenedor nativo (`audio/ogg`, `audio/mp4`, `audio/aac`) y transcribe notas de voz entrantes en ~1 segundo.
+
+---
+
+## 9. Integración No Invasiva con Atribución AutoAds v2 (`AA-XXXXX`)
+
+- El flujo Express de WhatsApp en 1 paso (`"CORRECTO"`), la Compuerta Audio-Primero (`1s`) y el Muro de Hierro (`isOfficialRegisteredProductOrder`) **permanecen 100% intactos** y NO afectan las métricas del algoritmo publicitario (`Circuito A`, optimizado sobre formularios web confirmados `Lead`).
+- De forma paralela e independiente, AutoAds v2 dispone del endpoint `POST /api/attribution/wa-token` (tokens `AA-XXXXX` en `wa_attribution_tokens`, vigencia 30 días) y del matching telefónico normalizado (`5959XXXXXXXX`, `phone_stitch_30d`) en [`server/attributionAndOrders.ts`](./server/attributionAndOrders.ts) para recuperar la atribución publicitaria cuando un visitante derivado por WhatsApp termina completando un pedido. Documentación completa en [`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md).

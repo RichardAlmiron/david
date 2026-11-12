@@ -151,6 +151,11 @@ export interface AutoAdsCreativeBrief {
   ctaLabel: string;
   themeIndex: number;
   aiImagePrompt?: string;
+  videoScriptPrompt?: string;
+  hypothesisId?: string;
+  angleId?: string;
+  hypothesisCode?: string;
+  testVariable?: string;
   aiGeneratedImageUrl?: string;
   aiGeneratedVideoUrl?: string;
   videoScenes?: Array<{
@@ -169,6 +174,15 @@ export interface AutoAdsBrainProfile {
   productName: string;
   trainedAt: string;
   status: 'idle' | 'training' | 'ready' | 'error';
+  strategyMode?: 'hypothesis_v2' | 'legacy' | string;
+  dossierId?: string;
+  researchDossier?: any;
+  psychologicalProfile?: any;
+  hypotheses?: any[];
+  competitorsSummary?: any;
+  competitors?: any[];
+  learningMemoryUsed?: any;
+  recommendedObjective?: string;
 
   /** Análisis profundo del producto */
   productAnalysis: {
@@ -373,9 +387,13 @@ export function extractProductCoreIdentity(product: Partial<ProductPage>): {
 export function enforceZeroSecondFirstWordsHook(
   rawText: string,
   product: Partial<ProductPage>,
-  angleIdx = 0
+  angleIdx = 0,
+  options?: { policyGuardOnly?: boolean }
 ): string {
   if (!rawText) return '';
+  if (options?.policyGuardOnly) {
+    return rawText;
+  }
   const { genericProductName, shortCategoryNoun, ultraShortObjectLabel } = extractProductCoreIdentity(product);
   const objUpper = ultraShortObjectLabel.toUpperCase();
   const rootNoun = (ultraShortObjectLabel.split(' ')[0] || '').toLowerCase();
@@ -501,7 +519,8 @@ export function enforceZeroSecondFirstWordsHook(
 export function sanitizeAdCopyForParaguayCod(
   rawText: string,
   product: Partial<ProductPage>,
-  angleIdx = 0
+  angleIdx = 0,
+  options?: { policyGuardOnly?: boolean }
 ): string {
   if (!rawText) return '';
   const { genericProductName, brandTokenRemoved, shortCategoryNoun } = extractProductCoreIdentity(product);
@@ -548,8 +567,9 @@ export function sanitizeAdCopyForParaguayCod(
   text = text.replace(/[™®©]/g, '').replace(/  +/g, ' ').trim();
 
   // 5. Si es un bloque de anuncio multilínea, aplicar la regla de 0.0 segundos + Primera Estrofa 100% Producto/Placer/Solución
-  if (text.includes('\n')) {
-    text = enforceZeroSecondFirstWordsHook(text, product, angleIdx);
+  // (en modo hypothesis_v2 / policyGuardOnly NO se mutilan preguntas ni hooks psicológicos).
+  if (text.includes('\n') && !options?.policyGuardOnly) {
+    text = enforceZeroSecondFirstWordsHook(text, product, angleIdx, options);
   }
 
   return text;
@@ -1422,36 +1442,42 @@ export function buildCreativeAssetsFromBrain(
   return brain.creativeBriefs.map((brief, idx) => {
     const aspectRatio = brief.format || (brief.type === 'feed_1x1' ? '1:1' : '9:16');
     const themeIdx = (brief.themeIndex ?? idx) % CREATIVE_COLOR_THEMES.length;
+    const policyGuardOnly = brain.strategyMode === 'hypothesis_v2' || Boolean(brief.hypothesisId);
 
     const cleanHeadline = syncRealTimePricesInText(
-      sanitizeAdCopyForParaguayCod(brief.headline || product.nombre, product, idx)
+      sanitizeAdCopyForParaguayCod(brief.headline || product.nombre, product, idx, { policyGuardOnly })
     );
     const cleanPrimaryText = syncRealTimePricesInText(
-      sanitizeAdCopyForParaguayCod(brief.primaryText || '', product, idx)
+      sanitizeAdCopyForParaguayCod(brief.primaryText || '', product, idx, { policyGuardOnly })
     );
     const cleanDescText = syncRealTimePricesInText(
       sanitizeAdCopyForParaguayCod(
         brief.descriptionText || 'Entrega en 2 a 3 días hábiles · Pagás cuando recibís',
         product,
-        idx
+        idx,
+        { policyGuardOnly }
       )
     );
     const ctaLabel = sanitizeCtaLabelForCustomer(brief.ctaLabel || 'PAGÁS CUANDO RECIBÍS');
     const cleanHookBadge = sanitizeAdCopyForParaguayCod(
       brief.hookBadge || '🔥 OFERTA · PAGÁS CUANDO RECIBÍS',
       product,
-      idx
+      idx,
+      { policyGuardOnly }
     );
 
-    // Construir o enriquecer el aiImagePrompt para que siempre sea 100% congruente con la PRIMERA ESTROFA de este anuncio específico
-    const aiImagePrompt = buildAiAdImagePromptForBrief(
-      product,
-      idx,
-      0,
-      cleanPrimaryText,
-      cleanHeadline,
-      ctaLabel
-    );
+    // Respetar el aiImagePrompt psicológico específico de la hipótesis si viene poblado
+    const aiImagePrompt =
+      brief.aiImagePrompt && brief.aiImagePrompt.trim().length > 20
+        ? brief.aiImagePrompt.trim()
+        : buildAiAdImagePromptForBrief(
+            product,
+            idx,
+            0,
+            cleanPrimaryText,
+            cleanHeadline,
+            ctaLabel
+          );
     const aiGeneratedImageUrl = brief.aiGeneratedImageUrl || '';
     const aiGeneratedVideoUrl = brief.aiGeneratedVideoUrl || '';
     const productImage = aiGeneratedImageUrl || product.imagen || '';
@@ -1487,7 +1513,11 @@ export function buildCreativeAssetsFromBrain(
       imageDataUrl,
       aiGeneratedImageUrl,
       aiGeneratedVideoUrl,
-      aiImagePrompt
+      aiImagePrompt,
+      hypothesisId: brief.hypothesisId,
+      angleId: brief.angleId,
+      hypothesisCode: brief.hypothesisCode,
+      testVariable: brief.testVariable
     };
 
     if (brief.videoScenes && brief.videoScenes.length > 0) {

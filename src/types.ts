@@ -1,4 +1,59 @@
 export type OrderStatus = 'reservado' | 'en_camino' | 'entregado_pagado' | 'cancelado';
+
+export type DeliveryStatus =
+  | 'pendiente_envio'
+  | 'en_transito'
+  | 'reprogramado'
+  | 'entregado_fisicamente'
+  | 'devuelto'
+  | 'cancelado';
+
+export type CustomerPaymentStatus =
+  | 'pendiente_cobro'
+  | 'cobrado_verificado'
+  | 'fallido_o_rechazado';
+
+export type CourierSettlementStatus =
+  | 'no_aplica'
+  | 'pendiente_liquidacion'
+  | 'liquidado_en_lote'
+  | 'discrepancia';
+
+export interface PaidTouchSnapshot {
+  capturedAt: string;
+  productSlug?: string;
+  landingPath?: string;
+  referrer?: string;
+  fbclid?: string;
+  fbc?: string;
+  fbp?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  campaign_id?: string;
+  adset_id?: string;
+  ad_id?: string;
+  creative_id?: string;
+  hypothesis_id?: string;
+  angle_id?: string;
+  aa_cid?: string;
+  wa_token?: string;
+}
+
+export interface OrderAttributionPayload {
+  visitorId?: string;
+  firstTouch?: PaidTouchSnapshot | null;
+  lastPaidTouch?: PaidTouchSnapshot | null;
+  waToken?: string;
+  fbp?: string;
+  fbc?: string;
+  fbclid?: string;
+  referrer?: string;
+  landingPath?: string;
+  attributionMethod?: string;
+}
 export type AIMode = 'manual' | 'automatico';
 export type WaCommercialStageId =
   | 'stage1_welcome'
@@ -141,6 +196,34 @@ export interface Order {
   comprobantePagoMimeType?: string;
   comprobantePagoNombreArchivo?: string;
   waCommercialSentStages?: Partial<Record<WaCommercialStageId, boolean>>;
+  // Circuito A (Atribución e idempotencia — inmutable post-confirmación del formulario)
+  visitorId?: string;
+  clientRequestKey?: string;
+  confirmedFormAt?: string;
+  canonicalConversionEvent?: 'Lead';
+  canonicalLeadEventId?: string;
+  attributionSnapshot?: OrderAttributionPayload;
+  attributedAdId?: string;
+  attributedCampaignId?: string;
+  attributedAdsetId?: string;
+  attributedCreativeId?: string;
+  attributedHypothesisId?: string;
+  attributedAngleId?: string;
+  attributionSourceKind?: string;
+  // Circuito B (Logística 3 ejes, costos reales, courier & CAPI Purchase independiente)
+  deliveryStatus?: DeliveryStatus;
+  customerPaymentStatus?: CustomerPaymentStatus;
+  courierSettlementStatus?: CourierSettlementStatus;
+  deliveredAt?: string;
+  collectedAt?: string;
+  settledAt?: string;
+  netCashCollectedPyg?: number;
+  courierFeePyg?: number;
+  courierSettlementId?: string;
+  productUnitCostPyg?: number;
+  packagingCostPyg?: number;
+  returnCostPyg?: number;
+  purchaseCapiStatus?: string;
 }
 
 export interface AppConfig {
@@ -380,6 +463,7 @@ export interface ProductMetaTrackingConfig {
     InitiateCheckout: boolean;
     AddPaymentInfo: boolean;
     Lead: boolean;
+    OrderReservedCOD?: boolean;
     Purchase: boolean;
     Contact: boolean;
     GalleryInteraction: boolean;
@@ -427,6 +511,203 @@ export interface AIAgentSettings {
   activo: boolean;
   scriptPrompt: string;
   modoPorDefecto?: AIMode;
+}
+
+// ============================================================================
+// AUTO ADS v2 — INTERFACES COMPARTIDAS CIRCUITO A Y CIRCUITO B
+// ============================================================================
+
+export type CompetitorSourceTier =
+  | 'verified_meta_ad_library'
+  | 'manual_operator_evidence'
+  | 'llm_strategic_inference';
+
+export interface CompetitorFindingV2 {
+  id: string;
+  pageName: string;
+  headline: string;
+  bodyCopy: string;
+  ctaLabel: string;
+  landingUrl?: string;
+  detectedAngle: string;
+  detectedOffer: string;
+  sourceTier: CompetitorSourceTier;
+  sourceVerified: boolean;
+  evidenceNote: string;
+  activeDays?: number;
+  score?: number;
+  isWinner?: boolean;
+}
+
+export interface PsychologicalProfileV2 {
+  productSlug: string;
+  awarenessLevel: 'unaware' | 'problem_aware' | 'solution_aware' | 'product_aware' | 'most_aware';
+  marketSophistication: 1 | 2 | 3 | 4 | 5;
+  visceralPains: string[];
+  deepDesires: string[];
+  cognitiveBiasesAndTriggers: string[];
+  paraguayCodObjections: Array<{
+    objection: string;
+    reframe: string;
+  }>;
+  uniqueMechanismProblem: string;
+  uniqueMechanismSolution: string;
+  winningAnglesSummary: string[];
+  saturatedPatternsToAvoid: string[];
+}
+
+export interface AutoAdsHypothesisV2 {
+  id: string;
+  hypothesisCode: string;
+  angleId: string;
+  angleName: string;
+  awarenessLevel: string;
+  marketSophistication: number;
+  targetAvatar: string;
+  corePain: string;
+  deepDesire: string;
+  objectionTargeted: string;
+  uniqueMechanismProblem: string;
+  uniqueMechanismSolution: string;
+  bigIdea: string;
+  promise: string;
+  proofType: string;
+  hookFormula: string;
+  testVariable: string;
+  copyFramework: string;
+  visualArchetype: string;
+  primaryTextDraft: string;
+  headlineDraft: string;
+  ctaDraft: string;
+  aiImagePrompt: string;
+  videoScriptPrompt: string;
+  strategicRationale: string;
+}
+
+export interface CircuitAMetricRow {
+  entityType: 'campaign' | 'adset' | 'ad' | 'creative' | 'hypothesis' | 'angle' | 'hook' | 'format';
+  entityId: string;
+  label: string;
+  angleId?: string;
+  hypothesisId?: string;
+  impressions: number;
+  clicks: number;
+  inlineLinkClicks: number;
+  spendUsd: number;
+  spendPyg: number;
+  formsCount: number;
+  formCvrPct: number;
+  cpfUsd: number | null;
+  cpfPyg: number | null;
+  verdict: 'winner' | 'promising' | 'loser' | 'insufficient_data';
+  maturityProgressPct: number;
+  confidenceScore: number;
+  recommendedAction: string;
+}
+
+export interface ProductCostProfile {
+  id: string;
+  productSlug: string;
+  effectiveFrom: string;
+  unitProductCostPyg: number;
+  packagingCostPyg: number;
+  defaultCourierDeliveryFeePyg: number;
+  defaultCourierReturnFeePyg: number;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+}
+
+export interface FxRatePeriod {
+  id: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  usdToPygRate: number;
+  source: 'manual_admin' | 'meta_invoice_reconciliation';
+  metaInvoiceReference?: string;
+  metaInvoiceAmountUsd?: number;
+  metaInvoiceAmountPyg?: number;
+  createdBy?: string;
+  createdAt: string;
+}
+
+export interface CourierSettlementRecord {
+  id: string;
+  courierName: string;
+  settlementDate: string;
+  referenceCode?: string;
+  totalGrossCollectedPyg: number;
+  totalCourierFeesPyg: number;
+  totalNetTransferredPyg: number;
+  ordersCount: number;
+  matchedOrderIds: string[];
+  unmatchedRows: Array<{
+    reservaId?: string;
+    phone?: string;
+    amountPyg?: number;
+    feePyg?: number;
+    reason: string;
+  }>;
+  rawSourceType: 'manual' | 'csv_import';
+  createdBy?: string;
+  createdAt: string;
+}
+
+export interface ErpProfitabilitySummary {
+  auditStatus: 'auditado_completo' | 'faltan_costos_reales' | 'pendiente_liquidacion_courier';
+  auditWarnings: string[];
+  totalOrdersCount: number;
+  deliveredAndCollectedCount: number;
+  pendingCourierCount: number;
+  returnedOrCancelledCount: number;
+  grossCollectedPyg: number;
+  settledCashPyg: number;
+  productCogsPyg: number | null;
+  packagingTotalPyg: number;
+  courierFeesTotalPyg: number;
+  returnFeesTotalPyg: number;
+  adSpendUsd: number;
+  adSpendPyg: number;
+  fxRateUsed: number;
+  fxSource: string;
+  auditedNetProfitPyg: number | null;
+  purchaseCapiSentCount: number;
+  purchaseCapiSkippedWindowCount: number;
+  purchaseCapiPendingCount: number;
+}
+
+export interface AutoAdsFeatureFlags {
+  AUTOADS_STRATEGY_V2_ENABLED: boolean;
+  AUTOADS_CANONICAL_LEAD_ONLY: boolean;
+  AUTOADS_EMIT_COD_CUSTOM_EVENT: boolean;
+  AUTOADS_PREFLIGHT_STRICT_CURRENCY: boolean;
+  AUTOADS_PURCHASE_CAPI_INDEPENDENT_ENABLED: boolean;
+}
+
+export interface MetaPreflightCheckItem {
+  code: string;
+  level: 'ok' | 'warning' | 'error';
+  message: string;
+  detail?: string;
+}
+
+export interface MetaPreflightReport {
+  readyToPublish: boolean;
+  publisher: 'meta_direct' | 'pipeboard';
+  adAccountId: string;
+  accountCurrency: string;
+  campaignObjective: 'OUTCOME_LEADS' | 'OUTCOME_SALES';
+  optimizationEvent: 'LEAD' | 'PURCHASE';
+  pixelId: string;
+  pixelLeadEvents7d: number | null;
+  pixelHasSufficientLeadHistory: boolean;
+  dailyBudgetRaw: number;
+  dailyBudgetAccountMinorUnits: number;
+  dailyBudgetDisplay: string;
+  urlTagsSupported: boolean;
+  videoUploadSupported: boolean;
+  trackingLinkMode: 'url_tags' | 'link_query_params';
+  checks: MetaPreflightCheckItem[];
 }
 
 

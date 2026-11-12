@@ -944,6 +944,14 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         ...baseProfile,
         status: 'ready',
         trainedAt: new Date().toISOString(),
+        strategyMode: data?.brainProfile?.strategyMode,
+        dossierId: data?.brainProfile?.dossierId,
+        psychologicalProfile: data?.brainProfile?.psychologicalProfile,
+        hypotheses: data?.brainProfile?.hypotheses,
+        competitorsSummary: data?.brainProfile?.competitorsSummary,
+        competitors: data?.brainProfile?.competitors,
+        learningMemoryUsed: data?.brainProfile?.learningMemoryUsed,
+        recommendedObjective: data?.brainProfile?.recommendedObjective,
         productAnalysis: {
           ...baseProfile.productAnalysis,
           images: extractAllProductImages(finalProduct)
@@ -1114,6 +1122,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             currentBrain = {
               ...currentBrain,
               trainedAt: new Date().toISOString(),
+              strategyMode: trainData.brainProfile.strategyMode || currentBrain.strategyMode,
+              dossierId: trainData.brainProfile.dossierId || currentBrain.dossierId,
+              psychologicalProfile: trainData.brainProfile.psychologicalProfile || currentBrain.psychologicalProfile,
+              hypotheses: trainData.brainProfile.hypotheses || currentBrain.hypotheses,
               avatars: trainData.brainProfile.avatars || currentBrain.avatars,
               targeting: trainData.brainProfile.targeting || currentBrain.targeting,
               creativeBriefs: trainData.brainProfile.creativeBriefs
@@ -1125,6 +1137,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         }
       }
 
+      const policyGuardOnly = currentBrain?.strategyMode === 'hypothesis_v2';
       const baseAssets = buildCreativeAssetsFromBrain(activeProduct, currentBrain);
       let workingAssets = isResumeIncomplete
         ? baseAssets.map((asset, idx) => ({
@@ -1134,7 +1147,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           primaryText: sanitizeAdCopyForParaguayCod(
             existingCreatives[idx]?.primaryText || asset.primaryText,
             activeProduct,
-            idx
+            idx,
+            { policyGuardOnly }
           ),
           descriptionText: existingCreatives[idx]?.descriptionText || asset.descriptionText,
           ctaLabel: existingCreatives[idx]?.ctaLabel || asset.ctaLabel,
@@ -1149,7 +1163,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         : baseAssets.map((asset, idx) => ({
           ...asset,
           type: onlyImagesMode && idx >= 4 ? ('image_story_9x16' as const) : asset.type,
-          primaryText: sanitizeAdCopyForParaguayCod(asset.primaryText, activeProduct, idx),
+          primaryText: sanitizeAdCopyForParaguayCod(asset.primaryText, activeProduct, idx, { policyGuardOnly }),
           aiGeneratedImageUrl: idx < imageSliceEnd ? asset.aiGeneratedImageUrl || '' : '',
           aiGeneratedImageDataUrl: idx < imageSliceEnd ? asset.aiGeneratedImageDataUrl || '' : '',
           aiGeneratedVideoUrl: !onlyImagesMode && idx >= 4 ? asset.aiGeneratedVideoUrl || '' : ''
@@ -1719,8 +1733,13 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       if (pubRes.ok && pubData?.success !== false && pubData?.campaign) {
         setPublishedCampaigns(prev => [pubData.campaign, ...prev]);
         setWorkflowStep('published');
+        const preflightWarn = Array.isArray(pubData?.preflight?.checks)
+          ? pubData.preflight.checks.find((c: any) => c.code === 'PIXEL_LEAD_HISTORY_LOW')?.message
+          : '';
         showToast(
-          `🚀 ¡Campaña publicada en vivo en Meta Ads (${pubData.campaign.campaignId}) con tus ${creatives.length} anuncios!`
+          `🚀 ¡Campaña publicada en vivo en Meta Ads (${pubData.campaign.campaignId}) con tus ${creatives.length} anuncios!${
+            preflightWarn ? ` · ℹ️ ${preflightWarn}` : ''
+          }`
         );
       } else {
         setWorkflowStep('generated');

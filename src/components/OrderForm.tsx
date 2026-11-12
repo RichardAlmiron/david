@@ -189,21 +189,14 @@ export const OrderForm: React.FC = () => {
     } catch { }
   }, []);
 
-  // Fire Meta InitiateCheckout + Lead as soon as customer enters valid Name + WhatsApp
+  // Fire Meta InitiateCheckout once as soon as customer starts filling Name + WhatsApp
+  // (Canonical Lead is emitted ONLY when the order form completes & server confirms persistence)
   useEffect(() => {
     const digits = celular.replace(/\D/g, '');
     if (!leadEventFired && nombre.trim().length >= 3 && digits.length >= 8) {
       setLeadEventFired(true);
       trackMetaFullFunnelEvent({
         eventName: 'InitiateCheckout',
-        product: currentProductPage,
-        globalPixelId: config.pixelId,
-        packQuantity: effectivePack,
-        valueGs: total,
-        userData: { nombre: nombre.trim(), celular: celular.trim(), departamento }
-      });
-      trackMetaFullFunnelEvent({
-        eventName: 'Lead',
         product: currentProductPage,
         globalPixelId: config.pixelId,
         packQuantity: effectivePack,
@@ -771,8 +764,10 @@ export const OrderForm: React.FC = () => {
       setOrderComplete(order);
       setShowConfirmPopup(true);
 
-      trackMetaFullFunnelEvent({
-        eventName: 'Purchase',
+      // Evento canónico ÚNICO del formulario confirmado: `Lead` (nunca Purchase en checkout COD;
+      // Purchase se emite únicamente desde el servidor tras entrega física + cobro verificado).
+      await trackMetaFullFunnelEvent({
+        eventName: 'Lead',
         product: currentProductPage,
         globalPixelId: config.pixelId,
         packQuantity: finalPack,
@@ -782,10 +777,28 @@ export const OrderForm: React.FC = () => {
           nombre: nombre.trim(),
           celular: celular.trim(),
           ciudad: finalCiudad,
-          departamento: finalCiudad,
-          externalId: order.reservaid
+          departamento: departamento || finalCiudad,
+          externalId: order.visitorId || order.reservaid
         }
       });
+
+      if (currentProductPage?.metaTracking?.enabledEvents?.OrderReservedCOD !== false) {
+        void trackMetaFullFunnelEvent({
+          eventName: 'OrderReservedCOD',
+          product: currentProductPage,
+          globalPixelId: config.pixelId,
+          packQuantity: finalPack,
+          valueGs: total,
+          orderId: order.reservaid,
+          userData: {
+            nombre: nombre.trim(),
+            celular: celular.trim(),
+            ciudad: finalCiudad,
+            departamento: departamento || finalCiudad,
+            externalId: order.visitorId || order.reservaid
+          }
+        });
+      }
 
       try {
         confetti({

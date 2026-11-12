@@ -18,6 +18,10 @@ import {
   formatWaPhone,
   resolveProductSellerWa
 } from '../config';
+import {
+  captureUrlAttributionTouch,
+  getOrderAttributionSnapshot
+} from '../utils/metaPixelEngine';
 
 interface StoreContextType {
   config: AppConfig;
@@ -1048,6 +1052,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
       const params = new URLSearchParams(window.location.search);
+      captureUrlAttributionTouch(params.get('p') || undefined);
 
       const ref = params.get('ref') || params.get('bind');
       if (ref) {
@@ -1331,7 +1336,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           : Promise.resolve(null),
         sbUrl && sbKey
           ? fetchWithTimeout(
-              `${sbUrl}/rest/v1/codigos?select=code,dispositivo&code=like.ORD-*&order=id.desc&limit=250`,
+              `${sbUrl}/rest/v1/codigos?select=code,dispositivo&code=like.ORD-*&order=id.desc&limit=1000`,
               { headers: sbHeaders, cache: 'no-store' },
               4500
             ).then(async r => {
@@ -1342,7 +1347,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           : Promise.resolve(null),
         sbUrl && sbKey
           ? fetchWithTimeout(
-              `${sbUrl}/rest/v1/pedidos?order=fecha.desc&limit=250`,
+              `${sbUrl}/rest/v1/pedidos?order=fecha.desc&limit=1000`,
               { headers: sbHeaders, cache: 'no-store' },
               4500
             ).then(async r => {
@@ -1608,6 +1613,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         resolveProductSellerWa({ id: targetProdId, nombre: targetProdName, wa: currentProductPage?.wa }, productPages)
       );
 
+      const attrPayload = getOrderAttributionSnapshot(currentProductPage?.slug || targetProdId);
+      const clientRequestKey =
+        orderData.clientRequestKey ||
+        `ck_${reservaid}_${Date.now().toString(36)}`;
+
       const newOrder: Order = {
         ...orderData,
         productoId: targetProdId,
@@ -1618,7 +1628,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         dispositivo: getDeviceToken(),
         fecha: new Date().toISOString(),
         estado: orderData.estado || 'reservado',
-        acredita: true
+        acredita: true,
+        visitorId: attrPayload.visitorId,
+        clientRequestKey,
+        attributionSnapshot: attrPayload
       };
 
       // Optimistic UI update usando actualización funcional para no pisar pedidos concurrentes
@@ -1629,10 +1642,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return next;
       });
 
-      // 1. Disparar servidor local (/api/pedidos) y persistencia en Base de Datos Supabase en PARALELO
-      // Verificamos explícitamente que al menos UNO confirme guardado real en BD/servidor.
+      // 1. Ruta atómica principal: POST /api/pedidos persiste conjuntamente pedido + order_attribution
+      // (y encola respaldo idempotente si Supabase falla). Solo usamos persistOrderToDatabase directo si el servidor no responde.
       let serverOk = false;
       let supabaseOk = false;
+      let persistedOrderFromServer: Order | null = null;
 
       const serverPromise = fetchWithTimeout(
         '/api/pedidos',
@@ -1649,22 +1663,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const data = await res.json().catch(() => null);
           if (data && data.success !== false) {
             serverOk = true;
+            if (data.order && data.order.reservaid) {
+              persistedOrderFromServer = data.order as Order;
+            }
             return true;
           }
           return false;
         })
         .catch(() => false);
 
-      const supabasePromise = persistOrderToDatabase(newOrder, true)
-        .then((ok) => {
-          supabaseOk = Boolean(ok);
-          return supabaseOk;
-        })
-        .catch(() => false);
-
-      // Si el servidor central confirma guardado (<2s), no congelar la compra esperando Supabase 504; si no, esperar Supabase.
       await serverPromise;
       if (!serverOk) {
+        const supabasePromise = persistOrderToDatabase(newOrder, true)
+          .then((ok) => {
+            supabaseOk = Boolean(ok);
+            return supabaseOk;
+          })
+          .catch(() => false);
         let timeoutId: number | undefined;
         const hardTimeout = new Promise<void>((resolve) => {
           timeoutId = window.setTimeout(resolve, 9000);
@@ -1674,8 +1689,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         } finally {
           if (timeoutId !== undefined) window.clearTimeout(timeoutId);
         }
-      } else {
-        void supabasePromise;
+      }
+
+      if (persistedOrderFromServer) {
+        Object.assign(newOrder, persistedOrderFromServer);
       }
 
       if (!serverOk && !supabaseOk) {

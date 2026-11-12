@@ -61,6 +61,45 @@ import {
   loadStoreConfig,
   queueOrderCloudSync
 } from './server/whatsappEngine';
+import {
+  flushPendingSupabaseSyncs,
+  getAutoadsSupabaseHealth,
+  getFeatureFlags,
+  hydrateAutoadsFromSupabase,
+  postgrestUpsert,
+  setFeatureFlags
+} from './server/autoadsStore.ts';
+import {
+  applyOrderAxisUpdate,
+  buildPedidoSupabaseRow,
+  createOrIdempotentPedidoWithAttribution,
+  issueWaAttributionToken,
+  retryPendingCloudSyncQueue
+} from './server/attributionAndOrders.ts';
+import { runPsychologicalAndHypothesisIntelligence } from './server/autoAdsIntelligence.ts';
+import { recomputeCircuitALearning, syncMetaInsightsForAccount } from './server/metaInsightsAndAdsLearning.ts';
+import {
+  computeAuditedErpProfitability,
+  getEffectiveFxRate,
+  importCourierSettlementCsv,
+  listProductCostProfiles,
+  recordCourierSettlement,
+  saveFxRatePeriod,
+  saveProductCostProfile
+} from './server/erpFinanceAndCourier.ts';
+import {
+  dispatchCanonicalConversionCapi,
+  dispatchIndependentPurchaseCapiIfEligible,
+  retryPendingCapiDispatches
+} from './server/metaCapiWorker.ts';
+import {
+  appendTrackingParamsToUrl,
+  buildMetaAttributionUrlTags,
+  generateAaCid,
+  registerAdEntitySnapshot,
+  runMetaPublishPreflight,
+  uploadMetaDirectAdVideo
+} from './server/metaPublishPreflight.ts';
 
 const RUNTIME_PERSISTENT_PATHS = getPersistentDataPaths();
 function getPedidosFilePath() {
@@ -452,6 +491,7 @@ function registerApiServerMiddlewares(server: any) {
       autoBootWhatsAppIfSessionExists();
     } catch {}
     ensureAllProductsWaCommercialsReady().catch(() => {});
+    hydrateAutoadsFromSupabase({ forceRefresh: true }).catch(() => {});
   }, 900);
 
   // Activar servidor gemelo para responder tanto en 8080 como en 3000 simultáneamente en Railway
@@ -469,6 +509,7 @@ function registerApiServerMiddlewares(server: any) {
         service: 'noelux-app',
         uptime: process.uptime(),
         port: serverPort,
+        autoadsSupabase: getAutoadsSupabaseHealth(),
         timestamp: new Date().toISOString()
       }));
       return;
@@ -849,29 +890,44 @@ function registerApiServerMiddlewares(server: any) {
                 const pedido = JSON.parse(body || '{}');
                 pedido.fecha = pedido.fecha || new Date().toISOString();
 
-                // Garantizar que el número de WhatsApp decretado para ese producto viaje y se guarde con el pedido
-                if (!pedido.waVendedor) {
-                  try {
-                    const cfg = loadStoreConfig();
-                    const pages = Array.isArray(cfg.productPages) ? cfg.productPages : [];
-                    const matchedProd =
-                      pages.find(
-                        (p: any) =>
-                          (pedido.productoId && p.id === pedido.productoId) ||
-                          (pedido.producto && p.nombre && p.nombre.toLowerCase() === String(pedido.producto).toLowerCase())
-                      ) || pages[0];
-                    if (matchedProd?.wa) {
-                      pedido.waVendedor = normalizeWaPhone(matchedProd.wa);
+                let resolvedMatchedProd: any = null;
+                try {
+                  const cfg = loadStoreConfig();
+                  const pages = Array.isArray(cfg.productPages) ? cfg.productPages : [];
+                  resolvedMatchedProd =
+                    pages.find(
+                      (p: any) =>
+                        (pedido.productoId && p.id === pedido.productoId) ||
+                        (pedido.producto && p.nombre && p.nombre.toLowerCase() === String(pedido.producto).toLowerCase())
+                    ) || pages[0];
+                  if (!pedido.waVendedor) {
+                    if (resolvedMatchedProd?.wa) {
+                      pedido.waVendedor = normalizeWaPhone(resolvedMatchedProd.wa);
                     } else if (cfg.wa) {
                       pedido.waVendedor = normalizeWaPhone(cfg.wa);
                     }
-                    if (!pedido.productoId && matchedProd?.id) {
-                      pedido.productoId = matchedProd.id;
-                    }
-                  } catch (e) {}
-                } else {
-                  pedido.waVendedor = normalizeWaPhone(pedido.waVendedor);
-                }
+                  } else {
+                    pedido.waVendedor = normalizeWaPhone(pedido.waVendedor);
+                  }
+                  if (!pedido.productoId && resolvedMatchedProd?.id) {
+                    pedido.productoId = resolvedMatchedProd.id;
+                  }
+                } catch {}
+
+                // Leer cookies de primera parte para enriquecer atribución conjunta
+                const cookieHeader = String(req.headers.cookie || '');
+                const readReqCookie = (name: string) => {
+                  const m = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+                  return m ? decodeURIComponent(m[1]) : '';
+                };
+                const rawFwdIp = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1');
+                const clientIp = rawFwdIp.split(',')[0].trim();
+                const clientUserAgent = String(req.headers['user-agent'] || '');
+                let cookieAttrTouch: any = null;
+                try {
+                  const rawAttrCookie = readReqCookie('aa_last_paid_touch_v2');
+                  if (rawAttrCookie) cookieAttrTouch = JSON.parse(rawAttrCookie);
+                } catch {}
 
                 const rawList = loadPedidos();
                 const existingEntry = Array.isArray(rawList) && pedido.reservaid
@@ -889,31 +945,85 @@ function registerApiServerMiddlewares(server: any) {
                 }
                 pedido.actualizado_en = pedido.actualizado_en || pedido.fecha;
 
-                const list = Array.isArray(rawList)
-                  ? rawList.filter((p: any) => !pedido.reservaid || p?.reservaid !== pedido.reservaid)
-                  : [];
+                // Hidratar estado v2 desde Supabase (con timeout acotado para no frenar checkout)
+                await Promise.race([
+                  hydrateAutoadsFromSupabase().catch(() => {}),
+                  new Promise<void>((resolve) => setTimeout(resolve, 2500))
+                ]);
 
-                list.unshift(pedido);
-                savePedidos(list);
-
-                let persistedCloud = false;
-                if (pedido.reservaid) {
-                  persistedCloud = await Promise.race([
-                    syncOrderUpdateToCloud(pedido).catch(() => false),
-                    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 1800))
-                  ]);
-                  if (!persistedCloud) {
-                    queueOrderCloudSync(pedido);
+                // Persistencia conjunta e idempotente de `pedido` + `order_attribution`
+                const jointRes = await createOrIdempotentPedidoWithAttribution({
+                  orderInput: pedido,
+                  cookieFbp: readReqCookie('_fbp'),
+                  cookieFbc: readReqCookie('_fbc'),
+                  cookieAttrTouch,
+                  clientIp,
+                  clientUserAgent,
+                  cloudSyncFn: async (savedOrd) => {
+                    const ok = await Promise.race([
+                      syncOrderUpdateToCloud(savedOrd).catch(() => false),
+                      new Promise<boolean>(resolve => setTimeout(() => resolve(false), 1800))
+                    ]);
+                    if (!ok) {
+                      queueOrderCloudSync(savedOrd);
+                    }
+                    return ok;
                   }
-                }
-
-                // Ejecutar automatización (Audio o Chat Automático según interruptores)
-                handleNewOrderAutomation(pedido).catch((autoErr: any) => {
-                  console.error('[POST /api/pedidos handleNewOrderAutomation Error]:', autoErr);
                 });
 
+                const finalPedido = jointRes.order;
+
+                if (!jointRes.idempotentReplay) {
+                  const list = Array.isArray(rawList)
+                    ? rawList.filter((p: any) => !finalPedido.reservaid || p?.reservaid !== finalPedido.reservaid)
+                    : [];
+                  list.unshift(finalPedido);
+                  savePedidos(list);
+
+                  // Automatización WhatsApp conservada tal cual
+                  handleNewOrderAutomation(finalPedido).catch((autoErr: any) => {
+                    console.error('[POST /api/pedidos handleNewOrderAutomation Error]:', autoErr);
+                  });
+
+                  // Respaldo servidor CAPI idempotente para evento canónico Lead (sin Purchase)
+                  try {
+                    const cfg = loadStoreConfig();
+                    const pixelId = String(
+                      resolvedMatchedProd?.metaTracking?.pixelId || cfg?.pixelId || readKeyFromEnvFile('META_PIXEL_ID') || ''
+                    ).trim();
+                    const capiToken = String(
+                      resolvedMatchedProd?.metaTracking?.capiAccessToken ||
+                        cfg?.capiAccessToken ||
+                        readKeyFromEnvFile('META_CAPI_TOKEN') ||
+                        readKeyFromEnvFile('META_ACCESS_TOKEN') ||
+                        ''
+                    ).trim();
+                    if (pixelId && capiToken) {
+                      void dispatchCanonicalConversionCapi({
+                        order: finalPedido,
+                        attribution: jointRes.attribution,
+                        pixelId,
+                        capiAccessToken: capiToken,
+                        emitOrderReservedCod: resolvedMatchedProd?.metaTracking?.enabledEvents?.OrderReservedCOD !== false
+                      }).catch(() => {});
+                    }
+                  } catch {}
+                }
+
+                await flushPendingSupabaseSyncs(2500);
+
                 res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                res.end(JSON.stringify({ success: true, persistedCloud, pedido }));
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    persistedCloud: jointRes.cloudSynced,
+                    queuedForRetry: jointRes.queuedForRetry,
+                    idempotentReplay: jointRes.idempotentReplay,
+                    pedido: finalPedido,
+                    order: finalPedido,
+                    attribution: jointRes.attribution
+                  })
+                );
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -997,14 +1107,55 @@ function registerApiServerMiddlewares(server: any) {
             req.on('end', async () => {
               try {
                 const payload = JSON.parse(body || '{}');
-                const { id, estado, updates, orderSnapshot } = payload;
+                const {
+                  id,
+                  estado,
+                  updates,
+                  orderSnapshot,
+                  deliveryStatus,
+                  customerPaymentStatus,
+                  courierSettlementStatus,
+                  netCashCollectedPyg,
+                  courierFeePyg,
+                  productUnitCostPyg,
+                  packagingCostPyg,
+                  returnCostPyg
+                } = payload;
+
+                const touchesFinancialFields =
+                  netCashCollectedPyg !== undefined ||
+                  courierFeePyg !== undefined ||
+                  productUnitCostPyg !== undefined ||
+                  packagingCostPyg !== undefined ||
+                  returnCostPyg !== undefined ||
+                  courierSettlementStatus !== undefined;
+
+                if (touchesFinancialFields) {
+                  const authResult = verifyAdminToken(req.headers['authorization'], req.headers['cookie']);
+                  if (!authResult.valid) {
+                    res.statusCode = 401;
+                    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                    res.end(JSON.stringify({ success: false, error: 'Autenticación admin requerida para editar montos financieros/costos.' }));
+                    return;
+                  }
+                }
+
                 const list = loadPedidos();
                 const targetIdx = list.findIndex((p: any) => p.reservaid === id || p.id === id);
                 let finalOrder: any = null;
                 if (targetIdx !== -1) {
                   if (estado) list[targetIdx].estado = estado;
                   if (updates && typeof updates === 'object') {
-                    list[targetIdx] = { ...list[targetIdx], ...updates };
+                    // Jamás permitir mutar atribución inmutable del Circuito A desde endpoint logístico/ERP
+                    const safeUpdates = { ...updates };
+                    delete safeUpdates.attributionSnapshot;
+                    delete safeUpdates.attributedAdId;
+                    delete safeUpdates.attributedCampaignId;
+                    delete safeUpdates.attributedHypothesisId;
+                    delete safeUpdates.attributedAngleId;
+                    delete safeUpdates.canonicalConversionEvent;
+                    delete safeUpdates.canonicalLeadEventId;
+                    list[targetIdx] = { ...list[targetIdx], ...safeUpdates };
                   }
                   list[targetIdx].actualizado_en = new Date().toISOString();
                   finalOrder = list[targetIdx];
@@ -1017,12 +1168,74 @@ function registerApiServerMiddlewares(server: any) {
                   };
                   list.unshift(finalOrder);
                 }
+
+                await Promise.race([
+                  hydrateAutoadsFromSupabase().catch(() => {}),
+                  new Promise<void>((resolve) => setTimeout(resolve, 2500))
+                ]);
+
+                // Sincronizar los 3 ejes del Circuito B y disparar Purchase CAPI independiente si es venta real verificada
+                const axisRes = applyOrderAxisUpdate({
+                  reservaIdOrOrderId: String(id || finalOrder?.reservaid || ''),
+                  estado: estado || finalOrder?.estado,
+                  deliveryStatus: deliveryStatus || updates?.deliveryStatus,
+                  customerPaymentStatus: customerPaymentStatus || updates?.customerPaymentStatus,
+                  courierSettlementStatus: courierSettlementStatus || updates?.courierSettlementStatus,
+                  netCashCollectedPyg,
+                  courierFeePyg,
+                  productUnitCostPyg,
+                  packagingCostPyg,
+                  returnCostPyg
+                });
+
+                if (axisRes.found && axisRes.order) {
+                  finalOrder = { ...(finalOrder || {}), ...axisRes.order };
+                  if (targetIdx !== -1) list[targetIdx] = finalOrder;
+                }
+
                 if (finalOrder) {
                   savePedidos(list);
                   queueOrderCloudSync(finalOrder);
+                  await postgrestUpsert('pedidos', buildPedidoSupabaseRow(finalOrder), 'reservaid').catch(() => {});
                 }
+
+                let purchaseCapiResult: any = null;
+                if (axisRes.isRealSale && axisRes.order) {
+                  try {
+                    const cfg = loadStoreConfig();
+                    const pages = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                    const matchedProd = pages.find(
+                      (p: any) => p.id === axisRes.order?.productoId || p.slug === axisRes.order?.productoId
+                    ) || pages[0];
+                    const pixelId = String(
+                      matchedProd?.metaTracking?.pixelId || cfg?.pixelId || readKeyFromEnvFile('META_PIXEL_ID') || ''
+                    ).trim();
+                    const capiToken = String(
+                      matchedProd?.metaTracking?.capiAccessToken ||
+                        cfg?.capiAccessToken ||
+                        readKeyFromEnvFile('META_CAPI_TOKEN') ||
+                        readKeyFromEnvFile('META_ACCESS_TOKEN') ||
+                        ''
+                    ).trim();
+                    purchaseCapiResult = await dispatchIndependentPurchaseCapiIfEligible({
+                      order: axisRes.order,
+                      pixelId,
+                      capiAccessToken: capiToken
+                    });
+                  } catch {}
+                }
+
+                await flushPendingSupabaseSyncs(3000);
+
                 res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                res.end(JSON.stringify({ success: true, persistedCloud: Boolean(finalOrder), order: finalOrder }));
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    persistedCloud: Boolean(finalOrder),
+                    order: finalOrder,
+                    purchaseCapiResult
+                  })
+                );
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -2759,7 +2972,11 @@ function registerApiServerMiddlewares(server: any) {
                   .replace(/[^a-z0-9]/g, '')
                   .trim();
 
-                const externalId = String(rawUser.externalId || parsed.productSlug || '').trim().toLowerCase();
+                const externalId = String(
+                  rawUser.externalId || parsed.visitorId || sha256Hex(`${clientIp}|${clientUserAgent}`)
+                )
+                  .trim()
+                  .toLowerCase();
 
                 const capiUserData: Record<string, any> = {
                   client_ip_address: clientIp,
@@ -3182,7 +3399,7 @@ function registerApiServerMiddlewares(server: any) {
                     ? ultraShortObjectLabel
                     : threeWordCandidate || ultraShortObjectLabel;
 
-                const sanitizeServerAdCopy = (rawText: string, angleIdx = 0) => {
+                const sanitizeServerAdCopy = (rawText: string, angleIdx = 0, policyGuardOnly = false) => {
                   if (!rawText) return '';
                   let txt = String(rawText)
                     .replace(/vos pod[eé]s tener esto hoy mismo en tu puerta\.?/gi, 'Reservás sin adelantos y lo recibís en 2 a 3 días hábiles en la puerta de tu casa.')
@@ -3216,7 +3433,7 @@ function registerApiServerMiddlewares(server: any) {
                   // 1) Empiece en las palabras 1 a 4 (0.0 segundos) nombrando el PRODUCTO.
                   // 2) Siga hablando dentro de esa misma primera estrofa 100% del PRODUCTO en sí: qué ofrece, qué entrega, qué placer o solución obtiene el usuario.
                   // 3) PROHIBIDO hablar en la primera estrofa de precios (Gs.), pagos, giros, repartidores o miedos de comprar online.
-                  if (txt.includes('\n')) {
+                  if (txt.includes('\n') && !policyGuardOnly) {
                     const lines = txt.split('\n');
                     const firstLine = (lines[0] || '').trim();
                     if (firstLine) {
@@ -3455,6 +3672,117 @@ function registerApiServerMiddlewares(server: any) {
                     })
                   );
                   return;
+                }
+
+                // CIRCUIT A V2: Cerebro Psicológico + 6 Hipótesis Dinámicas + Competencia Honesta + Memoria Histórica
+                await hydrateAutoadsFromSupabase().catch(() => {});
+                const activeFlags = getFeatureFlags();
+                if (activeFlags.AUTOADS_STRATEGY_V2_ENABLED) {
+                  try {
+                    const v2Out = await runPsychologicalAndHypothesisIntelligence({
+                      product: {
+                        ...product,
+                        slug: String(product.slug || prodName.toLowerCase().replace(/[^a-z0-9]+/g, '-')),
+                        nombre: prodName,
+                        descripcion: prodDesc
+                      },
+                      market: 'PY',
+                      metaAccessToken: String(activeCapiToken || readKeyFromEnvFile('META_ACCESS_TOKEN') || '').trim(),
+                      manualCompetitors: Array.isArray(parsed.manualCompetitors) ? parsed.manualCompetitors : undefined,
+                      openRouterApiKey: openRouterKey
+                    });
+
+                    const v2Profile = v2Out.brainProfileCompatible;
+                    const verifiedOrManualCount =
+                      v2Out.dossier.competitorSourceSummary.verifiedCount +
+                      v2Out.dossier.competitorSourceSummary.manualCount;
+
+                    const v2CompetitorInsights = {
+                      searchQuery: `${prodName} (Meta Ad Library PY)`,
+                      activeAdsFound: v2Out.dossier.competitorSourceSummary.verifiedCount,
+                      manualEvidenceCount: v2Out.dossier.competitorSourceSummary.manualCount,
+                      inferredCount: v2Out.dossier.competitorSourceSummary.inferredCount,
+                      adArchiveError: v2Out.dossier.competitorSourceSummary.adArchiveError,
+                      marketsScanned: ['Paraguay (PY)'],
+                      winningPatterns: v2Out.dossier.competitorFindingsJson
+                        .slice(0, 5)
+                        .map((c: any) => `[${c.sourceTier}] ${c.pageName}: ${c.detectedAngle}`),
+                      commonHooks: v2Out.hypotheses.slice(0, 4).map((h: any) => h.hookFormula),
+                      commonAngles: v2Out.hypotheses.map((h: any) => `${h.hypothesisCode}: ${h.angleName}`),
+                      dominantFormats: ['Feed 1:1 (1080×1080)', 'Story 9:16 (1080×1920)', 'Video Reel 9:16'],
+                      avgLongevityDays: verifiedOrManualCount > 0 ? 14 : 0
+                    };
+
+                    const sanitizedBriefs = (v2Profile.creativeBriefs || []).map((brief: any, bIdx: number) => ({
+                      ...brief,
+                      index: bIdx,
+                      type: brief.type || (bIdx < 3 ? 'feed_1x1' : bIdx === 3 ? 'story_9x16' : 'reel_9x16'),
+                      format: brief.format || (bIdx < 3 ? '1:1' : '9:16'),
+                      themeIndex: brief.themeIndex ?? bIdx % 4,
+                      archetypeName: brief.angleName || brief.hypothesisCode || `Hipótesis ${bIdx + 1}`,
+                      avatarTarget: brief.targetAvatar || 'Comprador COD Paraguay',
+                      angleType: 'offer',
+                      hook3s: sanitizeServerAdCopy(brief.hook || '', bIdx, true),
+                      hookBadge: brief.badge || brief.hypothesisCode || `H${bIdx + 1}`,
+                      headline: sanitizeServerAdCopy(brief.headline || prodName, bIdx, true),
+                      primaryText: sanitizeServerAdCopy(brief.primaryText || '', bIdx, true),
+                      descriptionText: sanitizeServerAdCopy('Entrega en 48 a 72 hs · Pagás cuando recibís', bIdx, true),
+                      ctaType: 'ORDER_NOW',
+                      ctaLabel: String(brief.ctaLabel || 'PAGÁS CUANDO RECIBÍS')
+                        .replace(/pedir\s+contra\s+entrega/gi, 'PAGÁS CUANDO RECIBÍS')
+                        .replace(/contra\s+entrega/gi, 'PAGÁS CUANDO RECIBÍS')
+                        .trim(),
+                      aiImagePrompt: brief.aiImagePrompt || '',
+                      videoScriptPrompt: brief.videoScriptPrompt || ''
+                    }));
+
+                    const v2Avatars = v2Out.hypotheses.slice(0, 3).map((h: any, idx: number) => ({
+                      id: `av_${idx + 1}`,
+                      name: h.targetAvatar,
+                      ageRange: '24-52',
+                      painPoints: [h.corePain, h.objectionTargeted].filter(Boolean),
+                      desires: [h.deepDesire, h.promise].filter(Boolean),
+                      angles: [
+                        {
+                          id: h.angleId,
+                          type: 'offer',
+                          hook: h.hookFormula,
+                          emotionalTrigger: h.awarenessLevel
+                        }
+                      ]
+                    }));
+
+                    const fullV2Brain = {
+                      ...v2Profile,
+                      avatars: v2Avatars,
+                      targeting: {
+                        locations: ['Paraguay (Asunción, Central, Interior)'],
+                        ageMin: 22,
+                        ageMax: 58,
+                        interests: v2Out.dossier.psychologicalProfileJson.cognitiveBiasesAndTriggers || ['Compras online PY'],
+                        peakHours: [9, 12, 18, 21]
+                      },
+                      creativeBriefs: sanitizedBriefs
+                    };
+
+                    await flushPendingSupabaseSyncs(3000);
+
+                    res.end(
+                      JSON.stringify({
+                        success: true,
+                        scrapedProduct: scrapedSiteData ? product : null,
+                        scrapedSiteData,
+                        capiAudit,
+                        brainProfile: fullV2Brain,
+                        competitorInsights: v2CompetitorInsights,
+                        model: 'openai/gpt-4o',
+                        openRouterConnected: true
+                      })
+                    );
+                    return;
+                  } catch (v2Err: any) {
+                    console.warn('[brain-train] v2 pipeline fallback to legacy:', v2Err?.message || v2Err);
+                  }
                 }
 
                 let openRouterErrorText: string = '';
@@ -4724,7 +5052,8 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   prompt: string,
                   idx: number,
                   prefix: string,
-                  retryAttempt = 0
+                  retryAttempt = 0,
+                  aspectRatio: '1:1' | '9:16' = '1:1'
                 ): Promise<{ savedUrl: string; errorText: string; fatalAuth: boolean }> => {
                   const cleanPrompt = sanitizePromptForOpenAiImages(prompt);
                   const fullPrompt = `Generate a high-converting, hyper-impactful commercial Meta Ad poster photograph showing the product in active use producing its real visible result, with bold, legible Spanish advertising typography: ${cleanPrompt}`;
@@ -4743,7 +5072,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                         body: JSON.stringify({
                           model: imgModel,
                           prompt: fullPrompt,
-                          aspect_ratio: '1:1',
+                          aspect_ratio: aspectRatio,
                           quality: 'high',
                           output_format: 'jpeg',
                           n: 1
@@ -4762,7 +5091,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                           const waitMs = 4500;
                           console.log(`[generate-ad-images] Turno en espera de liquidación in-flight (${waitMs}ms) para Anuncio #${idx + 1} (${imgModel}, intento ${retryAttempt + 1}/12)...`);
                           await new Promise(r => setTimeout(r, waitMs));
-                          return invokeOpenRouterImageModelCore(imgModel, prompt, idx, prefix, retryAttempt + 1);
+                          return invokeOpenRouterImageModelCore(imgModel, prompt, idx, prefix, retryAttempt + 1, aspectRatio);
                         }
                         return {
                           savedUrl: '',
@@ -4860,10 +5189,11 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   imgModel: string,
                   prompt: string,
                   idx: number,
-                  prefix: string
+                  prefix: string,
+                  aspectRatio: '1:1' | '9:16' = '1:1'
                 ) =>
                   runOpenRouterExclusiveTurn(() =>
-                    invokeOpenRouterImageModelCore(imgModel, prompt, idx, prefix, 0)
+                    invokeOpenRouterImageModelCore(imgModel, prompt, idx, prefix, 0, aspectRatio)
                   );
 
                 let lastOpenRouterImgError = '';
@@ -4903,12 +5233,17 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     };
                   }
 
+                  const briefAspectRatio: '1:1' | '9:16' =
+                    Array.isArray(parsed.creativeBriefs) && parsed.creativeBriefs[idx]?.format === '9:16'
+                      ? '9:16'
+                      : '1:1';
                   for (const imgModel of candidateImageModels) {
                     const { savedUrl, errorText, fatalAuth } = await invokeOpenRouterImageModel(
                       imgModel,
                       finalPrompt,
                       idx,
-                      'autoads_img'
+                      'autoads_img',
+                      briefAspectRatio
                     );
                     if (savedUrl) {
                       let b64DataUrl = '';
@@ -4957,7 +5292,12 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                 // EJECUCIÓN ESTRICTAMENTE POR TURNO (1 por 1): Evita 100% que OpenRouter bloquee por reserva in-flight
                 const generatedImages: any[] = [];
                 for (const idx of requestedIndices) {
-                  const oneResult = await generateOneCreativeViaOpenRouter(universalArchetypePrompts[idx], idx);
+                  const briefPrompt =
+                    Array.isArray(parsed.creativeBriefs) && typeof parsed.creativeBriefs[idx]?.aiImagePrompt === 'string'
+                      ? parsed.creativeBriefs[idx].aiImagePrompt.trim()
+                      : '';
+                  const chosenPrompt = briefPrompt.length > 20 ? briefPrompt : universalArchetypePrompts[idx];
+                  const oneResult = await generateOneCreativeViaOpenRouter(chosenPrompt, idx);
                   if (oneResult.imageUrl || oneResult.videoUrl) {
                     patchAutoAdsWorkspaceMedia(product, idx, {
                       imageUrl: oneResult.imageUrl || undefined,
@@ -5056,7 +5396,11 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     ? ultraShortObjectLabel
                     : regenThreeWords || ultraShortObjectLabel;
 
-                const sanitizeRegenCopy = (rawText: string, angleIdx = 0) => {
+                const sanitizeRegenCopy = (
+                  rawText: string,
+                  angleIdx = 0,
+                  policyGuardOnly = Boolean(parsed.policyGuardOnly || parsed.strategyMode === 'hypothesis_v2')
+                ) => {
                   if (!rawText) return '';
                   let txt = String(rawText)
                     .replace(/vos pod[eé]s tener esto hoy mismo en tu puerta\.?/gi, 'Reservás sin adelantos y lo recibís en 2 a 3 días hábiles en la puerta de tu casa.')
@@ -5085,7 +5429,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   }
                   txt = txt.replace(/[™®©]/g, '').replace(/  +/g, ' ').trim();
 
-                  if (txt.includes('\n')) {
+                  if (txt.includes('\n') && !policyGuardOnly) {
                     const lines = txt.split('\n');
                     const firstLine = (lines[0] || '').trim();
                     if (firstLine) {
@@ -6635,14 +6979,30 @@ setTimeout(()=>window.close(),5000);
                   return resp.json();
                 };
 
+                // Preflight V2: validar moneda, historial de eventos Lead (no bloqueante) y compatibility
+                await hydrateAutoadsFromSupabase().catch(() => {});
+                const pubFlags = getFeatureFlags();
+                const preflight = await runMetaPublishPreflight({
+                  publisher: 'meta_direct',
+                  adAccountId,
+                  accessToken,
+                  pixelId: resolvedPixelId || pixelId,
+                  dailyBudget: dailyBudgetGs,
+                  dailyBudgetInputCurrency: 'PYG',
+                  usdToPygRate: getEffectiveFxRate().usdToPygRate,
+                  desiredObjective: pubFlags.AUTOADS_CANONICAL_LEAD_ONLY ? 'OUTCOME_LEADS' : 'OUTCOME_SALES',
+                  hasVideosSelected: creatives.some((c: any) => Boolean(c?.aiGeneratedVideoUrl)),
+                  knownAccountCurrency: accountCurrency
+                });
+
                 // Paso 1: Crear Campaña
                 let campaignId = '';
                 let firstMetaError = '';
-                const campaignName = `[META IA] ${prodName} · Conversiones COD PY`;
+                const campaignName = `[META IA] ${prodName} · ${preflight.campaignObjective === 'OUTCOME_LEADS' ? 'Leads COD PY' : 'Conversiones COD PY'}`;
                 try {
                   const campRes: any = await callMetaApi(`${adAccountId}/campaigns`, 'POST', {
                     name: campaignName,
-                    objective: 'OUTCOME_SALES',
+                    objective: preflight.campaignObjective,
                     status: publishStatus,
                     special_ad_categories: '[]',
                     is_adset_budget_sharing_enabled: false
@@ -6657,7 +7017,7 @@ setTimeout(()=>window.close(),5000);
                     status: campaignId ? 'success' : 'error',
                     metaResponse: campRes,
                     summary: campaignId
-                      ? `Campaña creada: "${campaignName}" (ID: ${campaignId})`
+                      ? `Campaña creada: "${campaignName}" (ID: ${campaignId}) · Objetivo: ${preflight.campaignObjective}`
                       : `Error al crear campaña: ${campRes?.error?.message || 'desconocido'}`,
                     timestamp: new Date().toISOString()
                   });
@@ -6686,13 +7046,10 @@ setTimeout(()=>window.close(),5000);
                   return;
                 }
 
-                // Paso 2: Crear Conjunto de Anuncios (Ad Set) respetando la moneda real de la cuenta (USD vs PYG)
+                // Paso 2: Crear Conjunto de Anuncios (Ad Set) respetando moneda real normalizada + Lead canónico
                 let adSetId = '';
-                const dailyBudgetInAccountUnits =
-                  accountCurrency === 'PYG'
-                    ? Math.max(15000, Math.round(dailyBudgetGs))
-                    : Math.max(200, Math.round((dailyBudgetGs / 7500) * 100));
-                const adSetName = `[PARAGUAY 18-65+] ${prodName} · Gs. ${dailyBudgetGs.toLocaleString('es-PY')}/día`;
+                const dailyBudgetInAccountUnits = preflight.dailyBudgetAccountMinorUnits;
+                const adSetName = `[PARAGUAY 18-65+] ${prodName} · ${preflight.dailyBudgetDisplay}`;
                 if (campaignId) {
                   try {
                     const adSetBody: any = {
@@ -6712,7 +7069,7 @@ setTimeout(()=>window.close(),5000);
                     if (resolvedPixelId) {
                       adSetBody.promoted_object = JSON.stringify({
                         pixel_id: resolvedPixelId,
-                        custom_event_type: 'PURCHASE'
+                        custom_event_type: preflight.optimizationEvent
                       });
                     }
                     const adSetRes: any = await callMetaApi(`${adAccountId}/adsets`, 'POST', adSetBody);
@@ -6726,7 +7083,7 @@ setTimeout(()=>window.close(),5000);
                       status: adSetId ? 'success' : 'error',
                       metaResponse: adSetRes,
                       summary: adSetId
-                        ? `Ad Set creado (ID: ${adSetId}) en moneda ${accountCurrency}`
+                        ? `Ad Set creado (ID: ${adSetId}) · ${preflight.dailyBudgetDisplay} · Evento: ${preflight.optimizationEvent}`
                         : `Error al crear Ad Set: ${adSetRes?.error?.message || 'desconocido'}`,
                       timestamp: new Date().toISOString()
                     });
@@ -6741,13 +7098,39 @@ setTimeout(()=>window.close(),5000);
                   }
                 }
 
-                // Paso 3: Por cada creativo – subir imagen real desde disco (bytes Base64), crear ad creative, crear anuncio
+                // Paso 3: Por cada creativo – subir video (/advideos) o imagen (/adimages), url_tags con macros + aa_cid, creative y anuncio
                 const publishedAds: any[] = [];
                 for (let i = 0; i < creatives.length; i++) {
                   const cr = creatives[i];
+                  const aaCid = generateAaCid();
+                  const urlTags = buildMetaAttributionUrlTags({
+                    aaCid,
+                    hypothesisId: cr.hypothesisId,
+                    angleId: cr.angleId,
+                    creativeId: cr.id
+                  });
                   let imageHash = '';
+                  let videoId = '';
+                  let mediaType: 'image' | 'video' = 'image';
 
-                  // 3a: Subir imagen real (cr.aiGeneratedImageUrl) al ad account en Base64 bytes
+                  if (cr.aiGeneratedVideoUrl) {
+                    const localVidPath = String(cr.aiGeneratedVideoUrl).startsWith('/')
+                      ? path.resolve(__dirname, 'public', String(cr.aiGeneratedVideoUrl).replace(/^\//, ''))
+                      : undefined;
+                    const vidRes = await uploadMetaDirectAdVideo({
+                      adAccountId,
+                      accessToken,
+                      videoFilePath: localVidPath,
+                      videoUrl: localVidPath ? undefined : String(cr.aiGeneratedVideoUrl),
+                      title: `${prodName} Reel #${i + 1}`
+                    });
+                    if (vidRes.ok && vidRes.videoId) {
+                      videoId = vidRes.videoId;
+                      mediaType = 'video';
+                    }
+                  }
+
+                  // Subir también imagen (o thumbnail si subió video)
                   try {
                     const imgPayload = await resolveCreativeImagePayload(cr);
                     const imgBody: any = {
@@ -6766,11 +7149,13 @@ setTimeout(()=>window.close(),5000);
                       step: 3 + i * 3,
                       action: 'upload_ad_image',
                       creativeIndex: i,
-                      status: imageHash ? 'success' : 'error',
+                      status: imageHash || videoId ? 'success' : 'error',
                       metaResponse: imgRes,
-                      summary: imageHash
-                        ? `Imagen IA #${i + 1} subida a Meta (hash: ${imageHash})`
-                        : `Error al subir imagen #${i + 1}: ${imgRes?.error?.message || 'desconocido'}`,
+                      summary: videoId
+                        ? `Video Reel #${i + 1} subido a Meta /advideos (ID: ${videoId})`
+                        : imageHash
+                          ? `Imagen IA #${i + 1} subida a Meta (hash: ${imageHash})`
+                          : `Error al subir media #${i + 1}: ${imgRes?.error?.message || 'desconocido'}`,
                       timestamp: new Date().toISOString()
                     });
                   } catch (err: any) {
@@ -6784,26 +7169,45 @@ setTimeout(()=>window.close(),5000);
                     });
                   }
 
-                  // 3b: Crear Ad Creative
+                  // 3b: Crear Ad Creative con `url_tags`
                   let creativeId = '';
-                  if (imageHash && adSetId) {
+                  if ((imageHash || videoId) && adSetId) {
                     try {
+                      const storySpec =
+                        videoId && imageHash
+                          ? {
+                              page_id: facebookPageId,
+                              video_data: {
+                                video_id: videoId,
+                                image_hash: imageHash,
+                                title: cr.headline || prodName,
+                                message: cr.primaryText || '',
+                                link_description: cr.descriptionText || '',
+                                call_to_action: {
+                                  type: cr.ctaType || 'ORDER_NOW',
+                                  value: { link: landingUrl }
+                                }
+                              }
+                            }
+                          : {
+                              page_id: facebookPageId,
+                              link_data: {
+                                image_hash: imageHash,
+                                link: landingUrl,
+                                message: cr.primaryText || '',
+                                name: cr.headline || prodName,
+                                description: cr.descriptionText || '',
+                                call_to_action: {
+                                  type: cr.ctaType || 'ORDER_NOW',
+                                  value: { link: landingUrl }
+                                }
+                              }
+                            };
+
                       const creativeBody: any = {
                         name: `Creative #${i + 1} · ${cr.angleTitle || cr.formatLabel || 'Anuncio'}`,
-                        object_story_spec: JSON.stringify({
-                          page_id: facebookPageId,
-                          link_data: {
-                            image_hash: imageHash,
-                            link: landingUrl,
-                            message: cr.primaryText || '',
-                            name: cr.headline || prodName,
-                            description: cr.descriptionText || '',
-                            call_to_action: {
-                              type: cr.ctaType || 'ORDER_NOW',
-                              value: { link: landingUrl }
-                            }
-                          }
-                        })
+                        object_story_spec: JSON.stringify(storySpec),
+                        url_tags: urlTags
                       };
                       const crRes: any = await callMetaApi(`${adAccountId}/adcreatives`, 'POST', creativeBody);
                       creativeId = crRes.id || '';
@@ -6814,7 +7218,7 @@ setTimeout(()=>window.close(),5000);
                         status: creativeId ? 'success' : 'error',
                         metaResponse: crRes,
                         summary: creativeId
-                          ? `Creative ${i + 1} creado (ID: ${creativeId})`
+                          ? `Creative ${i + 1} creado (ID: ${creativeId}) con url_tags aa_cid=${aaCid}`
                           : `Error al crear creative ${i + 1}: ${crRes?.error?.message || 'desconocido'}`,
                         timestamp: new Date().toISOString()
                       });
@@ -6864,10 +7268,38 @@ setTimeout(()=>window.close(),5000);
                     }
                   }
 
+                  if (adId || creativeId) {
+                    registerAdEntitySnapshot({
+                      productSlug: String(product.slug || 'producto'),
+                      publisher: 'meta_direct',
+                      adAccountId,
+                      accountCurrency: preflight.accountCurrency,
+                      campaignId,
+                      adsetId: adSetId,
+                      adId: adId || undefined,
+                      creativeId: cr.id || undefined,
+                      metaCreativeId: creativeId || undefined,
+                      aaCid,
+                      hypothesisId: cr.hypothesisId,
+                      angleId: cr.angleId,
+                      mediaType,
+                      headline: cr.headline,
+                      primaryText: cr.primaryText,
+                      ctaLabel: cr.ctaLabel,
+                      destinationUrl: landingUrl,
+                      urlTags,
+                      preflightStatus: preflight.readyToPublish ? 'ok' : 'warnings',
+                      payloadSnapshot: { optimizationEvent: preflight.optimizationEvent }
+                    });
+                  }
+
                   publishedAds.push({
                     adId: adId || `pending-${i}`,
                     creativeId: creativeId || `pending-${i}`,
                     imageHash: imageHash || '',
+                    aaCid,
+                    hypothesisId: cr.hypothesisId,
+                    angleId: cr.angleId,
                     name: `Anuncio #${i + 1} · ${cr.formatLabel || 'Anuncio'}`,
                     formatLabel: cr.formatLabel || '',
                     status: adId ? publishStatus : 'ERROR'
@@ -6884,12 +7316,16 @@ setTimeout(()=>window.close(),5000);
                   productSlug: product.slug || 'producto',
                   landingUrl,
                   adAccountId,
+                  accountCurrency: preflight.accountCurrency,
+                  objective: preflight.campaignObjective,
+                  optimizationEvent: preflight.optimizationEvent,
                   pixelId: resolvedPixelId || pixelId || '1276031534651377',
                   campaignId,
                   campaignName,
                   adSetId,
                   adSetName,
                   publishedAds,
+                  preflight,
                   executionMode: 'meta_graph_api_direct' as const,
                   mcpStepLogs,
                   adsManagerUrl: `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${encodeURIComponent(
@@ -6906,10 +7342,13 @@ setTimeout(()=>window.close(),5000);
                   fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
                 } catch {}
 
+                await flushPendingSupabaseSyncs(3000);
+
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({
                   success: true,
-                  campaign: record
+                  campaign: record,
+                  preflight
                 }));
               } catch (err: any) {
                 res.statusCode = 500;
@@ -7278,35 +7717,56 @@ setTimeout(()=>window.close(),5000);
                   return null;
                 };
 
-                // Paso 1: get_ad_accounts (auto-descubrir cuenta real si sigue el placeholder act_595884210394)
+                // Paso 1: get_ad_accounts (auto-descubrir cuenta real + moneda real)
                 const mcpAccResult = await callPipeboardMcpTool('get_ad_accounts', {});
                 const discoveredAccounts =
                   mcpAccResult?.ad_accounts || mcpAccResult?.data || (Array.isArray(mcpAccResult) ? mcpAccResult : []);
-                if (
-                  Array.isArray(discoveredAccounts) &&
-                  discoveredAccounts.length > 0 &&
-                  (!adAccountId || adAccountId === 'act_595884210394')
-                ) {
-                  const firstAcc = discoveredAccounts[0];
-                  adAccountId = String(firstAcc.id || `act_${firstAcc.account_id}`);
+                let detectedAccountCurrency = '';
+                if (Array.isArray(discoveredAccounts) && discoveredAccounts.length > 0) {
+                  const matchedAcc =
+                    discoveredAccounts.find((a: any) => String(a.id || `act_${a.account_id}`) === adAccountId) ||
+                    discoveredAccounts[0];
+                  if (!adAccountId || adAccountId === 'act_595884210394') {
+                    adAccountId = String(matchedAcc.id || `act_${matchedAcc.account_id}`);
+                  }
+                  if (matchedAcc?.currency) {
+                    detectedAccountCurrency = String(matchedAcc.currency).toUpperCase();
+                  }
                 }
+
+                await hydrateAutoadsFromSupabase().catch(() => {});
+                const pbFlags = getFeatureFlags();
+                const pbPreflight = await runMetaPublishPreflight({
+                  publisher: 'pipeboard',
+                  adAccountId,
+                  pipeboardMcpToken: pbToken,
+                  pipeboardUrl: mcpEndpoint,
+                  accessToken: metaDirectToken,
+                  pixelId,
+                  dailyBudget: dailyBudgetGs,
+                  dailyBudgetInputCurrency: 'PYG',
+                  usdToPygRate: getEffectiveFxRate().usdToPygRate,
+                  desiredObjective: pbFlags.AUTOADS_CANONICAL_LEAD_ONLY ? 'OUTCOME_LEADS' : 'OUTCOME_SALES',
+                  hasVideosSelected: creatives.some((c: any) => Boolean(c?.aiGeneratedVideoUrl)),
+                  knownAccountCurrency: detectedAccountCurrency || 'USD'
+                });
 
                 mcpStepLogs.push({
                   step: 1,
                   toolName: 'get_ad_accounts',
                   status: mcpAccResult ? 'success' : 'error',
                   summary: mcpAccResult
-                    ? `Cuenta publicitaria verificada en Pipeboard: ${adAccountId} (Píxel: ${pixelId})`
+                    ? `Cuenta verificada en Pipeboard: ${adAccountId} (${pbPreflight.accountCurrency}) · Píxel: ${pixelId} · Budget: ${pbPreflight.dailyBudgetDisplay}`
                     : lastMcpError || `No se pudo verificar la cuenta ${adAccountId} en Pipeboard`,
                   timestamp: new Date().toISOString()
                 });
 
                 // Paso 2: create_campaign
-                const campaignName = `[PIPEBOARD IA] ${product.nombre || 'Producto'} · Conversiones COD PY`;
+                const campaignName = `[PIPEBOARD IA] ${product.nombre || 'Producto'} · ${pbPreflight.campaignObjective === 'OUTCOME_LEADS' ? 'Leads COD PY' : 'Conversiones COD PY'}`;
                 const mcpCamp = await callPipeboardMcpTool('create_campaign', {
                   ad_account_id: adAccountId,
                   name: campaignName,
-                  objective: 'OUTCOME_SALES',
+                  objective: pbPreflight.campaignObjective,
                   status: publishStatus,
                   special_ad_categories: []
                 });
@@ -7316,7 +7776,7 @@ setTimeout(()=>window.close(),5000);
                   toolName: 'create_campaign',
                   status: campaignId ? 'success' : 'error',
                   summary: campaignId
-                    ? `Campaña creada: "${campaignName}" (ID: ${campaignId}) · Objetivo: OUTCOME_SALES`
+                    ? `Campaña creada: "${campaignName}" (ID: ${campaignId}) · Objetivo: ${pbPreflight.campaignObjective}`
                     : lastMcpError || 'Error al crear campaña en Meta Ads vía Pipeboard',
                   timestamp: new Date().toISOString()
                 });
@@ -7330,24 +7790,25 @@ setTimeout(()=>window.close(),5000);
                       error:
                         lastMcpError ||
                         `Pipeboard/Meta Ads no devolvió un ID real de campaña para la cuenta ${adAccountId}. Verificá tu Token de Pipeboard o Cuenta Publicitaria en "OpenRouter & Pipeboard".`,
-                      mcpStepLogs
+                      mcpStepLogs,
+                      preflight: pbPreflight
                     })
                   );
                   return;
                 }
 
-                // Paso 3: create_ad_set
-                const adSetName = `[PARAGUAY 18-65+] ${product.nombre || 'Producto'} · Píxel ${pixelId} · Gs. ${dailyBudgetGs.toLocaleString('es-PY')}/día`;
+                // Paso 3: create_ad_set (usando presupuesto convertido a la moneda real de la cuenta + evento Lead)
+                const adSetName = `[PARAGUAY 18-65+] ${product.nombre || 'Producto'} · Píxel ${pixelId} · ${pbPreflight.dailyBudgetDisplay}`;
                 const mcpAdSet = await callPipeboardMcpTool('create_ad_set', {
                   ad_account_id: adAccountId,
                   campaign_id: campaignId,
                   name: adSetName,
-                  daily_budget: dailyBudgetGs,
+                  daily_budget: pbPreflight.dailyBudgetAccountMinorUnits,
                   billing_event: 'IMPRESSIONS',
                   optimization_goal: 'OFFSITE_CONVERSIONS',
                   promoted_object: {
                     pixel_id: pixelId,
-                    custom_event_type: 'PURCHASE'
+                    custom_event_type: pbPreflight.optimizationEvent
                   },
                   targeting: {
                     geo_locations: { countries: ['PY'] },
@@ -7362,15 +7823,24 @@ setTimeout(()=>window.close(),5000);
                   toolName: 'create_ad_set',
                   status: adSetId ? 'success' : 'error',
                   summary: adSetId
-                    ? `Conjunto de Anuncios creado (ID: ${adSetId}) conectado al Píxel ${pixelId} (Evento: PURCHASE)`
+                    ? `Conjunto de Anuncios creado (ID: ${adSetId}) conectado al Píxel ${pixelId} (Evento: ${pbPreflight.optimizationEvent}, Budget=${pbPreflight.dailyBudgetAccountMinorUnits})`
                     : lastMcpError || 'Error al crear Ad Set',
                   timestamp: new Date().toISOString()
                 });
 
-                // Paso 4, 5 y 6: upload_ad_image + create_ad_creative + create_ad por cada creativo usando su imagen IA real (cr.aiGeneratedImageUrl)
+                // Paso 4, 5 y 6: upload_ad_image (fallback automático si no soporta video) + create_ad_creative (link con aa_cid/UTMs) + create_ad
                 const publishedAds: any[] = [];
                 for (let i = 0; i < creatives.length; i++) {
                   const cr = creatives[i];
+                  const aaCid = generateAaCid();
+                  const trackedLink = appendTrackingParamsToUrl(landingUrl, {
+                    aaCid,
+                    hypothesisId: cr.hypothesisId,
+                    angleId: cr.angleId,
+                    creativeId: cr.id,
+                    campaignName,
+                    adName: `Anuncio #${i + 1}`
+                  });
                   const realImageUrl = resolvePublicCreativeUrl(cr);
                   const imgRes = await callPipeboardMcpTool('upload_ad_image', {
                     ad_account_id: adAccountId,
@@ -7384,7 +7854,7 @@ setTimeout(()=>window.close(),5000);
                     name: `Creative #${i + 1} · ${cr.angleTitle}`,
                     page_id: pageId,
                     image_hash: imageHash,
-                    link: landingUrl,
+                    link: trackedLink,
                     message: cr.primaryText,
                     headline: cr.headline,
                     description: cr.descriptionText,
@@ -7401,10 +7871,38 @@ setTimeout(()=>window.close(),5000);
                   });
                   const adId = String(adRes?.id || '');
 
+                  if (adId || creativeId) {
+                    registerAdEntitySnapshot({
+                      productSlug: String(product.slug || 'producto'),
+                      publisher: 'pipeboard',
+                      adAccountId,
+                      accountCurrency: pbPreflight.accountCurrency,
+                      campaignId,
+                      adsetId: adSetId,
+                      adId: adId || undefined,
+                      creativeId: cr.id || undefined,
+                      metaCreativeId: creativeId || undefined,
+                      aaCid,
+                      hypothesisId: cr.hypothesisId,
+                      angleId: cr.angleId,
+                      mediaType: 'image',
+                      headline: cr.headline,
+                      primaryText: cr.primaryText,
+                      ctaLabel: cr.ctaLabel,
+                      destinationUrl: trackedLink,
+                      urlTags: undefined,
+                      preflightStatus: pbPreflight.readyToPublish ? 'ok' : 'warnings',
+                      payloadSnapshot: { trackingLinkMode: pbPreflight.trackingLinkMode }
+                    });
+                  }
+
                   publishedAds.push({
                     adId: adId || `pending-${i + 1}`,
                     creativeId: creativeId || `pending-${i + 1}`,
                     imageHash,
+                    aaCid,
+                    hypothesisId: cr.hypothesisId,
+                    angleId: cr.angleId,
                     name: `Anuncio #${i + 1} · ${cr.formatLabel}`,
                     formatLabel: cr.formatLabel,
                     status: adId ? publishStatus : 'ERROR'
@@ -7422,7 +7920,7 @@ setTimeout(()=>window.close(),5000);
                   step: 5,
                   toolName: 'create_ad_creative',
                   status: 'success',
-                  summary: `${publishedAds.length} Object Story Specs ensamblados con enlace directo a ${landingUrl}`,
+                  summary: `${publishedAds.length} Object Story Specs ensamblados con tracking aa_cid en link (${pbPreflight.trackingLinkMode})`,
                   timestamp: new Date().toISOString()
                 });
                 mcpStepLogs.push({
@@ -7442,12 +7940,16 @@ setTimeout(()=>window.close(),5000);
                   productSlug: product.slug || 'producto',
                   landingUrl,
                   adAccountId,
+                  accountCurrency: pbPreflight.accountCurrency,
+                  objective: pbPreflight.campaignObjective,
+                  optimizationEvent: pbPreflight.optimizationEvent,
                   pixelId,
                   campaignId,
                   campaignName,
                   adSetId,
                   adSetName,
                   publishedAds,
+                  preflight: pbPreflight,
                   executionMode,
                   mcpStepLogs,
                   adsManagerUrl: `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${encodeURIComponent(
@@ -7468,10 +7970,13 @@ setTimeout(()=>window.close(),5000);
                   fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
                 } catch {}
 
+                await flushPendingSupabaseSyncs(3000);
+
                 res.end(
                   JSON.stringify({
                     success: true,
-                    campaign: record
+                    campaign: record,
+                    preflight: pbPreflight
                   })
                 );
               } catch (err: any) {
@@ -7480,6 +7985,279 @@ setTimeout(()=>window.close(),5000);
               }
             });
             return;
+          }
+
+          // =========================================================================
+          // ENDPOINTS INTERNOS AUTO ADS V2 (CIRCUITO A PURO + ATRIBUCIÓN + CIRCUITO B ERP)
+          // =========================================================================
+
+          if (url === '/api/autoads/feature-flags') {
+            if (req.method === 'GET') {
+              (async () => {
+                await hydrateAutoadsFromSupabase({ forceRefresh: true }).catch(() => {});
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, flags: getFeatureFlags() }));
+              })();
+              return;
+            }
+            if (req.method === 'POST') {
+              const auth = verifyAdminToken(req.headers['authorization'], req.headers['cookie']);
+              if (!auth.valid) {
+                res.statusCode = 401;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Se requiere sesión admin' }));
+                return;
+              }
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                try {
+                  await hydrateAutoadsFromSupabase().catch(() => {});
+                  const patch = JSON.parse(body || '{}');
+                  const next = setFeatureFlags(patch);
+                  await flushPendingSupabaseSyncs(3000);
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: true, flags: next }));
+                } catch (err: any) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+          }
+
+          if (req.method === 'POST' && url === '/api/autoads/preflight') {
+            let body = '';
+            req.on('data', (c: any) => (body += c));
+            req.on('end', async () => {
+              try {
+                await hydrateAutoadsFromSupabase().catch(() => {});
+                const parsed = JSON.parse(body || '{}');
+                const report = await runMetaPublishPreflight({
+                  publisher: parsed.publisher === 'pipeboard' ? 'pipeboard' : 'meta_direct',
+                  adAccountId: String(parsed.adAccountId || 'act_1048211497774834'),
+                  accessToken: parsed.accessToken || readKeyFromEnvFile('META_ACCESS_TOKEN'),
+                  pipeboardMcpToken: parsed.pipeboardApiToken || readKeyFromEnvFile('PIPEBOARD_API_TOKEN'),
+                  pixelId: String(parsed.pixelId || readKeyFromEnvFile('META_PIXEL_ID') || '1276031534651377'),
+                  dailyBudget: Number(parsed.dailyBudgetGs || parsed.dailyBudget || 65000),
+                  dailyBudgetInputCurrency: parsed.dailyBudgetInputCurrency || 'PYG',
+                  usdToPygRate: getEffectiveFxRate().usdToPygRate,
+                  desiredObjective: parsed.desiredObjective || 'OUTCOME_LEADS',
+                  hasVideosSelected: Boolean(parsed.hasVideosSelected),
+                  knownAccountCurrency: parsed.knownAccountCurrency
+                });
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, preflight: report }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/api/attribution/wa-token') {
+            let body = '';
+            req.on('data', (c: any) => (body += c));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const issued = issueWaAttributionToken({
+                  productSlug: String(parsed.productSlug || 'default'),
+                  visitorId: parsed.visitorId,
+                  phone: parsed.phone,
+                  touch: parsed.touch || null
+                });
+                await flushPendingSupabaseSyncs(3000);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, token: issued.token, waHintText: issued.waHintText }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/api/autoads/insights/sync') {
+            let body = '';
+            req.on('data', (c: any) => (body += c));
+            req.on('end', async () => {
+              try {
+                await hydrateAutoadsFromSupabase({ forceRefresh: true }).catch(() => {});
+                const parsed = JSON.parse(body || '{}');
+                const cfg = loadStoreConfig();
+                const accessToken = String(
+                  parsed.accessToken || cfg?.metaDirectConfig?.accessToken || readKeyFromEnvFile('META_ACCESS_TOKEN') || ''
+                ).trim();
+                const adAccountId = String(
+                  parsed.adAccountId || cfg?.pipeboardConfig?.selectedAdAccountId || 'act_1048211497774834'
+                ).trim();
+                const productSlug = String(parsed.productSlug || cfg?.productPages?.[0]?.slug || 'default');
+                let syncResult: any = { syncedRows: 0, accountCurrency: 'USD', warnings: ['Sin META_ACCESS_TOKEN; recomputando solo con datos locales.'] };
+                if (accessToken) {
+                  syncResult = await syncMetaInsightsForAccount({
+                    adAccountId,
+                    accessToken,
+                    usdToPygRate: getEffectiveFxRate().usdToPygRate,
+                    datePreset: parsed.datePreset || 'last_30d'
+                  });
+                }
+                const learning = recomputeCircuitALearning({ productSlug });
+                await flushPendingSupabaseSyncs(4000);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, syncResult, learning }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/api/autoads/learning-dashboard') {
+            (async () => {
+              try {
+                await hydrateAutoadsFromSupabase({ forceRefresh: true }).catch(() => {});
+                const q = new URLSearchParams(req.url?.split('?')[1] || '');
+                const productSlug = q.get('productSlug') || loadStoreConfig()?.productPages?.[0]?.slug || 'default';
+                const learning = recomputeCircuitALearning({ productSlug });
+                await flushPendingSupabaseSyncs(3000);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, productSlug, ...learning }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            })();
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/api/sync/retry-queues') {
+            let body = '';
+            req.on('data', (c: any) => (body += c));
+            req.on('end', async () => {
+              try {
+                await hydrateAutoadsFromSupabase({ forceRefresh: true }).catch(() => {});
+                const cloudRes = await retryPendingCloudSyncQueue(async (ord) => syncOrderUpdateToCloud(ord));
+                const cfg = loadStoreConfig();
+                const capiRes = await retryPendingCapiDispatches({
+                  accessTokenResolver: () =>
+                    String(cfg?.capiAccessToken || readKeyFromEnvFile('META_CAPI_TOKEN') || readKeyFromEnvFile('META_ACCESS_TOKEN') || '').trim()
+                });
+                await flushPendingSupabaseSyncs(3000);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, cloudRes, capiRes }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          if (url.startsWith('/api/erp/')) {
+            const auth = verifyAdminToken(req.headers['authorization'], req.headers['cookie']);
+            if (!auth.valid) {
+              res.statusCode = 401;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: 'Autenticación admin requerida para Circuito B ERP.' }));
+              return;
+            }
+            if (req.method === 'GET' && url === '/api/erp/costs') {
+              (async () => {
+                await hydrateAutoadsFromSupabase({ forceRefresh: true }).catch(() => {});
+                const q = new URLSearchParams(req.url?.split('?')[1] || '');
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, costProfiles: listProductCostProfiles(q.get('productSlug') || undefined) }));
+              })();
+              return;
+            }
+            if (req.method === 'POST' && url === '/api/erp/costs') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                try {
+                  await hydrateAutoadsFromSupabase().catch(() => {});
+                  const p = JSON.parse(body || '{}');
+                  const profile = saveProductCostProfile({ ...p, createdBy: auth.username || 'admin' });
+                  await flushPendingSupabaseSyncs(3000);
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: true, profile }));
+                } catch (err: any) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+            if (req.method === 'POST' && url === '/api/erp/fx-rates') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                try {
+                  await hydrateAutoadsFromSupabase().catch(() => {});
+                  const p = JSON.parse(body || '{}');
+                  const period = saveFxRatePeriod({ ...p, createdBy: auth.username || 'admin' });
+                  await flushPendingSupabaseSyncs(3000);
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: true, period }));
+                } catch (err: any) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+            if (req.method === 'POST' && url === '/api/erp/settlements') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                try {
+                  await hydrateAutoadsFromSupabase().catch(() => {});
+                  const p = JSON.parse(body || '{}');
+                  const record = recordCourierSettlement({ ...p, createdBy: auth.username || 'admin' });
+                  await flushPendingSupabaseSyncs(3000);
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: true, settlement: record }));
+                } catch (err: any) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+            if (req.method === 'POST' && url === '/api/erp/settlements/import-csv') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                try {
+                  await hydrateAutoadsFromSupabase().catch(() => {});
+                  const p = JSON.parse(body || '{}');
+                  const record = importCourierSettlementCsv({ ...p, createdBy: auth.username || 'admin' });
+                  await flushPendingSupabaseSyncs(3000);
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: true, settlement: record }));
+                } catch (err: any) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+            if (req.method === 'GET' && url === '/api/erp/profitability') {
+              (async () => {
+                await hydrateAutoadsFromSupabase({ forceRefresh: true }).catch(() => {});
+                const q = new URLSearchParams(req.url?.split('?')[1] || '');
+                const summary = computeAuditedErpProfitability({
+                  productSlug: q.get('productSlug') || undefined
+                });
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, summary }));
+              })();
+              return;
+            }
           }
 
           next();
@@ -7530,6 +8308,7 @@ export default defineConfig({
     allowedHosts: true,
     watch: {
       ignored: [
+        '**/data/**',
         '**/database/**',
         '**/wa_chats.json',
         '**/seller_agent_chats.json',

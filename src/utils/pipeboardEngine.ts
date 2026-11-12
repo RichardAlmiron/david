@@ -47,6 +47,10 @@ export interface GeneratedAdCreativeAsset {
   aiGeneratedImageDataUrl?: string; // Persistent Base64 Data URL backup to survive container restarts/redeploys
   aiGeneratedVideoUrl?: string; // Real AI-generated playable Reel video (.mp4) derived from the AI image
   aiImagePrompt?: string; // Exact prompt used by the AI Image Generator to create this ad visual
+  hypothesisId?: string;
+  angleId?: string;
+  hypothesisCode?: string;
+  testVariable?: string;
   videoScenes?: Array<{
     durationSec: number;
     badge: string;

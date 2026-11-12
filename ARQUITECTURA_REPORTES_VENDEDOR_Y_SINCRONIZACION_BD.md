@@ -126,3 +126,12 @@ Toda la persistencia multi-dispositivo opera al 100% sobre **Supabase Oficial (`
    - Copiado instantáneo con confirmación visual (`Copiado!`) para **Nombre**, **Teléfono (`09XXXXXXXX`)**, **Ciudad**, **Dirección** y **Mapa GPS**.
 3. **Resumen Completo para Delivery (`📋 Copiar Todo el Resumen para Delivery`):**
    - Genera el bloque completo listo para enviar al courier/motomensajería con todos los datos verificados y enlace de Google Maps.
+
+---
+
+## 9. Separación Estricta Entre Circuito A (Conversión `Lead` de AutoAds) y Circuito B (Logística, Costos y `Purchase` Independiente)
+
+En la arquitectura **AutoAds v2** (ver [`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md)):
+1. **Persistencia Conjunta Idempotente en `POST /api/pedidos`:** Además de guardar el pedido en `pedidos` / `ORD-*` para WhatsApp y el Panel Admin, [`server/attributionAndOrders.ts`](./server/attributionAndOrders.ts) persiste de manera idempotente (`clientRequestKey` / `reservaid`) el snapshot inmutable de atribución en `order_attribution` (`last_paid_touch` 30d, token WA `AA-XXXXX` o stitch telefónico) con señal canónica única **`Lead`** (en caso de fallo de nube, la cola `cloudSyncQueue` reintenta sin perder conversiones).
+2. **Aislamiento de Logística y ERP en `POST /api/pedidos/estado` (`Circuito B`):** Cuando el vendedor, reparto o planilla CSV del courier actualiza estados (`en_camino`, `entregado`, `cancelado` o los 3 ejes `deliveryStatus`, `customerPaymentStatus`, `courierSettlementStatus`) o registra costos reales/liquidaciones en `/api/erp/*`, **jamás modifica `order_attribution` ni altera el aprendizaje de anuncios (`Circuito A`)**.
+3. **`Purchase` CAPI Independiente:** Solo cuando el backend confirma `entregado_fisicamente && cobrado_verificado` dentro de los 7 días reales desde el formulario, [`server/metaCapiWorker.ts`](./server/metaCapiWorker.ts) despacha `Purchase` (`action_source: 'website'`); si supera 7 días, registra `skipped_window_expired_erp_only` únicamente para auditoría interna del ERP.

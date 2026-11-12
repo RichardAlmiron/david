@@ -1,4 +1,9 @@
-import { ProductMetaTrackingConfig, ProductPage } from '../types';
+import {
+  OrderAttributionPayload,
+  PaidTouchSnapshot,
+  ProductMetaTrackingConfig,
+  ProductPage
+} from '../types';
 
 export type MetaFunnelEventName =
   | 'PageView'
@@ -8,6 +13,7 @@ export type MetaFunnelEventName =
   | 'InitiateCheckout'
   | 'AddPaymentInfo'
   | 'Lead'
+  | 'OrderReservedCOD'
   | 'Purchase'
   | 'Contact'
   | 'GalleryInteraction'
@@ -89,16 +95,23 @@ export const META_EVENTS_CATALOG: MetaEventDefinition[] = [
   {
     id: 'Lead',
     type: 'standard',
-    title: 'Lead (Captura de Nombre y WhatsApp con SHA-256)',
-    triggerDescription: 'Envía teléfono paraguayo (595...) y nombre hasheados en SHA-256.',
-    metaAlgorithmImpact: 'Eleva el Event Match Quality (EMQ) por encima de 9.2/10.'
+    title: 'Lead (Conversión Canónica: Formulario de Pedido Confirmado)',
+    triggerDescription: 'Se dispara únicamente tras validación y guardado confirmado del pedido (SHA-256 + event_id único).',
+    metaAlgorithmImpact: 'Señal principal canónica para optimizar campañas OUTCOME_LEADS sin duplicar conversiones.'
+  },
+  {
+    id: 'OrderReservedCOD',
+    type: 'custom_micro',
+    title: 'OrderReservedCOD (Telemetría Secundaria COD)',
+    triggerDescription: 'Evento custom opcional emitido al reservar pedido COD en paralelo a Lead sin alterar Results.',
+    metaAlgorithmImpact: 'Telemetría diagnóstica COD separada para Events Manager sin duplicar resultados de campaña.'
   },
   {
     id: 'Purchase',
     type: 'standard',
-    title: 'Purchase (Pedido Contra Entrega Confirmado)',
-    triggerDescription: 'Disparo dual (Píxel + Servidor CAPI) con deduplicación event_id, monto PYG y orden.',
-    metaAlgorithmImpact: 'El evento rey para que el algoritmo Andromeda busque miles de compradores idénticos.'
+    title: 'Purchase (Venta Real Entregada y Cobrada — Solo Servidor)',
+    triggerDescription: 'Emitido exclusivamente desde el servidor CAPI al confirmarse entrega física + cobro verificado.',
+    metaAlgorithmImpact: 'Mantiene calidad real financiera en Events Manager separada del entrenamiento por formularios.'
   },
   {
     id: 'Contact',
@@ -124,6 +137,7 @@ export const DEFAULT_META_TRACKING_CONFIG: ProductMetaTrackingConfig = {
     InitiateCheckout: true,
     AddPaymentInfo: true,
     Lead: true,
+    OrderReservedCOD: true,
     Purchase: true,
     Contact: true,
     GalleryInteraction: true,
@@ -205,10 +219,30 @@ export function normalizeCustomerForAdvancedMatching(input?: MetaUserDataInput):
 export function generateDeduplicationEventId(eventName: string, orderOrCustomSeed?: string): string {
   if (orderOrCustomSeed) {
     const cleanSeed = orderOrCustomSeed.replace(/[^a-zA-Z0-9_-]/g, '');
-    return `evt_${eventName}_${cleanSeed}`;
+    return `ord_${cleanSeed}_${eventName}`;
   }
   const rand = Math.random().toString(36).substring(2, 10);
   return `evt_${eventName}_${Date.now()}_${rand}`;
+}
+
+export function getOrCreateVisitorId(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const fromCookie = getCookieValue('aa_visitor_id');
+    const fromLs = window.localStorage.getItem('aa_visitor_id') || '';
+    const existing = fromCookie || fromLs;
+    if (existing && existing.length >= 6) {
+      if (!fromCookie) setFirstPartyCookie('aa_visitor_id', existing, 90);
+      if (!fromLs) window.localStorage.setItem('aa_visitor_id', existing);
+      return existing;
+    }
+    const created = `vis_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    setFirstPartyCookie('aa_visitor_id', created, 90);
+    window.localStorage.setItem('aa_visitor_id', created);
+    return created;
+  } catch {
+    return `vis_${Date.now().toString(36)}`;
+  }
 }
 
 function setFirstPartyCookie(name: string, value: string, days = 90) {
@@ -352,8 +386,13 @@ export async function trackMetaFullFunnelEvent(options: TrackMetaEventOptions): 
   const effectivePixelId = String(trackingCfg.pixelId || globalPixelId || '').replace(/\D+/g, '');
   const eventId = generateDeduplicationEventId(
     eventName,
-    orderId ? `${orderId}_${eventName}` : undefined
+    orderId ? orderId : undefined
   );
+  const visitorId = getOrCreateVisitorId();
+  const effectiveUserData: MetaUserDataInput = {
+    ...(userData || {}),
+    externalId: userData?.externalId || visitorId || undefined
+  };
 
   const fbp = getOrCreateFbp();
   const fbc = captureAndPersistFbc();
@@ -399,8 +438,8 @@ export async function trackMetaFullFunnelEvent(options: TrackMetaEventOptions): 
       initMetaBrowserPixel(effectivePixelId);
       const w = window as any;
       if (typeof w.fbq === 'function') {
-        if (userData && (userData.celular || userData.nombre)) {
-          const norm = normalizeCustomerForAdvancedMatching(userData);
+        if (effectiveUserData && (effectiveUserData.celular || effectiveUserData.nombre || effectiveUserData.externalId)) {
+          const norm = normalizeCustomerForAdvancedMatching(effectiveUserData);
           w.fbq('init', effectivePixelId, {
             ...(norm.ph ? { ph: norm.ph } : {}),
             ...(norm.fn ? { fn: norm.fn } : {}),
@@ -455,7 +494,8 @@ export async function trackMetaFullFunnelEvent(options: TrackMetaEventOptions): 
           productSlug: contentId,
           fbp,
           fbc,
-          userData: userData || {},
+          visitorId,
+          userData: effectiveUserData,
           customData
         })
       });
@@ -464,4 +504,138 @@ export async function trackMetaFullFunnelEvent(options: TrackMetaEventOptions): 
   }
 
   return { eventId, browserFired, capiSent };
+}
+
+const ATTR_FIRST_KEY = 'aa_first_touch_v2';
+const ATTR_LAST_PAID_KEY = 'aa_last_paid_touch_v2';
+const ATTR_WA_TOKEN_KEY = 'aa_wa_token_v2';
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+function readTouchStorage(key: string): PaidTouchSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key) || getCookieValue(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PaidTouchSnapshot;
+    if (!parsed || !parsed.capturedAt) return null;
+    const ageMs = Date.now() - Date.parse(parsed.capturedAt);
+    if (Number.isFinite(ageMs) && ageMs > THIRTY_DAYS_MS && key === ATTR_LAST_PAID_KEY) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveTouchStorage(key: string, touch: PaidTouchSnapshot, days = 30) {
+  if (typeof window === 'undefined') return;
+  try {
+    const encoded = JSON.stringify(touch);
+    window.localStorage.setItem(key, encoded);
+    setFirstPartyCookie(key, encoded, days);
+  } catch {}
+}
+
+export function captureUrlAttributionTouch(productSlug?: string): PaidTouchSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    getOrCreateVisitorId();
+    getOrCreateFbp();
+    const fbc = captureAndPersistFbc();
+    const params = new URLSearchParams(window.location.search);
+
+    const waTokenParam = params.get('wa_token') || params.get('ref') || '';
+    if (/^AA-[A-Z0-9]{4,10}$/i.test(waTokenParam.trim())) {
+      const upperToken = waTokenParam.trim().toUpperCase();
+      window.localStorage.setItem(ATTR_WA_TOKEN_KEY, upperToken);
+      setFirstPartyCookie(ATTR_WA_TOKEN_KEY, upperToken, 30);
+    }
+
+    const fbclid = params.get('fbclid') || undefined;
+    const utm_source = params.get('utm_source') || undefined;
+    const utm_medium = params.get('utm_medium') || undefined;
+    const utm_campaign = params.get('utm_campaign') || undefined;
+    const utm_content = params.get('utm_content') || undefined;
+    const utm_term = params.get('utm_term') || undefined;
+    const campaign_id = params.get('campaign_id') || undefined;
+    const adset_id = params.get('adset_id') || undefined;
+    const ad_id = params.get('ad_id') || undefined;
+    const creative_id = params.get('creative_id') || undefined;
+    const hypothesis_id = params.get('hypothesis_id') || undefined;
+    const angle_id = params.get('angle_id') || undefined;
+    const aa_cid = params.get('aa_cid') || undefined;
+
+    const hasPaidSignal = Boolean(
+      fbclid ||
+        fbc ||
+        ad_id ||
+        adset_id ||
+        campaign_id ||
+        aa_cid ||
+        utm_campaign ||
+        (utm_source && !/^(direct|none)$/i.test(utm_source))
+    );
+
+    if (!hasPaidSignal) {
+      return readTouchStorage(ATTR_LAST_PAID_KEY);
+    }
+
+    const snapshot: PaidTouchSnapshot = {
+      capturedAt: new Date().toISOString(),
+      productSlug: productSlug || params.get('p') || undefined,
+      landingPath: `${window.location.pathname}${window.location.search}`,
+      referrer: document.referrer || undefined,
+      fbclid,
+      fbc: fbc || undefined,
+      fbp: getOrCreateFbp() || undefined,
+      utm_source,
+      utm_medium,
+      utm_campaign,
+      utm_content,
+      utm_term,
+      campaign_id,
+      adset_id,
+      ad_id,
+      creative_id,
+      hypothesis_id,
+      angle_id,
+      aa_cid
+    };
+
+    if (!readTouchStorage(ATTR_FIRST_KEY)) {
+      saveTouchStorage(ATTR_FIRST_KEY, snapshot, 90);
+    }
+    // Actualizar last_paid_touch únicamente ante toque pagado real (jamás sobrescribir con tráfico directo)
+    saveTouchStorage(ATTR_LAST_PAID_KEY, snapshot, 30);
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+export function getOrderAttributionSnapshot(productSlug?: string): OrderAttributionPayload {
+  captureUrlAttributionTouch(productSlug);
+  const firstTouch = readTouchStorage(ATTR_FIRST_KEY);
+  const lastPaidTouch = readTouchStorage(ATTR_LAST_PAID_KEY);
+  let waToken: string | undefined;
+  try {
+    waToken =
+      (typeof window !== 'undefined'
+        ? window.localStorage.getItem(ATTR_WA_TOKEN_KEY) || getCookieValue(ATTR_WA_TOKEN_KEY)
+        : '') || undefined;
+  } catch {}
+  return {
+    visitorId: getOrCreateVisitorId(),
+    firstTouch,
+    lastPaidTouch,
+    waToken,
+    fbp: getOrCreateFbp() || undefined,
+    fbc: captureAndPersistFbc() || getCookieValue('_fbc') || undefined,
+    fbclid: lastPaidTouch?.fbclid || firstTouch?.fbclid,
+    referrer: typeof document !== 'undefined' ? document.referrer || undefined : undefined,
+    landingPath:
+      lastPaidTouch?.landingPath ||
+      (typeof window !== 'undefined' ? `${window.location.pathname}${window.location.search}` : undefined)
+  };
 }

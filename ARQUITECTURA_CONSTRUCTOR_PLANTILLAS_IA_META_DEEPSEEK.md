@@ -1,6 +1,8 @@
-# 🏗️ ARQUITECTURA ALGORÍTMICA COMPLETA: KERNEL OFICIAL `deepseek-ai/deepseek-harness` (CORDIS) + ESTUDIO AUTOPILOTO 1-CLIC + DISTRIBUCIÓN MULTI-MODELO OPENROUTER (`z-ai/glm-5.3` DESARROLLO WEB + `openai/gpt-4o-mini` COPYWRITING + `openai/gpt-image-2.6` IMÁGENES + `minimax/minimax-m3.1-flash` VIDEO REELS) + META CAPI ANTI-APPLE + PIPEBOARD ADS AUTOPILOT + INTERFAZ MÓVIL ANDROID 100% NEGRO PURO
+# 🏗️ ARQUITECTURA ALGORÍTMICA: KERNEL `deepseek-ai/deepseek-harness` (CORDIS) + ESTUDIO AUTOPILOTO 1-CLIC + AUTOADS v2 (`openai/gpt-4o`, `openai/gpt-image-2.6-sunburst`, `google/gemini-omni-1.2-flash`) + META CAPI `Lead` CANÓNICO + PIPEBOARD ADS
 
-Este documento detalla **píxel por píxel** y **algoritmo por algoritmo** la arquitectura vigente del **Estudio Autopiloto de Páginas de Producto**, el **Kernel Oficial DeepSeek Harness (`deepseek-ai/deepseek-harness`)**, la **Distribución Multi-Modelo vía OpenRouter**, el **Gateway First-Party de Meta Conversions API (CAPI)**, el **Creador de Anuncios en Piloto Automático Pipeboard Meta Ads** y la **Interfaz Móvil Nativa Android / Vercel 100% Negro Puro**.
+> 📌 Para la especificación integral del nuevo **Cerebro Psicológico y de Inteligencia Publicitaria de AutoAds (Circuito A independiente del courier)** y el **Circuito B ERP/Purchase**, consultá [`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md).
+
+Este documento detalla la arquitectura vigente del **Estudio Autopiloto de Páginas de Producto**, el **Kernel DeepSeek Harness (`src/utils/deepseekHarnessKernel.ts`)**, los motores generativos OpenRouter conservados, el **Gateway First-Party de Meta CAPI (`Lead` canónico en checkout COD + `Purchase` backend-only en entrega/cobro)** y los publicadores **Meta Direct** y **Pipeboard MCP**.
 
 ---
 
@@ -52,54 +54,43 @@ Cada vez que el Kernel aplica una mutación sobre el borrador (`ProductDraftStat
 La plataforma implementa una distribución especializada de modelos de IA en OpenRouter para maximizar la velocidad, la conversión y la congruencia visual/textual en cada área:
 
 1. **Desarrollo Web & Agente de Código (`ProductTemplateBuilderStudio.tsx` / `/api/builder/coding-agent`)**:
-   - Modelo: **`z-ai/glm-5.3` (GLM 5.3)** en OpenRouter.
+   - Modelo: **`z-ai/glm-5.3-flash`** en OpenRouter.
    - Utilizado para razonamiento estructural profundo, mutación de componentes y plugins del Kernel Harness Cordis.
-2. **AutoAds Cerebro Maestro 0.0s, Contexto & Director de Prompts (`AutoAdsView.tsx` / `/api/autoads/brain-train` / `/api/autoads/regenerate-ad`)**:
-   - Modelo Principal: **`z-ai/glm-5.3`** con respaldo automático a **`openai/gpt-4o-mini`** en OpenRouter.
-   - **Regla Inquebrantable de los 0.0 Segundos (Palabras 1 a 4)**: Cada anuncio nombra en sus primeras 1 a 4 palabras el **objeto exacto** (`PROYECTOR NAVIDEÑO`, `TALADRO PERCUTOR`, etc., sin marcas desconocidas) junto con el **dolor, solución, placer u oferta irresistible** (`🔥 PROYECTOR NAVIDEÑO EN OFERTA:`, `🛑 PROYECTOR NAVIDEÑO PAGO EN PUERTA:`, `💡 PROYECTOR NAVIDEÑO SIN COMPLICACIONES:`, `🎁 2X PROYECTOR NAVIDEÑO EN OFERTA:`, `⚡ PROYECTOR NAVIDEÑO MÁXIMA POTENCIA:`, `📦 PROYECTOR NAVIDEÑO KIT COMPLETO:`).
-   - **Logística Realista COD Paraguay**: Prohibido prometer entregas *"hoy mismo en tu puerta"*; todos los anuncios comunican con transparencia que el comprador reserva sin adelantos y recibe en **2 a 3 días hábiles (48 a 72 horas)** pagando al repartidor en puerta.
+2. **AutoAds Cerebro Psicológico v2 (`server/autoAdsIntelligence.ts` / `/api/autoads/brain-train` / `/api/autoads/regenerate-ad`)**:
+   - Modelo: **`openai/gpt-4o`** vía OpenRouter.
+   - Preserva los motores originales agregando investigación competitiva en 3 niveles honestos, perfil psicológico Schwartz, 6 hipótesis dinámicas y memoria de aprendizaje desde formularios completados (`Circuito A`). Cuando `strategyMode === 'hypothesis_v2'`, `sanitizeAdCopyForParaguayCod` usa `{ policyGuardOnly: true }` para proteger los hooks psicológicos sin truncarlos; la regla legacy de las 0.0 palabras solo aplica si se desactiva `AUTOADS_STRATEGY_V2_ENABLED`.
+   - **Logística Realista COD Paraguay**: Todos los anuncios comunican tiempos reales de entrega COD (**2 a 3 días hábiles / 48 a 72 horas**) y lenguaje claro para el cliente (`pagás cuando recibís`).
 3. **Generación de Imágenes Publicitarias en Modo Seguro Turno por Turno (`Anti-HTTP 402 in-flight requests`)**:
-   - Modelos OpenAI en OpenRouter: **`openai/gpt-image-2.6-flare`** (predeterminado), **`openai/gpt-image-2.6-sunburst`**, **`openai/gpt-5-image-mini`**, **`openai/gpt-image-1-mini`** y **`openai/gpt-5.4-image-2`** en resolución universal `1024x1024`.
-   - **Algoritmo Anti-Bloqueo `in-flight requests` (`HTTP 402`)**:
-     - En el servidor (`invokeOpenRouterImageModel` en `/vite.config.ts`), si OpenRouter reporta `HTTP 402 ("This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle")`, el motor espera **4.5 segundos (`4500ms`)** a que se liquide la reserva en vuelo y reintenta automáticamente el mismo modelo hasta 3 veces sin disparar fallbacks simultáneos.
-     - En el frontend (`AutoAdsView.tsx`), el Paso 2 prepara en 2 segundos los **6 Textos y Prompts** y ofrece dos modos 100% seguros:
-       1. **Modo Individual (`1 por 1` Manual)**: Botón **`⚡ Generar Imagen IA (Solo este anuncio #N)`** en cada tarjeta.
-       2. **Modo Cola Secuencial (`1 a la vez` con Pausa de Liquidación)**: Botón **`🛡️ Generar las 6 Imágenes por Turno (1 a la vez · Espera 3.5s entre turnos)`** con indicador de turno activo y botón **`⏹️ Pausar Cola`**.
-   - **Persistencia Dual Anti-Pérdida (`autoads_creatives_cache_v3_` + `/api/autoads/save-creatives-cache`)**:
-     - Cada imagen generada se guarda como archivo `.png` en `/public/assets/ai-ads/`, como `dataUrl` Base64 en `localStorage` (`autoads_creatives_cache_v3_<productKey>`) y en el backend (`store_config.json` vía `POST /api/autoads/save-creatives-cache`), garantizando que las imágenes jamás desaparezcan al recargar la página, iniciar sesión con Facebook OAuth o redesplegar el contenedor en Railway.
+   - Modelo conservado intacto: **`openai/gpt-image-2.6-sunburst`** en OpenRouter consumiendo el `aiImagePrompt` específico de cada hipótesis (soportando `1:1` y `9:16`).
+   - Mantiene el backoff automático anti-`HTTP 402` de `4.5s`, la cola secuencial turno por turno (`3.5s` en frontend) y la caché persistente dual (`localStorage` + `store_config.json`).
 4. **Creador de Video Reels (`/api/autoads/generate-ad-images` y `AutoAdsView.tsx`)**:
-   - Modelos de Video en OpenRouter: **`bytedance/seedance-2.5`** (predeterminado, capaz de animar la foto real del producto y generar video de avatar/demostración) y **`google/gemini-omni-1.2-flash`** / **`google/gemini-omni-1.1-flash`**.
+   - Modelo conservado intacto: **`google/gemini-omni-1.2-flash`** recibiendo el `videoScriptPrompt` de cada hipótesis.
 
 ---
 
-## 4. Píxel de Facebook + Algoritmo de 12 Eventos Full-Funnel + Servidor First-Party CAPI Anti-Bloqueo de Apple iOS (`src/utils/metaPixelEngine.ts` y `/api/meta-capi/track`)
+## 4. Píxel de Facebook, Conversión Canónica Única (`Lead`), Atribución 30d y `Purchase` Independiente (`Circuito B`)
 
-Todas las páginas creadas cuentan con infraestructura de **Doble Canal (Browser Pixel `fbq` + Servidor First-Party Conversions API `CAPI`)** para alcanzar **Calidad de Coincidencia de Eventos (EMQ) 9.4/10** y evitar pérdidas de atribución por **iOS 14.5+ ATT, Safari ITP y AdBlockers**:
+Todas las páginas cuentan con infraestructura de **Doble Canal (Browser Pixel `fbq` + Servidor First-Party CAPI `/api/meta-capi/track`)** y persistencia conjunta idempotente en `POST /api/pedidos`:
 
-1. **Persistencia First-Party de `_fbp` y `_fbc`**:
-   - Captura automática de `?fbclid=...` en el aterrizaje y persistencia en cookie First-Party y `localStorage`.
-2. **Gateway First-Party en el Servidor (`POST /api/meta-capi/track` en `vite.config.ts`)**:
-   - Recibe los eventos desde el mismo dominio, extrae IP real y User-Agent, normaliza teléfonos paraguayos (`5959...`), aplica **Hash SHA-256 (Advanced Matching)** y transmite Servidor-a-Servidor a `https://graph.facebook.com/v21.0/{pixel_id}/events` con deduplicación exacta por `event_id`.
-3. **Los 12 Eventos Full-Funnel Activos**:
-   - `PageView`, `ViewContent`, `CustomizeProduct`, `AddToCart`, `InitiateCheckout`, `AddPaymentInfo`, `Lead`, `Purchase` (con valor real en `PYG` y Advanced Matching SHA-256 completo), `Contact`, `GalleryInteraction`, `EngagedVisitor` (15s/45s) y `DeepScroll` (50%/80%).
+1. **Atribución 30 Días + `_fbp` / `_fbc` / `aa_cid` (`src/utils/metaPixelEngine.ts`):**
+   - Captura `last_paid_touch` por 30 días en `localStorage` y cookie `aa_last_paid_touch_v2` (una visita directa posterior no sobrescribe el último toque pago vigente), junto con `visitorId` único por visitante.
+2. **Evento Canónico de Optimización Publicitaria (`Lead`):**
+   - Al teclear en el formulario (`OrderForm.tsx`) solo se dispara **`InitiateCheckout`** una vez.
+   - **`Lead`** se emite **únicamente** después de que `addOrder` (`POST /api/pedidos`) confirma la persistencia conjunta de `pedidos` + `order_attribution`, contando una sola vez por pedido (`event_id = ord_<reservaid>_Lead`). Opcionalmente puede emitirse `OrderReservedCOD` como evento personalizado secundario de telemetría sin sumar en `Results` (`OUTCOME_LEADS` / `LEAD`).
+3. **`Purchase` Backend-Only Separado del Algoritmo AutoAds (`server/metaCapiWorker.ts`):**
+   - **Nunca se dispara `Purchase` al enviar el formulario COD.** `Purchase` se emite exclusivamente desde backend (`POST /api/pedidos/estado` / Circuito B) cuando el pedido alcanza `entregado_fisicamente && cobrado_verificado` dentro de la ventana real de 7 días de Meta (`action_source: 'website'`), sin usar `physical_store` ni alterar fechas si venció.
 
 ---
 
-## 5. AutoAds 360: Autenticación OAuth 1-Clic con Facebook, Descubrimiento Dinámico de Nombres en Vivo y Publicación Directa en Meta Graph API v21.0 (`src/components/AutoAdsView.tsx` y `vite.config.ts`)
+## 5. AutoAds 360: UI de 3 Pasos Preservada, OAuth 1-Clic y Preflight Meta Direct / Pipeboard
 
-1. **Estructura Comercial Oficial Fijada por ID + Nombres Reales Dinámicos desde Meta Graph API**:
-   - **Portafolio Comercial (Business)**: `Landingcod`
-   - **Cuenta Publicitaria Oficial (termina en `834`)**: ID bloqueado `act_1048211497774834` (`1048211497774834`). Su nombre real actual (`liveAdAccountName`) se consulta dinámicamente en vivo desde `GET /v21.0/act_1048211497774834?fields=id,account_id,name,currency,account_status,business_name`.
-   - **Píxel Oficial de la Cuenta 834 (termina en `377`)**: ID bloqueado `1276031534651377`. Su nombre real actual (`livePixelName`) se consulta dinámicamente en vivo desde `GET /v21.0/act_1048211497774834/adspixels?fields=id,name` y `GET /v21.0/1276031534651377?fields=id,name`.
-   - **Página Oficial de Facebook (Fanpage)**: `Landingcod Shop` — ID fijo `1050835598123904`.
-   - **Cuenta Personal Excluida y Auto-Pausada**: `act_424711183775699` (`Richard Almiron`) está 100% filtrada y excluida; además, el backend inspecciona automáticamente `act_424711183775699/campaigns` y pausa (`status: 'PAUSED'`) cualquier campaña `[META IA]` que se haya creado allí por error en el pasado.
-2. **Autenticación Facebook OAuth en 1 Clic (`GET /api/meta/auth-url`, `GET /api/meta/callback`, `POST /api/meta/restore-session`, `GET /api/meta/status`)**:
-   - Resolución dinámica de `redirect_uri` según el host real (`https://autoads360.up.railway.app/api/meta/callback`, `https://autoads360.up.railway.app/api/meta/callback` o `http://localhost:3000/api/meta/callback`).
-   - Intercambio automático por token de larga duración (~60 días) y respaldo en `localStorage` (`autoads_meta_oauth_backup_v1`) con auto-curación vía `POST /api/meta/restore-session` cuando Railway reinicia el contenedor tras un despliegue.
-   - Tarjeta de Referencia Oficial (`data-testid="meta-official-reference-card"`) con botones de copiado en 1 clic y botón **`🔄 Actualizar Nombres Reales desde Meta (834 / 377)`** (`data-testid="btn-discover-live-meta-names"`).
-3. **Publicación Directa en Meta Graph API v21.0 (`POST /api/meta/publish-direct`)**:
-   - Fuerza siempre `adAccountId = 'act_1048211497774834'`, `facebookPageId = '1050835598123904'` y `pixelId = '1276031534651377'`.
-   - Detecta en vivo la moneda de la cuenta (`USD` en centavos vs `PYG` entero en Guaraníes), convierte imágenes locales `/assets/ai-ads/...png` o `data:image/...` a Base64 (`bytes`) para `/act_1048211497774834/adimages`, y ejecuta la cadena completa: **Campaña → Conjunto de Anuncios (`AdSet`) → Subida de Imágenes → Creativos (`object_story_spec`) → Anuncios (`Ads`)**.
+1. **Flujo UI Intacto (`src/components/AutoAdsView.tsx`):** Se conservan sin cambios los **3 pasos**: `1. INVESTIGAR -> 2. GENERAR TODOS LOS CREATIVOS -> 3. PUBLICAR EN META ADS`.
+2. **Estructura Comercial Fija y OAuth 1-Clic:** `Landingcod`, cuenta `act_1048211497774834` (`834`), píxel `1276031534651377` (`377`), página `Landingcod Shop` (`1050835598123904`) y exclusión automática de `act_424711183775699`.
+3. **Publicación Compatibilizada (`POST /api/meta/publish-direct`, `POST /api/pipeboard/publish-campaign`, `POST /api/autoads/preflight`):**
+   - Optimiza exclusivamente a objetivo **`OUTCOME_LEADS`** (`LEAD`).
+   - Normaliza el presupuesto según la moneda real de la cuenta (`PYG` entero sin multiplicar por `100`; `USD` en centavos).
+   - Emite advertencia no bloqueante si el píxel tiene pocos eventos `Lead` en 7 días.
+   - Adjunta `aa_cid` + UTMs (`url_tags` en Meta Direct y `link` query params en Pipeboard), sube vídeos en Direct vía `/advideos` (con fallback controlado a imagen en Pipeboard cuando MCP no soporta vídeo) y registra cada anuncio publicado en `ad_entities`.
 
 ---
 

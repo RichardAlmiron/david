@@ -2,7 +2,8 @@
 
 Este documento contiene la bitácora completa y cronológica de todas las solicitudes del chat, las decisiones arquitectónicas y las mejoras técnicas implementadas desde el inicio hasta el estado actual en **Noelux™ (Proyector Navideño 12 Diseños — Pago Contra Entrega en Paraguay)**.
 
-Para la especificación algorítmica profunda del motor de WhatsApp, voz neuronal, transcripción STT y señalización, consultá también:
+Para la especificación algorítmica profunda del ecosistema actual, consultá también:
+- [`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md) (Documentación central del Cerebro Psicológico y Publicitario de AutoAds v2: Circuito A independiente del courier, señal canónica `Lead`, atribución 30d, preflight Meta/Pipeboard y Circuito B ERP/Purchase).
 - [`ARQUITECTURA_WHATSAPP_IA_VOZ.md`](./ARQUITECTURA_WHATSAPP_IA_VOZ.md)
 - [`ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md`](./ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md) (Documentación dedicada a la nueva tecnología de Reportes Ejecutivos Directos del Agente IA al WhatsApp del Vendedor, Panel de Confirmados y Sincronización Multi-Dispositivo en Supabase).
 
@@ -1215,4 +1216,28 @@ Al auditar las conversaciones reales en producción (incluyendo el caso de la cl
 2. **Generador de Imagen Final `renderPersonalizedOrderConfirmedImage` (`stage3_confirmed`)**:
    - Genera un póster 1:1 (`1080×1080`) de lujo con el titular **`"¡PEDIDO CONFIRMADO!"`**, personalizado **`"A NOMBRE DE: [Nombre del Cliente]"`**, con mensaje de **`"¡FELICIDADES!"`** y el recuadro destacado de logística: **`"AVISO DE TRANSPORTE (48 A 72 HORAS): En unos días (48 a 72 hs) la transportadora y los agentes del courier entrarán en contacto con vos y te estarán llamando en cuanto ya estén listos para entregarte tu producto"`**.
    - **44/44 pruebas unitarias pasando**, compilación (`npm run build`) y verificación de tipos (`tsc --noEmit`) con **0 errores**.
+
+---
+
+## 40. Fase 79 — Cerebro Publicitario y Psicológico AutoAds v2 (Aislamiento Absoluto del Courier, Señal Canónica `Lead`, Atribución 30d, Preflight Meta/Pipeboard y Flujo de 3 Pasos Preservado)
+
+### A. Decisiones Directivas y Alcance
+- **Preservación estricta operativa y visual:** Se conservaron sin reconstrucción los motores existentes de generación (`openai/gpt-4o`, `openai/gpt-image-2.6-sunburst`, `google/gemini-omni-1.2-flash`), publicación Directa / Pipeboard, `RepartoView`, `AdminView` y `whatsappEngine`, manteniendo **intacta la interfaz y flujo de 3 pasos en `AutoAdsView.tsx` (`1. INVESTIGAR -> 2. GENERAR TODOS LOS CREATIVOS -> 3. PUBLICAR EN META ADS`)**.
+- **Independencia absoluta del courier (`Circuito A ⊥ Circuito B`):** El cerebro de AutoAds optimiza y aprende exclusivamente sobre **formularios de pedido completados y confirmados en servidor (`Lead`)**. No lee ni depende de estados de entrega, cobros, devoluciones o liquidaciones del courier.
+- **Documentación central:** Toda la especificación verificada de la nueva arquitectura quedó documentada en [`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md).
+
+### B. Implementación Backend & Tracking Realizada
+1. **Cerebro Psicológico, Competencia Honesta e Hipótesis Dinámicas (`server/autoAdsIntelligence.ts`, `server/autoadsStore.ts`):**
+   - Minería competitiva de 3 niveles sin inventar anuncios verificados (`manual_operator_evidence`, `verified_meta_ad_library`, `llm_strategic_inference`).
+   - Síntesis psicológica Schwartz + **6 hipótesis dinámicas** conectadas a la memoria de aprendizaje histórica vía el puente sanitario aislado `getCircuitAReadView()`.
+   - Sanitizador `sanitizeAdCopyForParaguayCod` con `{ policyGuardOnly: true }` para proteger hooks psicológicos sin mutilarlos en `hypothesis_v2`.
+2. **Atribución 30d e Idempotencia Conjunta (`src/utils/metaPixelEngine.ts`, `src/components/OrderForm.tsx`, `src/context/StoreContext.tsx`, `server/attributionAndOrders.ts`):**
+   - Eliminado el disparo prematuro de `Lead` al teclear (reemplazado por `InitiateCheckout`) y de `Purchase` en el checkout COD. **`Lead`** se emite una única vez por pedido tras persistencia conjunta idempotente de `pedidos` + `order_attribution` (`POST /api/pedidos`), con cola de reintentos `cloudSyncQueue`.
+   - Captura `last_paid_touch` por 30 días, tokens WhatsApp `AA-XXXXX` (`POST /api/attribution/wa-token`), `phone_stitch_30d` y enriquecimiento `aa_cid -> ad_entities`.
+3. **Aprendizaje Estadístico y Preflight Meta / Pipeboard (`server/metaInsightsAndAdsLearning.ts`, `server/metaPublishPreflight.ts`):**
+   - Cómputo de CVR de formulario, CPF USD/PYG y veredictos por madurez estadística (`winner` / `promising` / `loser` / `insufficient_data`) sin esperar entregas logísticas.
+   - Campañas estandarizadas en **`OUTCOME_LEADS` / `LEAD`**, corrección crítica de moneda `PYG` (zero-decimal sin multiplicar por `100`), advertencia no bloqueante para píxeles sin historial `Lead`, subida `/advideos` en Direct, fallback `link_query_params` en Pipeboard MCP y registro en `ad_entities`.
+4. **Circuito B ERP + `Purchase` CAPI Independiente (`server/erpFinanceAndCourier.ts`, `server/metaCapiWorker.ts`, `database/autoads_v2_additive_migration.sql`):**
+   - 3 ejes independientes (`deliveryStatus`, `customerPaymentStatus`, `courierSettlementStatus`) sincronizados bidireccionalmente con `estado`, costos reales (`faltan_costos_reales`), FX, liquidaciones CSV y `Purchase` backend-only emitido únicamente ante `entregado_fisicamente && cobrado_verificado` dentro de los 7 días reales (`action_source: 'website'`, jamás falsificando `physical_store`).
+   - Migración SQL aditiva lista en [`database/autoads_v2_additive_migration.sql`](./database/autoads_v2_additive_migration.sql) (pendiente de ejecución manual en Supabase SQL Editor) y suite de verificación `server/__tests__/autoadsArchitecture.test.ts`.
 

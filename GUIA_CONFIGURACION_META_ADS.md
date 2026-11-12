@@ -459,9 +459,9 @@ Una vez configurada la conexión con Meta Ads, es momento de probar todo el fluj
 
 ---
 
-### 5.2 🧠 Entrenamiento del Cerebro Maestro IA
+### 5.2 🧠 Entrenamiento del Cerebro Psicológico IA (`AutoAds v2`)
 
-Al iniciar la creación de una campaña, el sistema activa el **Cerebro Maestro IA** (endpoint `POST /api/autoads/brain-train`), que utiliza el modelo **`openai/gpt-4o-mini`** a través de OpenRouter para redacción ultra-rápida en ~1.6s, junto con **`openai/gpt-image-2.6`** para generación visual y **`minimax/minimax-m3.1-flash`** para dirección de video reels.
+Al iniciar la investigación (Paso 1 de la interfaz de 3 pasos), el sistema activa el **Cerebro Psicológico AutoAds v2** (endpoint `POST /api/autoads/brain-train`), que ejecuta [`server/autoAdsIntelligence.ts`](./server/autoAdsIntelligence.ts) usando **`openai/gpt-4o`** vía OpenRouter, junto con los motores existentes **`openai/gpt-image-2.6-sunburst`** (imágenes) y **`google/gemini-omni-1.2-flash`** (vídeos Reels) en el Paso 2. Para ver la arquitectura completa del cerebro, consultá [`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md).
 
 **Animación de 3 pasos:**
 
@@ -732,18 +732,18 @@ sequenceDiagram
 
     U->>App: Selecciona producto
     App->>AI: POST /api/autoads/brain-train
-    AI->>AI: GLM-5.3 analiza producto
-    AI-->>App: 6 creativos generados
+    AI->>AI: openai/gpt-4o + memoria Circuito A analizan producto/psicología
+    AI-->>App: 6 hipótesis dinámicas y creativos generados
     App-->>U: Muestra 6 tabs de creativos
-    U->>App: Clic "Lanzar Piloto Automático"
-    App->>API: POST /api/meta/publish-direct
-    API->>Meta: Crea Campaña
+    U->>App: Clic "Publicar en Meta Ads"
+    App->>API: POST /api/meta/publish-direct (o /api/pipeboard/publish-campaign)
+    API->>Meta: Preflight OUTCOME_LEADS/LEAD + Moneda + Crea Campaña
     Meta-->>API: Campaign ID
-    API->>Meta: Crea Ad Set
+    API->>Meta: Crea Ad Set (optimization_goal=LEAD)
     Meta-->>API: Ad Set ID
-    API->>Meta: Crea Ads (x6)
-    Meta-->>API: Ad IDs
-    API-->>App: Campaña publicada ✅
+    API->>Meta: Sube Imágenes/Vídeos (/advideos) + Crea Ads (x6 con aa_cid)
+    Meta-->>API: Ad IDs registrados en ad_entities
+    API-->>App: Campaña publicada ✅ (con advertencias no bloqueantes si aplica)
     App-->>U: Confirmación con IDs
 ```
 
@@ -751,15 +751,18 @@ sequenceDiagram
 
 ## 9. 📚 Referencia de API
 
-### Endpoints del Sistema AutoAds
+### Endpoints Principales del Sistema AutoAds
 
 | # | Método | Endpoint | Descripción |
-|---|--------|----------|-------------|
+|---|---|---|---|
 | 1 | `GET` | `/api/meta/auth-url` | Genera la URL de OAuth para login con Facebook |
 | 2 | `GET` | `/api/meta/callback` | Callback de OAuth — intercambia código por token |
 | 3 | `GET` | `/api/meta/status` | Estado de conexión, lista cuentas y páginas |
-| 4 | `POST` | `/api/meta/publish-direct` | Publica campaña directamente en Meta Ads |
-| 5 | `POST` | `/api/autoads/brain-train` | Entrena el Cerebro Maestro IA con GLM-5.3 |
+| 4 | `POST` | `/api/autoads/preflight` | Valida moneda (`PYG` sin centavos / `USD` centavos), historial `Lead` no bloqueante y capacidades Direct/Pipeboard |
+| 5 | `POST` | `/api/meta/publish-direct` | Publica campaña **`OUTCOME_LEADS` / `LEAD`** con `url_tags`, `/advideos` y registro en `ad_entities` |
+| 6 | `POST` | `/api/pipeboard/publish-campaign` | Publica campaña **`OUTCOME_LEADS` / `LEAD`** vía Pipeboard MCP con `aa_cid` y moneda normalizada |
+| 7 | `POST` | `/api/autoads/brain-train` | Ejecuta investigación de 3 niveles + perfil psicológico + 6 hipótesis dinámicas (`openai/gpt-4o`) |
+| 8 | `GET` | `/api/autoads/learning-dashboard` | Métricas de formularios (`Lead`), CVR, CPF y veredictos estadísticos (Circuito A) |
 
 ---
 
@@ -940,9 +943,9 @@ Content-Type: application/json
 
 ---
 
-#### 5. `POST /api/autoads/brain-train` — Entrenar Cerebro Maestro IA
+#### 5. `POST /api/autoads/brain-train` — Investigación Psicológica y Generación de Hipótesis
 
-Envía los datos del producto al modelo `openai/gpt-4o-mini` (OpenRouter) para generar creativos publicitarios optimizados de forma ultra-rápida.
+Envía los datos del producto al Cerebro Psicológico AutoAds v2 (`server/autoAdsIntelligence.ts` usando **`openai/gpt-4o`** vía OpenRouter + memoria del Circuito A) manteniendo compatibilidad total con las 6 tarjetas creativas existentes.
 
 **Request:**
 ```http
