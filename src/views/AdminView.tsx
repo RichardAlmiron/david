@@ -170,14 +170,14 @@ export const AdminView: React.FC = () => {
   const [activeMenu, setActiveMenu] = useState<'productos' | 'creador' | 'pipeboard' | 'whatsapp' | 'deepgram' | 'openrouter'>('productos');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // Selected product page and accordion expanded state (desplegar la primera página por defecto para ver pedidos al instante)
+  // Selected product page and accordion expanded state (todas las tarjetas inician cerradas)
   const [selectedProductId, setSelectedProductId] = useState<string>(productPages[0]?.id || '');
-  const [expandedProductId, setExpandedProductId] = useState<string | null>(() => productPages[0]?.id || null);
+  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const [recentlyCreatedProductId, setRecentlyCreatedProductId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!expandedProductId && productPages.length > 0) {
-      setExpandedProductId(productPages[0].id);
+    if (productPages.length > 0 && !selectedProductId) {
+      setSelectedProductId(productPages[0].id);
     }
   }, [productPages]);
   const [showPageFiltersBar, setShowPageFiltersBar] = useState<boolean>(false);
@@ -343,7 +343,7 @@ export const AdminView: React.FC = () => {
       setSelectedProductPageIds(prev => prev.filter(id => !deletedSet.has(id)));
       if (expandedProductId && deletedSet.has(expandedProductId)) {
         const remaining = productPages.filter(p => !deletedSet.has(p.id));
-        setExpandedProductId(remaining[0]?.id || null);
+        setExpandedProductId(null);
         setSelectedProductId(remaining[0]?.id || '');
       }
       setDeleteProductsConfirmModal({
