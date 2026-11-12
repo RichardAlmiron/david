@@ -100,6 +100,16 @@ import {
   runMetaPublishPreflight,
   uploadMetaDirectAdVideo
 } from './server/metaPublishPreflight.ts';
+import {
+  auditMetaTokenAndPermissions,
+  classifyMetaGraphError,
+  hydrateMetaVaultIntoStoreConfig,
+  isValidMetaAccessToken,
+  isValidMetaAppSecret,
+  isValidNumericMetaAppId,
+  sanitizeStoredMetaDirectConfig,
+  saveMetaVaultToSupabase
+} from './server/metaAuthSession.ts';
 
 const RUNTIME_PERSISTENT_PATHS = getPersistentDataPaths();
 function getPedidosFilePath() {
@@ -492,6 +502,12 @@ function registerApiServerMiddlewares(server: any) {
     } catch {}
     ensureAllProductsWaCommercialsReady().catch(() => {});
     hydrateAutoadsFromSupabase({ forceRefresh: true }).catch(() => {});
+    hydrateMetaVaultIntoStoreConfig({
+      cfgFile: getStoreConfigFilePath(),
+      envReader: readKeyFromEnvFile,
+      envWriter: saveKeyToEnvFile,
+      forceRefresh: true
+    }).catch(() => {});
   }, 900);
 
   // Activar servidor gemelo para responder tanto en 8080 como en 3000 simultáneamente en Railway
@@ -5939,102 +5955,107 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
           // 7. PIPEBOARD META ADS MCP + OPENROUTER CREATIVE & AD AUTOMATION
           // -------------------------------------------------------------
           if (req.method === 'GET' && url === '/api/pipeboard/config') {
-            try {
-              const cfgFile = getStoreConfigFilePath();
-              let cfg: any = {};
-              if (fs.existsSync(cfgFile)) {
-                cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
-              }
-              const pbConfig = cfg.pipeboardConfig || {};
-              const orKey = String(
-                pbConfig.openRouterApiKey ||
-                  readKeyFromEnvFile('OPENROUTER_API_KEY') ||
-                  DEFAULT_OPENROUTER_API_KEY
-              ).trim();
-              const orKeyPreview =
-                orKey.length > 8
-                  ? `${orKey.slice(0, 8)}••••••••${orKey.slice(-4)}`
-                  : orKey
-                  ? '••••••••'
-                  : '';
-              const pbToken = String(
-                pbConfig.pipeboardApiToken ||
-                  readKeyFromEnvFile('PIPEBOARD_API_TOKEN') ||
-                  ''
-              ).trim();
-              const tokenPreview =
-                pbToken.length > 4
-                  ? `••••••••${pbToken.slice(-4)}`
-                  : pbToken
-                  ? '••••••••'
-                  : '';
+            (async () => {
+              try {
+                const cfgFile = getStoreConfigFilePath();
+                const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+                  cfgFile,
+                  envReader: readKeyFromEnvFile,
+                  envWriter: saveKeyToEnvFile
+                });
+                const pbConfig = cfg.pipeboardConfig || {};
+                const orKey = String(
+                  pbConfig.openRouterApiKey ||
+                    readKeyFromEnvFile('OPENROUTER_API_KEY') ||
+                    DEFAULT_OPENROUTER_API_KEY
+                ).trim();
+                const orKeyPreview =
+                  orKey.length > 8
+                    ? `${orKey.slice(0, 8)}••••••••${orKey.slice(-4)}`
+                    : orKey
+                    ? '••••••••'
+                    : '';
+                const pbToken = String(
+                  pbConfig.pipeboardApiToken ||
+                    readKeyFromEnvFile('PIPEBOARD_API_TOKEN') ||
+                    ''
+                ).trim();
+                const tokenPreview =
+                  pbToken.length > 4
+                    ? `••••••••${pbToken.slice(-4)}`
+                    : pbToken
+                    ? '••••••••'
+                    : '';
 
-              const persistedModels = getPersistedAutoAdsModels();
-              const metaAppId = String(
-                cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || ''
-              ).trim();
-              const metaAppSecret = String(
-                cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || ''
-              ).trim();
+                const persistedModels = getPersistedAutoAdsModels();
+                const sanitizedMeta = sanitizeStoredMetaDirectConfig(
+                  cfg,
+                  readKeyFromEnvFile,
+                  saveKeyToEnvFile
+                );
+                const metaAppId = sanitizedMeta.appId;
+                const metaAppSecret = sanitizedMeta.appSecret;
 
-              res.end(
-                JSON.stringify({
-                  success: true,
-                  // Seguridad Total: Jamás enviamos tokens ni API keys de regreso al navegador
-                  config: {
-                    pipeboardApiToken: '',
-                    pipeboardMcpEndpoint:
-                      pbConfig.pipeboardMcpEndpoint || 'https://meta-ads.mcp.pipeboard.co',
-                    metaAccessTokenFallback: '',
-                    openRouterApiKey: '',
-                    openRouterModel: 'openai/gpt-4o',
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    // Seguridad Total: Jamás enviamos tokens ni API keys de regreso al navegador
+                    config: {
+                      pipeboardApiToken: '',
+                      pipeboardMcpEndpoint:
+                        pbConfig.pipeboardMcpEndpoint || 'https://meta-ads.mcp.pipeboard.co',
+                      metaAccessTokenFallback: '',
+                      openRouterApiKey: '',
+                      openRouterModel: 'openai/gpt-4o',
+                      selectedImageModel: persistedModels.imageModel,
+                      selectedVideoModel: persistedModels.videoModel,
+                      selectedAdAccountId:
+                        pbConfig.selectedAdAccountId &&
+                        pbConfig.selectedAdAccountId !== 'act_595884210394' &&
+                        pbConfig.selectedAdAccountId !== 'act_424711183775699'
+                          ? pbConfig.selectedAdAccountId
+                          : 'act_1048211497774834',
+                      selectedFacebookPageId:
+                        pbConfig.selectedFacebookPageId &&
+                        pbConfig.selectedFacebookPageId !== '104928374650192'
+                          ? pbConfig.selectedFacebookPageId
+                          : '1050835598123904',
+                      dailyBudgetGs: Number(pbConfig.dailyBudgetGs || 65000),
+                      defaultPublishStatus: pbConfig.defaultPublishStatus || 'ACTIVE'
+                    },
                     selectedImageModel: persistedModels.imageModel,
                     selectedVideoModel: persistedModels.videoModel,
-                    selectedAdAccountId:
-                      pbConfig.selectedAdAccountId &&
-                      pbConfig.selectedAdAccountId !== 'act_595884210394' &&
-                      pbConfig.selectedAdAccountId !== 'act_424711183775699'
-                        ? pbConfig.selectedAdAccountId
-                        : 'act_1048211497774834',
-                    selectedFacebookPageId:
-                      pbConfig.selectedFacebookPageId &&
-                      pbConfig.selectedFacebookPageId !== '104928374650192'
-                        ? pbConfig.selectedFacebookPageId
-                        : '1050835598123904',
-                    dailyBudgetGs: Number(pbConfig.dailyBudgetGs || 65000),
-                    defaultPublishStatus: pbConfig.defaultPublishStatus || 'ACTIVE'
-                  },
-                  selectedImageModel: persistedModels.imageModel,
-                  selectedVideoModel: persistedModels.videoModel,
-                  hasPipeboardToken: Boolean(pbToken),
-                  pipeboardTokenPreview: tokenPreview,
-                  hasOpenRouterKey: Boolean(orKey),
-                  openRouterKeyPreview: orKeyPreview,
-                  hasMetaAppCredentials: Boolean(metaAppId && metaAppSecret),
-                  metaAppIdPreview: metaAppId ? `${metaAppId.slice(0, 6)}••••` : '',
-                  publishedCampaigns: Array.isArray(cfg.pipeboardPublishedCampaigns)
-                    ? cfg.pipeboardPublishedCampaigns
-                    : []
-                })
-              );
-            } catch (err: any) {
-              res.statusCode = 500;
-              res.end(JSON.stringify({ success: false, error: err?.message }));
-            }
+                    hasPipeboardToken: Boolean(pbToken),
+                    pipeboardTokenPreview: tokenPreview,
+                    hasOpenRouterKey: Boolean(orKey),
+                    openRouterKeyPreview: orKeyPreview,
+                    hasMetaAppCredentials: Boolean(metaAppId && metaAppSecret),
+                    metaAppIdPreview: metaAppId ? `${metaAppId.slice(0, 6)}••••` : '',
+                    publishedCampaigns: Array.isArray(cfg.pipeboardPublishedCampaigns)
+                      ? cfg.pipeboardPublishedCampaigns
+                      : []
+                  })
+                );
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            })();
             return;
           }
 
           if (req.method === 'POST' && url === '/api/pipeboard/config') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
-            req.on('end', () => {
+            req.on('end', async () => {
               try {
                 const parsed = JSON.parse(body || '{}');
                 const cfgFile = getStoreConfigFilePath();
-                let cfg: any = {};
-                if (fs.existsSync(cfgFile)) {
-                  cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
-                }
+                const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+                  cfgFile,
+                  envReader: readKeyFromEnvFile,
+                  envWriter: saveKeyToEnvFile
+                });
                 const prevPb = cfg.pipeboardConfig || {};
                 const incomingToken = String(parsed.pipeboardApiToken || '').trim();
                 const incomingOrKey = String(parsed.openRouterApiKey || '').trim();
@@ -6042,6 +6063,40 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                 const incomingMetaAppSecret = String(parsed.metaAppSecret || '').trim();
                 const incomingMetaDirectToken = String(parsed.metaAccessToken || '').trim();
                 const clearToken = Boolean(parsed.clearPipeboardToken);
+
+                if (incomingMetaAppId && !isValidNumericMetaAppId(incomingMetaAppId)) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        'El Meta App ID debe contener únicamente dígitos numéricos (ej: 1465256781554439). No se permite guardar correos ni texto.'
+                    })
+                  );
+                  return;
+                }
+                if (incomingMetaAppSecret && !isValidMetaAppSecret(incomingMetaAppSecret)) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        'El Meta App Secret ingresado no es válido (debe tener al menos 16 caracteres alfanuméricos sin espacios ni @).'
+                    })
+                  );
+                  return;
+                }
+                if (incomingMetaDirectToken && !isValidMetaAccessToken(incomingMetaDirectToken)) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error:
+                        'El Token de Meta Ads debe comenzar con EAA... y tener formato válido (sin espacios ni correos).'
+                    })
+                  );
+                  return;
+                }
 
                 const effectivePbToken = clearToken
                   ? ''
@@ -6073,6 +6128,10 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                 }
                 if (incomingMetaDirectToken) {
                   cfg.metaDirectConfig.accessToken = incomingMetaDirectToken;
+                  cfg.metaDirectConfig.tokenStatus = 'valid';
+                  cfg.metaDirectConfig.lastTokenError = '';
+                  cfg.metaDirectConfig.connectedAt = cfg.metaDirectConfig.connectedAt || new Date().toISOString();
+                  cfg.metaDirectConfig.updatedAt = new Date().toISOString();
                   saveKeyToEnvFile('META_ACCESS_TOKEN', incomingMetaDirectToken);
                   saveKeyToEnvFile('META_CAPI_TOKEN', incomingMetaDirectToken);
                 }
@@ -6085,6 +6144,10 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     saveKeyToEnvFile('META_ACCESS_TOKEN', incomingToken);
                     saveKeyToEnvFile('META_CAPI_TOKEN', incomingToken);
                     cfg.metaDirectConfig.accessToken = incomingToken;
+                    cfg.metaDirectConfig.tokenStatus = 'valid';
+                    cfg.metaDirectConfig.lastTokenError = '';
+                    cfg.metaDirectConfig.connectedAt = cfg.metaDirectConfig.connectedAt || new Date().toISOString();
+                    cfg.metaDirectConfig.updatedAt = new Date().toISOString();
                   }
                 }
                 if (incomingOrKey) {
@@ -6099,6 +6162,9 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
 
                 cfg.pipeboardConfig = nextPb;
                 fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                if (incomingMetaAppId || incomingMetaAppSecret || incomingMetaDirectToken || incomingToken || clearToken) {
+                  await saveMetaVaultToSupabase(cfg).catch(() => {});
+                }
 
                 const tokenPreview =
                   effectivePbToken.length > 4
@@ -6115,12 +6181,13 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     : finalOrKey
                     ? '••••••••'
                     : '';
-                const finalMetaAppId = String(
-                  cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || ''
-                ).trim();
-                const finalMetaAppSecret = String(
-                  cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || ''
-                ).trim();
+                const sanitizedAfter = sanitizeStoredMetaDirectConfig(
+                  cfg,
+                  readKeyFromEnvFile,
+                  saveKeyToEnvFile
+                );
+                const finalMetaAppId = sanitizedAfter.appId;
+                const finalMetaAppSecret = sanitizedAfter.appSecret;
 
                 // Seguridad Total: La respuesta devuelve config con el token vacío para autodestrucción en navegador
                 res.end(
@@ -6173,64 +6240,111 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
 
           // Endpoint 1: Generar URL de autenticación OAuth de Facebook
           if (req.method === 'GET' && url === '/api/meta/auth-url') {
-            try {
-              const params = new URL(req.url || '', 'http://localhost').searchParams;
-              const cfgFile = getStoreConfigFilePath();
-              let cfg: any = {};
-              if (fs.existsSync(cfgFile)) {
-                cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
-              }
+            (async () => {
+              try {
+                const params = new URL(req.url || '', 'http://localhost').searchParams;
+                const cfgFile = getStoreConfigFilePath();
+                const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+                  cfgFile,
+                  envReader: readKeyFromEnvFile,
+                  envWriter: saveKeyToEnvFile
+                });
 
-              // Leer app_id y app_secret de query params, store_config o .env
-              let appId = (params.get('app_id') || '').trim();
-              let appSecret = (params.get('app_secret') || '').trim();
-              if (!appId) appId = String(cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || '').trim();
-              if (!appSecret) appSecret = String(cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || '').trim();
+                const incomingAppId = (params.get('app_id') || '').trim();
+                const incomingAppSecret = (params.get('app_secret') || '').trim();
+                const redirectUri = resolveMetaOAuthRedirectUri();
 
-              const redirectUri = resolveMetaOAuthRedirectUri();
+                if (incomingAppId && !isValidNumericMetaAppId(incomingAppId)) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({
+                    success: false,
+                    needsCredentials: true,
+                    redirectUri,
+                    error:
+                      'El Meta App ID debe ser numérico (ej: 1465256781554439). Se bloqueó un correo electrónico o dato inválido.'
+                  }));
+                  return;
+                }
+                if (incomingAppSecret && !isValidMetaAppSecret(incomingAppSecret)) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({
+                    success: false,
+                    needsCredentials: true,
+                    redirectUri,
+                    error:
+                      'El Meta App Secret ingresado no es válido (debe tener al menos 16 caracteres de Meta for Developers).'
+                  }));
+                  return;
+                }
 
-              if (!appId || !appSecret) {
-                res.statusCode = 400;
+                const sanitized = sanitizeStoredMetaDirectConfig(
+                  cfg,
+                  readKeyFromEnvFile,
+                  saveKeyToEnvFile
+                );
+                const appId = incomingAppId || sanitized.appId;
+                const appSecret = incomingAppSecret || sanitized.appSecret;
+
+                if (!appId || !appSecret) {
+                  if (sanitized.corruptedAppIdCleared || sanitized.corruptedAppSecretCleared) {
+                    try {
+                      fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                    } catch {}
+                  }
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({
+                    success: false,
+                    needsCredentials: true,
+                    corruptedCredentialsCleared: sanitized.corruptedAppIdCleared || sanitized.corruptedAppSecretCleared,
+                    redirectUri,
+                    error: sanitized.corruptedReason
+                      ? `Se limpiaron credenciales OAuth corruptas (${sanitized.corruptedReason}). Ingresá tu Meta App ID numérico y tu Meta App Secret de developers.facebook.com, o pegá un Token directo EAA...`
+                      : 'Ingresá tu Meta App ID numérico y App Secret por única vez para abrir el popup oficial de Facebook Login OAuth, o conectá con tu Token directo EAA...'
+                  }));
+                  return;
+                }
+
+                // Guardar app_id y app_secret válidos en store_config.json, .env y Supabase Vault
+                if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
+                const credsChanged =
+                  cfg.metaDirectConfig.appId !== appId ||
+                  cfg.metaDirectConfig.appSecret !== appSecret;
+                cfg.metaDirectConfig.appId = appId;
+                cfg.metaDirectConfig.appSecret = appSecret;
+                if (credsChanged) {
+                  cfg.metaDirectConfig.updatedAt = new Date().toISOString();
+                  fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                  saveKeyToEnvFile('META_APP_ID', appId);
+                  saveKeyToEnvFile('META_APP_SECRET', appSecret);
+                  await saveMetaVaultToSupabase(cfg).catch(() => {});
+                }
+
+                // Permisos requeridos para Meta Ads
+                const scopes = 'ads_management,ads_read,pages_show_list,pages_read_engagement,business_management';
+
+                const authUrl =
+                  `https://www.facebook.com/v21.0/dialog/oauth?` +
+                  `client_id=${encodeURIComponent(appId)}` +
+                  `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                  `&scope=${encodeURIComponent(scopes)}` +
+                  `&response_type=code` +
+                  `&state=${Date.now()}`;
+
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({
-                  success: false,
-                  needsCredentials: true,
-                  redirectUri,
-                  error: 'Ingresá tu Meta App ID y App Secret por única vez para abrir el popup oficial de Facebook Login OAuth, o conectá con tu Token directo.'
+                  success: true,
+                  authUrl,
+                  redirectUri
                 }));
-                return;
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: err?.message }));
               }
-
-              // Guardar app_id y app_secret en store_config.json y .env
-              if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
-              cfg.metaDirectConfig.appId = appId;
-              cfg.metaDirectConfig.appSecret = appSecret;
-              fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
-              saveKeyToEnvFile('META_APP_ID', appId);
-              saveKeyToEnvFile('META_APP_SECRET', appSecret);
-
-              // Permisos requeridos para Meta Ads
-              const scopes = 'ads_management,ads_read,pages_show_list,pages_read_engagement,business_management';
-
-              const authUrl =
-                `https://www.facebook.com/v21.0/dialog/oauth?` +
-                `client_id=${encodeURIComponent(appId)}` +
-                `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-                `&scope=${encodeURIComponent(scopes)}` +
-                `&response_type=code` +
-                `&state=${Date.now()}`;
-
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({
-                success: true,
-                authUrl,
-                redirectUri
-              }));
-            } catch (err: any) {
-              res.statusCode = 500;
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ success: false, error: err?.message }));
-            }
+            })();
             return;
           }
 
@@ -6257,14 +6371,34 @@ setTimeout(()=>window.close(),5000);
                 return;
               }
 
-              // Leer credenciales de la app desde store_config
+              // Leer credenciales válidas de la app desde store_config / .env / Supabase Vault
               const cfgFile = getStoreConfigFilePath();
-              let cfg: any = {};
-              if (fs.existsSync(cfgFile)) {
-                cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+              const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+                cfgFile,
+                envReader: readKeyFromEnvFile,
+                envWriter: saveKeyToEnvFile
+              });
+              const sanitized = sanitizeStoredMetaDirectConfig(
+                cfg,
+                readKeyFromEnvFile,
+                saveKeyToEnvFile
+              );
+              const appId = sanitized.appId;
+              const appSecret = sanitized.appSecret;
+
+              if (!appId || !appSecret) {
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                res.end(`<!DOCTYPE html><html><body style="background:#000;color:#ef4444;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+<div style="text-align:center;max-width:460px;padding:24px">
+<h1>❌ Credenciales OAuth de Meta Inválidas</h1>
+<p>Faltan o están corruptos el Meta App ID numérico y/o Meta App Secret en el servidor.</p>
+<script>
+window.opener && window.opener.postMessage({type:'META_AUTH_ERROR',error:'invalid_app_credentials'},'*');
+setTimeout(()=>window.close(),5000);
+</script>
+</div></body></html>`);
+                return;
               }
-              const appId = cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || '';
-              const appSecret = cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || '';
 
               const redirectUri = resolveMetaOAuthRedirectUri();
 
@@ -6277,16 +6411,17 @@ setTimeout(()=>window.close(),5000);
                 `&code=${encodeURIComponent(code)}`;
 
               const tokenRes = await fetch(tokenUrl);
-              const tokenJson: any = await tokenRes.json();
+              const tokenJson: any = await tokenRes.json().catch(() => ({}));
 
-              if (!tokenJson.access_token) {
+              if (!tokenRes.ok || !tokenJson.access_token) {
+                const errMsg = String(tokenJson.error?.message || 'No se pudo obtener el access token.');
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
                 res.end(`<!DOCTYPE html><html><body style="background:#000;color:#ef4444;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
-<div style="text-align:center">
+<div style="text-align:center;max-width:460px;padding:24px">
 <h1>❌ Error al Obtener Token</h1>
-<p>${tokenJson.error?.message || 'No se pudo obtener el access token.'}</p>
+<p>${errMsg}</p>
 <script>
-window.opener && window.opener.postMessage({type:'META_AUTH_ERROR',error:'token_exchange_failed'},'*');
+window.opener && window.opener.postMessage({type:'META_AUTH_ERROR',error:${JSON.stringify(errMsg)}},'*');
 setTimeout(()=>window.close(),5000);
 </script>
 </div></body></html>`);
@@ -6390,12 +6525,20 @@ setTimeout(()=>window.close(),5000);
                 }
               } catch {}
 
-              // Guardar token, Cuenta Funcional (834 con nombre real), Página (Landingcod Shop) y Píxel (377 con nombre real) en store_config.json
+              // Guardar token, Cuenta Funcional (834 con nombre real), Página (Landingcod Shop) y Píxel (377 con nombre real) en store_config.json y Supabase Vault
               if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
               cfg.metaDirectConfig.accessToken = longLivedToken;
               cfg.metaDirectConfig.userId = userId;
               cfg.metaDirectConfig.userName = userName;
               cfg.metaDirectConfig.connectedAt = new Date().toISOString();
+              cfg.metaDirectConfig.updatedAt = new Date().toISOString();
+              if (longTokenJson?.expires_in) {
+                cfg.metaDirectConfig.expiresAt = new Date(
+                  Date.now() + Number(longTokenJson.expires_in) * 1000
+                ).toISOString();
+              }
+              cfg.metaDirectConfig.tokenStatus = 'valid';
+              cfg.metaDirectConfig.lastTokenError = '';
               cfg.metaDirectConfig.adAccountId = discoveredAdAccountId;
               cfg.metaDirectConfig.adAccountName = discoveredAdAccountName;
               if (!cfg.pipeboardConfig) cfg.pipeboardConfig = {};
@@ -6408,11 +6551,10 @@ setTimeout(()=>window.close(),5000);
               saveKeyToEnvFile('META_PIXEL_ID', discoveredPixelId);
               saveKeyToEnvFile('META_PIXEL_NAME', discoveredPixelName);
               saveKeyToEnvFile('META_AD_ACCOUNT_NAME', discoveredAdAccountName);
-              fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
-
-              // Guardar token también en .env (sirve tanto para Meta Ads Directo como para Servidor CAPI Universal)
               saveKeyToEnvFile('META_ACCESS_TOKEN', longLivedToken);
               saveKeyToEnvFile('META_CAPI_TOKEN', longLivedToken);
+              fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+              await saveMetaVaultToSupabase(cfg).catch(() => {});
 
               // Responder con HTML que notifica a la ventana padre (incluyendo los nombres reales descubiertos y respaldo para Railway)
               res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -6447,29 +6589,32 @@ setTimeout(()=>window.close(),5000);
           if (req.method === 'POST' && url === '/api/meta/restore-session') {
             let body = '';
             req.on('data', (chunk: any) => (body += chunk));
-            req.on('end', () => {
+            req.on('end', async () => {
               try {
                 const parsed = JSON.parse(body || '{}');
                 const incomingToken = String(parsed.accessToken || '').trim();
-                if (!incomingToken) {
+                if (!isValidMetaAccessToken(incomingToken)) {
+                  res.statusCode = 400;
                   res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ success: false }));
+                  res.end(JSON.stringify({ success: false, error: 'Token Meta (EAA...) inválido o vacío.' }));
                   return;
                 }
                 const cfgFile = getStoreConfigFilePath();
-                let cfg: any = {};
-                if (fs.existsSync(cfgFile)) {
-                  try {
-                    cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
-                  } catch {}
-                }
+                const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+                  cfgFile,
+                  envReader: readKeyFromEnvFile,
+                  envWriter: saveKeyToEnvFile
+                });
                 if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
                 cfg.metaDirectConfig.accessToken = incomingToken;
-                if (parsed.appId) {
+                cfg.metaDirectConfig.tokenStatus = 'valid';
+                cfg.metaDirectConfig.lastTokenError = '';
+                cfg.metaDirectConfig.updatedAt = new Date().toISOString();
+                if (parsed.appId && isValidNumericMetaAppId(parsed.appId)) {
                   cfg.metaDirectConfig.appId = String(parsed.appId).trim();
                   saveKeyToEnvFile('META_APP_ID', String(parsed.appId).trim());
                 }
-                if (parsed.appSecret) {
+                if (parsed.appSecret && isValidMetaAppSecret(parsed.appSecret)) {
                   cfg.metaDirectConfig.appSecret = String(parsed.appSecret).trim();
                   saveKeyToEnvFile('META_APP_SECRET', String(parsed.appSecret).trim());
                 }
@@ -6492,6 +6637,7 @@ setTimeout(()=>window.close(),5000);
                 saveKeyToEnvFile('META_ACCESS_TOKEN', incomingToken);
                 saveKeyToEnvFile('META_CAPI_TOKEN', incomingToken);
                 saveKeyToEnvFile('META_PIXEL_ID', '1276031534651377');
+                await saveMetaVaultToSupabase(cfg).catch(() => {});
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ success: true }));
               } catch (err: any) {
@@ -6503,20 +6649,22 @@ setTimeout(()=>window.close(),5000);
             return;
           }
 
-          // Endpoint 3: Estado de conexión con Meta Ads directo (descubre en vivo el nombre actual de Cuenta 834 y Píxel 377)
+          // Endpoint 3: Estado de conexión con Meta Ads directo (descubre en vivo cuenta 834, píxel 377, validez del token y permisos Marketing API)
           if (req.method === 'GET' && url === '/api/meta/status') {
             (async () => { try {
               const cfgFile = getStoreConfigFilePath();
-              let cfg: any = {};
-              if (fs.existsSync(cfgFile)) {
-                cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
-              }
+              const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+                cfgFile,
+                envReader: readKeyFromEnvFile,
+                envWriter: saveKeyToEnvFile
+              });
 
-              // Buscar token en store_config o en .env
-              const accessToken =
+              // Buscar token en store_config/vault o en .env/process.env
+              const accessToken = String(
                 cfg.metaDirectConfig?.accessToken ||
                 readKeyFromEnvFile('META_ACCESS_TOKEN') ||
-                '';
+                ''
+              ).trim();
 
               const storedAdAccountName =
                 cfg.metaDirectConfig?.adAccountName ||
@@ -6533,6 +6681,8 @@ setTimeout(()=>window.close(),5000);
                 res.end(JSON.stringify({
                   success: true,
                   connected: false,
+                  tokenState: 'missing',
+                  requiresReauth: true,
                   user: null,
                   adAccounts: [],
                   pages: [],
@@ -6548,17 +6698,29 @@ setTimeout(()=>window.close(),5000);
                 return;
               }
 
-              // Validar token obteniendo datos del usuario
-              const meRes = await fetch(
-                `https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${encodeURIComponent(accessToken)}`
-              );
-              const meJson: any = await meRes.json();
+              // Validar token + permisos Marketing API + acceso a la cuenta act_1048211497774834
+              const tokenAudit = await auditMetaTokenAndPermissions({
+                accessToken,
+                adAccountId: 'act_1048211497774834',
+                pageId: '1050835598123904'
+              });
 
-              if (meJson.error) {
+              if (!tokenAudit.tokenValid || !tokenAudit.user) {
+                const invalidMsg =
+                  tokenAudit.tokenError?.userMessage || 'Token de Meta Ads inválido o vencido.';
+                if (cfg.metaDirectConfig && cfg.metaDirectConfig.accessToken === accessToken) {
+                  cfg.metaDirectConfig.tokenStatus = 'invalid';
+                  cfg.metaDirectConfig.lastTokenError = invalidMsg;
+                  try {
+                    fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                  } catch {}
+                }
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({
                   success: true,
                   connected: false,
+                  tokenState: 'expired_or_invalid',
+                  requiresReauth: true,
                   user: null,
                   adAccounts: [],
                   pages: [],
@@ -6568,12 +6730,43 @@ setTimeout(()=>window.close(),5000);
                   selectedAdAccountId: 'act_1048211497774834',
                   selectedAdAccountName: storedAdAccountName || null,
                   selectedFacebookPageId: '1050835598123904',
-                  error: meJson.error.message,
+                  error: invalidMsg,
+                  errorCode: tokenAudit.tokenError?.code || 190,
                   tokenExpiresIn: null,
                   connectedAt: cfg.metaDirectConfig?.connectedAt || null
                 }));
                 return;
               }
+
+              if (!tokenAudit.hasAdsManagement) {
+                const permMsg =
+                  `El token de Facebook está activo pero le falta el permiso ads_management (faltantes: ${tokenAudit.missingPermissions.join(', ')}). Volvé a autorizar aceptando todos los permisos de Meta Ads.`;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  success: true,
+                  connected: false,
+                  tokenState: 'missing_permissions',
+                  requiresReauth: true,
+                  user: tokenAudit.user,
+                  grantedPermissions: tokenAudit.grantedPermissions,
+                  declinedPermissions: tokenAudit.declinedPermissions,
+                  missingPermissions: tokenAudit.missingPermissions,
+                  adAccounts: [],
+                  pages: [],
+                  pixels: [],
+                  universalPixelId: '1276031534651377',
+                  universalPixelName: storedPixelName || null,
+                  selectedAdAccountId: 'act_1048211497774834',
+                  selectedAdAccountName: storedAdAccountName || null,
+                  selectedFacebookPageId: '1050835598123904',
+                  error: permMsg,
+                  tokenExpiresIn: null,
+                  connectedAt: cfg.metaDirectConfig?.connectedAt || null
+                }));
+                return;
+              }
+
+              const meJson = tokenAudit.user;
 
               // Auto-pausar en segundo plano cualquier campaña accidental que se haya creado antes en "Richard Almiron" (act_424711183775699)
               let pausedWrongCampaignsCount = 0;
@@ -6781,6 +6974,12 @@ setTimeout(()=>window.close(),5000);
               res.end(JSON.stringify({
                 success: true,
                 connected: true,
+                tokenState: 'valid',
+                requiresReauth: false,
+                grantedPermissions: tokenAudit.grantedPermissions,
+                missingPermissions: tokenAudit.missingPermissions,
+                adAccountAccessible: tokenAudit.adAccountAccessible,
+                adAccountError: tokenAudit.adAccountError || null,
                 user: { id: meJson.id, name: meJson.name },
                 adAccounts,
                 pages,
@@ -6793,8 +6992,8 @@ setTimeout(()=>window.close(),5000);
                 pausedWrongCampaignsCount,
                 oauthBackup: {
                   accessToken,
-                  appId: cfg.metaDirectConfig?.appId || readKeyFromEnvFile('META_APP_ID') || '',
-                  appSecret: cfg.metaDirectConfig?.appSecret || readKeyFromEnvFile('META_APP_SECRET') || '',
+                  appId: cfg.metaDirectConfig?.appId || (isValidNumericMetaAppId(readKeyFromEnvFile('META_APP_ID')) ? readKeyFromEnvFile('META_APP_ID') : ''),
+                  appSecret: cfg.metaDirectConfig?.appSecret || (isValidMetaAppSecret(readKeyFromEnvFile('META_APP_SECRET')) ? readKeyFromEnvFile('META_APP_SECRET') : ''),
                   userId: meJson.id,
                   userName: meJson.name,
                   adAccountName: liveAdAccountName,
@@ -6813,53 +7012,112 @@ setTimeout(()=>window.close(),5000);
             return;
           }
 
-          // Endpoint 4: Publicar campaña directamente vía Meta Graph API (BLOQUEADO ESTRICTAMENTE A LANDINGCOD PY 834 + PÍXEL 377)
-          if (req.method === 'POST' && url === '/api/meta/publish-direct') {
-            let body = '';
-            req.on('data', (chunk: any) => (body += chunk));
-            req.on('end', async () => {
-              try {
-                const parsed = JSON.parse(body || '{}');
-                const product = parsed.product || {};
-                const creatives: any[] = Array.isArray(parsed.creatives) ? parsed.creatives : [];
-                const brainProfile = parsed.brainProfile || null;
-                const dailyBudgetGs = Number(parsed.dailyBudgetGs || 65000);
-                const publishStatus: 'ACTIVE' | 'PAUSED' =
-                  parsed.publishStatus === 'PAUSED' ? 'PAUSED' : 'ACTIVE';
-                const landingUrl = String(
-                  parsed.landingUrl || `http://localhost:3000/?p=${product.slug || 'producto'}`
-                );
-                // Leer credenciales desde store_config, body.oauthBackup o .env
-                const cfgFile = getStoreConfigFilePath();
-                let cfg: any = {};
-                if (fs.existsSync(cfgFile)) {
-                  cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
-                }
-                const accessToken = String(
-                  parsed.accessToken ||
-                    cfg.metaDirectConfig?.accessToken ||
-                    readKeyFromEnvFile('META_ACCESS_TOKEN') ||
-                    (String(cfg.pipeboardConfig?.pipeboardApiToken || '').startsWith('EAA')
-                      ? cfg.pipeboardConfig.pipeboardApiToken
-                      : '') ||
-                    (String(readKeyFromEnvFile('PIPEBOARD_API_TOKEN') || '').startsWith('EAA')
-                      ? readKeyFromEnvFile('PIPEBOARD_API_TOKEN')
-                      : '') ||
-                    ''
-                ).trim();
+          // Helper compartido para publicación directa en Meta Graph API v21.0 (usado por /api/meta/publish-direct y fallback de /api/pipeboard/publish-campaign cuando usa token EAA...)
+          const executeMetaDirectPublish = async (parsed: any) => {
+            const product = parsed.product || {};
+            const creatives: any[] = Array.isArray(parsed.creatives) ? parsed.creatives : [];
+            const dailyBudgetGs = Number(parsed.dailyBudgetGs || 65000);
+            const publishStatus: 'ACTIVE' | 'PAUSED' =
+              parsed.publishStatus === 'PAUSED' ? 'PAUSED' : 'ACTIVE';
+            const landingUrl = String(
+              parsed.landingUrl || `http://localhost:3000/?p=${product.slug || 'producto'}`
+            );
 
-                if (!accessToken) {
-                  res.statusCode = 400;
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(
-                    JSON.stringify({
-                      success: false,
-                      error:
-                        'No hay Token de Meta Ads configurado en el Backend. Tocá el botón azul "Conectar Meta Ads (Facebook OAuth)" arriba a la derecha para autorizar en 1 clic.'
-                    })
-                  );
-                  return;
-                }
+            // Hidratar y leer credenciales desde store_config, Supabase Vault METAAUTH-v1, body o .env
+            const cfgFile = getStoreConfigFilePath();
+            const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+              cfgFile,
+              envReader: readKeyFromEnvFile,
+              envWriter: saveKeyToEnvFile
+            });
+            const explicitToken = String(parsed.accessToken || parsed.metaAccessTokenFallback || '').trim();
+            const pipeboardTokenVal = String(
+              cfg.pipeboardConfig?.pipeboardApiToken || readKeyFromEnvFile('PIPEBOARD_API_TOKEN') || ''
+            ).trim();
+            const storedServerToken = String(
+              (cfg.metaDirectConfig?.tokenStatus !== 'invalid' ? cfg.metaDirectConfig?.accessToken : '') ||
+                readKeyFromEnvFile('META_ACCESS_TOKEN') ||
+                ''
+            ).trim();
+            const accessToken = String(
+              (isValidMetaAccessToken(storedServerToken) ? storedServerToken : '') ||
+                (isValidMetaAccessToken(explicitToken) ? explicitToken : '') ||
+                (pipeboardTokenVal.startsWith('EAA') && isValidMetaAccessToken(pipeboardTokenVal) ? pipeboardTokenVal : '') ||
+                ''
+            ).trim();
+
+            if (!accessToken) {
+              res.statusCode = 401;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(
+                JSON.stringify({
+                  success: false,
+                  requiresReauth: true,
+                  errorCode: 'MISSING_TOKEN',
+                  error:
+                    'No hay Token de Meta Ads configurado en el Backend. Tocá "Conectar Meta Ads (Facebook OAuth)" para autorizar tu cuenta.'
+                })
+              );
+              return;
+            }
+
+            // Verificar validez real del token, permisos Marketing API y acceso a act_1048211497774834 ANTES de crear entidades
+            const prePublishAuthAudit = await auditMetaTokenAndPermissions({
+              accessToken,
+              adAccountId: 'act_1048211497774834',
+              pageId: '1050835598123904'
+            });
+            if (!prePublishAuthAudit.tokenValid) {
+              const errMsg =
+                prePublishAuthAudit.tokenError?.userMessage ||
+                'El token de acceso de Meta Ads venció o es inválido. Volvé a iniciar sesión con Facebook OAuth.';
+              if (cfg.metaDirectConfig && cfg.metaDirectConfig.accessToken === accessToken) {
+                cfg.metaDirectConfig.tokenStatus = 'invalid';
+                cfg.metaDirectConfig.lastTokenError = errMsg;
+                try {
+                  fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                } catch {}
+              }
+              res.statusCode = 401;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(
+                JSON.stringify({
+                  success: false,
+                  requiresReauth: true,
+                  errorCode: prePublishAuthAudit.tokenError?.code || 190,
+                  errorSubcode: prePublishAuthAudit.tokenError?.subcode,
+                  error: errMsg
+                })
+              );
+              return;
+            }
+            if (!prePublishAuthAudit.hasAdsManagement) {
+              res.statusCode = 403;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(
+                JSON.stringify({
+                  success: false,
+                  requiresReauth: true,
+                  errorCode: 'MISSING_ADS_MANAGEMENT',
+                  missingPermissions: prePublishAuthAudit.missingPermissions,
+                  error: `Tu sesión de Meta no tiene el permiso ads_management aprobado (faltantes: ${prePublishAuthAudit.missingPermissions.join(', ')}). Reautorizá Facebook aceptando todos los permisos.`
+                })
+              );
+              return;
+            }
+            if (!prePublishAuthAudit.adAccountAccessible && prePublishAuthAudit.adAccountError) {
+              res.statusCode = 403;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(
+                JSON.stringify({
+                  success: false,
+                  requiresReauth: true,
+                  errorCode: 'AD_ACCOUNT_ACCESS_DENIED',
+                  error: `No tenés acceso de publicación sobre la cuenta act_1048211497774834: ${prePublishAuthAudit.adAccountError}`
+                })
+              );
+              return;
+            }
 
                 // CANDADO ABSOLUTO: Jamás publicar en "Richard Almiron" (act_424711183775699).
                 // Siempre publicar en Portafolio Comercial "Landingcod" -> Cuenta Publicitaria "Landingcod PY" (act_1048211497774834) + Píxel "Auto Ads 360" (1276031534651377) + Página "Landingcod Shop" (1050835598123904)
@@ -6998,18 +7256,20 @@ setTimeout(()=>window.close(),5000);
                 // Paso 1: Crear Campaña
                 let campaignId = '';
                 let firstMetaError = '';
+                let firstMetaClassified: any = null;
                 const campaignName = `[META IA] ${prodName} · ${preflight.campaignObjective === 'OUTCOME_LEADS' ? 'Leads COD PY' : 'Conversiones COD PY'}`;
                 try {
                   const campRes: any = await callMetaApi(`${adAccountId}/campaigns`, 'POST', {
                     name: campaignName,
                     objective: preflight.campaignObjective,
                     status: publishStatus,
-                    special_ad_categories: '[]',
+                    special_ad_categories: [],
                     is_adset_budget_sharing_enabled: false
                   });
                   campaignId = campRes.id || '';
-                  if (!campaignId && campRes?.error?.message) {
-                    firstMetaError = `Meta Graph API (Campaña): ${campRes.error.message}`;
+                  if (!campaignId && campRes?.error) {
+                    firstMetaClassified = classifyMetaGraphError(campRes.error);
+                    firstMetaError = `Meta Graph API (Campaña): ${firstMetaClassified.userMessage}`;
                   }
                   mcpStepLogs.push({
                     step: 1,
@@ -7033,11 +7293,18 @@ setTimeout(()=>window.close(),5000);
                 }
 
                 if (!campaignId) {
-                  res.statusCode = 400;
+                  res.statusCode = firstMetaClassified?.isTokenInvalid
+                    ? 401
+                    : firstMetaClassified?.isPermissionError
+                    ? 403
+                    : 400;
                   res.setHeader('Content-Type', 'application/json');
                   res.end(
                     JSON.stringify({
                       success: false,
+                      requiresReauth: Boolean(firstMetaClassified?.requiresReauth),
+                      errorCode: firstMetaClassified?.code,
+                      errorSubcode: firstMetaClassified?.subcode,
                       error:
                         firstMetaError ||
                         `Meta Ads rechazó la creación de la campaña en la cuenta ${adAccountId}. Verificá que el Token tenga permiso ads_management y que la cuenta esté activa.`
@@ -7074,8 +7341,14 @@ setTimeout(()=>window.close(),5000);
                     }
                     const adSetRes: any = await callMetaApi(`${adAccountId}/adsets`, 'POST', adSetBody);
                     adSetId = adSetRes.id || '';
-                    if (!adSetId && adSetRes?.error?.message && !firstMetaError) {
-                      firstMetaError = `Meta Graph API (Ad Set): ${adSetRes.error.message}`;
+                    if (!adSetId && adSetRes?.error) {
+                      const classifiedAdSet = classifyMetaGraphError(adSetRes.error);
+                      if (!firstMetaClassified || classifiedAdSet.requiresReauth) {
+                        firstMetaClassified = classifiedAdSet;
+                      }
+                      if (!firstMetaError) {
+                        firstMetaError = `Meta Graph API (Ad Set): ${classifiedAdSet.userMessage}`;
+                      }
                     }
                     mcpStepLogs.push({
                       step: 2,
@@ -7096,6 +7369,29 @@ setTimeout(()=>window.close(),5000);
                       timestamp: new Date().toISOString()
                     });
                   }
+                }
+
+                if (!adSetId) {
+                  res.statusCode = firstMetaClassified?.isTokenInvalid
+                    ? 401
+                    : firstMetaClassified?.isPermissionError
+                    ? 403
+                    : 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      requiresReauth: Boolean(firstMetaClassified?.requiresReauth),
+                      errorCode: firstMetaClassified?.code,
+                      errorSubcode: firstMetaClassified?.subcode,
+                      partialCampaignId: campaignId,
+                      mcpStepLogs,
+                      error:
+                        firstMetaError ||
+                        `Meta Ads creó la campaña (${campaignId}) pero rechazó el Conjunto de Anuncios (Ad Set). Revisá permisos, método de pago o píxel en ${adAccountId}.`
+                    })
+                  );
+                  return;
                 }
 
                 // Paso 3: Por cada creativo – subir video (/advideos) o imagen (/adimages), url_tags con macros + aa_cid, creative y anuncio
@@ -7350,6 +7646,16 @@ setTimeout(()=>window.close(),5000);
                   campaign: record,
                   preflight
                 }));
+          };
+
+          // Endpoint 4: Publicar campaña directamente vía Meta Graph API (BLOQUEADO ESTRICTAMENTE A LANDINGCOD PY 834 + PÍXEL 377)
+          if (req.method === 'POST' && url === '/api/meta/publish-direct') {
+            let body = '';
+            req.on('data', (chunk: any) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                await executeMetaDirectPublish(parsed);
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
@@ -7581,12 +7887,11 @@ setTimeout(()=>window.close(),5000);
               try {
                 const parsed = JSON.parse(body || '{}');
                 const cfgFile = getStoreConfigFilePath();
-                let cfg: any = {};
-                if (fs.existsSync(cfgFile)) {
-                  try {
-                    cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
-                  } catch {}
-                }
+                const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+                  cfgFile,
+                  envReader: readKeyFromEnvFile,
+                  envWriter: saveKeyToEnvFile
+                });
                 const product = parsed.product || {};
                 const creatives: any[] = Array.isArray(parsed.creatives) ? parsed.creatives : [];
                 let adAccountId = String(
@@ -7640,24 +7945,33 @@ setTimeout(()=>window.close(),5000);
                     : rawPixelId;
 
                 if (!pbToken && !metaDirectToken) {
-                  res.statusCode = 400;
+                  res.statusCode = 401;
                   res.setHeader('Content-Type', 'application/json');
                   res.end(
                     JSON.stringify({
                       success: false,
+                      requiresReauth: true,
+                      errorCode: 'MISSING_TOKEN',
                       error:
-                        'No se detectó ningún Token de Meta Ads ni de Pipeboard guardado en el servidor (recordá que /store_config.json fue eliminado recién). Abrí el botón "OpenRouter & Pipeboard" arriba a la derecha, pegá tu Token de Pipeboard o tu Access Token de Meta Ads (EAA...) y dale clic en Guardar antes de publicar.'
+                        'No se detectó ningún Token de Meta Ads ni de Pipeboard guardado en el servidor. Conectá Meta Ads con Facebook OAuth o cargá tu Token antes de publicar.'
                     })
                   );
+                  return;
+                }
+
+                // Si solo existe un token directo de Meta (EAA...) sin token Pipeboard (pb_/pk_), delegar directamente a Meta Graph API v21.0
+                if (metaDirectToken && !pbToken.startsWith('pb_') && !pbToken.startsWith('pk_')) {
+                  await executeMetaDirectPublish({
+                    ...parsed,
+                    accessToken: parsed.accessToken || metaDirectToken
+                  });
                   return;
                 }
 
                 const nowIso = new Date().toISOString();
                 const mcpStepLogs: any[] = [];
                 let executionMode: 'pipeboard_remote_mcp' | 'meta_graph_direct' | 'pipeboard_sandbox_preview' =
-                  metaDirectToken && !pbToken.startsWith('pb_') && !pbToken.startsWith('pk_')
-                    ? 'meta_graph_direct'
-                    : 'pipeboard_remote_mcp';
+                  'pipeboard_remote_mcp';
 
                 // Construir URL HTTPS pública para cada imagen IA generada (/assets/ai-ads/...)
                 const resolvePublicCreativeUrl = (cr: any) => {
@@ -7782,14 +8096,19 @@ setTimeout(()=>window.close(),5000);
                 });
 
                 if (!campaignId) {
-                  res.statusCode = 400;
+                  const looksLikeAuthIssue =
+                    /401|403|unauthoriz|invalid.*token|expired|oauth|session|190|ads_management|permission/i.test(
+                      lastMcpError
+                    );
+                  res.statusCode = looksLikeAuthIssue ? 401 : 400;
                   res.setHeader('Content-Type', 'application/json');
                   res.end(
                     JSON.stringify({
                       success: false,
+                      requiresReauth: looksLikeAuthIssue,
                       error:
                         lastMcpError ||
-                        `Pipeboard/Meta Ads no devolvió un ID real de campaña para la cuenta ${adAccountId}. Verificá tu Token de Pipeboard o Cuenta Publicitaria en "OpenRouter & Pipeboard".`,
+                        `Pipeboard/Meta Ads no devolvió un ID real de campaña para la cuenta ${adAccountId}. Verificá tu Token de Pipeboard o Cuenta Publicitaria en "OpenRouter & Meta Ads".`,
                       mcpStepLogs,
                       preflight: pbPreflight
                     })

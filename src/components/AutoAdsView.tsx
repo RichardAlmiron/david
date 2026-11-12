@@ -128,6 +128,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [metaAppSecretInput, setMetaAppSecretInput] = useState<string>('');
   const [directMetaTokenInput, setDirectMetaTokenInput] = useState<string>('');
   const [connectingFacebookOAuth, setConnectingFacebookOAuth] = useState<boolean>(false);
+  const [metaAuthErrorBanner, setMetaAuthErrorBanner] = useState<string>('');
 
   const handleCopyMetaRef = (key: string, label: string, textToCopy: string) => {
     try {
@@ -283,6 +284,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
       if (data?.connected) {
         setMetaConnected(true);
+        setMetaAuthErrorBanner('');
         if (data.oauthBackup?.accessToken) {
           setMetaOAuthBackupState(data.oauthBackup);
         }
@@ -385,6 +387,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       } else {
         setMetaConnected(false);
         setMetaUser(null);
+        setMetaOAuthBackupState(null);
+        if (data?.error && data?.tokenState !== 'missing') {
+          setMetaAuthErrorBanner(String(data.error));
+        }
         if (data?.selectedAdAccountName) {
           setActiveAdAccountName(String(data.selectedAdAccountName));
         }
@@ -456,9 +462,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         });
       } else if (event.data.type === 'META_AUTH_ERROR') {
         setConnectingFacebookOAuth(false);
-        showToast(
-          `⚠️ La autorización en Facebook no se completó (${event.data.error || 'cancelado'}). Podés intentar de nuevo o pegar tu Token directo.`
-        );
+        const errText = `La autorización en Facebook no se completó (${event.data.error || 'cancelado'}). Podés intentar de nuevo o pegar tu Token directo EAA...`;
+        setMetaAuthErrorBanner(errText);
+        showToast(`⚠️ ${errText}`);
       }
     };
     window.addEventListener('message', handleOAuthPopupMessage);
@@ -673,12 +679,18 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // Guardar Slot Pipeboard + OpenRouter Key + Meta OAuth en Backend + Bóveda Persistente Local
   const handleSaveConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    setSavingSettings(true);
     const tokenToSend = pipeboardTokenInput.trim();
     const orKeyToSend = openRouterKeyInput.trim();
     const appIdToSend = metaAppIdInput.trim();
     const appSecretToSend = metaAppSecretInput.trim();
     const directMetaToSend = directMetaTokenInput.trim();
+    if (appIdToSend && !/^\d{8,24}$/.test(appIdToSend)) {
+      const msg = 'El Meta App ID debe contener solo dígitos numéricos (ej: 1465256781554439). No pegues un correo.';
+      setMetaAuthErrorBanner(msg);
+      showToast(`⚠️ ${msg}`);
+      return;
+    }
+    setSavingSettings(true);
     setPipeboardTokenInput('');
     setOpenRouterKeyInput('');
     setMetaAppSecretInput('');
@@ -705,8 +717,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           metaAccessTokenFallback: ''
         })
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
+        setMetaAuthErrorBanner('');
         setHasPipeboardTokenInBackend(Boolean(data?.hasPipeboardToken));
         setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
         setHasOpenRouterKeyInBackend(Boolean(data?.hasOpenRouterKey));
@@ -722,6 +735,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         } else {
           showToast('Configuración actualizada en el Backend.');
         }
+      } else {
+        const errMsg = String(data?.error || `Error ${res.status} al guardar credenciales.`);
+        setMetaAuthErrorBanner(errMsg);
+        showToast(`⚠️ ${errMsg}`);
       }
     } catch {
       showToast('Error al conectar con el servidor.');
@@ -736,16 +753,26 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       setShowFacebookOAuthModal(true);
       return;
     }
+    const cleanAppId = metaAppIdInput.trim();
+    const cleanAppSecret = metaAppSecretInput.trim();
+    if (cleanAppId && !/^\d{8,24}$/.test(cleanAppId)) {
+      const msg = 'El Meta App ID debe ser numérico (ej: 1465256781554439). Se bloqueó un correo electrónico o texto inválido.';
+      setMetaAuthErrorBanner(msg);
+      setShowFacebookOAuthModal(true);
+      showToast(`⚠️ ${msg}`);
+      return;
+    }
     setConnectingFacebookOAuth(true);
     try {
       const query = new URLSearchParams();
-      if (metaAppIdInput.trim()) query.set('app_id', metaAppIdInput.trim());
-      if (metaAppSecretInput.trim()) query.set('app_secret', metaAppSecretInput.trim());
+      if (cleanAppId) query.set('app_id', cleanAppId);
+      if (cleanAppSecret) query.set('app_secret', cleanAppSecret);
       const url = `/api/meta/auth-url${query.toString() ? `?${query.toString()}` : ''}`;
       const res = await fetch(url);
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data?.success && data?.authUrl) {
+        setMetaAuthErrorBanner('');
         setHasMetaAppCredentials(true);
         const popup = window.open(
           data.authUrl,
@@ -758,7 +785,14 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           showToast('🔵 Ventana de Facebook abierta: Dale clic en "Continuar" para autorizar tu cuenta de Meta Ads.');
         }
       } else {
-        // Si aún no tiene App ID / Secret guardados, abrir el modal de Login OAuth de Facebook en 1 clic
+        if (data?.corruptedCredentialsCleared) {
+          setHasMetaAppCredentials(false);
+          setMetaAppIdPreview('');
+        }
+        if (data?.error) {
+          setMetaAuthErrorBanner(String(data.error));
+        }
+        // Si aún no tiene App ID / Secret válidos guardados, abrir el modal de Login OAuth de Facebook en 1 clic
         setShowFacebookOAuthModal(true);
       }
     } catch {
@@ -774,6 +808,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     const rawToken = directMetaTokenInput.trim();
     if (!rawToken) return;
     setConnectingFacebookOAuth(true);
+    setMetaAuthErrorBanner('');
     try {
       const isMetaToken = rawToken.startsWith('EAA');
       const res = await fetch('/api/pipeboard/config', {
@@ -782,24 +817,32 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         body: JSON.stringify({
           ...pbConfig,
           pipeboardApiToken: isMetaToken ? '' : rawToken,
-          metaAccessToken: isMetaToken ? rawToken : rawToken,
+          metaAccessToken: isMetaToken ? rawToken : undefined,
           openRouterApiKey: getVaultOpenRouterKey(),
           selectedImageModel,
           selectedVideoModel
         })
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
         setHasPipeboardTokenInBackend(Boolean(data?.hasPipeboardToken));
         setPipeboardTokenPreview(String(data?.pipeboardTokenPreview || ''));
         setDirectMetaTokenInput('');
         const isConn = await refreshMetaConnectionStatus();
-        setShowFacebookOAuthModal(false);
         if (isConn) {
+          setMetaAuthErrorBanner('');
+          setShowFacebookOAuthModal(false);
           showToast('✅ ¡Cuenta de Meta Ads conectada y sincronizada! Ya podés publicar todos tus anuncios.');
+        } else if (!isMetaToken && data?.hasPipeboardToken) {
+          setShowFacebookOAuthModal(false);
+          showToast('✅ Token de Pipeboard guardado en el Backend. Listo para publicar en Meta Ads.');
         } else {
-          showToast('✅ Token guardado en el Backend. Listo para publicar en Meta Ads.');
+          showToast('⚠️ El token se guardó pero Meta reportó que está vencido o sin permiso ads_management. Revisá el aviso arriba.');
         }
+      } else {
+        const errMsg = String(data?.error || 'El token ingresado no tiene un formato válido.');
+        setMetaAuthErrorBanner(errMsg);
+        showToast(`⚠️ ${errMsg}`);
       }
     } catch {
       showToast('Error al guardar el token en el servidor.');
@@ -1743,15 +1786,27 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         );
       } else {
         setWorkflowStep('generated');
-        setShowSettingsDrawer(true);
-        setApiErrorModal({
-          isOpen: true,
-          title: '⚠️ Auditoría de Publicación en Meta Ads — Acción Requerida',
-          errorMessage:
+        const needsMetaReauth =
+          pubRes.status === 401 || pubRes.status === 403 || Boolean(pubData?.requiresReauth);
+        if (needsMetaReauth) {
+          const authErrMsg =
             pubData?.error ||
-            `Error ${pubRes.status}: No se pudo completar la publicación en Meta Ads. Verificá tu conexión de Facebook OAuth / Meta Ads y tu Cuenta Publicitaria.`,
-          sourceEndpoint: publishEndpoint
-        });
+            'Tu token de Meta Ads venció, fue invalidado o le faltan permisos. Volvé a autorizar tu cuenta de Facebook para publicar.';
+          setMetaConnected(false);
+          setMetaOAuthBackupState(null);
+          setMetaAuthErrorBanner(authErrMsg);
+          setShowFacebookOAuthModal(true);
+          showToast('🔐 Meta solicitó reautorización de tu sesión OAuth / Token antes de publicar.');
+        } else {
+          setApiErrorModal({
+            isOpen: true,
+            title: '⚠️ Auditoría de Publicación en Meta Ads — Acción Requerida',
+            errorMessage:
+              pubData?.error ||
+              `Error ${pubRes.status}: No se pudo completar la publicación en Meta Ads. Verificá tu conexión de Facebook OAuth / Meta Ads y tu Cuenta Publicitaria.`,
+            sourceEndpoint: publishEndpoint
+          });
+        }
       }
     } catch (err: any) {
       setWorkflowStep('generated');
@@ -3008,51 +3063,67 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         </div>
       )}
 
-      {/* Pop-up Modal de Error de OpenRouter (Trabajo Pausado - Sin Fallbacks Ficticios) */}
-      {apiErrorModal?.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-[#0f0f11] border border-red-500/30 rounded-lg shadow-lg p-6 text-white space-y-4 relative overflow-hidden">
-            <div className="absolute -top-12 -right-12 w-36 h-36 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
+      {/* Pop-up Modal de Error (OpenRouter o Publicación en Meta Ads) */}
+      {apiErrorModal?.isOpen && (() => {
+        const isMetaPublishError = Boolean(
+          apiErrorModal.sourceEndpoint?.includes('/meta/') ||
+          apiErrorModal.sourceEndpoint?.includes('/pipeboard/publish')
+        );
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-lg bg-[#0f0f11] border border-red-500/30 rounded-lg shadow-lg p-6 text-white space-y-4 relative overflow-hidden">
+              <div className="absolute -top-12 -right-12 w-36 h-36 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
 
-            <div className="flex items-start space-x-3">
-              <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-red-400 shrink-0">
-                <AlertTriangle className="w-6 h-6" />
+              <div className="flex items-start space-x-3">
+                <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-red-400 shrink-0">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-white leading-tight">
+                    {apiErrorModal.title}
+                  </h3>
+                  <p className="text-xs text-zinc-400 leading-normal">
+                    {isMetaPublishError
+                      ? 'Meta Ads rechazó la publicación real en la cuenta publicitaria. Revisá el detalle exacto devuelto por Meta antes de reintentar.'
+                      : 'Se ha pausado la generación de anuncios porque la API de OpenRouter retornó un error o no está activa. Se desactivaron todos los fallbacks ficticios para garantizar contenido 100% genuino.'}
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-white leading-tight">
-                  {apiErrorModal.title}
-                </h3>
-                <p className="text-xs text-zinc-400 leading-normal">
-                  Se ha pausado la generación de anuncios porque la API de OpenRouter retornó un error o no está activa. Se desactivaron todos los fallbacks ficticios para garantizar contenido 100% genuino.
-                </p>
+
+              <div className="bg-zinc-950 border border-red-900/40 rounded-xl p-3 text-xs font-mono text-red-300 leading-relaxed max-h-48 overflow-y-auto select-text break-words">
+                {apiErrorModal.errorMessage}
               </div>
-            </div>
 
-            <div className="bg-zinc-950 border border-red-900/40 rounded-xl p-3 text-xs font-mono text-red-300 leading-relaxed max-h-48 overflow-y-auto select-text break-words">
-              {apiErrorModal.errorMessage}
-            </div>
-
-            <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-end">
-              <button
-                onClick={() => {
-                  setApiErrorModal(null);
-                  setShowSettingsDrawer(true);
-                }}
-                className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-xs flex items-center justify-center space-x-2 transition-all shadow-lg shadow-emerald-950/40"
-              >
-                <Settings2 className="w-4 h-4" />
-                <span>Configurar API Key en OpenRouter</span>
-              </button>
-              <button
-                onClick={() => setApiErrorModal(null)}
-                className="w-full sm:w-auto px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg text-xs transition-all"
-              >
-                Cerrar
-              </button>
+              <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setApiErrorModal(null);
+                    if (isMetaPublishError) {
+                      setShowFacebookOAuthModal(true);
+                    } else {
+                      setShowSettingsDrawer(true);
+                    }
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-xs flex items-center justify-center space-x-2 transition-all shadow-lg shadow-emerald-950/40 cursor-pointer"
+                >
+                  <Settings2 className="w-4 h-4" />
+                  <span>
+                    {isMetaPublishError
+                      ? 'Reconectar Meta Ads / Facebook OAuth'
+                      : 'Configurar API Key en OpenRouter'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setApiErrorModal(null)}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg text-xs transition-all cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ===================================================================== */}
       {/* MODAL DE LOGIN OAUTH 1-CLIC CON FACEBOOK / META ADS                   */}
@@ -3082,6 +3153,13 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 ✕
               </button>
             </div>
+
+            {metaAuthErrorBanner && (
+              <div className="p-3 rounded-lg bg-red-950/60 border border-red-700/70 text-xs text-red-200 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed break-words">{metaAuthErrorBanner}</span>
+              </div>
+            )}
 
             {metaConnected && (
               <div className="p-3.5 rounded-lg bg-emerald-950/60 border border-emerald-700/80 space-y-2 text-xs">
@@ -3150,9 +3228,15 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   <label className="block text-zinc-400 mb-1">Meta App ID (developers.facebook.com)</label>
                   <input
                     type="text"
+                    name="meta_app_id_oauth"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     value={metaAppIdInput}
                     onChange={e => setMetaAppIdInput(e.target.value)}
-                    placeholder={hasMetaAppCredentials ? `Guardado (${metaAppIdPreview})` : 'Ej: 123456789012345'}
+                    placeholder={hasMetaAppCredentials ? `Guardado (${metaAppIdPreview})` : 'Ej: 1465256781554439'}
                     className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono text-xs outline-none focus:border-blue-500"
                   />
                 </div>
@@ -3160,6 +3244,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   <label className="block text-zinc-400 mb-1">Meta App Secret</label>
                   <input
                     type="password"
+                    name="meta_app_secret_oauth"
+                    autoComplete="new-password"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     value={metaAppSecretInput}
                     onChange={e => setMetaAppSecretInput(e.target.value)}
                     placeholder={hasMetaAppCredentials ? '••••••••••••••••' : 'Clave secreta de tu App Meta'}
@@ -3195,7 +3284,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             </div>
 
             {/* OPCIÓN 2: LOGIN RÁPIDO SIN CREAR APP EN META DEVELOPERS (TOKEN DIRECTO EAA... O PIPEBOARD OAUTH) */}
-            <form onSubmit={handleQuickConnectTokenInModal} className="p-4 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-3">
+            <form onSubmit={handleQuickConnectTokenInModal} autoComplete="off" className="p-4 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
                   Opción B · Conexión Instantánea (Token Meta EAA... o Pipeboard Facebook Login)
@@ -3216,6 +3305,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="password"
+                  name="meta_direct_token_oauth"
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   value={directMetaTokenInput}
                   onChange={e => setDirectMetaTokenInput(e.target.value)}
                   placeholder="Pegá tu Token EAA... de Meta Ads o tu Token de Pipeboard..."
