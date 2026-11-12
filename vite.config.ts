@@ -52,8 +52,26 @@ import {
   dispatchStageCommercialForOrderIfNeeded,
   approveOrderPrepaymentAndNotifyCustomer,
   ensureBootCloudRestoreCompleted,
-  pollCloudCommandsAndOrders
+  pollCloudCommandsAndOrders,
+  getPersistentDataPaths,
+  getDeletedOrderIdsArray,
+  isBootCloudRestoreFinished,
+  loadPedidos,
+  savePedidos,
+  loadStoreConfig,
+  queueOrderCloudSync
 } from './server/whatsappEngine';
+
+const RUNTIME_PERSISTENT_PATHS = getPersistentDataPaths();
+function getPedidosFilePath() {
+  return RUNTIME_PERSISTENT_PATHS.pedidosFile;
+}
+function getStoreConfigFilePath() {
+  return RUNTIME_PERSISTENT_PATHS.configFile;
+}
+function getAutoAdsWorkspacesFilePath() {
+  return RUNTIME_PERSISTENT_PATHS.autoAdsWorkspacesFile;
+}
 import {
   renderWaStageCommercialImage,
   renderFullProductCommercialMatrixOnServer
@@ -193,7 +211,7 @@ function readKeyFromEnvFile(keyName: string): string {
     }
 
     if (keyName === 'OPENROUTER_API_KEY') {
-      const cfgFile = path.resolve(__dirname, 'store_config.json');
+      const cfgFile = getStoreConfigFilePath();
       if (fs.existsSync(cfgFile)) {
         const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
         const directOrKey = String(cfg?.openRouterApiKey || '').trim();
@@ -224,7 +242,7 @@ function getOpenRouterReferer(req?: any): string {
 }
 
 function getSessionsFilePath() {
-  return path.resolve(__dirname, 'admin_sessions.json');
+  return RUNTIME_PERSISTENT_PATHS.adminSessionsFile;
 }
 
 function loadSessions(): Record<string, any> {
@@ -385,7 +403,7 @@ function registerApiServerMiddlewares(server: any) {
   // Auto-conectar WhatsApp y pre-generar automáticamente los 12 comerciales (4 etapas × Packs 1x, 2x y 3x) de todos los productos sin intervención manual
   const ensureAllProductsWaCommercialsReady = async () => {
     try {
-      const cfgFile = path.resolve(__dirname, 'store_config.json');
+      const cfgFile = getStoreConfigFilePath();
       let cfg: any = {};
       if (fs.existsSync(cfgFile)) {
         try {
@@ -466,7 +484,7 @@ function registerApiServerMiddlewares(server: any) {
         // Si el archivo no existe en disco tras un redeploy en Railway, intentar reconstruirlo desde el respaldo Base64 en autoads_workspaces.json
         if (!fs.existsSync(targetPath)) {
           try {
-            const wsFile = path.resolve(__dirname, 'autoads_workspaces.json');
+            const wsFile = getAutoAdsWorkspacesFilePath();
             if (fs.existsSync(wsFile)) {
               const wsRaw = JSON.parse(fs.readFileSync(wsFile, 'utf-8') || '{}');
               const workspaces = wsRaw?.workspaces || {};
@@ -545,7 +563,7 @@ function registerApiServerMiddlewares(server: any) {
         );
         if (parsedMatch) {
           const [, prodSlug, stageIdRaw, packDigits, priceDigits] = parsedMatch;
-          const cfgFile = path.resolve(__dirname, 'store_config.json');
+          const cfgFile = getStoreConfigFilePath();
           const savedCfg = fs.existsSync(cfgFile)
             ? JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}')
             : {};
@@ -620,7 +638,7 @@ function registerApiServerMiddlewares(server: any) {
       } else if (codeParam) {
         // 2. Buscar por reservaid o id en pedidos.json
         try {
-          const file = path.resolve(__dirname, 'pedidos.json');
+          const file = getPedidosFilePath();
           if (fs.existsSync(file)) {
             const list = JSON.parse(fs.readFileSync(file, 'utf-8') || '[]');
             const cleanCode = codeParam.toUpperCase();
@@ -773,49 +791,45 @@ function registerApiServerMiddlewares(server: any) {
           // 2. PEDIDOS API (PÚBLICO PARA CREAR / PROTEGIDO PARA ADMIN)
           // -------------------------------------------------------------
 
-          // GET /api/pedidos - Consulta de pedidos (sincronización continua con Supabase + caché local)
+          // GET /api/pedidos - Consulta instantánea local + sincronización continua en segundo plano
           if (req.method === 'GET' && url === '/api/pedidos') {
-            Promise.race([
-              ensureBootCloudRestoreCompleted().catch(() => { }),
-              new Promise<void>(resolve => setTimeout(resolve, 4000))
-            ])
-              .then(async () => {
-                try {
-                  const file = path.resolve(__dirname, 'pedidos.json');
-                  const readLocalFiltered = () => {
-                    const data = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : '[]';
-                    const all = JSON.parse(data || '[]');
-                    const filteredList = Array.isArray(all)
-                      ? all.filter((p: any) => !isOrderDeleted(p?.reservaid) && !isOrderDeleted(p?.id))
-                      : [];
-                    if (Array.isArray(all) && filteredList.length !== all.length) {
-                      fs.writeFileSync(file, JSON.stringify(filteredList, null, 2), 'utf-8');
-                    }
-                    return filteredList;
-                  };
-
-                  let filtered = readLocalFiltered();
-                  const nowMs = Date.now();
-                  const lastSyncMs = Number((globalThis as any).__lastApiPedidosCloudSyncMs || 0);
-                  if (filtered.length === 0 || nowMs - lastSyncMs >= 4000) {
-                    (globalThis as any).__lastApiPedidosCloudSyncMs = nowMs;
-                    await Promise.race([
-                      pollCloudCommandsAndOrders(true).catch(() => { }),
-                      new Promise<void>(resolve => setTimeout(resolve, 4500))
-                    ]);
-                    filtered = readLocalFiltered();
-                  }
-                  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                  res.end(JSON.stringify({ pedidos: filtered }));
-                } catch (err: any) {
-                  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                  res.end(JSON.stringify({ pedidos: [], error: err?.message }));
+            (async () => {
+              try {
+                let filtered = loadPedidos();
+                if (filtered.length === 0 && !isBootCloudRestoreFinished()) {
+                  await Promise.race([
+                    ensureBootCloudRestoreCompleted().catch(() => { }),
+                    new Promise<void>(resolve => setTimeout(resolve, 900))
+                  ]);
+                  filtered = loadPedidos();
                 }
-              })
-              .catch((err: any) => {
+
+                // Disparar sincronización con Supabase en segundo plano sin bloquear la respuesta HTTP
+                const nowMs = Date.now();
+                const lastSyncMs = Number((globalThis as any).__lastApiPedidosCloudSyncMs || 0);
+                if (nowMs - lastSyncMs >= 8000) {
+                  (globalThis as any).__lastApiPedidosCloudSyncMs = nowMs;
+                  void pollCloudCommandsAndOrders(true).catch(() => { });
+                }
+
                 res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                res.end(JSON.stringify({ pedidos: [], error: err?.message }));
-              });
+                res.end(
+                  JSON.stringify({
+                    pedidos: filtered,
+                    deletedIds: getDeletedOrderIdsArray()
+                  })
+                );
+              } catch (err: any) {
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.end(
+                  JSON.stringify({
+                    pedidos: [],
+                    deletedIds: getDeletedOrderIdsArray(),
+                    error: err?.message
+                  })
+                );
+              }
+            })();
             return;
           }
 
@@ -825,10 +839,12 @@ function registerApiServerMiddlewares(server: any) {
             req.on('data', chunk => body += chunk);
             req.on('end', async () => {
               try {
-                await Promise.race([
-                  ensureBootCloudRestoreCompleted().catch(() => { }),
-                  new Promise<void>(resolve => setTimeout(resolve, 2500))
-                ]);
+                if (!isBootCloudRestoreFinished()) {
+                  await Promise.race([
+                    ensureBootCloudRestoreCompleted().catch(() => { }),
+                    new Promise<void>(resolve => setTimeout(resolve, 800))
+                  ]);
+                }
 
                 const pedido = JSON.parse(body || '{}');
                 pedido.fecha = pedido.fecha || new Date().toISOString();
@@ -836,32 +852,28 @@ function registerApiServerMiddlewares(server: any) {
                 // Garantizar que el número de WhatsApp decretado para ese producto viaje y se guarde con el pedido
                 if (!pedido.waVendedor) {
                   try {
-                    const cfgPath = path.resolve(__dirname, 'store_config.json');
-                    if (fs.existsSync(cfgPath)) {
-                      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8') || '{}');
-                      const pages = Array.isArray(cfg.productPages) ? cfg.productPages : [];
-                      const matchedProd =
-                        pages.find(
-                          (p: any) =>
-                            (pedido.productoId && p.id === pedido.productoId) ||
-                            (pedido.producto && p.nombre && p.nombre.toLowerCase() === String(pedido.producto).toLowerCase())
-                        ) || pages[0];
-                      if (matchedProd?.wa) {
-                        pedido.waVendedor = normalizeWaPhone(matchedProd.wa);
-                      } else if (cfg.wa) {
-                        pedido.waVendedor = normalizeWaPhone(cfg.wa);
-                      }
-                      if (!pedido.productoId && matchedProd?.id) {
-                        pedido.productoId = matchedProd.id;
-                      }
+                    const cfg = loadStoreConfig();
+                    const pages = Array.isArray(cfg.productPages) ? cfg.productPages : [];
+                    const matchedProd =
+                      pages.find(
+                        (p: any) =>
+                          (pedido.productoId && p.id === pedido.productoId) ||
+                          (pedido.producto && p.nombre && p.nombre.toLowerCase() === String(pedido.producto).toLowerCase())
+                      ) || pages[0];
+                    if (matchedProd?.wa) {
+                      pedido.waVendedor = normalizeWaPhone(matchedProd.wa);
+                    } else if (cfg.wa) {
+                      pedido.waVendedor = normalizeWaPhone(cfg.wa);
+                    }
+                    if (!pedido.productoId && matchedProd?.id) {
+                      pedido.productoId = matchedProd.id;
                     }
                   } catch (e) {}
                 } else {
                   pedido.waVendedor = normalizeWaPhone(pedido.waVendedor);
                 }
 
-                const file = path.resolve(__dirname, 'pedidos.json');
-                const rawList = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf-8') || '[]') : [];
+                const rawList = loadPedidos();
                 const existingEntry = Array.isArray(rawList) && pedido.reservaid
                   ? rawList.find((p: any) => p?.reservaid === pedido.reservaid)
                   : null;
@@ -882,16 +894,17 @@ function registerApiServerMiddlewares(server: any) {
                   : [];
 
                 list.unshift(pedido);
-                const tmpFile = `${file}.tmp.${process.pid}`;
-                fs.writeFileSync(tmpFile, JSON.stringify(list, null, 2), 'utf-8');
-                fs.renameSync(tmpFile, file);
+                savePedidos(list);
 
                 let persistedCloud = false;
                 if (pedido.reservaid) {
                   persistedCloud = await Promise.race([
                     syncOrderUpdateToCloud(pedido).catch(() => false),
-                    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 6500))
+                    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 1800))
                   ]);
+                  if (!persistedCloud) {
+                    queueOrderCloudSync(pedido);
+                  }
                 }
 
                 // Ejecutar automatización (Audio o Chat Automático según interruptores)
@@ -910,7 +923,7 @@ function registerApiServerMiddlewares(server: any) {
             return;
           }
 
-          // POST /api/pedidos/delete - Eliminar uno, varios o todos los pedidos seleccionados directamente de la Base de Datos
+          // POST /api/pedidos/delete - Eliminación atómica inmediata (< 15ms) + limpieza de nube en segundo plano
           if (req.method === 'POST' && url === '/api/pedidos/delete') {
             let body = '';
             req.on('data', chunk => body += chunk);
@@ -924,16 +937,8 @@ function registerApiServerMiddlewares(server: any) {
                     : [];
                 const cleanIds = rawIds.map(x => String(x || '').trim()).filter(Boolean);
                 const result = await markOrdersDeletedBatch(cleanIds, parsed.ordersSnapshot);
-                const file = path.resolve(__dirname, 'pedidos.json');
-                const list = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf-8') || '[]') : [];
-                const cleanSet = new Set(cleanIds);
-                const updatedList = list.filter(
-                  (p: any) => !cleanSet.has(String(p.reservaid || '')) && !cleanSet.has(String(p.id || ''))
-                );
-                const tmpFile = `${file}.tmp.${process.pid}`;
-                fs.writeFileSync(tmpFile, JSON.stringify(updatedList, null, 2), 'utf-8');
-                fs.renameSync(tmpFile, file);
                 purgeOrphanedChatsAndResidues();
+                const updatedList = loadPedidos();
                 res.setHeader('Content-Type', 'application/json; charset=utf-8');
                 res.end(
                   JSON.stringify({
@@ -952,7 +957,7 @@ function registerApiServerMiddlewares(server: any) {
             return;
           }
 
-          // POST /api/pedidos/archive - Archivar o desarchivar uno, varios o todos los pedidos seleccionados directamente en la Base de Datos
+          // POST /api/pedidos/archive - Archivar o desarchivar pedidos al instante + sincronización en nube
           if (req.method === 'POST' && url === '/api/pedidos/archive') {
             let body = '';
             req.on('data', chunk => body += chunk);
@@ -993,8 +998,7 @@ function registerApiServerMiddlewares(server: any) {
               try {
                 const payload = JSON.parse(body || '{}');
                 const { id, estado, updates, orderSnapshot } = payload;
-                const file = path.resolve(__dirname, 'pedidos.json');
-                const list = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf-8') || '[]') : [];
+                const list = loadPedidos();
                 const targetIdx = list.findIndex((p: any) => p.reservaid === id || p.id === id);
                 let finalOrder: any = null;
                 if (targetIdx !== -1) {
@@ -1013,18 +1017,12 @@ function registerApiServerMiddlewares(server: any) {
                   };
                   list.unshift(finalOrder);
                 }
-                let persistedCloud = false;
                 if (finalOrder) {
-                  const tmpFile = `${file}.tmp.${process.pid}`;
-                  fs.writeFileSync(tmpFile, JSON.stringify(list, null, 2), 'utf-8');
-                  fs.renameSync(tmpFile, file);
-                  persistedCloud = await Promise.race([
-                    syncOrderUpdateToCloud(finalOrder).catch(() => false),
-                    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5000))
-                  ]);
+                  savePedidos(list);
+                  queueOrderCloudSync(finalOrder);
                 }
                 res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                res.end(JSON.stringify({ success: true, persistedCloud, order: finalOrder }));
+                res.end(JSON.stringify({ success: true, persistedCloud: Boolean(finalOrder), order: finalOrder }));
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1512,7 +1510,7 @@ function registerApiServerMiddlewares(server: any) {
                     ? genderParam
                     : undefined;
 
-                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                const cfgFile = getStoreConfigFilePath();
                 const savedCfg = fs.existsSync(cfgFile)
                   ? JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}')
                   : {};
@@ -1571,7 +1569,7 @@ function registerApiServerMiddlewares(server: any) {
 
                 // Persistir en store_config.json si existe la página
                 try {
-                  const cfgFile = path.resolve(__dirname, 'store_config.json');
+                  const cfgFile = getStoreConfigFilePath();
                   const savedCfg = fs.existsSync(cfgFile)
                     ? JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}')
                     : {};
@@ -1763,7 +1761,7 @@ function registerApiServerMiddlewares(server: any) {
                   return;
                 }
                 const cleanPhone = normalizeWaPhone(phone);
-                const pedidosFile = path.resolve(__dirname, 'pedidos.json');
+                const pedidosFile = getPedidosFilePath();
                 const pedidosList = fs.existsSync(pedidosFile)
                   ? JSON.parse(fs.readFileSync(pedidosFile, 'utf-8') || '[]')
                   : [];
@@ -1930,7 +1928,7 @@ function registerApiServerMiddlewares(server: any) {
             req.on('end', () => {
               try {
                 const { apiKey } = JSON.parse(body || '{}');
-                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                const cfgFile = getStoreConfigFilePath();
                 let cfg: any = {};
                 if (fs.existsSync(cfgFile)) {
                   cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
@@ -2039,7 +2037,7 @@ function registerApiServerMiddlewares(server: any) {
             req.on('end', () => {
               try {
                 const { apiKey, imageModel } = JSON.parse(body || '{}');
-                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                const cfgFile = getStoreConfigFilePath();
                 let cfg: any = {};
                 if (fs.existsSync(cfgFile)) {
                   cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
@@ -2169,7 +2167,7 @@ function registerApiServerMiddlewares(server: any) {
           // GET /api/config
           if (req.method === 'GET' && url === '/api/config') {
             try {
-              const file = path.resolve(__dirname, 'store_config.json');
+              const file = getStoreConfigFilePath();
               let cfgObj: any = {};
               if (fs.existsSync(file)) {
                 const raw = fs.readFileSync(file, 'utf-8');
@@ -2251,7 +2249,7 @@ function registerApiServerMiddlewares(server: any) {
             req.on('end', () => {
               try {
                 const parsed = JSON.parse(body || '{}');
-                const file = path.resolve(__dirname, 'store_config.json');
+                const file = getStoreConfigFilePath();
                 let existing: any = {};
                 if (fs.existsSync(file)) {
                   try {
@@ -2664,7 +2662,7 @@ function registerApiServerMiddlewares(server: any) {
                 let universalOAuthPixelId = '';
                 let universalOAuthToken = '';
                 try {
-                  const cfgFile = path.resolve(__dirname, 'store_config.json');
+                  const cfgFile = getStoreConfigFilePath();
                   if (fs.existsSync(cfgFile)) {
                     const cfgRaw = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
                     universalOAuthPixelId = String(cfgRaw.pixelId || cfgRaw.metaDirectConfig?.pixelId || '');
@@ -2847,7 +2845,7 @@ function registerApiServerMiddlewares(server: any) {
                 // Auto-persistir pixelId y capiAccessToken en store_config.json cuando llegan desde el cliente para que jamás se borren tras un redeploy
                 if ((parsed.pixelId && String(parsed.pixelId).trim()) || (parsed.capiAccessToken && String(parsed.capiAccessToken).trim())) {
                   try {
-                    const cfgFile = path.resolve(__dirname, 'store_config.json');
+                    const cfgFile = getStoreConfigFilePath();
                     const cfgRaw = fs.existsSync(cfgFile)
                       ? JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}')
                       : {};
@@ -2913,7 +2911,7 @@ function registerApiServerMiddlewares(server: any) {
             try {
               const waAuthBundle = exportAllWaSessionsAuthBundle();
               const waState = getWhatsAppEngineState();
-              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              const cfgFile = getStoreConfigFilePath();
               const storeConfig = fs.existsSync(cfgFile)
                 ? JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}')
                 : {};
@@ -2949,7 +2947,7 @@ function registerApiServerMiddlewares(server: any) {
                 let restoredConfig = false;
                 if (parsed.storeConfig && typeof parsed.storeConfig === 'object') {
                   try {
-                    const cfgFile = path.resolve(__dirname, 'store_config.json');
+                    const cfgFile = getStoreConfigFilePath();
                     const currentCfg = fs.existsSync(cfgFile)
                       ? JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}')
                       : {};
@@ -3332,7 +3330,7 @@ function registerApiServerMiddlewares(server: any) {
                 );
 
                 // 1. Auditoría en Vivo del Píxel (12 Eventos) y Túnel CAPI Anti-Bloqueo
-                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                const cfgFile = getStoreConfigFilePath();
                 let cfg: any = {};
                 if (fs.existsSync(cfgFile)) {
                   try {
@@ -3753,7 +3751,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
 
           const persistAutoAdsModels = (_newImageModel?: string, _newVideoModel?: string) => {
             try {
-              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              const cfgFile = getStoreConfigFilePath();
               let cfg: any = {};
               if (fs.existsSync(cfgFile)) {
                 try {
@@ -3849,7 +3847,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
           // PERSISTENCIA TOTAL EN BACKEND DE AUTOADS (INVESTIGACIÓN + IMÁGENES + VIDEOS + PASO EXACTA DONDE QUEDÓ)
           // Garantiza que al actualizar la página (F5) o cerrar el navegador jamás se pierda el trabajo ni los créditos invertidos.
           // ============================================================================
-          const autoAdsWorkspacesFile = path.resolve(__dirname, 'autoads_workspaces.json');
+          const autoAdsWorkspacesFile = getAutoAdsWorkspacesFilePath();
 
           const readAutoAdsWorkspacesFromDisk = (): {
             lastActive: {
@@ -3879,7 +3877,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   workspaces: raw.workspaces && typeof raw.workspaces === 'object' ? raw.workspaces : {}
                 };
               }
-              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              const cfgFile = getStoreConfigFilePath();
               if (fs.existsSync(cfgFile)) {
                 const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
                 if (cfg.autoAdsWorkspaces) {
@@ -3929,7 +3927,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
               fs.writeFileSync(autoAdsWorkspacesFile, JSON.stringify(nextState, null, 2), 'utf-8');
             } catch {}
             try {
-              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              const cfgFile = getStoreConfigFilePath();
               let cfg: any = {};
               if (fs.existsSync(cfgFile)) {
                 try {
@@ -5598,7 +5596,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
           // -------------------------------------------------------------
           if (req.method === 'GET' && url === '/api/pipeboard/config') {
             try {
-              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              const cfgFile = getStoreConfigFilePath();
               let cfg: any = {};
               if (fs.existsSync(cfgFile)) {
                 cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
@@ -5688,7 +5686,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
             req.on('end', () => {
               try {
                 const parsed = JSON.parse(body || '{}');
-                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                const cfgFile = getStoreConfigFilePath();
                 let cfg: any = {};
                 if (fs.existsSync(cfgFile)) {
                   cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
@@ -5833,7 +5831,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
           if (req.method === 'GET' && url === '/api/meta/auth-url') {
             try {
               const params = new URL(req.url || '', 'http://localhost').searchParams;
-              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              const cfgFile = getStoreConfigFilePath();
               let cfg: any = {};
               if (fs.existsSync(cfgFile)) {
                 cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
@@ -5916,7 +5914,7 @@ setTimeout(()=>window.close(),5000);
               }
 
               // Leer credenciales de la app desde store_config
-              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              const cfgFile = getStoreConfigFilePath();
               let cfg: any = {};
               if (fs.existsSync(cfgFile)) {
                 cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
@@ -6114,7 +6112,7 @@ setTimeout(()=>window.close(),5000);
                   res.end(JSON.stringify({ success: false }));
                   return;
                 }
-                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                const cfgFile = getStoreConfigFilePath();
                 let cfg: any = {};
                 if (fs.existsSync(cfgFile)) {
                   try {
@@ -6164,7 +6162,7 @@ setTimeout(()=>window.close(),5000);
           // Endpoint 3: Estado de conexión con Meta Ads directo (descubre en vivo el nombre actual de Cuenta 834 y Píxel 377)
           if (req.method === 'GET' && url === '/api/meta/status') {
             (async () => { try {
-              const cfgFile = path.resolve(__dirname, 'store_config.json');
+              const cfgFile = getStoreConfigFilePath();
               let cfg: any = {};
               if (fs.existsSync(cfgFile)) {
                 cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
@@ -6488,7 +6486,7 @@ setTimeout(()=>window.close(),5000);
                   parsed.landingUrl || `http://localhost:3000/?p=${product.slug || 'producto'}`
                 );
                 // Leer credenciales desde store_config, body.oauthBackup o .env
-                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                const cfgFile = getStoreConfigFilePath();
                 let cfg: any = {};
                 if (fs.existsSync(cfgFile)) {
                   cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
@@ -7143,7 +7141,7 @@ setTimeout(()=>window.close(),5000);
             req.on('end', async () => {
               try {
                 const parsed = JSON.parse(body || '{}');
-                const cfgFile = path.resolve(__dirname, 'store_config.json');
+                const cfgFile = getStoreConfigFilePath();
                 let cfg: any = {};
                 if (fs.existsSync(cfgFile)) {
                   try {
@@ -7458,7 +7456,7 @@ setTimeout(()=>window.close(),5000);
                 };
 
                 try {
-                  const cfgFile = path.resolve(__dirname, 'store_config.json');
+                  const cfgFile = getStoreConfigFilePath();
                   let cfg: any = {};
                   if (fs.existsSync(cfgFile)) {
                     cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');

@@ -366,6 +366,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const aiAgentSettingsRef = React.useRef<AIAgentSettings>(aiAgentSettings);
   const lastLocalPersistMsRef = React.useRef<number>(0);
   const deletedProductIdsRef = React.useRef<Set<string>>(new Set());
+  const locallyDeletedOrderIdsRef = React.useRef<Set<string>>(new Set());
+  const ordersRef = React.useRef<Order[]>(orders);
+  const orderMutationEpochRef = React.useRef<number>(0);
+
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
 
   useEffect(() => {
     productPagesRef.current = productPages;
@@ -415,50 +422,62 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const sbUrl = activeSb.url;
     const sbKey = activeSb.anonKey;
 
-    let savedToDb = false;
-
-    // 1. Guardar directamente en Base de Datos Supabase (accesible desde cualquier navegador/dispositivo)
-    if (sbUrl && sbKey) {
-      try {
-        const uniqueCode = `CFG-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        const res = await fetch(`${sbUrl}/rest/v1/codigos`, {
-          method: 'POST',
-          headers: {
-            'apikey': sbKey,
-            'Authorization': `Bearer ${sbKey}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({
-            code: uniqueCode,
-            dispositivo: JSON.stringify(payload)
-          })
-        });
-        if (res.ok) {
-          savedToDb = true;
+    const sbHeaders: Record<string, string> = sbKey
+      ? {
+          apikey: sbKey,
+          Authorization: `Bearer ${sbKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal'
         }
-      } catch (err) {
-        console.warn('Error guardando configuración en Supabase:', err);
-      }
+      : {};
+
+    const localHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (adminToken) {
+      localHeaders['Authorization'] = `Bearer ${adminToken}`;
     }
 
-    // 2. Guardar también en servidor local (/api/config) si está activo
+    const sbPromise: Promise<boolean> =
+      sbUrl && sbKey
+        ? fetchWithTimeout(
+            `${sbUrl}/rest/v1/codigos`,
+            {
+              method: 'POST',
+              headers: sbHeaders,
+              body: JSON.stringify({
+                code: `CFG-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                dispositivo: JSON.stringify(payload)
+              })
+            },
+            5000
+          )
+            .then(r => r.ok)
+            .catch(() => false)
+        : Promise.resolve(false);
+
+    let localOk = false;
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (adminToken) {
-        headers['Authorization'] = `Bearer ${adminToken}`;
-      }
-      const resLocal = await fetch('/api/config', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload)
-      });
-      if (resLocal.ok) {
-        savedToDb = true;
+      const resLocal = await fetchWithTimeout(
+        '/api/config',
+        {
+          method: 'POST',
+          headers: localHeaders,
+          body: JSON.stringify(payload)
+        },
+        4500
+      );
+      const ct = resLocal.headers.get('content-type') || '';
+      if (resLocal.ok && ct.includes('application/json')) {
+        localOk = true;
       }
     } catch (e) { }
 
-    return savedToDb;
+    if (localOk) {
+      // No bloquear la interfaz esperando Supabase si el servidor central ya persistió la configuración
+      void sbPromise;
+      return true;
+    }
+
+    return await sbPromise;
   };
 
   // Cargar configuración real desde la Base de Datos Supabase al abrir en cualquier navegador o dispositivo
@@ -471,7 +490,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     if (!sbUrl || !sbKey) {
       try {
-        const resLocalInit = await fetch('/api/config', { cache: 'no-store' });
+        const resLocalInit = await fetchWithTimeout('/api/config', { cache: 'no-store' }, 4500);
         if (resLocalInit.ok) {
           const dataLocalInit = await resLocalInit.json();
           if (dataLocalInit?.supabase?.url && dataLocalInit?.supabase?.anonKey) {
@@ -491,8 +510,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     if (sbUrl && sbKey) {
       try {
-        const res = await fetch(
-          `${sbUrl}/rest/v1/codigos?select=code,dispositivo,creado&code=like.CFG-*&order=creado.desc&limit=2`,
+        const res = await fetchWithTimeout(
+          `${sbUrl}/rest/v1/codigos?select=code,dispositivo,creado&code=like.CFG-*&order=id.desc&limit=2`,
           {
             headers: {
               'apikey': sbKey,
@@ -500,7 +519,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               'Cache-Control': 'no-cache'
             },
             cache: 'no-store'
-          }
+          },
+          5000
         );
         if (res.ok) {
           const rows = await res.json();
@@ -522,7 +542,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Fallback al endpoint local /api/config si Supabase no devolvió datos
     if (!remoteData) {
       try {
-        const resLocal = await fetch('/api/config', { cache: 'no-store' });
+        const resLocal = await fetchWithTimeout('/api/config', { cache: 'no-store' }, 4500);
         if (resLocal.ok) {
           const dataLocal = await resLocal.json();
           if (dataLocal?.supabase?.url && dataLocal?.supabase?.anonKey) {
@@ -574,8 +594,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Si algún producto no tenía vozAgente en el CFG, consultar también el registro WAVOICE-* en Supabase
         if (sbUrl && sbKey && !remoteData.productPages.every((p: ProductPage) => Boolean(p?.vozAgente))) {
           try {
-            const resVoice = await fetch(
-              `${sbUrl}/rest/v1/codigos?code=like.WAVOICE-*&order=creado.desc&limit=3`,
+            const resVoice = await fetchWithTimeout(
+              `${sbUrl}/rest/v1/codigos?code=like.WAVOICE-*&order=id.desc&limit=3`,
               {
                 headers: {
                   'apikey': sbKey,
@@ -583,7 +603,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   'Cache-Control': 'no-cache'
                 },
                 cache: 'no-store'
-              }
+              },
+              4500
             );
             if (resVoice.ok) {
               const vRows = await resVoice.json();
@@ -954,18 +975,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const sbKey = activeSb.anonKey;
     if (sbUrl && sbKey) {
       try {
-        const rpcRes = await fetch(`${sbUrl}/rest/v1/rpc/verificar_login_admin`, {
-          method: 'POST',
-          headers: {
-            'apikey': sbKey,
-            'Authorization': `Bearer ${sbKey}`,
-            'Content-Type': 'application/json'
+        const rpcRes = await fetchWithTimeout(
+          `${sbUrl}/rest/v1/rpc/verificar_login_admin`,
+          {
+            method: 'POST',
+            headers: {
+              'apikey': sbKey,
+              'Authorization': `Bearer ${sbKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              p_email: cleanUser,
+              p_password: cleanPass
+            })
           },
-          body: JSON.stringify({
-            p_email: cleanUser,
-            p_password: cleanPass
-          })
-        });
+          5000
+        );
         if (rpcRes.ok) {
           const rpcData = await rpcRes.json();
           if (rpcData && rpcData.success && rpcData.user) {
@@ -1138,9 +1163,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     let pedidosOk = false;
     let codigosOk = false;
+    const maxAttempts = isNewInsert ? 3 : 1;
 
-    // 1. Upsert garantizado en tabla estructurada 'pedidos' con 3 reintentos y verificación res.ok
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // 1. Upsert en tabla estructurada 'pedidos' con timeout acotado
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const resPed = await fetchWithTimeout(
           `${sbUrl}/rest/v1/pedidos?on_conflict=reservaid`,
@@ -1154,15 +1180,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             },
             body: JSON.stringify(structuredPedidoRow)
           },
-          8000
+          5500
         );
         if (resPed.ok) {
           pedidosOk = true;
           break;
         }
       } catch { }
-      if (attempt < 2) {
-        await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+      if (attempt < maxAttempts - 1) {
+        await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
       }
     }
 
@@ -1184,19 +1210,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               ref_code: orderObj.ref_code || null
             })
           },
-          5000
+          4500
         );
       } catch { }
     }
 
-    // 2. Guardar snapshot atómico en Supabase 'codigos' (POST primero con 3 reintentos; SOLO si resCod.ok limpiar snapshots anteriores)
+    // 2. Guardar snapshot atómico en Supabase 'codigos'
     const codeKey = `ORD-${orderObj.reservaid}-${Date.now()}`;
     const bodyPayload = JSON.stringify({
       code: codeKey,
       dispositivo: JSON.stringify(orderObj)
     });
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const resCod = await fetchWithTimeout(
           `${sbUrl}/rest/v1/codigos`,
@@ -1210,20 +1236,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             },
             body: bodyPayload
           },
-          8000
+          5500
         );
         if (resCod.ok) {
           codigosOk = true;
           break;
         }
       } catch { }
-      if (attempt < 2) {
-        await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+      if (attempt < maxAttempts - 1) {
+        await new Promise(r => setTimeout(r, 350 * (attempt + 1)));
       }
     }
 
     if (codigosOk) {
-      await fetchWithTimeout(
+      void fetchWithTimeout(
         `${sbUrl}/rest/v1/codigos?code=like.${encodeURIComponent(`ORD-${orderObj.reservaid}-`)}*&code=neq.${encodeURIComponent(codeKey)}`,
         {
           method: 'DELETE',
@@ -1232,7 +1258,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             'Authorization': `Bearer ${sbKey}`
           }
         },
-        6000
+        4500
       ).catch(() => { });
     }
 
@@ -1248,18 +1274,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     const run = async () => {
+      const startEpoch = orderMutationEpochRef.current;
       const activeSb = resolveValidSupabase(config.supabase);
       const sbUrl = activeSb.url;
       const sbKey = activeSb.anonKey;
       const mergedMap = new Map<string, Order>();
       let supabaseReachable = false;
-      const deletedSet = new Set<string>();
+      let localApiReachable = false;
+      const deletedSet = new Set<string>(locallyDeletedOrderIdsRef.current);
 
       const mergeOrderCandidate = (candidate: Order | null | undefined) => {
         if (!isOfficialStoreOrder(candidate)) return;
         const rid = String(candidate!.reservaid).trim();
         const cid = String(candidate!.id || '').trim();
-        if (!rid || deletedSet.has(rid) || (cid && deletedSet.has(cid))) return;
+        if (
+          !rid ||
+          deletedSet.has(rid) ||
+          (cid && deletedSet.has(cid)) ||
+          locallyDeletedOrderIdsRef.current.has(rid) ||
+          (cid && locallyDeletedOrderIdsRef.current.has(cid))
+        ) {
+          return;
+        }
         const existing = mergedMap.get(rid);
         if (!existing) {
           mergedMap.set(rid, candidate!);
@@ -1288,16 +1324,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const [delResult, ordResult, pedTableResult, apiResult] = await Promise.allSettled([
         sbUrl && sbKey
           ? fetchWithTimeout(
-              `${sbUrl}/rest/v1/codigos?select=code,dispositivo&code=like.DEL-ORD-*&order=creado.desc&limit=300`,
+              `${sbUrl}/rest/v1/codigos?select=code,dispositivo&code=like.DEL-ORD-*&order=id.desc&limit=250`,
               { headers: sbHeaders, cache: 'no-store' },
-              6000
+              4500
             ).then(r => (r.ok ? r.json() : null))
           : Promise.resolve(null),
         sbUrl && sbKey
           ? fetchWithTimeout(
-              `${sbUrl}/rest/v1/codigos?select=code,dispositivo&code=like.ORD-*&order=creado.desc&limit=300`,
+              `${sbUrl}/rest/v1/codigos?select=code,dispositivo&code=like.ORD-*&order=id.desc&limit=250`,
               { headers: sbHeaders, cache: 'no-store' },
-              6000
+              4500
             ).then(async r => {
               if (!r.ok) return null;
               supabaseReachable = true;
@@ -1306,21 +1342,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           : Promise.resolve(null),
         sbUrl && sbKey
           ? fetchWithTimeout(
-              `${sbUrl}/rest/v1/pedidos?order=fecha.desc&limit=300`,
+              `${sbUrl}/rest/v1/pedidos?order=fecha.desc&limit=250`,
               { headers: sbHeaders, cache: 'no-store' },
-              6000
+              4500
             ).then(async r => {
               if (!r.ok) return null;
               supabaseReachable = true;
               return r.json();
             })
           : Promise.resolve(null),
-        fetchWithTimeout('/api/pedidos', { cache: 'no-store' }, 6000).then(r =>
-          r.ok ? r.json().catch(() => null) : null
-        )
+        fetchWithTimeout('/api/pedidos', { cache: 'no-store' }, 4500).then(async r => {
+          const ct = r.headers.get('content-type') || '';
+          if (!r.ok || !ct.includes('application/json')) return null;
+          const json = await r.json().catch(() => null);
+          if (json && Array.isArray(json.pedidos)) {
+            localApiReachable = true;
+          }
+          return json;
+        })
       ]);
 
-      // 0. Procesar primero todos los pedidos eliminados (DEL-ORD-*)
+      // 0. Procesar primero todos los eliminados (DEL-ORD-* de Supabase + deletedIds locales de /api/pedidos)
+      if (apiResult.status === 'fulfilled' && Array.isArray(apiResult.value?.deletedIds)) {
+        for (const delId of apiResult.value.deletedIds) {
+          const clean = String(delId || '').trim();
+          if (clean) deletedSet.add(clean);
+        }
+      }
       if (delResult.status === 'fulfilled' && Array.isArray(delResult.value)) {
         for (const r of delResult.value) {
           try {
@@ -1405,14 +1453,63 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // Actualizar lista de pedidos con todos los pedidos oficiales (Supabase + /api/pedidos)
-      if (mergedMap.size > 0 || supabaseReachable) {
-        const finalOrders = Array.from(mergedMap.values()).sort((a, b) => {
+      // Actualizar lista de pedidos excluyendo siempre cualquier ID eliminado durante la sesión o en vuelo
+      if (mergedMap.size > 0 || supabaseReachable || localApiReachable) {
+        const sortByFechaDesc = (a: Order, b: Order) => {
           const tA = a.fecha ? new Date(a.fecha).getTime() : 0;
           const tB = b.fecha ? new Date(b.fecha).getTime() : 0;
           return tB - tA;
+        };
+
+        setOrders(prev => {
+          const prevByRid = new Map<string, Order>();
+          for (const p of prev) {
+            const pRid = String(p?.reservaid || '').trim();
+            if (pRid) prevByRid.set(pRid, p);
+          }
+
+          const mutatedDuringPoll = orderMutationEpochRef.current !== startEpoch;
+          const safeMap = new Map<string, Order>();
+
+          for (const [rid, candidate] of mergedMap.entries()) {
+            const cid = String(candidate.id || '').trim();
+            if (
+              locallyDeletedOrderIdsRef.current.has(rid) ||
+              (cid && locallyDeletedOrderIdsRef.current.has(cid))
+            ) {
+              continue;
+            }
+            const existingLocal = prevByRid.get(rid);
+            if (mutatedDuringPoll && existingLocal) {
+              const tLocal = new Date(existingLocal.actualizado_en || existingLocal.fecha || 0).getTime() || 0;
+              const tCand = new Date(candidate.actualizado_en || candidate.fecha || 0).getTime() || 0;
+              safeMap.set(rid, tLocal >= tCand ? existingLocal : candidate);
+            } else {
+              safeMap.set(rid, candidate);
+            }
+          }
+
+          // Preservar pedidos recién creados localmente mientras este poll estaba en vuelo
+          if (mutatedDuringPoll) {
+            for (const p of prev) {
+              const pRid = String(p?.reservaid || '').trim();
+              const pCid = String(p?.id || '').trim();
+              if (
+                pRid &&
+                !safeMap.has(pRid) &&
+                !deletedSet.has(pRid) &&
+                !locallyDeletedOrderIdsRef.current.has(pRid) &&
+                (!pCid || !locallyDeletedOrderIdsRef.current.has(pCid))
+              ) {
+                safeMap.set(pRid, p);
+              }
+            }
+          }
+
+          const finalOrders = Array.from(safeMap.values()).sort(sortByFechaDesc);
+          ordersRef.current = finalOrders;
+          return finalOrders;
         });
-        setOrders(finalOrders);
       }
     };
 
@@ -1525,53 +1622,68 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
 
       // Optimistic UI update usando actualización funcional para no pisar pedidos concurrentes
-      setOrders(prev => [newOrder, ...prev.filter(o => o.reservaid !== newOrder.reservaid)]);
+      orderMutationEpochRef.current += 1;
+      setOrders(prev => {
+        const next = [newOrder, ...prev.filter(o => o.reservaid !== newOrder.reservaid)];
+        ordersRef.current = next;
+        return next;
+      });
 
       // 1. Disparar servidor local (/api/pedidos) y persistencia en Base de Datos Supabase en PARALELO
       // Verificamos explícitamente que al menos UNO confirme guardado real en BD/servidor.
       let serverOk = false;
       let supabaseOk = false;
 
-      const persistPromise = Promise.all([
-        fetchWithTimeout(
-          '/api/pedidos',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newOrder)
-          },
-          10000
-        )
-          .then(async (res) => {
-            if (!res.ok) return false;
-            const data = await res.json().catch(() => null);
-            if (data && data.success !== false) {
-              serverOk = true;
-              return true;
-            }
-            return false;
-          })
-          .catch(() => false),
-        persistOrderToDatabase(newOrder, true)
-          .then((ok) => {
-            supabaseOk = Boolean(ok);
-            return supabaseOk;
-          })
-          .catch(() => false)
-      ]);
+      const serverPromise = fetchWithTimeout(
+        '/api/pedidos',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newOrder)
+        },
+        6000
+      )
+        .then(async (res) => {
+          const ct = res.headers.get('content-type') || '';
+          if (!res.ok || !ct.includes('application/json')) return false;
+          const data = await res.json().catch(() => null);
+          if (data && data.success !== false) {
+            serverOk = true;
+            return true;
+          }
+          return false;
+        })
+        .catch(() => false);
 
-      let timeoutId: number | undefined;
-      const hardTimeout = new Promise<void>((resolve) => {
-        timeoutId = window.setTimeout(resolve, 12000);
-      });
-      try {
-        await Promise.race([persistPromise, hardTimeout]);
-      } finally {
-        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      const supabasePromise = persistOrderToDatabase(newOrder, true)
+        .then((ok) => {
+          supabaseOk = Boolean(ok);
+          return supabaseOk;
+        })
+        .catch(() => false);
+
+      // Si el servidor central confirma guardado (<2s), no congelar la compra esperando Supabase 504; si no, esperar Supabase.
+      await serverPromise;
+      if (!serverOk) {
+        let timeoutId: number | undefined;
+        const hardTimeout = new Promise<void>((resolve) => {
+          timeoutId = window.setTimeout(resolve, 9000);
+        });
+        try {
+          await Promise.race([supabasePromise, hardTimeout]);
+        } finally {
+          if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+        }
+      } else {
+        void supabasePromise;
       }
 
       if (!serverOk && !supabaseOk) {
-        setOrders(prev => prev.filter(o => o.reservaid !== newOrder.reservaid));
+        setOrders(prev => {
+          const next = prev.filter(o => o.reservaid !== newOrder.reservaid);
+          ordersRef.current = next;
+          return next;
+        });
         setLastOrder(null);
         throw new Error('No se pudo guardar el pedido en la base de datos. Verificá tu conexión e intentá nuevamente.');
       }
@@ -1601,12 +1713,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateOrderStatus = async (id: string, newStatus: OrderStatus): Promise<boolean> => {
+    orderMutationEpochRef.current += 1;
     let affectedRefCode: string | null = null;
     let orderCity = 'Paraguay';
     let updatedOrderObj: Order | null = null;
     const nowIso = new Date().toISOString();
 
-    const nextOrders = orders.map(ord => {
+    const nextOrders = ordersRef.current.map(ord => {
       if (ord.reservaid === id || ord.id === id) {
         affectedRefCode = ord.ref_code;
         orderCity = ord.ciudad;
@@ -1616,24 +1729,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return ord;
     });
 
-    setOrders(nextOrders);
+    ordersRef.current = nextOrders;
+    setOrders(prev =>
+      prev.map(ord =>
+        ord.reservaid === id || ord.id === id
+          ? { ...ord, estado: newStatus, actualizado_en: nowIso }
+          : ord
+      )
+    );
 
-    if (updatedOrderObj) {
-      await persistOrderToDatabase(updatedOrderObj, false);
-    }
-
+    let backendOk = false;
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (adminToken) {
         headers['Authorization'] = `Bearer ${adminToken}`;
       }
-      await fetch('/api/pedidos/estado', {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify({ id, estado: newStatus, orderSnapshot: updatedOrderObj })
-      });
+      const res = await fetchWithTimeout(
+        '/api/pedidos/estado',
+        {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ id, estado: newStatus, orderSnapshot: updatedOrderObj })
+        },
+        4500
+      );
+      const ct = res.headers.get('content-type') || '';
+      if (res.ok && ct.includes('application/json')) {
+        backendOk = true;
+      }
     } catch (e) { }
+
+    // Fallback directo a Supabase solo si el servidor local/Railway no respondió
+    if (!backendOk && updatedOrderObj) {
+      await persistOrderToDatabase(updatedOrderObj, false);
+    }
 
     if (newStatus === 'entregado_pagado') {
       const paymentEvent: PublicEvent = {
@@ -1651,10 +1781,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateOrder = async (id: string, updates: Partial<Order>): Promise<boolean> => {
+    orderMutationEpochRef.current += 1;
     let updatedOrderObj: Order | null = null;
     const nowIso = new Date().toISOString();
 
-    const nextOrders = orders.map(ord => {
+    const nextOrders = ordersRef.current.map(ord => {
       if (ord.reservaid === id || ord.id === id) {
         updatedOrderObj = { ...ord, ...updates, actualizado_en: nowIso };
         return updatedOrderObj;
@@ -1662,24 +1793,40 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return ord;
     });
 
-    setOrders(nextOrders);
+    ordersRef.current = nextOrders;
+    setOrders(prev =>
+      prev.map(ord =>
+        ord.reservaid === id || ord.id === id
+          ? { ...ord, ...updates, actualizado_en: nowIso }
+          : ord
+      )
+    );
 
-    if (updatedOrderObj) {
-      await persistOrderToDatabase(updatedOrderObj, false);
-    }
-
+    let backendOk = false;
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (adminToken) {
         headers['Authorization'] = `Bearer ${adminToken}`;
       }
-      await fetch('/api/pedidos/estado', {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify({ id, estado: updates.estado, updates, orderSnapshot: updatedOrderObj })
-      });
+      const res = await fetchWithTimeout(
+        '/api/pedidos/estado',
+        {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ id, estado: updates.estado, updates, orderSnapshot: updatedOrderObj })
+        },
+        4500
+      );
+      const ct = res.headers.get('content-type') || '';
+      if (res.ok && ct.includes('application/json')) {
+        backendOk = true;
+      }
     } catch (e) { }
+
+    if (!backendOk && updatedOrderObj) {
+      await persistOrderToDatabase(updatedOrderObj, false);
+    }
 
     return true;
   };
@@ -1693,85 +1840,115 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       )
     );
     if (cleanIds.length === 0) return false;
-    const cleanSet = new Set(cleanIds);
 
-    const targetOrders = orders.filter(
+    orderMutationEpochRef.current += 1;
+    const cleanSet = new Set(cleanIds);
+    for (const delId of cleanIds) {
+      locallyDeletedOrderIdsRef.current.add(delId);
+    }
+
+    const targetOrders = ordersRef.current.filter(
       ord => cleanSet.has(String(ord.reservaid || '').trim()) || cleanSet.has(String(ord.id || '').trim())
     );
 
-    // 1. Filtrar estado de pedidos en React (la eliminación definitiva se persiste directo en Supabase)
-    const nextOrders = orders.filter(
+    // 1. Remover inmediatamente en memoria y UI sin congelar el modal
+    const filteredOrders = ordersRef.current.filter(
       ord => !cleanSet.has(String(ord.reservaid || '').trim()) && !cleanSet.has(String(ord.id || '').trim())
     );
-    setOrders(nextOrders);
+    ordersRef.current = filteredOrders;
+    setOrders(prev =>
+      prev.filter(
+        ord => !cleanSet.has(String(ord.reservaid || '').trim()) && !cleanSet.has(String(ord.id || '').trim())
+      )
+    );
 
-    // 3. Ejecutar eliminación directa en la Base de Datos Supabase (DEL-ORD-* + DELETE codigos + DELETE pedidos)
-    const activeSb = resolveValidSupabase(config.supabase);
-    const sbUrl = activeSb.url;
-    const sbKey = activeSb.anonKey;
-    if (sbUrl && sbKey) {
-      await Promise.allSettled(
-        cleanIds.map(async (cleanId, idx) => {
-          const targetOrder = targetOrders.find(
-            ord => ord.reservaid === cleanId || ord.id === cleanId
-          );
-          const targetPhone = targetOrder?.celular || (targetOrder as any)?.telefono || '';
-          try {
-            await fetch(`${sbUrl}/rest/v1/codigos`, {
-              method: 'POST',
-              headers: {
-                'apikey': sbKey,
-                'Authorization': `Bearer ${sbKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-              },
-              body: JSON.stringify({
-                code: `DEL-ORD-${cleanId}-${Date.now() + idx}`,
-                dispositivo: JSON.stringify({
-                  deletedOrderId: cleanId,
-                  customerPhone: targetPhone ? targetPhone.replace(/\D/g, '') : null,
-                  deletedAt: new Date().toISOString()
-                })
-              })
-            });
-          } catch (e) { }
-
-          try {
-            await fetch(`${sbUrl}/rest/v1/codigos?code=like.ORD-${cleanId}*`, {
-              method: 'DELETE',
-              headers: {
-                'apikey': sbKey,
-                'Authorization': `Bearer ${sbKey}`
-              }
-            });
-          } catch (e) { }
-
-          try {
-            await fetch(`${sbUrl}/rest/v1/pedidos?reservaid=eq.${cleanId}`, {
-              method: 'DELETE',
-              headers: {
-                'apikey': sbKey,
-                'Authorization': `Bearer ${sbKey}`
-              }
-            });
-          } catch (e) { }
-        })
-      );
-    }
-
-    // 4. Notificar a backend /api/pedidos/delete (ejecuta eliminación en servidor + base de datos)
+    // 2. Ejecutar borrado atómico en backend /api/pedidos/delete (< 15ms; sincroniza Supabase con reintento en segundo plano)
+    let backendDeleted = false;
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (adminToken) {
         headers['Authorization'] = `Bearer ${adminToken}`;
       }
-      await fetch('/api/pedidos/delete', {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify({ ids: cleanIds, id: cleanIds[0], ordersSnapshot: targetOrders })
-      });
+      const res = await fetchWithTimeout(
+        '/api/pedidos/delete',
+        {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ ids: cleanIds, id: cleanIds[0], ordersSnapshot: targetOrders })
+        },
+        4500
+      );
+      const ct = res.headers.get('content-type') || '';
+      if (res.ok && ct.includes('application/json')) {
+        const json = await res.json().catch(() => null);
+        if (json?.success !== false) {
+          backendDeleted = true;
+        }
+      }
     } catch (e) { }
+
+    // 3. Fallback directo a Supabase solo si el backend no está disponible (con timeouts estrictos para jamás congelar)
+    if (!backendDeleted) {
+      const activeSb = resolveValidSupabase(config.supabase);
+      const sbUrl = activeSb.url;
+      const sbKey = activeSb.anonKey;
+      if (sbUrl && sbKey) {
+        await Promise.allSettled(
+          cleanIds.map(async (cleanId, idx) => {
+            const targetOrder = targetOrders.find(
+              ord => ord.reservaid === cleanId || ord.id === cleanId
+            );
+            const targetPhone = targetOrder?.celular || (targetOrder as any)?.telefono || '';
+            await Promise.allSettled([
+              fetchWithTimeout(
+                `${sbUrl}/rest/v1/codigos`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'apikey': sbKey,
+                    'Authorization': `Bearer ${sbKey}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                  },
+                  body: JSON.stringify({
+                    code: `DEL-ORD-${cleanId}-${Date.now() + idx}`,
+                    dispositivo: JSON.stringify({
+                      deletedOrderId: cleanId,
+                      customerPhone: targetPhone ? targetPhone.replace(/\D/g, '') : null,
+                      deletedAt: new Date().toISOString()
+                    })
+                  })
+                },
+                4500
+              ),
+              fetchWithTimeout(
+                `${sbUrl}/rest/v1/codigos?code=like.${encodeURIComponent(`ORD-${cleanId}`)}*`,
+                {
+                  method: 'DELETE',
+                  headers: {
+                    'apikey': sbKey,
+                    'Authorization': `Bearer ${sbKey}`
+                  }
+                },
+                4500
+              ),
+              fetchWithTimeout(
+                `${sbUrl}/rest/v1/pedidos?reservaid=eq.${encodeURIComponent(cleanId)}`,
+                {
+                  method: 'DELETE',
+                  headers: {
+                    'apikey': sbKey,
+                    'Authorization': `Bearer ${sbKey}`
+                  }
+                },
+                4500
+              )
+            ]);
+          })
+        );
+      }
+    }
 
     return true;
   };
@@ -1789,11 +1966,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       )
     );
     if (cleanIds.length === 0) return false;
+    orderMutationEpochRef.current += 1;
     const cleanSet = new Set(cleanIds);
     const nowIso = new Date().toISOString();
     const updatedList: Order[] = [];
 
-    const nextOrders = orders.map(ord => {
+    const nextOrders = ordersRef.current.map(ord => {
       const rid = String(ord.reservaid || ord.id || '').trim();
       if (rid && cleanSet.has(rid)) {
         const updatedOrd: Order = {
@@ -1808,28 +1986,53 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return ord;
     });
 
-    setOrders(nextOrders);
+    ordersRef.current = nextOrders;
+    setOrders(prev =>
+      prev.map(ord => {
+        const rid = String(ord.reservaid || ord.id || '').trim();
+        if (rid && cleanSet.has(rid)) {
+          return {
+            ...ord,
+            archivado: Boolean(archivado),
+            fechaArchivado: archivado ? nowIso : null,
+            actualizado_en: nowIso
+          };
+        }
+        return ord;
+      })
+    );
 
-    // 1. Persistir directamente cada pedido archivado/desarchivado en la Base de Datos Supabase
-    await Promise.allSettled(updatedList.map(ord => persistOrderToDatabase(ord, false)));
-
-    // 2. Persistir en backend /api/pedidos/archive (que también sincroniza con Supabase y pedidos.json)
+    // 1. Guardar en backend /api/pedidos/archive (< 15ms; sincroniza Supabase con cola de reintento)
+    let backendArchived = false;
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (adminToken) {
         headers['Authorization'] = `Bearer ${adminToken}`;
       }
-      await fetch('/api/pedidos/archive', {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify({
-          ids: cleanIds,
-          archivado: Boolean(archivado),
-          ordersSnapshot: updatedList
-        })
-      });
+      const res = await fetchWithTimeout(
+        '/api/pedidos/archive',
+        {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({
+            ids: cleanIds,
+            archivado: Boolean(archivado),
+            ordersSnapshot: updatedList
+          })
+        },
+        4500
+      );
+      const ct = res.headers.get('content-type') || '';
+      if (res.ok && ct.includes('application/json')) {
+        backendArchived = true;
+      }
     } catch (e) { }
+
+    // 2. Fallback directo a Supabase solo si el backend no respondió
+    if (!backendArchived && updatedList.length > 0) {
+      await Promise.allSettled(updatedList.map(ord => persistOrderToDatabase(ord, false)));
+    }
 
     return true;
   };

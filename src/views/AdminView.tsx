@@ -840,6 +840,8 @@ export const AdminView: React.FC = () => {
 
     try {
       const uniqueCode = `WACMD-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const ctrl = new AbortController();
+      const tid = window.setTimeout(() => ctrl.abort(), 5500);
       const res = await fetch(`${rawSbUrl}/rest/v1/codigos`, {
         method: 'POST',
         headers: {
@@ -853,8 +855,10 @@ export const AdminView: React.FC = () => {
             ...cmdPayload,
             createdAt: new Date().toISOString()
           })
-        })
+        }),
+        signal: ctrl.signal
       });
+      window.clearTimeout(tid);
       return res.ok;
     } catch (e) {
       return false;
@@ -870,15 +874,19 @@ export const AdminView: React.FC = () => {
     }
 
     try {
+      const ctrl = new AbortController();
+      const tid = window.setTimeout(() => ctrl.abort(), 5500);
       const res = await fetch(
-        `${rawSbUrl}/rest/v1/codigos?select=code,dispositivo,creado&code=like.WAENG-*&order=creado.desc&limit=1`,
+        `${rawSbUrl}/rest/v1/codigos?select=code,dispositivo,creado&code=like.WAENG-*&order=id.desc&limit=1`,
         {
           headers: {
             apikey: sbKey,
             Authorization: `Bearer ${sbKey}`
-          }
+          },
+          signal: ctrl.signal
         }
       );
+      window.clearTimeout(tid);
       if (res.ok) {
         const rows = await res.json();
         if (Array.isArray(rows) && rows.length > 0 && rows[0]?.dispositivo) {

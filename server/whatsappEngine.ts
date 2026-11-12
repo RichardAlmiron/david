@@ -205,6 +205,22 @@ const CHATS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'wa_chats.json');
 const PEDIDOS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'pedidos.json');
 const CONFIG_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'store_config.json');
 const DELETED_ORDERS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'deleted_orders.json');
+const SELLER_CHATS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'seller_agent_chats.json');
+const ADMIN_SESSIONS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'admin_sessions.json');
+const AUTOADS_WORKSPACES_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'autoads_workspaces.json');
+
+export function getPersistentDataPaths() {
+  return {
+    ...PERSISTENT_PATHS,
+    chatsFile: CHATS_FILE,
+    pedidosFile: PEDIDOS_FILE,
+    configFile: CONFIG_FILE,
+    deletedOrdersFile: DELETED_ORDERS_FILE,
+    sellerChatsFile: SELLER_CHATS_FILE,
+    adminSessionsFile: ADMIN_SESSIONS_FILE,
+    autoAdsWorkspacesFile: AUTOADS_WORKSPACES_FILE
+  };
+}
 
 function resolveServerAssetPath(fileName: string): string {
   const cwdAsset = path.resolve(process.cwd(), 'server', 'assets', fileName);
@@ -452,126 +468,144 @@ function loadDeletedOrderIds(): Set<string> {
 
 function saveDeletedOrderIds(set: Set<string>) {
   try {
-    fs.writeFileSync(DELETED_ORDERS_FILE, JSON.stringify(Array.from(set), null, 2), 'utf-8');
+    const tmpFile = `${DELETED_ORDERS_FILE}.tmp.${process.pid}`;
+    fs.writeFileSync(tmpFile, JSON.stringify(Array.from(set), null, 2), 'utf-8');
+    fs.renameSync(tmpFile, DELETED_ORDERS_FILE);
   } catch (e) { }
 }
 
 const deletedOrderIds = loadDeletedOrderIds();
+const pendingCloudDeletes = new Map<string, string>();
+const inFlightCloudDeleteIds = new Set<string>();
+const pendingCloudOrderSyncs = new Map<string, any>();
+
+export function getDeletedOrderIdsArray(): string[] {
+  return Array.from(deletedOrderIds);
+}
 
 export function isOrderDeleted(orderId: string): boolean {
   if (!orderId) return false;
   return deletedOrderIds.has(String(orderId).trim());
 }
 
-export async function markOrderDeleted(orderId: string, knownCustomerPhone?: string): Promise<boolean> {
-  if (!orderId) return false;
-  const cleanId = String(orderId).trim();
-  deletedOrderIds.add(cleanId);
-  saveDeletedOrderIds(deletedOrderIds);
-
-  // 1. Quitar de pedidos.json local si existe y capturar el número de teléfono del cliente
-  let customerPhone = knownCustomerPhone ? normalizeWaPhone(knownCustomerPhone) : '';
+async function syncSingleDeletedOrderToCloud(
+  cleanId: string,
+  customerPhone: string,
+  tsOffset = 0
+): Promise<boolean> {
+  let tombstoneOk = false;
+  let tableDeleteOk = true;
   try {
-    const pedidos = loadPedidos();
-    const targetOrder = pedidos.find((p: any) => p.reservaid === cleanId || p.id === cleanId);
-    if (targetOrder?.celular && !customerPhone) {
-      customerPhone = normalizeWaPhone(targetOrder.celular);
-    }
-    const filtered = pedidos.filter((p: any) => p.reservaid !== cleanId && p.id !== cleanId);
-    savePedidos(filtered);
-  } catch (e) { }
+    const tasks: Promise<any>[] = [
+      insertOrUpdateSupabaseCodigo(
+        `DEL-ORD-${cleanId}-${Date.now() + tsOffset}`,
+        JSON.stringify({
+          deletedOrderId: cleanId,
+          customerPhone: customerPhone || null,
+          deletedAt: new Date().toISOString()
+        })
+      ).then(ok => {
+        tombstoneOk = ok;
+      }),
+      deleteSupabaseCodigos(`like.ORD-${cleanId}*`)
+    ];
 
-  // 2. Limpieza total de residuos en wa_chats.json y estado de conversación
-  try {
-    const storage = loadChatsStorage();
-    let changed = false;
-
-    // A. Eliminar mensajes específicos que tengan el orderId eliminado
-    for (const [phone, msgs] of Object.entries(storage.chats)) {
-      const beforeCount = msgs.length;
-      storage.chats[phone] = msgs.filter(m => m.orderId !== cleanId);
-      if (storage.chats[phone].length !== beforeCount) {
-        changed = true;
-      }
-    }
-
-    // B. Si capturamos el teléfono (o buscando en chats), verificar si quedan otros pedidos activos para este número
-    if (customerPhone) {
-      const remainingOrdersForPhone = loadPedidos().some(
-        p => normalizeWaPhone(p.celular) === customerPhone && p.reservaid !== cleanId && p.id !== cleanId
+    const creds = getSupabaseCredentials();
+    if (creds?.url && creds?.key) {
+      tasks.push(
+        (async () => {
+          tableDeleteOk = false;
+          try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 7000);
+            const res = await fetch(`${creds.url}/rest/v1/pedidos?reservaid=eq.${encodeURIComponent(cleanId)}`, {
+              method: 'DELETE',
+              headers: {
+                apikey: creds.key,
+                Authorization: `Bearer ${creds.key}`
+              },
+              signal: ctrl.signal
+            });
+            clearTimeout(tid);
+            tableDeleteOk = res.ok;
+          } catch {
+            tableDeleteOk = false;
+          }
+        })()
       );
-
-      // Si ya NO tiene otros pedidos activos, eliminar por completo todo el historial y estados del cliente
-      if (!remainingOrdersForPhone) {
-        delete storage.chats[customerPhone];
-        delete storage.chatModes[customerPhone];
-        delete storage.callModes[customerPhone];
-        delete storage.customerChannels[customerPhone];
-        delete storage.convSteps[customerPhone];
-        changed = true;
-      }
     }
 
-    if (changed) {
-      saveChatsStorage(storage);
-      scheduleCloudStateSync(true);
-    }
-  } catch (e) { }
-
-  // 3. Limpiar también del registro del agente de vendedor (seller_agent_chats.json)
-  try {
-    const sellerStorage = loadSellerChatsStorage();
-    let sellerChanged = false;
-    for (const [prodId, msgs] of Object.entries(sellerStorage.messagesByProduct)) {
-      const beforeCount = msgs.length;
-      sellerStorage.messagesByProduct[prodId] = msgs.filter(m => m.orderId !== cleanId);
-      if (sellerStorage.messagesByProduct[prodId].length !== beforeCount) {
-        sellerChanged = true;
-      }
-    }
-    if (sellerChanged) {
-      saveSellerChatsStorage(sellerStorage);
-    }
-  } catch (e) { }
-
-  // 4. Limpieza directa en Supabase (DEL-ORD-* y purgar WACHAT del cliente si quedó sin pedidos)
-  try {
-    await insertOrUpdateSupabaseCodigo(
-      `DEL-ORD-${cleanId}-${Date.now()}`,
-      JSON.stringify({
-        deletedOrderId: cleanId,
-        customerPhone: customerPhone || null,
-        deletedAt: new Date().toISOString()
-      })
-    );
-    await deleteSupabaseCodigos(`like.ORD-${cleanId}*`);
-    try {
-      const creds = getSupabaseCredentials();
-      if (creds?.url && creds?.key) {
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 8000);
-        await fetch(`${creds.url}/rest/v1/pedidos?reservaid=eq.${encodeURIComponent(cleanId)}`, {
-          method: 'DELETE',
-          headers: {
-            apikey: creds.key,
-            Authorization: `Bearer ${creds.key}`
-          },
-          signal: ctrl.signal
-        });
-        clearTimeout(tid);
-      }
-    } catch (e) { }
     if (customerPhone) {
       const remainingOrders = loadPedidos().some(
         p => normalizeWaPhone(p.celular) === customerPhone && p.reservaid !== cleanId && p.id !== cleanId
       );
       if (!remainingOrders) {
-        await deleteSupabaseCodigos(`eq.WACHAT-${customerPhone}`);
+        tasks.push(deleteSupabaseCodigos(`eq.WACHAT-${customerPhone}`));
       }
     }
-  } catch (e) { }
 
-  return true;
+    await Promise.allSettled(tasks);
+  } catch {}
+  return tombstoneOk && tableDeleteOk;
+}
+
+async function flushPendingCloudDeletes(maxBatch = 10): Promise<void> {
+  if (pendingCloudDeletes.size === 0) return;
+  const entries = Array.from(pendingCloudDeletes.entries())
+    .filter(([cleanId]) => !inFlightCloudDeleteIds.has(cleanId))
+    .slice(0, maxBatch);
+  if (entries.length === 0) return;
+  await Promise.allSettled(
+    entries.map(async ([cleanId, customerPhone], idx) => {
+      inFlightCloudDeleteIds.add(cleanId);
+      try {
+        const ok = await syncSingleDeletedOrderToCloud(cleanId, customerPhone, idx);
+        if (ok) {
+          pendingCloudDeletes.delete(cleanId);
+        }
+      } finally {
+        inFlightCloudDeleteIds.delete(cleanId);
+      }
+    })
+  );
+}
+
+export function queueOrderCloudSync(order: any): void {
+  const rid = String(order?.reservaid || order?.id || '').trim();
+  if (!rid || isOrderDeleted(rid)) return;
+  pendingCloudOrderSyncs.set(rid, order);
+  void (async () => {
+    const ok = await syncOrderUpdateToCloud(order).catch(() => false);
+    if (ok && pendingCloudOrderSyncs.get(rid) === order) {
+      pendingCloudOrderSyncs.delete(rid);
+    }
+  })();
+}
+
+async function flushPendingCloudOrderSyncs(maxBatch = 8): Promise<void> {
+  if (pendingCloudOrderSyncs.size === 0) return;
+  const entries = Array.from(pendingCloudOrderSyncs.entries()).slice(0, maxBatch);
+  await Promise.allSettled(
+    entries.map(async ([rid, order]) => {
+      if (isOrderDeleted(rid)) {
+        pendingCloudOrderSyncs.delete(rid);
+        return;
+      }
+      const ok = await syncOrderUpdateToCloud(order).catch(() => false);
+      if (ok && pendingCloudOrderSyncs.get(rid) === order) {
+        pendingCloudOrderSyncs.delete(rid);
+      }
+    })
+  );
+}
+
+export async function markOrderDeleted(orderId: string, knownCustomerPhone?: string): Promise<boolean> {
+  if (!orderId) return false;
+  const result = await markOrdersDeletedBatch(
+    [orderId],
+    knownCustomerPhone ? [{ reservaid: orderId, celular: knownCustomerPhone }] : undefined
+  );
+  return result.count > 0;
 }
 
 export async function markOrdersDeletedBatch(
@@ -588,7 +622,9 @@ export async function markOrdersDeletedBatch(
   if (cleanIds.length === 0) {
     return { deletedIds: [], count: 0 };
   }
+  const cleanSet = new Set(cleanIds);
 
+  // 1. Registrar tombstones y capturar teléfonos antes de filtrar pedidos.json (0ms local)
   const currentPedidos = loadPedidos();
   const phoneByOrderId: Record<string, string> = {};
   for (const p of currentPedidos) {
@@ -607,8 +643,77 @@ export async function markOrdersDeletedBatch(
   }
 
   for (const cleanId of cleanIds) {
-    await markOrderDeleted(cleanId, phoneByOrderId[cleanId]);
+    deletedOrderIds.add(cleanId);
+    pendingCloudOrderSyncs.delete(cleanId);
+    pendingCloudDeletes.set(cleanId, phoneByOrderId[cleanId] || '');
   }
+  saveDeletedOrderIds(deletedOrderIds);
+
+  // 2. Filtrar pedidos.json local una sola vez para todo el lote
+  const remainingPedidos = currentPedidos.filter(
+    (p: any) => !cleanSet.has(String(p?.reservaid || '').trim()) && !cleanSet.has(String(p?.id || '').trim())
+  );
+  if (remainingPedidos.length !== currentPedidos.length) {
+    savePedidos(remainingPedidos);
+  }
+
+  // 3. Limpiar residuos en wa_chats.json y estados de clientes sin otros pedidos activos (una sola escritura)
+  try {
+    const storage = loadChatsStorage();
+    let changed = false;
+
+    for (const [phone, msgs] of Object.entries(storage.chats)) {
+      const beforeCount = msgs.length;
+      storage.chats[phone] = msgs.filter(m => !m.orderId || !cleanSet.has(String(m.orderId).trim()));
+      if (storage.chats[phone].length !== beforeCount) {
+        changed = true;
+      }
+    }
+
+    const touchedPhones = new Set(Object.values(phoneByOrderId).filter(Boolean));
+    const activePhonesRemaining = new Set(
+      remainingPedidos
+        .map((p: any) => normalizeWaPhone(p?.celular || p?.telefono || ''))
+        .filter(Boolean)
+    );
+    for (const customerPhone of touchedPhones) {
+      if (!activePhonesRemaining.has(customerPhone)) {
+        delete storage.chats[customerPhone];
+        delete storage.chatModes[customerPhone];
+        delete storage.callModes[customerPhone];
+        delete storage.customerChannels[customerPhone];
+        delete storage.convSteps[customerPhone];
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      saveChatsStorage(storage);
+      scheduleCloudStateSync(true);
+    }
+  } catch (e) { }
+
+  // 4. Limpiar también del registro del agente de vendedor (seller_agent_chats.json)
+  try {
+    const sellerStorage = loadSellerChatsStorage();
+    let sellerChanged = false;
+    for (const [prodId, msgs] of Object.entries(sellerStorage.messagesByProduct)) {
+      const beforeCount = msgs.length;
+      sellerStorage.messagesByProduct[prodId] = msgs.filter(
+        m => !m.orderId || !cleanSet.has(String(m.orderId).trim())
+      );
+      if (sellerStorage.messagesByProduct[prodId].length !== beforeCount) {
+        sellerChanged = true;
+      }
+    }
+    if (sellerChanged) {
+      saveSellerChatsStorage(sellerStorage);
+    }
+  } catch (e) { }
+
+  // 5. Ejecutar limpieza en Supabase en segundo plano sin bloquear jamás la respuesta HTTP al usuario
+  //    Si Supabase está con 504 en este instante, queda en pendingCloudDeletes y se reintenta en el próximo poll.
+  void flushPendingCloudDeletes(cleanIds.length).catch(() => { });
 
   return { deletedIds: cleanIds, count: cleanIds.length };
 }
@@ -664,16 +769,11 @@ export async function markOrdersArchivedBatch(
 
   savePedidos(pedidos);
 
-  // Sincronización directa en Supabase ('codigos' ORD-<id>* y tabla estructurada 'pedidos')
+  // Sincronización en Supabase en segundo plano con cola de reintento para nunca congelar el panel admin
   if (updatedOrders.length > 0) {
-    try {
-      for (let idx = 0; idx < updatedOrders.length; idx++) {
-        const ord = updatedOrders[idx];
-        const rid = String(ord.reservaid || ord.id || '').trim();
-        if (!rid) continue;
-        await syncOrderUpdateToCloud(ord);
-      }
-    } catch (e) { }
+    for (const ord of updatedOrders) {
+      queueOrderCloudSync(ord);
+    }
   }
 
   return { updatedOrders, count: updatedOrders.length };
@@ -2780,6 +2880,9 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
     if (runHeavyCloudSync) {
       lastHeavyCloudSyncAt = Date.now();
 
+      await flushPendingCloudDeletes(8).catch(() => { });
+      await flushPendingCloudOrderSyncs(6).catch(() => { });
+
     // 1.5. Sincronizar lista global de pedidos eliminados (DEL-ORD-*) y configuración (CFG-*) desde Supabase
     try {
       const delRows = await querySupabaseCodigos({
@@ -2961,6 +3064,10 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
             for (const pr of pedRows) {
               if (!pr?.reservaid) continue;
               const rid = String(pr.reservaid).trim();
+              if (isOrderDeleted(rid)) {
+                pendingCloudDeletes.set(rid, normalizeWaPhone(pr?.celular || ''));
+                continue;
+              }
               const synKey = `PEDTABLE-${rid}-${pr.actualizado_en || pr.fecha || ''}`;
               if (processedCloudOrders.has(synKey) && localExistingReservaIds.has(rid)) continue;
               const snap = pr.dispositivo && typeof pr.dispositivo === 'object' && pr.dispositivo.reservaid ? pr.dispositivo : null;
@@ -3032,9 +3139,10 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
             continue;
           }
 
-          // Si el pedido fue eliminado permanentemente, purgar de Supabase y jamás restaurar
+          // Si el pedido fue eliminado permanentemente, purgar en segundo plano y jamás restaurar
           if (deletedOrderIds.has(String(ord.reservaid)) || deletedOrderIds.has(String(ord.id))) {
-            await deleteSupabaseCodigos(`eq.${row.code}`);
+            pendingCloudDeletes.set(rid, normalizeWaPhone(ord?.celular || ''));
+            void deleteSupabaseCodigos(`eq.${row.code}`).catch(() => { });
             continue;
           }
 
@@ -3321,7 +3429,7 @@ export function setGlobalAiEngineMode(_mode: 'automatico' | 'manual') {
   scheduleCloudStateSync(false);
 }
 
-function loadStoreConfig(): any {
+export function loadStoreConfig(): any {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8') || '{}');
@@ -3330,7 +3438,15 @@ function loadStoreConfig(): any {
   return {};
 }
 
-function loadPedidos(): any[] {
+export function saveStoreConfig(cfg: any) {
+  try {
+    const tmpFile = `${CONFIG_FILE}.tmp.${process.pid}`;
+    fs.writeFileSync(tmpFile, JSON.stringify(cfg ?? {}, null, 2), 'utf-8');
+    fs.renameSync(tmpFile, CONFIG_FILE);
+  } catch (e) { }
+}
+
+export function loadPedidos(): any[] {
   try {
     if (fs.existsSync(PEDIDOS_FILE)) {
       const list = JSON.parse(fs.readFileSync(PEDIDOS_FILE, 'utf-8') || '[]');
@@ -3398,7 +3514,7 @@ export function findActiveOrderForPhone(phone: string): any | null {
   return pedidos[0];
 }
 
-function savePedidos(list: any[]) {
+export function savePedidos(list: any[]) {
   try {
     const tmpFile = `${PEDIDOS_FILE}.tmp.${process.pid}`;
     fs.writeFileSync(tmpFile, JSON.stringify(list, null, 2), 'utf-8');
@@ -8585,9 +8701,18 @@ async function rehydrateSessionFromCloudBackupFallback(
   }
 }
 
+let bootCloudRestoreFinished = false;
+export function isBootCloudRestoreFinished(): boolean {
+  return bootCloudRestoreFinished;
+}
+
 export function ensureBootCloudRestoreCompleted(): Promise<void> {
   if (!bootRestorePromise) {
-    bootRestorePromise = restoreCloudStateAndWaSessionsOnBoot().catch(() => { });
+    bootRestorePromise = restoreCloudStateAndWaSessionsOnBoot()
+      .catch(() => { })
+      .finally(() => {
+        bootCloudRestoreFinished = true;
+      });
   }
   return bootRestorePromise;
 }
@@ -10528,8 +10653,6 @@ export function autoBootWhatsAppIfSessionExists() {
 // ============================================================================
 // AGENTE DE AVISOS Y CONVERSACIÓN EXCLUSIVA CON EL VENDEDOR POR PRODUCTO
 // ============================================================================
-
-const SELLER_CHATS_FILE = path.resolve(process.cwd(), 'seller_agent_chats.json');
 
 export interface SellerAgentChatRecord {
   id: string;
