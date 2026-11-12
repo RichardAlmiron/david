@@ -108,7 +108,8 @@ import {
   isValidMetaAppSecret,
   isValidNumericMetaAppId,
   sanitizeStoredMetaDirectConfig,
-  saveMetaVaultToSupabase
+  saveMetaVaultToSupabase,
+  verifyMetaAppCredentialsLive
 } from './server/metaAuthSession.ts';
 
 const RUNTIME_PERSISTENT_PATHS = getPersistentDataPaths();
@@ -6117,6 +6118,34 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                 delete nextPb.metaAppSecret;
                 delete nextPb.metaAccessToken;
 
+                if (incomingMetaAppId || incomingMetaAppSecret) {
+                  const sanitizedCurrent = sanitizeStoredMetaDirectConfig(
+                    cfg,
+                    readKeyFromEnvFile,
+                    saveKeyToEnvFile
+                  );
+                  const candidateAppId = incomingMetaAppId || sanitizedCurrent.appId;
+                  const candidateAppSecret = incomingMetaAppSecret || sanitizedCurrent.appSecret;
+                  if (candidateAppId && candidateAppSecret) {
+                    const liveCheck = await verifyMetaAppCredentialsLive({
+                      appId: candidateAppId,
+                      appSecret: candidateAppSecret
+                    });
+                    if (!liveCheck.valid) {
+                      res.statusCode = 400;
+                      res.end(
+                        JSON.stringify({
+                          success: false,
+                          invalidAppId: liveCheck.invalidAppId,
+                          invalidAppSecret: liveCheck.invalidAppSecret,
+                          error: liveCheck.message || 'Meta rechazó el App ID o App Secret.'
+                        })
+                      );
+                      return;
+                    }
+                  }
+                }
+
                 if (!cfg.metaDirectConfig) cfg.metaDirectConfig = {};
                 if (incomingMetaAppId) {
                   cfg.metaDirectConfig.appId = incomingMetaAppId;
@@ -6303,6 +6332,32 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     error: sanitized.corruptedReason
                       ? `Se limpiaron credenciales OAuth corruptas (${sanitized.corruptedReason}). Ingresá tu Meta App ID numérico y tu Meta App Secret de developers.facebook.com, o pegá un Token directo EAA...`
                       : 'Ingresá tu Meta App ID numérico y App Secret por única vez para abrir el popup oficial de Facebook Login OAuth, o conectá con tu Token directo EAA...'
+                  }));
+                  return;
+                }
+
+                // Verificar en vivo contra Meta Graph API que el App ID y App Secret existan y estén habilitados
+                const liveAppCheck = await verifyMetaAppCredentialsLive({ appId, appSecret });
+                if (!liveAppCheck.valid) {
+                  const shouldClearStored = !incomingAppId && liveAppCheck.invalidAppId;
+                  if (shouldClearStored) {
+                    if (cfg.metaDirectConfig) delete cfg.metaDirectConfig.appId;
+                    saveKeyToEnvFile('META_APP_ID', '');
+                    try {
+                      fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                    } catch {}
+                  }
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({
+                    success: false,
+                    needsCredentials: true,
+                    corruptedCredentialsCleared: shouldClearStored,
+                    invalidAppId: liveAppCheck.invalidAppId,
+                    invalidAppSecret: liveAppCheck.invalidAppSecret,
+                    redirectUri,
+                    error:
+                      `${liveAppCheck.message} Ingresá un App ID y App Secret vigentes de developers.facebook.com (Opción A) o conectate directamente con tu Token EAA... (Opción B).`
                   }));
                   return;
                 }

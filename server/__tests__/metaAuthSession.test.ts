@@ -14,7 +14,8 @@ import {
   META_AUTH_VAULT_CODE,
   OFFICIAL_META_AD_ACCOUNT_ID,
   sanitizeStoredMetaDirectConfig,
-  saveMetaVaultToSupabase
+  saveMetaVaultToSupabase,
+  verifyMetaAppCredentialsLive
 } from '../metaAuthSession.ts';
 
 test('validadores Meta App ID, App Secret y Access Token rechazan autocompletado y aceptan formato oficial', () => {
@@ -246,4 +247,65 @@ test('[SIMULADO] saveMetaVaultToSupabase y hydrateMetaVaultIntoStoreConfig sobre
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+});
+
+test('[SIMULADO] verifyMetaAppCredentialsLive detecta App ID inexistente/deshabilitado (code 101) antes de abrir OAuth', async () => {
+  const invalidIdRes = await verifyMetaAppCredentialsLive({
+    appId: '1465256781554439',
+    appSecret: '0123456789abcdef0123456789abcdef',
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({ error: { message: 'Invalid Client ID', type: 'OAuthException', code: 101 } }),
+        { status: 400 }
+      )
+  });
+  assert.equal(invalidIdRes.valid, false);
+  assert.equal(invalidIdRes.invalidAppId, true);
+  assert.equal(invalidIdRes.invalidAppSecret, false);
+  assert.match(invalidIdRes.message || '', /PLATFORM__INVALID_APP_ID/);
+
+  const invalidSecretRes = await verifyMetaAppCredentialsLive({
+    appId: '1465256781554439',
+    appSecret: '0123456789abcdef0123456789abcdef',
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          error: { message: 'Error validating client secret.', type: 'OAuthException', code: 1 }
+        }),
+        { status: 400 }
+      )
+  });
+  assert.equal(invalidSecretRes.valid, false);
+  assert.equal(invalidSecretRes.invalidAppId, false);
+  assert.equal(invalidSecretRes.invalidAppSecret, true);
+
+  const okRes = await verifyMetaAppCredentialsLive({
+    appId: '1465256781554439',
+    appSecret: '0123456789abcdef0123456789abcdef',
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ access_token: '1465256781554439|apptoken', token_type: 'bearer' }), {
+        status: 200
+      })
+  });
+  assert.equal(okRes.valid, true);
+  assert.equal(okRes.invalidAppId, false);
+  assert.equal(okRes.invalidAppSecret, false);
+});
+
+test('sanitizeStoredMetaDirectConfig prioriza META_APP_ID válido de entorno sobre store_config desactualizado en volumen', () => {
+  const cfg: Record<string, any> = {
+    metaDirectConfig: {
+      appId: '1465256781554439',
+      appSecret: '0123456789abcdef0123456789abcdef'
+    }
+  };
+  const envMap: Record<string, string> = {
+    META_APP_ID: '1495256781554439',
+    META_APP_SECRET: '0123456789abcdef0123456789abcdef'
+  };
+
+  const res = sanitizeStoredMetaDirectConfig(cfg, (k) => envMap[k] || '');
+  assert.equal(res.appId, '1495256781554439');
+  assert.equal(cfg.metaDirectConfig.appId, '1495256781554439');
+  assert.equal(res.corruptedAppIdCleared, true);
 });

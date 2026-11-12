@@ -159,6 +159,100 @@ export function classifyMetaGraphError(errInput: any): ClassifiedMetaError {
   };
 }
 
+export interface MetaAppVerificationResult {
+  valid: boolean;
+  invalidAppId: boolean;
+  invalidAppSecret: boolean;
+  networkSkipped?: boolean;
+  code?: number;
+  message?: string;
+}
+
+export async function verifyMetaAppCredentialsLive(params: {
+  appId: string;
+  appSecret: string;
+  fetchImpl?: typeof fetch;
+}): Promise<MetaAppVerificationResult> {
+  const appId = String(params.appId || '').trim();
+  const appSecret = String(params.appSecret || '').trim();
+  const fetchFn = params.fetchImpl || fetch;
+
+  if (!isValidNumericMetaAppId(appId)) {
+    return {
+      valid: false,
+      invalidAppId: true,
+      invalidAppSecret: false,
+      message: 'El Meta App ID debe contener únicamente dígitos numéricos.'
+    };
+  }
+  if (!isValidMetaAppSecret(appSecret)) {
+    return {
+      valid: false,
+      invalidAppId: false,
+      invalidAppSecret: true,
+      message: 'El Meta App Secret no tiene un formato válido.'
+    };
+  }
+
+  try {
+    const url =
+      `https://graph.facebook.com/v21.0/oauth/access_token?` +
+      `client_id=${encodeURIComponent(appId)}` +
+      `&client_secret=${encodeURIComponent(appSecret)}` +
+      `&grant_type=client_credentials`;
+    const resp = await fetchFn(url, { signal: AbortSignal.timeout(6000) });
+    const json: any = await resp.json().catch(() => ({}));
+    if (resp.ok && json?.access_token && !json?.error) {
+      return { valid: true, invalidAppId: false, invalidAppSecret: false };
+    }
+
+    const errMsg = String(json?.error?.message || `HTTP ${resp.status}`);
+    const errCode = Number(json?.error?.code) || undefined;
+    const isInvalidAppId =
+      errCode === 101 ||
+      /invalid client id|invalid application id|error validating application/i.test(errMsg);
+    const isInvalidSecret =
+      !isInvalidAppId &&
+      (/error validating client secret|invalid client secret/i.test(errMsg) || errCode === 1);
+
+    if (isInvalidAppId) {
+      return {
+        valid: false,
+        invalidAppId: true,
+        invalidAppSecret: false,
+        code: errCode,
+        message: `Meta rechazó el App ID (${appId.slice(0, 6)}••••): "${errMsg}" (PLATFORM__INVALID_APP_ID). La app fue eliminada, deshabilitada o el App ID es incorrecto.`
+      };
+    }
+
+    if (isInvalidSecret) {
+      return {
+        valid: false,
+        invalidAppId: false,
+        invalidAppSecret: true,
+        code: errCode,
+        message: `Meta rechazó el App Secret para la App ${appId.slice(0, 6)}••••: "${errMsg}". Verificá la clave secreta en developers.facebook.com.`
+      };
+    }
+
+    return {
+      valid: false,
+      invalidAppId: true,
+      invalidAppSecret: true,
+      code: errCode,
+      message: `Meta rechazó las credenciales OAuth: ${errMsg}`
+    };
+  } catch (err: any) {
+    return {
+      valid: true,
+      invalidAppId: false,
+      invalidAppSecret: false,
+      networkSkipped: true,
+      message: err?.message
+    };
+  }
+}
+
 export async function auditMetaTokenAndPermissions(params: {
   accessToken: string;
   adAccountId?: string;
@@ -329,17 +423,31 @@ export function sanitizeStoredMetaDirectConfig(
     if (envWriter) envWriter('META_APP_SECRET', '');
   }
 
-  const resolvedAppId = isValidNumericMetaAppId(cfg.metaDirectConfig.appId)
-    ? String(cfg.metaDirectConfig.appId).trim()
-    : isValidNumericMetaAppId(envReader('META_APP_ID'))
+  const validEnvAppId = isValidNumericMetaAppId(envReader('META_APP_ID'))
     ? String(envReader('META_APP_ID')).trim()
     : '';
+  const validCfgAppId = isValidNumericMetaAppId(cfg.metaDirectConfig.appId)
+    ? String(cfg.metaDirectConfig.appId).trim()
+    : '';
+  if (validEnvAppId && validCfgAppId && validEnvAppId !== validCfgAppId) {
+    cfg.metaDirectConfig.appId = validEnvAppId;
+    corruptedAppIdCleared = true;
+    reasons.push(`store_config desactualizado sincronizado con META_APP_ID de entorno`);
+  }
 
-  const resolvedAppSecret = isValidMetaAppSecret(cfg.metaDirectConfig.appSecret)
-    ? String(cfg.metaDirectConfig.appSecret).trim()
-    : isValidMetaAppSecret(envReader('META_APP_SECRET'))
+  const validEnvAppSecret = isValidMetaAppSecret(envReader('META_APP_SECRET'))
     ? String(envReader('META_APP_SECRET')).trim()
     : '';
+  const validCfgAppSecret = isValidMetaAppSecret(cfg.metaDirectConfig.appSecret)
+    ? String(cfg.metaDirectConfig.appSecret).trim()
+    : '';
+  if (validEnvAppSecret && validCfgAppSecret && validEnvAppSecret !== validCfgAppSecret) {
+    cfg.metaDirectConfig.appSecret = validEnvAppSecret;
+    corruptedAppSecretCleared = true;
+  }
+
+  const resolvedAppId = validEnvAppId || validCfgAppId || '';
+  const resolvedAppSecret = validEnvAppSecret || validCfgAppSecret || '';
 
   return {
     appId: resolvedAppId,
@@ -448,12 +556,14 @@ export async function hydrateMetaVaultIntoStoreConfig(params: {
         if (!cfg.pipeboardConfig) cfg.pipeboardConfig = {};
 
         const cm = cloudVault?.metaDirectConfig || {};
-        if (isValidNumericMetaAppId(cm.appId) && !isValidNumericMetaAppId(cfg.metaDirectConfig.appId)) {
+        const envHasValidAppId = isValidNumericMetaAppId(params.envReader('META_APP_ID'));
+        const envHasValidAppSecret = isValidMetaAppSecret(params.envReader('META_APP_SECRET'));
+        if (!envHasValidAppId && isValidNumericMetaAppId(cm.appId) && !isValidNumericMetaAppId(cfg.metaDirectConfig.appId)) {
           cfg.metaDirectConfig.appId = cm.appId;
           if (params.envWriter && cm.appId) params.envWriter('META_APP_ID', cm.appId);
           cfgModified = true;
         }
-        if (isValidMetaAppSecret(cm.appSecret) && !isValidMetaAppSecret(cfg.metaDirectConfig.appSecret)) {
+        if (!envHasValidAppSecret && isValidMetaAppSecret(cm.appSecret) && !isValidMetaAppSecret(cfg.metaDirectConfig.appSecret)) {
           cfg.metaDirectConfig.appSecret = cm.appSecret;
           if (params.envWriter && cm.appSecret) params.envWriter('META_APP_SECRET', cm.appSecret);
           cfgModified = true;
@@ -462,9 +572,17 @@ export async function hydrateMetaVaultIntoStoreConfig(params: {
           isValidMetaAccessToken(cm.accessToken) &&
           (!hasLocalToken || cloudUpdatedMs > localUpdatedMs)
         ) {
+          const preservedAppId = envHasValidAppId
+            ? String(params.envReader('META_APP_ID')).trim()
+            : cfg.metaDirectConfig.appId;
+          const preservedAppSecret = envHasValidAppSecret
+            ? String(params.envReader('META_APP_SECRET')).trim()
+            : cfg.metaDirectConfig.appSecret;
           cfg.metaDirectConfig = {
             ...cfg.metaDirectConfig,
             ...cm,
+            ...(preservedAppId ? { appId: preservedAppId } : {}),
+            ...(preservedAppSecret ? { appSecret: preservedAppSecret } : {}),
             updatedAt: cloudVault.updatedAt
           };
           if (params.envWriter && cm.accessToken) {
