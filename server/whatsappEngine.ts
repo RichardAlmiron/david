@@ -174,13 +174,37 @@ interface WaSessionRuntime {
   lastKeyWritePromise?: Promise<any>;
 }
 
-// Base de Datos Nativa directa en el servidor Railway (Cero dependencias de cuentas externas suspendidas)
+// Detección automática de Volumen Persistente en Railway (/data o RAILWAY_VOLUME_MOUNT_PATH):
+// Si hay volumen montado, las llaves de WhatsApp sobreviven en disco físico a todos los deploys en 0ms, incluso si Supabase está caído.
+function resolvePersistentDataDir(): { authRootParent: string; dataRoot: string; isPersistentVolume: boolean } {
+  const candidates = [
+    process.env.RAILWAY_VOLUME_MOUNT_PATH,
+    process.env.NOELUX_PERSISTENT_DIR,
+    process.platform !== 'win32' ? '/data' : ''
+  ]
+    .map(v => String(v || '').trim())
+    .filter(Boolean);
+
+  for (const dir of candidates) {
+    try {
+      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+        const probeFile = path.join(dir, '.noelux_write_probe');
+        fs.writeFileSync(probeFile, 'ok', 'utf-8');
+        fs.unlinkSync(probeFile);
+        return { authRootParent: dir, dataRoot: dir, isPersistentVolume: true };
+      }
+    } catch {}
+  }
+  return { authRootParent: os.homedir(), dataRoot: process.cwd(), isPersistentVolume: false };
+}
+
+const PERSISTENT_PATHS = resolvePersistentDataDir();
 const LEGACY_AUTH_DIR = path.resolve(os.homedir(), '.noelux_wa_auth_v2');
-const MULTI_AUTH_ROOT = path.resolve(os.homedir(), '.noelux_wa_multi');
-const CHATS_FILE = path.resolve(process.cwd(), 'wa_chats.json');
-const PEDIDOS_FILE = path.resolve(process.cwd(), 'pedidos.json');
-const CONFIG_FILE = path.resolve(process.cwd(), 'store_config.json');
-const DELETED_ORDERS_FILE = path.resolve(process.cwd(), 'deleted_orders.json');
+const MULTI_AUTH_ROOT = path.resolve(PERSISTENT_PATHS.authRootParent, '.noelux_wa_multi');
+const CHATS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'wa_chats.json');
+const PEDIDOS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'pedidos.json');
+const CONFIG_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'store_config.json');
+const DELETED_ORDERS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'deleted_orders.json');
 
 function resolveServerAssetPath(fileName: string): string {
   const cwdAsset = path.resolve(process.cwd(), 'server', 'assets', fileName);
@@ -247,14 +271,15 @@ export function getSupabaseCredentials(): { url: string; key: string } | null {
   }
 }
 
-export async function querySupabaseCodigos(options?: {
+export async function querySupabaseCodigosWithStatus(options?: {
   select?: string;
   codeFilter?: string | string[];
   orderDesc?: boolean;
   limit?: number;
-}): Promise<any[]> {
+  timeoutMs?: number;
+}): Promise<{ ok: boolean; status: number; rows: any[] }> {
   const creds = getSupabaseCredentials();
-  if (!creds) return [];
+  if (!creds) return { ok: false, status: 0, rows: [] };
   try {
     const params = new URLSearchParams();
     params.set('select', options?.select || 'code,dispositivo,creado');
@@ -265,14 +290,14 @@ export async function querySupabaseCodigos(options?: {
       }
     }
     if (options?.orderDesc !== false) {
-      params.set('order', 'creado.desc');
+      params.set('order', 'id.desc');
     }
     if (options?.limit && options.limit > 0) {
       params.set('limit', String(options.limit));
     }
 
     const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const tid = setTimeout(() => ctrl.abort(), options?.timeoutMs || 10000);
     const res = await fetch(`${creds.url}/rest/v1/codigos?${params.toString()}`, {
       method: 'GET',
       headers: {
@@ -282,12 +307,23 @@ export async function querySupabaseCodigos(options?: {
       signal: ctrl.signal
     });
     clearTimeout(tid);
-    if (!res.ok) return [];
+    if (!res.ok) return { ok: false, status: res.status, rows: [] };
     const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return { ok: true, status: res.status, rows: Array.isArray(data) ? data : [] };
   } catch {
-    return [];
+    return { ok: false, status: 504, rows: [] };
   }
+}
+
+export async function querySupabaseCodigos(options?: {
+  select?: string;
+  codeFilter?: string | string[];
+  orderDesc?: boolean;
+  limit?: number;
+  timeoutMs?: number;
+}): Promise<any[]> {
+  const res = await querySupabaseCodigosWithStatus(options);
+  return res.rows;
 }
 
 export async function deleteSupabaseCodigos(codeFilter: string | string[]): Promise<void> {
@@ -351,11 +387,13 @@ export async function insertOrUpdateSupabaseCodigo(code: string, dispositivo: st
       dispositivo: typeof dispositivo === 'string' ? dispositivo : JSON.stringify(dispositivo)
     });
 
+    const isCriticalAuth = code.startsWith('WAAUTH-');
+    const postTimeoutMs = isCriticalAuth ? 16000 : 8500;
     let ok = false;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < (isCriticalAuth ? 3 : 2); attempt++) {
       try {
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 8000);
+        const tid = setTimeout(() => ctrl.abort(), postTimeoutMs);
         const res = await fetch(`${creds.url}/rest/v1/codigos`, {
           method: 'POST',
           headers: {
@@ -2310,13 +2348,37 @@ export function getWhatsAppEngineState(): WaEngineState {
   };
 }
 
-// Push real-time WhatsApp Engine State, Multi-Sessions & Chats to Supabase
+// Push real-time WhatsApp Engine State, Multi-Sessions & Chats to Supabase (Ultraligero: CERO Base64 de audio/imagen)
 let syncTimeout: NodeJS.Timeout | null = null;
 export function scheduleCloudStateSync(immediate = false) {
   if (syncTimeout) clearTimeout(syncTimeout);
   syncTimeout = setTimeout(() => {
     syncWhatsAppStateToCloud().catch(() => { });
-  }, immediate ? 50 : 300);
+  }, immediate ? 250 : 2500);
+}
+
+function stripHeavyMediaFromChatMsg(m: WaChatMessage): Partial<WaChatMessage> {
+  const safeImageUrl =
+    typeof m.imageUrl === 'string' && !m.imageUrl.startsWith('data:') && m.imageUrl.length < 600
+      ? m.imageUrl
+      : undefined;
+  return {
+    id: m.id,
+    phone: m.phone,
+    sender: m.sender,
+    senderName: m.senderName,
+    text: m.text,
+    timestamp: m.timestamp,
+    status: m.status,
+    orderId: m.orderId,
+    isAudioNote: m.isAudioNote,
+    convStep: m.convStep,
+    voiceEngine: m.voiceEngine,
+    ...(safeImageUrl ? { imageUrl: safeImageUrl } : {}),
+    ...(m.commercialStage ? { commercialStage: m.commercialStage } : {}),
+    ...(m.commercialPackQty ? { commercialPackQty: m.commercialPackQty } : {}),
+    ...(m.commercialFramedPriceGs ? { commercialFramedPriceGs: m.commercialFramedPriceGs } : {})
+  };
 }
 
 export async function syncCustomerChatToCloud(phone: string): Promise<void> {
@@ -2327,24 +2389,8 @@ export async function syncCustomerChatToCloud(phone: string): Promise<void> {
     const msgs = storage.chats[clean] || [];
     if (msgs.length === 0) return;
 
-    // Quitar datos pesados de audio base64 para que el payload sea ultraligero (< 25KB)
-    const lightweightMsgs = msgs.slice(-50).map(m => ({
-      id: m.id,
-      phone: m.phone,
-      sender: m.sender,
-      senderName: m.senderName,
-      text: m.text,
-      timestamp: m.timestamp,
-      status: m.status,
-      orderId: m.orderId,
-      isAudioNote: m.isAudioNote,
-      convStep: m.convStep,
-      voiceEngine: m.voiceEngine,
-      ...(m.imageUrl ? { imageUrl: m.imageUrl } : {}),
-      ...(m.commercialStage ? { commercialStage: m.commercialStage } : {}),
-      ...(m.commercialPackQty ? { commercialPackQty: m.commercialPackQty } : {}),
-      ...(m.commercialFramedPriceGs ? { commercialFramedPriceGs: m.commercialFramedPriceGs } : {})
-    }));
+    // Quitar datos pesados de audio/imagen base64 para que el payload sea ultraligero (< 15KB) y no sature Disk IO de Supabase
+    const lightweightMsgs = msgs.slice(-40).map(stripHeavyMediaFromChatMsg);
 
     const payload = {
       phone: clean,
@@ -2366,6 +2412,17 @@ export async function syncWhatsAppStateToCloud(): Promise<void> {
     const state = getWhatsAppEngineState();
     const storage = loadChatsStorage();
     const summary = getAllChatsSummary();
+
+    // CRÍTICO ANTI-504 SUPABASE: Jamás incluir audioDataUrl ni data:image/* Base64 dentro de WAENG-*
+    // (reduce cada snapshot WAENG-* de ~5MB a ~10KB, eliminando el agotamiento de Disk IO en PostgreSQL)
+    const compactChats: Record<string, Partial<WaChatMessage>[]> = {};
+    const chatEntries = Object.entries(storage.chats || {}).slice(-60);
+    for (const [ph, list] of chatEntries) {
+      if (Array.isArray(list) && list.length > 0) {
+        compactChats[ph] = list.slice(-15).map(stripHeavyMediaFromChatMsg);
+      }
+    }
+
     const payload = {
       engineState: {
         ...state,
@@ -2373,7 +2430,7 @@ export async function syncWhatsAppStateToCloud(): Promise<void> {
       },
       sessions: state.sessions || [],
       chatsSummary: summary,
-      chats: storage.chats,
+      chats: compactChats,
       chatModes: storage.chatModes,
       callModes: storage.callModes,
       customerChannels: storage.customerChannels,
@@ -2383,7 +2440,7 @@ export async function syncWhatsAppStateToCloud(): Promise<void> {
       preferredChannel: storage.preferredChannel,
       selectedVoiceId: storage.selectedVoiceId,
       voices: DEEPGRAM_VOICE_CATALOG,
-      incomingDiagnostics: recentIncomingDiagnostics.slice(0, 40),
+      incomingDiagnostics: recentIncomingDiagnostics.slice(0, 25),
       updatedAt: new Date().toISOString()
     };
 
@@ -7848,10 +7905,10 @@ function startNasaLeaderWatcher() {
         await yieldToNewerDeployLeader(`newer_leader_${lock.leaderId}`, lock.bootEpoch);
       }
     } catch {}
-  }, 1500);
+  }, 5000);
 }
 
-// Heartbeat cada 25s para telemetría de vida y vigencia del Leader Lease
+// Heartbeat cada 45s para telemetría de vida y vigencia del Leader Lease (ultra liviano para Supabase Disk IO)
 function startNasaHeartbeat() {
   if ((globalThis as any).__noeluxNasaHeartbeat) return;
   (globalThis as any).__noeluxNasaHeartbeat = setInterval(async () => {
@@ -7864,16 +7921,17 @@ function startNasaHeartbeat() {
         instanceId: MY_INSTANCE_ID,
         bootEpoch: MY_BOOT_EPOCH,
         pid: process.pid,
+        persistentVolume: PERSISTENT_PATHS.isPersistentVolume,
         timestamp: new Date().toISOString(),
         sessions: connectedSessions.map(s => ({ id: s.id, phone: s.connectedPhone })),
         runtime: isProductionRuntime() ? 'production' : 'dev'
       };
       await insertOrUpdateSupabaseCodigo('WAHEART-beat', JSON.stringify(heartbeat));
     } catch {}
-  }, 25_000);
+  }, 45_000);
 }
 
-// Backup periódico completo cada 75s — red de seguridad continua
+// Backup periódico de seguridad cada 180s (complementa los backups reactivos instantáneos de creds.update y keys.set)
 function startNasaPeriodicBackup() {
   if ((globalThis as any).__noeluxNasaPeriodicBackup) return;
   (globalThis as any).__noeluxNasaPeriodicBackup = setInterval(async () => {
@@ -7887,7 +7945,7 @@ function startNasaPeriodicBackup() {
         }
       }
     }
-  }, 75_000);
+  }, 180_000);
 }
 
 export function hasValidLinkedCredsOnDisk(authDir: string): boolean {
@@ -8345,13 +8403,65 @@ async function restoreCloudStateAndWaSessionsOnBoot(): Promise<void> {
     return;
   }
 
-  // 3. Restaurar credenciales Baileys (WAAUTH-*) desde Supabase al disco local (con Doble Bóveda N / N-1)
+  // 3. Restaurar credenciales Baileys (WAAUTH-*) desde Supabase al disco local (con Doble Bóveda N / N-1 y Escudo Anti-504)
   try {
-    const authRows = await querySupabaseCodigos({
-      codeFilter: 'like.WAAUTH-*',
-      orderDesc: true,
-      limit: 25
-    });
+    let authQuery = { ok: false, status: 504, rows: [] as any[] };
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      authQuery = await querySupabaseCodigosWithStatus({
+        codeFilter: 'like.WAAUTH-*',
+        orderDesc: true,
+        limit: 12,
+        timeoutMs: 20000
+      });
+      if (authQuery.ok) break;
+      console.warn(
+        `[NASA Restore] ⏳ Supabase devolvió HTTP ${authQuery.status} al leer WAAUTH-* (intento ${attempt}/3)...`
+      );
+      if (attempt < 3) await new Promise(r => setTimeout(r, 2000));
+    }
+
+    // Si Supabase está caído con 504 y NO hay credenciales en Volumen local, activar auto-reintento en segundo plano
+    // en lugar de iniciar una sesión en blanco que pida QR innecesariamente:
+    const anyLocalLinked = Array.from(sessionsMap.values()).some(s => hasValidLinkedCredsOnDisk(s.authDir));
+    if (!authQuery.ok && !anyLocalLinked) {
+      console.error(
+        `[NASA Anti-504] 🛡️ Supabase no responde (HTTP ${authQuery.status}). Reintentando recuperar sesión WAAUTH-* cada 12s en segundo plano...`
+      );
+      const retryTimer = setInterval(async () => {
+        if (isYieldingToNewerDeploy()) {
+          clearInterval(retryTimer);
+          return;
+        }
+        const probe = await querySupabaseCodigosWithStatus({
+          codeFilter: 'like.WAAUTH-*',
+          orderDesc: true,
+          limit: 10,
+          timeoutMs: 18000
+        });
+        if (!probe.ok) return;
+        clearInterval(retryTimer);
+        for (const row of probe.rows) {
+          if (!row?.dispositivo) continue;
+          try {
+            const d = JSON.parse(row.dispositivo);
+            const sid = String(d?.sessionId || 'wa-1');
+            if (!d?.loggedOut && d?.filesGzBase64) {
+              if (applyCloudAuthBundleToSessionDisk(sid, d, false)) {
+                const s = sessionsMap.get(sid);
+                if (s && s.status !== 'connected') {
+                  await stopSessionSocket(s, false);
+                  connectWhatsAppEngine(false, sid).catch(() => {});
+                }
+                break;
+              }
+            }
+          } catch {}
+        }
+      }, 12000);
+      return;
+    }
+
+    const authRows = authQuery.rows;
     if (!Array.isArray(authRows) || authRows.length === 0) return;
 
     const restoredSessions = new Set<string>();
@@ -8370,7 +8480,9 @@ async function restoreCloudStateAndWaSessionsOnBoot(): Promise<void> {
         }
         if (!data?.filesGzBase64) continue;
 
-        const ok = applyCloudAuthBundleToSessionDisk(sessionId, data, true);
+        // Si ya estamos en Volumen Persistente (/data) con sesión activa local, no sobreescribir el ratchet local más nuevo
+        const overwriteLocal = !PERSISTENT_PATHS.isPersistentVolume;
+        const ok = applyCloudAuthBundleToSessionDisk(sessionId, data, overwriteLocal);
         if (ok) {
           restoredSessions.add(sessionId);
         }
