@@ -2082,20 +2082,20 @@ export const AdminView: React.FC = () => {
       {/* 1. LEFT SIDEBAR — PREMIUM SaaS                                  */}
       {/* ============================================================== */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-60 bg-[#0a0a0a] text-zinc-300 flex flex-col border-r border-zinc-800 transition-transform duration-300 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-52 bg-[#0a0a0a] text-zinc-300 flex flex-col border-r border-zinc-800 transition-transform duration-300 lg:static lg:translate-x-0 ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Brand Header */}
-        <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-700 flex items-center justify-center text-white font-bold text-sm">
+        <div className="px-4 py-3.5 border-b border-zinc-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-700 flex items-center justify-center text-white font-bold text-xs">
               ▲
             </div>
             <div>
-              <div className="font-semibold text-white text-sm tracking-tight flex items-center gap-2">
+              <div className="font-semibold text-white text-xs tracking-tight flex items-center gap-1.5">
                 <span>NOELUX</span>
-                <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded">
+                <span className="text-[9px] font-mono text-zinc-500 bg-zinc-900 border border-zinc-800 px-1 py-0.5 rounded">
                   ADMIN
                 </span>
               </div>
@@ -2111,12 +2111,12 @@ export const AdminView: React.FC = () => {
         </div>
 
         {/* User Badge */}
-        <div className="px-5 py-3 border-b border-zinc-800/70 flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-mono text-zinc-300 text-xs">
+        <div className="px-4 py-2.5 border-b border-zinc-800/70 flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-mono text-zinc-300 text-[10px]">
             {(adminUser?.nombre || 'AD').slice(0, 2).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-zinc-200 truncate">
+            <div className="text-xs font-medium text-zinc-200 truncate">
               {adminUser?.nombre || 'Administrador'}
             </div>
             <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
@@ -2126,7 +2126,7 @@ export const AdminView: React.FC = () => {
         </div>
 
         {/* Navigation Menus */}
-        <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
+        <nav className="flex-1 px-2.5 py-3 space-y-4 overflow-y-auto">
 
           {/* Section: Principal */}
           <div>
@@ -2142,19 +2142,19 @@ export const AdminView: React.FC = () => {
                   setActiveMenu('productos');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'productos'
                     ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2 min-w-0">
                   <Layers
-                    className={`w-4 h-4 ${
+                    className={`w-4 h-4 shrink-0 ${
                       activeMenu === 'productos' ? 'text-white' : 'text-zinc-500'
                     }`}
                   />
-                  <span>Páginas de Productos</span>
+                  <span className="truncate">Páginas de Productos</span>
                 </div>
                 <span className="text-[10px] font-mono bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-full text-zinc-400">
                   {productPages.length}
@@ -2169,19 +2169,19 @@ export const AdminView: React.FC = () => {
                   setActiveMenu('creador');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'creador'
                     ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2 min-w-0">
                   <Sparkles
-                    className={`w-4 h-4 ${
+                    className={`w-4 h-4 shrink-0 ${
                       activeMenu === 'creador' ? 'text-emerald-400' : 'text-zinc-500'
                     }`}
                   />
-                  <span>Crear con Agente IA</span>
+                  <span className="truncate">Creador IA</span>
                 </div>
               </button>
             </div>
@@ -2201,19 +2201,19 @@ export const AdminView: React.FC = () => {
                   setActiveMenu('pipeboard');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'pipeboard'
                     ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2 min-w-0">
                   <Bot
-                    className={`w-4 h-4 ${
+                    className={`w-4 h-4 shrink-0 ${
                       activeMenu === 'pipeboard' ? 'text-white' : 'text-zinc-500'
                     }`}
                   />
-                  <span>AutoAds</span>
+                  <span className="truncate">AutoAds</span>
                 </div>
                 <span className="text-[10px] font-mono bg-zinc-900 border border-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full">
                   Meta
@@ -2227,19 +2227,19 @@ export const AdminView: React.FC = () => {
                   setActiveMenu('whatsapp');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'whatsapp'
                     ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2 min-w-0">
                   <Smartphone
-                    className={`w-4 h-4 ${
+                    className={`w-4 h-4 shrink-0 ${
                       activeMenu === 'whatsapp' ? 'text-emerald-400' : 'text-zinc-500'
                     }`}
                   />
-                  <span>Conexiones WhatsApp</span>
+                  <span className="truncate">WhatsApp</span>
                 </div>
                 <span
                   className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
@@ -2268,19 +2268,19 @@ export const AdminView: React.FC = () => {
                   setActiveMenu('deepgram');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'deepgram'
                     ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2 min-w-0">
                   <Zap
-                    className={`w-4 h-4 ${
+                    className={`w-4 h-4 shrink-0 ${
                       activeMenu === 'deepgram' ? 'text-white' : 'text-zinc-500'
                     }`}
                   />
-                  <span>Deepgram Aura-2</span>
+                  <span className="truncate">Deepgram</span>
                 </div>
                 <span className="text-[10px] font-mono text-zinc-500">
                   STT·TTS
@@ -2294,19 +2294,19 @@ export const AdminView: React.FC = () => {
                   setActiveMenu('openrouter');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'openrouter'
                     ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
                     : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2 min-w-0">
                   <Bot
-                    className={`w-4 h-4 ${
+                    className={`w-4 h-4 shrink-0 ${
                       activeMenu === 'openrouter' ? 'text-white' : 'text-zinc-500'
                     }`}
                   />
-                  <span>Cerebro LLM</span>
+                  <span className="truncate">Cerebro LLM</span>
                 </div>
                 <span className="text-[10px] font-mono text-zinc-500">
                   Activo
@@ -2317,21 +2317,21 @@ export const AdminView: React.FC = () => {
         </nav>
 
         {/* Bottom Actions */}
-        <div className="p-3 border-t border-zinc-800 space-y-1.5">
+        <div className="p-2.5 border-t border-zinc-800 space-y-1">
           <button
             onClick={() => setCurrentView('store')}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900/40 hover:bg-zinc-800 text-sm text-zinc-400 hover:text-white transition-colors duration-150 cursor-pointer border border-zinc-800"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/40 hover:bg-zinc-800 text-xs text-zinc-400 hover:text-white transition-colors duration-150 cursor-pointer border border-zinc-800"
           >
-            <div className="flex items-center gap-2">
-              <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Ver Tienda Pública</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <ExternalLink className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+              <span className="truncate">Ver Tienda</span>
             </div>
             <ChevronRight className="w-3 h-3 text-zinc-600" />
           </button>
 
           <button
             onClick={() => logoutAdmin()}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-400/80 hover:text-red-300 hover:bg-red-950/20 transition-colors duration-150 cursor-pointer"
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-400/80 hover:text-red-300 hover:bg-red-950/20 transition-colors duration-150 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Cerrar Sesión</span>
