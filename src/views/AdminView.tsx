@@ -3037,8 +3037,8 @@ export const AdminView: React.FC = () => {
                                 </div>
                                 <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2">
                                   <div>
-                                    <span className="text-[10px] text-emerald-300 block">Cuenta Publicitaria (834)</span>
-                                    <strong className="text-white font-mono text-xs">{liveMetaRef.adAccountName} (1048211497774834)</strong>
+                                    <span className="text-[10px] text-zinc-400 block">Cuenta Publicitaria</span>
+                                    <strong className="text-white font-mono text-xs">{liveMetaRef.adAccountName}</strong>
                                   </div>
                                   <button
                                     type="button"
@@ -3053,31 +3053,21 @@ export const AdminView: React.FC = () => {
                                 </div>
                                 <div className="p-2 rounded-lg bg-zinc-900/90 border border-emerald-700/70 flex items-center justify-between gap-2">
                                   <div>
-                                    <span className="text-[10px] text-emerald-300 block">Píxel de Cuenta 834 (377)</span>
-                                    <strong className="text-white font-mono text-xs">{liveMetaRef.pixelName} ({liveMetaRef.pixelId})</strong>
+                                    <span className="text-[10px] text-zinc-400 block">Píxel</span>
+                                    <strong className="text-white font-mono text-xs">{liveMetaRef.pixelName}</strong>
+                                    <span className="text-[10px] text-zinc-500 font-mono block">{liveMetaRef.pixelId}</span>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        try { navigator.clipboard.writeText(liveMetaRef.pixelId); } catch {}
-                                        showToast(`📋 Copiado ID Píxel ${liveMetaRef.pixelName} (377): ${liveMetaRef.pixelId}`);
-                                      }}
-                                      className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
-                                    >
-                                      Copiar
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditPixelId(liveMetaRef.pixelId);
-                                        showToast(`🎯 Píxel ${liveMetaRef.pixelName} (${liveMetaRef.pixelId}) colocado en el campo.`);
-                                      }}
-                                      className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-medium cursor-pointer"
-                                    >
-                                      Usar 377
-                                    </button>
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      try { navigator.clipboard.writeText(liveMetaRef.pixelId); } catch {}
+                                      setEditPixelId(liveMetaRef.pixelId);
+                                      showToast(`Píxel ${liveMetaRef.pixelName} copiado y colocado en el campo.`);
+                                    }}
+                                    className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
+                                  >
+                                    Copiar
+                                  </button>
                                 </div>
                               </div>
                             </div>
