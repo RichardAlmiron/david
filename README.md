@@ -1,6 +1,6 @@
 # Noelux™ — Plataforma E-Commerce COD (Pago Contra Entrega) + Cerebro Psicológico AutoAds v2 + Kernel Autopiloto + Motor Multi-WhatsApp y Voz Neuronal Deepgram Aura-2
 
-Aplicación full-stack desarrollada en **React 19 + TypeScript + Vite 6 + Tailwind CSS v4 + Baileys Multi-Device + Deepgram Aura-2 (TTS OGG/Opus Nativo) + Deepgram Nova-3 (STT) + OpenRouter (`openai/gpt-4o`, `openai/gpt-image-2.6-sunburst`, `google/gemini-omni-1.2-flash` y `z-ai/glm-5.3-flash`)** con persistencia dual en tiempo real sobre **Supabase** y disco local e interfaz administrativa **100% Negro Puro estilo App Móvil Android / Vercel**.
+Aplicación full-stack desarrollada en **React 19 + TypeScript + Vite 6 + Tailwind CSS v4 + Baileys Multi-Device + Deepgram Aura-2 (TTS OGG/Opus Nativo) + Deepgram Nova-3 (STT) + OpenRouter (`openai/gpt-4o`, `openai/gpt-image-2.6-sunburst`, `google/gemini-omni-1.2-flash` y `z-ai/glm-5.3-flash`)** con lectura y escritura autoritativa en tiempo real sobre **Supabase Oficial (`https://pgpmopannzzubunuhlmb.supabase.co`)** sin depender de JSON local tras redespliegues e interfaz administrativa **100% Negro Puro estilo App Móvil Android / Vercel**.
 
 ---
 
@@ -44,7 +44,7 @@ Diseñada desde cero como una aplicación nativa Android con estética monocrom�
      - **`🎙️ Cerebro IA & Voz`**: Selector de voz neuronal **Deepgram Aura-2** (`Estrella`, `Celeste`, `Sirio`, `Néstor`) inmutable por producto (`WAVOICE-*`) y ficha técnica de entrenamiento.
       - **`📦 Pedidos`**: Vista desplegada automáticamente al abrir el panel con pestaña **`✅ Confirmados (N)`** (`ProductConfirmedOrdersPanel.tsx`), comparativa Web vs. Chat IA, barra de **Función Logística Universal** (`No Enviado`, `Enviado`, `Concretado / Cobrado`), edición manual post-llamada, sincronización en paralelo sobre Supabase y consola de **Chat de WhatsApp en Vivo** 100% en modo oscuro.
 2. **Módulo 2 — Autopilot Studio IA (`creador` — `ProductTemplateBuilderStudio.tsx`)**:
-   - Motor **100% Autopiloto de 1 Clic** impulsado por el **Kernel Oficial `deepseek-ai/deepseek-harness` (`src/utils/deepseekHarnessKernel.ts`)** y **`z-ai/glm-5.3`**.
+   - Motor **100% Autopiloto de 1 Clic** impulsado por el **Kernel Oficial `deepseek-ai/deepseek-harness` (`src/utils/deepseekHarnessKernel.ts`)** y **`z-ai/glm-5.3-flash`**.
    - 4 plugins activos (`theme-architect`, `cod-pricing-engine`, `physical-truth-shield`, `whatsapp-brain-trainer`), 5 comandos slash (`/autopilot`, `/luxury`, `/flash`, `/pack2-gift`, `/audit`), 33 plantillas diferenciadas y botón `Undo` reversible.
 3. **Módulo 3 — AutoAds 360: Cerebro Psicológico v2 + Meta Ads Directo & Pipeboard (`autoads` — `AutoAdsView.tsx`)**:
    - Conserva **intacta la interfaz operativa de 3 pasos** (`1. INVESTIGAR -> 2. GENERAR TODOS LOS CREATIVOS -> 3. PUBLICAR EN META ADS`), ejecutando toda la nueva inteligencia desde backend (`Circuito A`).
@@ -64,12 +64,12 @@ Diseñada desde cero como una aplicación nativa Android con estética monocrom�
 
 ## Documentación Técnica Actualizada del Proyecto
 
-- 🧠 **[`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md)**: Documentación central del Cerebro AutoAds v2 (investigación y competencia 3 niveles, perfil psicológico e hipótesis dinámicas, alimentación a motores existentes, señal canónica única `Lead`, atribución 30d, aislamiento estricto Circuito A vs Circuito B, preflight Meta/Pipeboard y circuito ERP/Purchase independiente).
-- 📜 **[`CONTEXTO_DE_CHAT.md`](./CONTEXTO_DE_CHAT.md)**: Bitácora cronológica completa (**Fases 1 a 79**) con decisiones técnicas y auditorías acumuladas.
+- 🧠 **[`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md)**: Documentación central del Cerebro AutoAds v2 (investigación y competencia 3 niveles, perfil psicológico e hipótesis dinámicas, hidratación autoritativa en Supabase, señal canónica única `Lead`, atribución 30d, aislamiento estricto Circuito A vs Circuito B, preflight Meta/Pipeboard y circuito ERP/Purchase independiente).
+- 📜 **[`CONTEXTO_DE_CHAT.md`](./CONTEXTO_DE_CHAT.md)**: Bitácora cronológica completa (**Fases 1 a 80**) con decisiones técnicas, despliegue en Railway (`https://autoads360.up.railway.app`) y verificaciones en vivo.
 - 🏗️ **[`ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md`](./ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md)**: Especificación algorítmica del Kernel Cordis (`src/utils/deepseekHarnessKernel.ts`), Estudio Autopiloto 1-Clic, Cola Anti-`HTTP 402`, CAPI `Lead` + `Purchase` independiente y Publicación Meta Direct / Pipeboard.
 - 🎙️ **[`ARQUITECTURA_WHATSAPP_IA_VOZ.md`](./ARQUITECTURA_WHATSAPP_IA_VOZ.md)**: Manual del Motor de Confirmación Express (`"CORRECTO"`), Compuerta Audio-Primero (`1s`), Deepgram Aura-2 + Nova-3, Muro de Hierro y tokens de atribución WA.
-- 📲 **[`ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md`](./ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md)**: Especificación de Reportes Ejecutivos al Vendedor, Sincronización en Supabase, persistencia conjunta `pedidos` + `order_attribution` y ejes logísticos del Circuito B.
-- 🗄️ **[`database/autoads_v2_additive_migration.sql`](./database/autoads_v2_additive_migration.sql)** y **[`database/noelux_admin_schema.sql`](./database/noelux_admin_schema.sql)**: Esquemas SQL oficiales (la migración aditiva v2 debe ejecutarse manualmente en Supabase SQL Editor).
+- 📲 **[`ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md`](./ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md)**: Especificación de Reportes Ejecutivos al Vendedor, hidratación autoritativa sobre Supabase sin depender de JSON local, persistencia conjunta `pedidos` (`cantidad`, `monto`, `producto_id`) + `order_attribution` (`pedido_id`) y ejes logísticos del Circuito B.
+- 🗄️ **[`database/autoads_v2_additive_migration.sql`](./database/autoads_v2_additive_migration.sql)** y **[`database/noelux_admin_schema.sql`](./database/noelux_admin_schema.sql)**: Esquemas SQL oficiales (**migración aditiva v2 ejecutada y verificada en Supabase**: 11 tablas nuevas + 25 columnas en `pedidos`).
 - 🎯 **[`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md)**: Guía operativa de Meta Ads, OAuth en 1 clic, preflight `OUTCOME_LEADS` / moneda real PYG vs USD y despliegue en Railway.
 
 

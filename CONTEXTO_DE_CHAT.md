@@ -1239,5 +1239,29 @@ Al auditar las conversaciones reales en producción (incluyendo el caso de la cl
    - Campañas estandarizadas en **`OUTCOME_LEADS` / `LEAD`**, corrección crítica de moneda `PYG` (zero-decimal sin multiplicar por `100`), advertencia no bloqueante para píxeles sin historial `Lead`, subida `/advideos` en Direct, fallback `link_query_params` en Pipeboard MCP y registro en `ad_entities`.
 4. **Circuito B ERP + `Purchase` CAPI Independiente (`server/erpFinanceAndCourier.ts`, `server/metaCapiWorker.ts`, `database/autoads_v2_additive_migration.sql`):**
    - 3 ejes independientes (`deliveryStatus`, `customerPaymentStatus`, `courierSettlementStatus`) sincronizados bidireccionalmente con `estado`, costos reales (`faltan_costos_reales`), FX, liquidaciones CSV y `Purchase` backend-only emitido únicamente ante `entregado_fisicamente && cobrado_verificado` dentro de los 7 días reales (`action_source: 'website'`, jamás falsificando `physical_store`).
-   - Migración SQL aditiva lista en [`database/autoads_v2_additive_migration.sql`](./database/autoads_v2_additive_migration.sql) (pendiente de ejecución manual en Supabase SQL Editor) y suite de verificación `server/__tests__/autoadsArchitecture.test.ts`.
+   - Migración SQL aditiva creada en [`database/autoads_v2_additive_migration.sql`](./database/autoads_v2_additive_migration.sql) (ejecutada manualmente y verificada en Supabase en la **Fase 80**) y suite de verificación `server/__tests__/autoadsArchitecture.test.ts` (**`9/9` pruebas pasando**).
+
+---
+
+## 41. Fase 80 — Migración SQL Ejecutada en Supabase, Hidratación Autoritativa Sin JSON Local, Corrección de Columnas `pedidos`, Despliegue en Railway (`78e5d6f`) y Documentación Completa
+
+### A. Solicitud del Usuario
+- Tras ejecutar manualmente [`database/autoads_v2_additive_migration.sql`](./database/autoads_v2_additive_migration.sql) en Supabase SQL Editor, verificar que todas las tablas/columnas v2 existan en producción, confirmar despliegue en Railway sin depender de persistencia JSON local tras redespliegues, comprobar endpoints y logs/errores reales, preservar sin cambios visuales el flujo de 3 pasos, actualizar **toda la documentación** y hacer `push`.
+
+### B. Persistencia Autoritativa en Supabase e Integridad de Esquema (`server/autoadsStore.ts`, `server/attributionAndOrders.ts`, `server/erpFinanceAndCourier.ts`, `server/metaCapiWorker.ts`)
+1. **Hidratación y Sincronización Autoritativa (`server/autoadsStore.ts`):**
+   - Implementados `hydrateAutoadsFromSupabase()`, `postgrestSelect()`, `postgrestUpsert()`, `postgrestDelete()` y `flushPendingSupabaseSyncs()` para cargar y escribir directamente contra PostgreSQL/PostgREST en Supabase sin depender de archivos JSON efímeros en Railway (el almacenamiento en disco queda exclusivamente como caché/respaldo offline, con `setAutoadsDataRootForTesting()` para aislamiento de pruebas).
+   - Feature flags persistidos en `codigos` (`AAFLAGS-v2-*`) y diagnóstico expuesto en `GET /health` (`autoadsSupabase`).
+2. **Alineación Exacta de Columnas en `pedidos` y Enlace con `order_attribution` (`server/attributionAndOrders.ts`, `server/erpFinanceAndCourier.ts`, `server/metaCapiWorker.ts`):**
+   - `buildPedidoSupabaseRow` alinea la fila exactamente con las columnas reales de `public.pedidos` (`cantidad`, `monto`, `producto_id` más las **25 columnas** agregadas por AutoAds v2), mientras `order_attribution.pedido_id` enlaza cada registro de atribución con su pedido.
+   - `applyOrderAxisUpdate` y `metaCapiWorker` propagan actualizaciones de ejes ERP y envíos `Purchase` directamente a `public.pedidos` y `capi_events_log`.
+
+### C. Verificación en Producción (Railway + Supabase) y Cierre Documental
+- **Pruebas y compilación locales:** `node --test server/__tests__/autoadsArchitecture.test.ts` (**9/9 pruebas pasando** incluyendo validación exacta de `buildPedidoSupabaseRow`), `npx tsc --noEmit` (0 errores) y `npm run build` exitosos.
+- **Verificación real en Railway (`https://autoads360.up.railway.app`, commit `78e5d6f`) y Supabase:**
+  - Prueba E2E desde directorio limpio confirmó hidratación real de **`13/13` tablas** desde Supabase.
+  - Endpoints verificados con HTTP `200` en vivo: `GET /health`, `GET /api/autoads/feature-flags`, `POST /api/attribution/wa-token`, `GET /api/pedidos`, `GET /api/autoads/learning-dashboard`, `POST /api/autoads/preflight`, `POST /api/autoads/insights/sync` y `POST /api/sync/retry-queues`.
+  - Inspección en navegador sobre el storefront en producción sin errores HTTP `5xx` y flujo original de 3 pasos (`INVESTIGAR → GENERAR TODOS LOS CREATIVOS → PUBLICAR EN META ADS`) intacto sin UI adicional.
+  - *Limitaciones reales observadas:* el entorno local no cuenta con Railway CLI para hacer streaming de logs stdout internos del contenedor en Railway, y las rutas protegidas de escritura ERP (`POST /api/erp/...`) requieren sesión/autenticación administrativa activa para invocación directa en producción.
+- **Actualización documental y `push`:** Sincronizados [`README.md`](./README.md), [`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md), [`ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md`](./ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md), [`ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md`](./ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md), [`ARQUITECTURA_WHATSAPP_IA_VOZ.md`](./ARQUITECTURA_WHATSAPP_IA_VOZ.md), [`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md) y [`CONTEXTO_DE_CHAT.md`](./CONTEXTO_DE_CHAT.md).
 

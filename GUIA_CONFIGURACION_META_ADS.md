@@ -271,7 +271,7 @@ Agregá las siguientes variables de entorno en el panel de Variables de Railway.
 |---|----------|-------|:-----------:|-------|
 | 1 | `META_APP_ID` | `1465256781554439` | ✅ | App ID de Meta Developers |
 | 2 | `META_APP_SECRET` | `547f5fac6512fa43d4af4ec428e56fc5` | ✅ | App Secret — **NO compartir** |
-| 3 | `OPENROUTER_API_KEY` | *(ya configurada)* | ✅ | API key para el modelo GLM-5.3 |
+| 3 | `OPENROUTER_API_KEY` | *(ya configurada)* | ✅ | API key para OpenRouter (`openai/gpt-4o`, `openai/gpt-image-2.6-sunburst`, `google/gemini-omni-1.2-flash`, `z-ai/glm-5.3-flash`) |
 | 4 | `META_ACCESS_TOKEN` | *(se auto-guarda)* | 🔄 | Se genera automáticamente tras OAuth |
 
 > [!WARNING]
@@ -551,11 +551,12 @@ Cuando estés conforme con los creativos generados, hacé clic en el botón **"�
    - Confirma que hay una cuenta publicitaria y página seleccionadas
    - Valida que los creativos estén completos
 
-2. **Llamada al endpoint `POST /api/meta/publish-direct`:**
+2. **Llamada al endpoint `POST /api/meta/publish-direct` (previa validación `POST /api/autoads/preflight`):**
+   - Se verifica la moneda real de la cuenta (`PYG` sin centavos / `USD` en centavos), el evento canónico **`Lead`** (emitiendo advertencia no bloqueante si el píxel aún no tiene historial suficiente) y las capacidades Direct/Pipeboard
    - Se envía la solicitud a Meta Graph API v21.0
-   - Se crea la **Campaña** (Campaign) con objetivo de conversión
-   - Se crea el **Conjunto de anuncios** (Ad Set) con la segmentación definida por la IA
-   - Se crean los **Anuncios** (Ads) con los creativos seleccionados
+   - Se crea la **Campaña** (Campaign) estandarizada en **`OUTCOME_LEADS`**
+   - Se crea el **Conjunto de anuncios** (Ad Set) optimizado para conversión **`LEAD`** con `promoted_object` y segmentación definida por la IA
+   - Se suben vídeos reales a `/advideos` (cuando aplica) y se crean los **Anuncios** (Ads) con `url_tags`, `aa_cid` y registro automático en `ad_entities`
 
 3. **Confirmación visual:**
    ```
@@ -763,6 +764,8 @@ sequenceDiagram
 | 6 | `POST` | `/api/pipeboard/publish-campaign` | Publica campaña **`OUTCOME_LEADS` / `LEAD`** vía Pipeboard MCP con `aa_cid` y moneda normalizada |
 | 7 | `POST` | `/api/autoads/brain-train` | Ejecuta investigación de 3 niveles + perfil psicológico + 6 hipótesis dinámicas (`openai/gpt-4o`) |
 | 8 | `GET` | `/api/autoads/learning-dashboard` | Métricas de formularios (`Lead`), CVR, CPF y veredictos estadísticos (Circuito A) |
+| 9 | `POST` | `/api/sync/retry-queues` | Reintenta colas pendientes de sincronización autoritativa en Supabase (`pedidos`, atribución y tablas AutoAds v2) |
+| 10 | `GET` | `/health` | Diagnóstico de salud del servidor, estado de Supabase (`autoadsSupabase`) y configuración Meta/Pipeboard |
 
 ---
 
@@ -956,51 +959,79 @@ Content-Type: application/json
 
 ```json
 {
-  "productName": "Producto Ejemplo",
-  "productDescription": "Descripción detallada del producto...",
-  "productPrice": 29.99,
-  "productImage": "https://autoads360.up.railway.app/images/producto.jpg",
-  "targetMarket": "Paraguay",
-  "language": "es"
+  "product": {
+    "id": "noelux-proyector-12",
+    "nombre": "Proyector Navideño 12 Diseños",
+    "descripcion": "Proyector LED resistente al agua para fachadas e interiores...",
+    "precioNormal": 249000,
+    "precios": {
+      "1": 189000,
+      "2": 358000,
+      "3": 507000
+    }
+  },
+  "externalUrl": "https://autoads360.up.railway.app/"
 }
 ```
 
-**Ejemplo de respuesta exitosa:**
+**Ejemplo de respuesta exitosa (AutoAds v2):**
 ```json
 {
   "success": true,
-  "creatives": [
-    {
-      "tab": 1,
-      "headline": "¡Transformá tu Vida Hoy!",
-      "primaryText": "Descubrí por qué miles ya eligieron...",
-      "description": "Envío gratis + garantía de satisfacción",
-      "callToAction": "SHOP_NOW",
-      "approach": "urgencia"
+  "scrapedProduct": null,
+  "scrapedSiteData": null,
+  "capiAudit": { "pixelId": "1276031534651377", "score": 100 },
+  "brainProfile": {
+    "productObject": "Proyector Navideño",
+    "avatars": [
+      {
+        "id": "av_1",
+        "name": "Comprador COD Paraguay",
+        "ageRange": "24-52",
+        "painPoints": ["..."],
+        "desires": ["..."]
+      }
+    ],
+    "targeting": {
+      "locations": ["Paraguay (Asunción, Central, Interior)"],
+      "ageMin": 22,
+      "ageMax": 58,
+      "interests": ["Compras online PY"],
+      "peakHours": [9, 12, 18, 21]
     },
-    {
-      "tab": 2,
-      "headline": "El Secreto que Todos Buscan",
-      "primaryText": "Lo que nadie te contó sobre...",
-      "description": "Oferta por tiempo limitado",
-      "callToAction": "LEARN_MORE",
-      "approach": "curiosidad"
-    }
-  ],
-  "targeting": {
-    "suggestedAgeRange": "25-55",
-    "suggestedInterests": ["compras online", "ofertas"],
-    "suggestedGenders": "todos"
+    "creativeBriefs": [
+      {
+        "index": 0,
+        "type": "feed_1x1",
+        "format": "1:1",
+        "hook3s": "...",
+        "headline": "...",
+        "primaryText": "...",
+        "ctaType": "ORDER_NOW",
+        "ctaLabel": "PAGÁS CUANDO RECIBÍS"
+      }
+    ]
   },
-  "totalCreatives": 6
+  "competitorInsights": {
+    "activeAdsFound": 0,
+    "marketsScanned": ["Paraguay (PY)"],
+    "winningPatterns": ["..."],
+    "commonHooks": ["..."],
+    "commonAngles": ["H1: ..."],
+    "dominantFormats": ["Feed 1:1 (1080×1080)", "Story 9:16 (1080×1920)", "Video Reel 9:16"]
+  },
+  "model": "openai/gpt-4o",
+  "openRouterConnected": true
 }
 ```
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| `creatives` | `array` | 6 creativos generados con diferentes enfoques |
-| `targeting` | `object` | Sugerencias de segmentación de la IA |
-| `totalCreatives` | `number` | Cantidad total de creativos (siempre 6) |
+| `brainProfile` | `object` | Perfil psicológico (`avatars`, `targeting`) + **`creativeBriefs`** de las 6 hipótesis dinámicas |
+| `competitorInsights` | `object` | Hallazgos honestos de 3 niveles (`manual_operator_evidence`, `verified_meta_ad_library`, `llm_strategic_inference`) sin datos simulados |
+| `capiAudit` | `object` | Auditoría en vivo del Píxel y Túnel CAPI |
+| `model` | `string` | Modelo estratégico ejecutado (`openai/gpt-4o`) |
+| `openRouterConnected` | `boolean` | Confirmación de conexión activa con OpenRouter |
 
 ---
 
@@ -1067,12 +1098,13 @@ Usá esta lista de verificación para confirmar que todo está correctamente con
 ### 11.2 Nuevos Endpoints y Algoritmos de Resiliencia
 
 1. **Descubrimiento Dinámico en Vivo de Nombres Renombrados (`GET /api/meta/status` y `GET /api/meta/callback`)**:
-   - Cuando el administrador cambia el nombre de la cuenta publicitaria `act_1048211497774834` (`834`) o el nombre del píxel `1276031534651377` (`377`) dentro de Meta Business Suite, el backend consulta directamente la Graph API v21.0, guarda los nuevos nombres reales en `store_config.json` (`adAccountName`, `pixelName`) y `.env` (`META_AD_ACCOUNT_NAME`, `META_PIXEL_NAME`), y actualiza en vivo la **Tarjeta de Referencia Oficial (`data-testid="meta-official-reference-card"`)** tanto en `AutoAdsView.tsx` como en la pestaña `🎯 Píxel & CAPI` de `AdminView.tsx`.
+   - Cuando el administrador cambia el nombre de la cuenta publicitaria `act_1048211497774834` (`834`) o el nombre del píxel `1276031534651377` (`377`) dentro de Meta Business Suite, el backend consulta directamente la Graph API v21.0, guarda los nuevos nombres reales en `store_config.json` (`adAccountName`, `pixelName`, respaldado en Supabase como `CFG-STORE-*`) y `.env` (`META_AD_ACCOUNT_NAME`, `META_PIXEL_NAME`), y actualiza en vivo la **Tarjeta de Referencia Oficial (`data-testid="meta-official-reference-card"`)** tanto en `AutoAdsView.tsx` como en la pestaña `🎯 Píxel & CAPI` de `AdminView.tsx`.
    - Incluye el botón **`🔄 Actualizar Nombres Reales desde Meta (834 / 377)`** (`data-testid="btn-discover-live-meta-names"`) para refrescar los nombres en 1 clic.
-2. **Auto-Restauración de Sesión OAuth tras Redespliegue en Railway (`POST /api/meta/restore-session`)**:
+2. **Auto-Restauración de Sesión OAuth tras Redespliegue en Railway (`POST /api/meta/restore-session`) e Hidratación Autoritativa en Supabase**:
    - El navegador guarda una copia cifrada del token OAuth y los nombres descubiertos en `localStorage` (`autoads_meta_oauth_backup_v1`). Si Railway reinicia el contenedor tras un `git push`, `refreshMetaConnectionStatus()` llama automáticamente a `POST /api/meta/restore-session` y restaura la sesión sin pedir nuevo login.
+   - Todo el estado estratégico y operativo de AutoAds v2 (`pedidos`, `order_attribution`, `wa_attribution_tokens`, `AAFLAGS-v2-*` en `codigos` y las 11 tablas de AutoAds v2) se hidrata directamente desde Supabase (`hydrateAutoadsFromSupabase()`, `postgrestSelect()`) sin depender de archivos JSON locales efímeros en Railway.
 3. **Persistencia Dual de los 6 Creativos e Imágenes IA (`POST /api/autoads/save-creatives-cache` y `GET /api/autoads/creatives-cache`)**:
-   - Cada imagen generada 1 por 1 se almacena como `.png` en `/public/assets/ai-ads/`, como `dataUrl` Base64 en `localStorage` (`autoads_creatives_cache_v3_<productKey>`) y en el servidor (`store_config.json`), evitando cualquier pérdida de imágenes al recargar o autenticar OAuth.
+   - Cada imagen generada 1 por 1 se almacena como `.png` en `/public/assets/ai-ads/`, como `dataUrl` Base64 en `localStorage` (`autoads_creatives_cache_v3_<productKey>`) y en el servidor (`store_config.json` + respaldo `CFG-STORE-*` en Supabase), evitando cualquier pérdida de imágenes al recargar o autenticar OAuth.
 4. **Cola Secuencial Turno por Turno Anti-`HTTP 402 ("in-flight requests settle")`**:
    - Para evitar que OpenRouter bloquee la generación simultánea por reservas de crédito en vuelo (*in-flight credit hold*), el sistema permite generar cada imagen individualmente (`1 por 1`) o mediante la cola automática turno por turno con espera de liquidación de `3.5s` en frontend y backoff automático de `4.5s` en backend.
 
