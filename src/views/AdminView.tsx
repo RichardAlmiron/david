@@ -2936,37 +2936,6 @@ export const AdminView: React.FC = () => {
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
-                            data-testid={`edit-with-ai-btn-${prod.id}`}
-                            onClick={e => {
-                              e.stopPropagation();
-                              setEditingProductInBuilder(prod);
-                              setActiveMenu('creador');
-                            }}
-                            className="h-8 px-3 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 text-sm font-medium inline-flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-700/40 transition-colors duration-150 whitespace-nowrap"
-                            title="Editar esta página con Agente IA (DeepSeek)"
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                            <span className="hidden sm:inline">Editar IA</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            data-testid={`view-live-product-${prod.id}`}
-                            onClick={e => {
-                              e.stopPropagation();
-                              setCurrentProductPage(prod);
-                              window.history.pushState({}, '', `/?p=${prod.slug}`);
-                              setCurrentView('store');
-                            }}
-                            className="h-8 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-sm font-medium inline-flex items-center justify-center gap-1.5 cursor-pointer border border-zinc-800 transition-colors duration-150 whitespace-nowrap"
-                            title="Abrir y ver esta página de producto en vivo"
-                          >
-                            <Eye className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
-                            <span className="hidden md:inline">Ver</span>
-                          </button>
-
-                          <button
-                            type="button"
                             onClick={e => {
                               e.stopPropagation();
                               toggleProductExpand(prod);
@@ -3012,66 +2981,21 @@ export const AdminView: React.FC = () => {
                             <div className="flex items-center gap-1 flex-wrap">
                               <button
                                 type="button"
-                                onClick={() => setProductSubTab(prod.id, 'pedidos')}
-                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
-                                  getProductSubTab(prod.id) === 'pedidos'
-                                    ? 'bg-zinc-800 text-white'
-                                    : 'text-zinc-400 hover:text-zinc-200'
-                                }`}
-                              >
-                                <span>Todos ({allProdOrders.length})</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                data-testid={`tab-confirmed-orders-${prod.id}`}
-                                onClick={() => setProductSubTab(prod.id, 'confirmados')}
-                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
-                                  getProductSubTab(prod.id) === 'confirmados'
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 hover:bg-emerald-900/40'
-                                }`}
-                                title="Ver pedidos confirmados pendientes de cobro al recibir"
-                              >
-                                <span>Confirmados ({confirmedProdOrdersCount})</span>
-                                {prepaidPendingVerifyCount > 0 && (
-                                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-medium">
-                                    {prepaidPendingVerifyCount}
-                                  </span>
-                                )}
-                              </button>
-
-                              <button
-                                type="button"
-                                data-testid={`tab-prepaid-orders-${prod.id}`}
-                                onClick={() => setProductSubTab(prod.id, 'pagos_adelantados')}
-                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
-                                  getProductSubTab(prod.id) === 'pagos_adelantados'
-                                    ? 'bg-sky-600 text-white'
-                                    : 'bg-sky-950/40 text-sky-300 border border-sky-800/40 hover:bg-sky-900/40'
-                                }`}
-                                title="Pedidos confirmados que YA PAGARON por adelantado"
-                              >
-                                <span>Pago Adel. ({prepaidVerifiedOrdersCount})</span>
-                              </button>
-
-                              <button
-                                type="button"
                                 data-testid={`toggle-pixel-config-${prod.id}`}
                                 onClick={() => setProductSubTab(prod.id, 'pixel')}
-                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
+                                className={`h-6 px-1.5 rounded text-[11px] font-medium transition-colors duration-150 inline-flex items-center cursor-pointer ${
                                   getProductSubTab(prod.id) === 'pixel'
                                     ? 'bg-zinc-800 text-white'
                                     : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                               >
-                                <span>Píxel & CAPI</span>
+                                <span>Píxel</span>
                               </button>
 
                               <button
                                 type="button"
                                 onClick={() => setProductSubTab(prod.id, 'precios')}
-                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
+                                className={`h-6 px-1.5 rounded text-[11px] font-medium transition-colors duration-150 inline-flex items-center cursor-pointer ${
                                   getProductSubTab(prod.id) === 'precios'
                                     ? 'bg-zinc-800 text-white'
                                     : 'text-zinc-400 hover:text-zinc-200'
@@ -3083,7 +3007,7 @@ export const AdminView: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => setProductSubTab(prod.id, 'voz')}
-                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
+                                className={`h-6 px-1.5 rounded text-[11px] font-medium transition-colors duration-150 inline-flex items-center cursor-pointer ${
                                   getProductSubTab(prod.id) === 'voz'
                                     ? 'bg-zinc-800 text-white'
                                     : 'text-zinc-400 hover:text-zinc-200'
@@ -3144,33 +3068,7 @@ export const AdminView: React.FC = () => {
                                 </button>
                               </div>
 
-                              <button
-                                type="button"
-                                data-testid={`edit-template-builder-${prod.id}`}
-                                onClick={() => {
-                                  setEditingProductInBuilder(prod);
-                                  setShowNewProductModal(true);
-                                }}
-                                className="h-7 px-2 rounded-md border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[12px] font-medium text-zinc-400 cursor-pointer transition-colors duration-150"
-                              >
-                                Plantillas
-                              </button>
-                              <button
-                                type="button"
-                                data-testid={`quick-autotrain-agent-${prod.id}`}
-                                onClick={() => handleQuickAutoTrainProductAgent(prod)}
-                                className="h-7 px-2 rounded-md border border-emerald-900/40 bg-emerald-950/30 hover:bg-emerald-900/30 text-[12px] font-medium text-emerald-400 cursor-pointer transition-colors duration-150"
-                              >
-                                Entrenar
-                              </button>
-                              <button
-                                type="button"
-                                data-testid={`clone-ab-angle-${prod.id}`}
-                                onClick={() => handleCloneProductWithNewAngle(prod)}
-                                className="h-7 px-2 rounded-md border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[12px] font-medium text-zinc-400 cursor-pointer transition-colors duration-150"
-                              >
-                                Clonar A/B
-                              </button>
+
                             </div>
                           </div>
 
@@ -3540,30 +3438,7 @@ export const AdminView: React.FC = () => {
                             </div>
                           )}
 
-                          {/* INTERFAZ 1: Pestaña Exclusiva de Pedidos Confirmados o Pestaña Exclusiva de Pago Adelantado */}
-                          {(getProductSubTab(prod.id) === 'confirmados' ||
-                            getProductSubTab(prod.id) === 'pagos_adelantados' ||
-                            showConfirmedOrdersPanel) && (
-                            <ProductConfirmedOrdersPanel
-                              product={prod}
-                              orders={allProdOrders}
-                              panelMode={
-                                getProductSubTab(prod.id) === 'pagos_adelantados'
-                                  ? 'pagos_adelantados'
-                                  : 'confirmados'
-                              }
-                              onSwitchSubTab={tab => setProductSubTab(prod.id, tab)}
-                              onUpdateOrderLogistics={async (orderId, updates, toastMsg) => {
-                                await updateOrder(orderId, updates);
-                                if (toastMsg) showToast(toastMsg);
-                              }}
-                              onRequestDeleteOrders={openRedDeleteConfirmModal}
-                              onClose={() => {
-                                setShowConfirmedOrdersPanel(false);
-                                setProductSubTab(prod.id, 'pedidos');
-                              }}
-                            />
-                          )}
+
 
                           {/* INTERFAZ 2: Panel de Avisos al Vendedor en Tiempo Real (Rojo / Verde) y Chat Vendedor <-> Agente */}
                           {showSellerAgentPanel && (
@@ -3581,7 +3456,7 @@ export const AdminView: React.FC = () => {
                           )}
 
                           {/* TAB PEDIDOS (Compacto y Sin Barullo) */}
-                          {getProductSubTab(prod.id) === 'pedidos' && (
+                          {!['pixel', 'precios', 'voz'].includes(getProductSubTab(prod.id)) && (
                           <div className="space-y-2.5 pt-0.5">
                             {/* Barra Superior Compacta de Pedidos: Total Ventas + Botón Rápido a Confirmados + Botón Compacto de Filtros */}
                             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
