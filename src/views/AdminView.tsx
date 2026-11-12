@@ -2906,21 +2906,7 @@ export const AdminView: React.FC = () => {
                                   ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
                                   : 'Sin Píxel'}
                               </span>
-                              {confirmedProdOrdersCount > 0 && (
-                                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60 shrink-0">
-                                  {confirmedProdOrdersCount} Confirmado{confirmedProdOrdersCount === 1 ? '' : 's'}
-                                </span>
-                              )}
-                              {prepaidPendingVerifyCount > 0 && (
-                                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800/60 shrink-0">
-                                  {prepaidPendingVerifyCount} Pago Enviado
-                                </span>
-                              )}
-                              {prepaidVerifiedOrdersCount > 0 && (
-                                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60 shrink-0">
-                                  {prepaidVerifiedOrdersCount} Pago Adelantado
-                                </span>
-                              )}
+
                               {isJustCreated && (
                                 <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60 shrink-0">
                                   Nueva
@@ -3019,21 +3005,20 @@ export const AdminView: React.FC = () => {
 
                       {/* CONTENIDO EXPANDIDO DEL PRODUCTO */}
                       {isExpanded && (
-                        <div className="border-t border-zinc-800/80 bg-[#09090b] p-4 space-y-4">
+                        <div className="border-t border-zinc-800/80 bg-[#09090b] px-3 py-3 space-y-2.5">
                           {/* BARRA DE PESTAÑAS + ACCIONES */}
-                          <div className="flex flex-wrap items-center justify-between gap-2 p-1 rounded-lg bg-[#0f0f11] border border-zinc-800">
+                          <div className="flex flex-wrap items-center justify-between gap-1 p-0.5 rounded-md bg-[#0f0f11] border border-zinc-800">
                             {/* Sub-Pestañas */}
                             <div className="flex items-center gap-1 flex-wrap">
                               <button
                                 type="button"
                                 onClick={() => setProductSubTab(prod.id, 'pedidos')}
-                                className={`h-8 px-3 rounded-md text-sm font-medium transition-colors duration-150 inline-flex items-center gap-1.5 cursor-pointer ${
+                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
                                   getProductSubTab(prod.id) === 'pedidos'
                                     ? 'bg-zinc-800 text-white'
                                     : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                               >
-                                <PackageCheck className="w-3.5 h-3.5 text-zinc-400" />
                                 <span>Todos ({allProdOrders.length})</span>
                               </button>
 
@@ -3041,14 +3026,13 @@ export const AdminView: React.FC = () => {
                                 type="button"
                                 data-testid={`tab-confirmed-orders-${prod.id}`}
                                 onClick={() => setProductSubTab(prod.id, 'confirmados')}
-                                className={`h-8 px-3 rounded-md text-sm font-medium transition-colors duration-150 inline-flex items-center gap-1.5 cursor-pointer ${
+                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
                                   getProductSubTab(prod.id) === 'confirmados'
                                     ? 'bg-emerald-600 text-white'
                                     : 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 hover:bg-emerald-900/40'
                                 }`}
                                 title="Ver pedidos confirmados pendientes de cobro al recibir"
                               >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
                                 <span>Confirmados ({confirmedProdOrdersCount})</span>
                                 {prepaidPendingVerifyCount > 0 && (
                                   <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-medium">
@@ -3061,7 +3045,7 @@ export const AdminView: React.FC = () => {
                                 type="button"
                                 data-testid={`tab-prepaid-orders-${prod.id}`}
                                 onClick={() => setProductSubTab(prod.id, 'pagos_adelantados')}
-                                className={`h-8 px-3 rounded-md text-sm font-medium transition-colors duration-150 inline-flex items-center gap-1.5 cursor-pointer ${
+                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
                                   getProductSubTab(prod.id) === 'pagos_adelantados'
                                     ? 'bg-sky-600 text-white'
                                     : 'bg-sky-950/40 text-sky-300 border border-sky-800/40 hover:bg-sky-900/40'
@@ -3075,7 +3059,7 @@ export const AdminView: React.FC = () => {
                                 type="button"
                                 data-testid={`toggle-pixel-config-${prod.id}`}
                                 onClick={() => setProductSubTab(prod.id, 'pixel')}
-                                className={`h-8 px-3 rounded-md text-sm font-medium transition-colors duration-150 inline-flex items-center gap-1.5 cursor-pointer ${
+                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
                                   getProductSubTab(prod.id) === 'pixel'
                                     ? 'bg-zinc-800 text-white'
                                     : 'text-zinc-400 hover:text-zinc-200'
@@ -3087,27 +3071,25 @@ export const AdminView: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => setProductSubTab(prod.id, 'precios')}
-                                className={`h-8 px-3 rounded-md text-sm font-medium transition-colors duration-150 inline-flex items-center gap-1.5 cursor-pointer ${
+                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
                                   getProductSubTab(prod.id) === 'precios'
                                     ? 'bg-zinc-800 text-white'
                                     : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                               >
-                                <Settings className="w-3.5 h-3.5 text-zinc-400" />
-                                <span>Precios & WA</span>
+                                <span>Precios</span>
                               </button>
 
                               <button
                                 type="button"
                                 onClick={() => setProductSubTab(prod.id, 'voz')}
-                                className={`h-8 px-3 rounded-md text-sm font-medium transition-colors duration-150 inline-flex items-center gap-1.5 cursor-pointer ${
+                                className={`h-7 px-2 rounded-md text-xs font-medium transition-colors duration-150 inline-flex items-center gap-1 cursor-pointer ${
                                   getProductSubTab(prod.id) === 'voz'
                                     ? 'bg-zinc-800 text-white'
                                     : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                               >
-                                <Bot className="w-3.5 h-3.5 text-zinc-400" />
-                                <span>Voz & IA</span>
+                                <span>Voz</span>
                               </button>
                             </div>
 
@@ -3124,7 +3106,7 @@ export const AdminView: React.FC = () => {
                                     showToast('Aún no hay pedidos activos para exportar en este producto.');
                                   }
                                 }}
-                                className="h-7 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium inline-flex items-center gap-1.5 cursor-pointer transition-colors duration-150"
+                                className="h-6 px-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-medium inline-flex items-center gap-1 cursor-pointer transition-colors duration-150"
                                 title="Descargar planilla Excel con todos los pedidos confirmados"
                               >
                                 <Download className="w-3 h-3" />
@@ -3604,7 +3586,7 @@ export const AdminView: React.FC = () => {
                             {/* Barra Superior Compacta de Pedidos: Total Ventas + Botón Rápido a Confirmados + Botón Compacto de Filtros */}
                             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h5 className="text-xs font-semibold uppercase tracking-wider text-zinc-100">
+                                <h5 className="text-[11px] font-medium uppercase tracking-wider text-zinc-300">
                                   Clientes ({prodOrders.length} de {allProdOrders.length})
                                 </h5>
                                 <span className="text-[11px] font-mono text-zinc-400">
@@ -3618,37 +3600,20 @@ export const AdminView: React.FC = () => {
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <button
                                   type="button"
-                                  onClick={() => setProductSubTab(prod.id, 'confirmados')}
-                                  className="h-7 px-2.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700 text-emerald-200 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                                >
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                  <span>Confirmados ({confirmedProdOrdersCount})</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => setProductSubTab(prod.id, 'pagos_adelantados')}
-                                  className="h-7 px-2.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/70 text-cyan-200 text-[11px] font-medium inline-flex items-center gap-1 cursor-pointer transition-colors "
-                                >
-                                  <span>Pago Adelantado ({prepaidVerifiedOrdersCount})</span>
-                                </button>
-
-                                <button
-                                  type="button"
                                   data-testid={`btn-manual-order-${prod.id}`}
                                   onClick={() => openManualOrderModal(prod)}
-                                  className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black text-[11px] font-medium inline-flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                  className="h-6 px-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-black text-[11px] font-medium inline-flex items-center gap-1 cursor-pointer transition-all"
                                   title="Cargar rápidamente un cliente que te contactó por WhatsApp"
                                 >
-                                  <Plus className="w-3.5 h-3.5" />
-                                  <span>➕ Cargar Cliente WhatsApp</span>
+                                  <Plus className="w-3 h-3" />
+                                  <span>Nuevo pedido</span>
                                 </button>
 
                                 <button
                                   type="button"
                                   data-testid={`toggle-order-filters-${prod.id}`}
                                   onClick={() => setShowOrderFiltersBar(prev => !prev)}
-                                  className={`h-7 px-2.5 rounded-lg border text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition-all ${
+                                  className={`h-6 px-2 rounded-md border text-[11px] font-medium inline-flex items-center gap-1 cursor-pointer transition-all ${
                                     showOrderFiltersBar ||
                                     filterOrderName ||
                                     filterOrderPhone ||
@@ -3745,7 +3710,7 @@ export const AdminView: React.FC = () => {
                                         setFilterArchiveMode('activos');
                                         setProductCurrentPage(prod.id, 1);
                                       }}
-                                      className={`py-1.5 px-2 rounded-md text-sm font-medium cursor-pointer transition-colors duration-150 whitespace-nowrap ${
+                                      className={`py-1 px-2 rounded-md text-xs font-medium cursor-pointer transition-colors duration-150 whitespace-nowrap ${
                                         filterArchiveMode === 'activos'
                                           ? 'bg-zinc-800 text-emerald-400'
                                           : 'text-zinc-400 hover:text-zinc-200'
@@ -3760,7 +3725,7 @@ export const AdminView: React.FC = () => {
                                         setFilterArchiveMode('archivados');
                                         setProductCurrentPage(prod.id, 1);
                                       }}
-                                      className={`py-1.5 px-2 rounded-md text-sm font-medium cursor-pointer transition-colors duration-150 whitespace-nowrap ${
+                                      className={`py-1 px-2 rounded-md text-xs font-medium cursor-pointer transition-colors duration-150 whitespace-nowrap ${
                                         filterArchiveMode === 'archivados'
                                           ? 'bg-zinc-800 text-amber-400'
                                           : 'text-zinc-400 hover:text-zinc-200'
@@ -3837,7 +3802,7 @@ export const AdminView: React.FC = () => {
                                     >
                                       <span></span>
                                       <span>
-                                        Archivar seleccionados ({selectedIdsForProd.length})
+                                        Archivar ({selectedIdsForProd.length})
                                       </span>
                                     </button>
                                   )}
@@ -3848,12 +3813,11 @@ export const AdminView: React.FC = () => {
                                       data-testid="admin-bulk-unarchive-btn"
                                       disabled={selectedIdsForProd.length === 0 || isArchivingBatch}
                                       onClick={() => handleArchiveOrders(selectedIdsForProd, false)}
-                                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white border border-emerald-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                                      className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white border border-emerald-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
                                       title="Restaurar los pedidos seleccionados a Activos en la Base de Datos"
                                     >
-                                      <span>📤</span>
                                       <span>
-                                        Desarchivar seleccionados ({selectedIdsForProd.length})
+                                        Desarchivar ({selectedIdsForProd.length})
                                       </span>
                                     </button>
                                   )}
@@ -3863,12 +3827,12 @@ export const AdminView: React.FC = () => {
                                     data-testid="admin-bulk-delete-btn"
                                     disabled={selectedIdsForProd.length === 0}
                                     onClick={() => openRedDeleteConfirmModal(selectedIdsForProd)}
-                                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[#dc2626] hover:bg-[#b91c1c] disabled:opacity-40 text-white border border-red-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                                    className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#dc2626] hover:bg-[#b91c1c] disabled:opacity-40 text-white border border-red-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
                                     title="Eliminar los pedidos seleccionados de la Base de Datos (abre confirmación roja)"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                     <span>
-                                      Eliminar seleccionados ({selectedIdsForProd.length})
+                                      Eliminar ({selectedIdsForProd.length})
                                     </span>
                                   </button>
                                 </div>
@@ -3878,7 +3842,7 @@ export const AdminView: React.FC = () => {
 
                             <div className="space-y-1.5">
                               {/* Cabecera Compacta de la Lista de Tarjetas Horizontales */}
-                              <div className="px-3 py-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                              <div className="px-2 py-1.5 rounded-md bg-zinc-900/40 border border-zinc-800/50 flex items-center justify-between gap-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
                                 <div className="flex items-center gap-2.5 min-w-0">
                                   <input
                                     type="checkbox"
@@ -3888,30 +3852,30 @@ export const AdminView: React.FC = () => {
                                     title="Seleccionar o deseleccionar todos los pedidos filtrados"
                                     className="w-3.5 h-3.5 accent-emerald-500 cursor-pointer shrink-0"
                                   />
-                                  <span className="truncate">Pedidos (Tocá cualquier tarjeta para abrir toda la información)</span>
+                                  <span className="truncate">Pedidos</span>
                                 </div>
-                                <div className="hidden sm:flex items-center gap-3 text-[10px] font-bold text-zinc-400 shrink-0">
+                                <div className="hidden lg:flex items-center gap-2 text-[9px] font-medium text-zinc-500 shrink-0">
                                   <span className="inline-flex items-center gap-1 text-amber-400">
-                                    <span className="w-2.5 h-2.5 rounded-xs bg-amber-400 border border-yellow-200 inline-block " />
-                                    Brillo Ámbar = Pago Enviado (Verificar)
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block " />
+                                    Pago enviado
                                   </span>
                                   <span className="inline-flex items-center gap-1 text-cyan-300">
-                                    <span className="w-2.5 h-2.5 rounded-xs bg-cyan-400 border border-sky-200 inline-block " />
-                                    Brillo Celeste = Pago Adelantado
+                                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block " />
+                                    Pago adelantado
                                   </span>
                                   <span className="inline-flex items-center gap-1 text-emerald-400">
-                                    <span className="w-2.5 h-2.5 rounded-xs bg-emerald-950 border border-emerald-500 inline-block" />
-                                    Verde = Confirmado
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                                    Confirmado
                                   </span>
                                   <span className="inline-flex items-center gap-1 text-zinc-400">
-                                    <span className="w-2.5 h-2.5 rounded-xs bg-zinc-900 border border-zinc-700 inline-block" />
-                                    Gris = Pendiente
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 inline-block" />
+                                    Pendiente
                                   </span>
                                 </div>
                               </div>
 
                               {paginatedOrders.length === 0 ? (
-                                <div className="py-8 px-4 rounded-xl border border-zinc-800 bg-[#0f0f11] text-center text-zinc-500 text-xs">
+                                <div className="py-5 px-4 rounded-lg border border-zinc-800/60 bg-[#0f0f11] text-center text-zinc-500 text-xs">
                                   {filterOrderName || filterOrderPhone
                                     ? 'No se encontraron pedidos que coincidan con el nombre o teléfono buscado.'
                                     : filterArchiveMode === 'archivados'
@@ -3972,7 +3936,7 @@ export const AdminView: React.FC = () => {
                                             );
                                           }
                                         }}
-                                        className={`w-full h-11 min-h-[44px] max-h-[44px] px-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer select-none overflow-hidden ${
+                                        className={`w-full h-10 min-h-[40px] max-h-[40px] px-2 rounded-lg border flex items-center justify-between gap-2 transition-all cursor-pointer select-none overflow-hidden ${
                                           isPrepayVerified
                                             ? 'bg-cyan-950/70 border-cyan-400 text-white'
                                             : isPrepaySentPending
