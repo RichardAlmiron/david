@@ -2937,9 +2937,6 @@ export const AdminView: React.FC = () => {
                         <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
                           {isExpanded && (
                             <>
-                              <button type="button" onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'pedidos'); }} className={`h-6 px-2 rounded text-[11px] font-medium cursor-pointer transition-colors border ${!['pixel','precios','voz'].includes(getProductSubTab(prod.id)) ? 'bg-zinc-700 text-white border-zinc-600' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}>
-                                Pedidos <span className="text-[10px] text-zinc-400 ml-0.5">{activeProdOrdersCount}</span>
-                              </button>
                               <button type="button" data-testid={`toggle-pixel-config-${prod.id}`} onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'pixel'); }} className={`h-6 px-2 rounded text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='pixel' ? 'bg-zinc-700 text-white border-zinc-600' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}>
                                 Píxel
                               </button>
@@ -2981,7 +2978,7 @@ export const AdminView: React.FC = () => {
                             onClick={e => { e.stopPropagation(); toggleProductExpand(prod); }}
                             className={`h-6 px-2 rounded text-[11px] font-medium transition-colors cursor-pointer border inline-flex items-center gap-1 ${isExpanded ? 'bg-zinc-700 text-white border-zinc-600' : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'}`}
                           >
-                            {isExpanded ? 'Cerrar' : 'Abrir'}
+                            {isExpanded ? 'Cerrar' : `Abrir (${activeProdOrdersCount})`}
                             <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                           </button>
                           <button
@@ -3546,7 +3543,7 @@ export const AdminView: React.FC = () => {
                                     title="Seleccionar o deseleccionar todos los pedidos filtrados"
                                     className="w-3.5 h-3.5 accent-emerald-500 cursor-pointer shrink-0"
                                   />
-                                  <span className="truncate">Pedidos</span>
+                                  <span className="truncate">{prodOrders.length} pedidos</span>
                                 </div>
   
                               </div>
@@ -3882,10 +3879,10 @@ export const AdminView: React.FC = () => {
                                           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
                                             <div className="flex items-center gap-2 flex-wrap">
                                               <span className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-emerald-400 font-mono text-xs font-semibold">
-                                                Pedido #{rowNumber} · {ord.reservaid}
+                                                #{rowNumber}
                                               </span>
                                               <span className="text-xs font-bold text-zinc-400">
-                                                📅 {fullFormattedDate} a las {formattedTime}hs
+                                                {fullFormattedDate} · {formattedTime}
                                               </span>
                                               {(ord.waVendedor || prod.wa) && (
                                                 <span className="text-[11px] font-mono text-zinc-400">
@@ -4005,7 +4002,7 @@ export const AdminView: React.FC = () => {
                                             <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-1.5 flex flex-col justify-between">
                                               <div className="space-y-1">
                                                 <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
-                                                  <span>👤 Datos del Cliente</span>
+                                                  <span>Datos del Cliente</span>
                                                   <CopyFieldBtn text={ord.nombre} label="Copiar" tooltip="Copiar Nombre" />
                                                 </div>
                                                 <div className="font-semibold text-zinc-100 text-sm truncate" title={ord.nombre}>
@@ -4049,7 +4046,7 @@ export const AdminView: React.FC = () => {
                                             <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-2 flex flex-col justify-between">
                                               <div className="space-y-1">
                                                 <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
-                                                  <span>🏠 Referencia y GPS</span>
+                                                  <span>Referencia y GPS</span>
                                                   {ord.referenciaCasa && (
                                                     <CopyFieldBtn text={ord.referenciaCasa} label="Copiar" tooltip="Copiar Referencia" />
                                                   )}
@@ -4102,7 +4099,7 @@ export const AdminView: React.FC = () => {
                                               title="Copiar todos los datos de este pedido (Nombre, Teléfono, Ciudad, Dirección, Referencia, GPS y Total) de una sola vez"
                                             >
                                               <Copy className="w-3.5 h-3.5" />
-                                              <span>Copiar Ficha Completa del Pedido (1 Clic)</span>
+                                              <span>Copiar Ficha Completa</span>
                                             </button>
                                           </div>
 
@@ -4173,7 +4170,7 @@ export const AdminView: React.FC = () => {
                                     {Math.min(startIndex + ITEMS_PER_PAGE, prodOrders.length)}
                                   </strong>{' '}
                                   de <strong className="text-zinc-100">{prodOrders.length}</strong>{' '}
-                                  clientes (10 por página)
+                                  pedidos (10 por página)
                                 </span>
 
                                 <div className="flex items-center gap-1.5 flex-wrap">
