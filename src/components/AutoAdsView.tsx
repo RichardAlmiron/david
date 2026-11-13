@@ -22,7 +22,8 @@ import {
   Layers,
   Megaphone,
   Cloud,
-  FolderOpen
+  FolderOpen,
+  ArrowLeft
 } from 'lucide-react';
 import { ProductPage } from '../types';
 import { formatGs } from '../config';
@@ -99,6 +100,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
   // Pestañas dedicadas e interfaces privadas: Inicio -> Campañas (y vista privada de campaña) / Crear / Conexión & Cloudinary
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'inicio' | 'campanas' | 'crear' | 'conexion'>('inicio');
+  const [conexionSubTab, setConexionSubTab] = useState<'cloudinary' | 'meta' | 'capi' | 'apis'>('cloudinary');
   const [creativesFilter, setCreativesFilter] = useState<'all' | 'feed' | 'pack_reels'>('all');
   const [showIntelDetails, setShowIntelDetails] = useState<boolean>(false);
 
@@ -2278,524 +2280,697 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
   };
 
-  return (
-    <div data-testid="autoads-view" className="max-w-6xl mx-auto space-y-3.5 font-sans text-zinc-100">
-      {/* ===================================================================== */}
-      {/* 1. CABECERA COMPACTA CON PESTAÑAS HORIZONTALES Y ACCESOS RÁPIDOS      */}
-      {/* ===================================================================== */}
-      <div className="p-3.5 sm:px-5 rounded-xl bg-[#0f0f11] border border-zinc-800/90 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 text-emerald-400 flex items-center justify-center font-semibold text-xs shrink-0">
-              ▲
-            </div>
-            <h1 className="text-sm sm:text-base font-bold text-zinc-100">AutoAds Piloto IA</h1>
-
-            <button
-              type="button"
-              data-testid="facebook-oauth-header-btn"
-              onClick={() => handleConnectFacebookOAuth(metaConnected ? true : false)}
-              disabled={connectingFacebookOAuth}
-              title="Iniciar sesión con Facebook (OAuth 1-Clic) para autorizar tu cuenta de Meta Ads y publicar directo"
-              className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
-                metaConnected
-                  ? 'border-emerald-800/80 bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300'
-                  : 'border-[#1877F2] bg-[#1877F2] hover:bg-[#166fe5] text-white'
-              }`}
-            >
-              {connectingFacebookOAuth ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <span className="w-3.5 h-3.5 rounded-full bg-white text-[#1877F2] font-bold text-[10px] inline-flex items-center justify-center leading-none">
-                  f
-                </span>
-              )}
-              <span>
-                {metaConnected
-                  ? `${activeAdAccountName} (834) · Píxel ${activeMetaPixel.id.slice(-3)}`
-                  : 'Conectar Meta Ads'}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                handleVerifyCapiTunnel();
-                setShowCapiDetailsModal(true);
-              }}
-              disabled={testingCapi}
-              title="Probar y verificar en vivo los 12 Eventos del Píxel y el Túnel CAPI Anti-Bloqueo"
-              className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-medium text-emerald-300 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              {testingCapi ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-              )}
-              <span>CAPI · EMQ {capiAudit.emqScoreEstimated}</span>
-            </button>
-
-            <button
-              type="button"
-              data-testid="cloudinary-header-status-pill"
-              onClick={() => setActiveWorkspaceTab('conexion')}
-              title="Almacenamiento de imágenes de AutoAds en Cloudinary (Railway ENV)"
-              className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
-                cloudinaryStatus?.configured
-                  ? 'border-sky-700/70 bg-sky-950/60 hover:bg-sky-900/60 text-sky-300'
-                  : 'border-amber-700/70 bg-amber-950/50 hover:bg-amber-900/50 text-amber-300'
-              }`}
-            >
-              <Cloud className="w-3 h-3" />
-              <span>
-                {cloudinaryStatus?.configured
-                  ? `Cloudinary: ${cloudinaryStatus.cloudName}`
-                  : 'Cloudinary: Pendiente ENV'}
-              </span>
-            </button>
-          </div>
-
+  const renderSettingsVaultForm = () => (
+    <div className="p-4 rounded-xl border border-zinc-800 bg-[#0f1115] space-y-3">
+      <form onSubmit={handleSaveConfig} className="space-y-3" autoComplete="off">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
+            Configuración OpenRouter IA &amp; Slot Pipeboard · Blindaje Backend
+          </h3>
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setShowSettingsDrawer(prev => !prev)}
-              className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
-                showSettingsDrawer
-                  ? 'border-emerald-600 bg-emerald-950/70 text-emerald-300'
-                  : 'border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200'
-              }`}
-            >
-              <Settings2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Configuración</span>
-            </button>
-
-            <a
-              href="https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=1048211497774834"
-              target="_blank"
-              rel="noreferrer"
-              className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1 transition-colors"
-            >
-              <span>Ads Manager</span>
-              <ExternalLink className="w-3 h-3 text-zinc-400" />
-            </a>
+            <span className="px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
+              {hasOpenRouterKeyInBackend
+                ? `OpenRouter Activo (${openRouterKeyPreview || '••••••••'})`
+                : 'Sin OpenRouter Key'}
+            </span>
+            <span className="px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
+              {hasPipeboardTokenInBackend
+                ? `Pipeboard (${pipeboardTokenPreview || '••••••••'})`
+                : 'Cero APIs en Navegador'}
+            </span>
           </div>
         </div>
 
-        {/* Botones Principales Lado a Lado (Interfaces Privadas sin Amontonamiento) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-zinc-800/80">
-          <div className="bg-zinc-950 p-1 rounded-xl border border-zinc-800 inline-flex flex-wrap items-center gap-1">
-            <button
-              type="button"
-              data-testid="autoads-tab-inicio"
-              onClick={() => setActiveWorkspaceTab('inicio')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
-                activeWorkspaceTab === 'inicio'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Inicio</span>
-            </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          <div>
+            <label className="block text-emerald-300 mb-1 font-bold">
+              API Key de OpenRouter (sk-or-v1-...)
+            </label>
+            <input
+              type="password"
+              name="openrouter_onetime_secret"
+              autoComplete="new-password"
+              spellCheck={false}
+              data-lpignore="true"
+              value={openRouterKeyInput}
+              onChange={e => setOpenRouterKeyInput(e.target.value)}
+              placeholder={
+                hasOpenRouterKeyInBackend
+                  ? `Activa (${openRouterKeyPreview}) · Pegá otra para cambiar...`
+                  : 'sk-or-v1-... (se guarda en .env y store_config)'
+              }
+              className="w-full px-3 py-2 rounded-xl border border-emerald-700/70 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-400"
+            />
+          </div>
+          <div>
+            <label className="block text-zinc-400 mb-1 font-medium">
+              Token Meta Ads (EAA...) o Pipeboard
+            </label>
+            <input
+              type="password"
+              name="pipeboard_onetime_secret"
+              autoComplete="new-password"
+              spellCheck={false}
+              data-lpignore="true"
+              value={pipeboardTokenInput}
+              onChange={e => setPipeboardTokenInput(e.target.value)}
+              placeholder={
+                metaConnected
+                  ? 'Conectado vía Facebook OAuth / Token...'
+                  : hasPipeboardTokenInBackend
+                    ? 'Blindada en Backend (pegá otra para reemplazar)...'
+                    : 'EAA... o pipeboard_... (se guarda en backend)'
+              }
+              className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="block text-emerald-300 mb-1 font-bold">
+              Cuenta Publicitaria Funcional
+            </label>
+            {metaAdAccounts.length > 0 ? (
+              <select
+                value={pbConfig.selectedAdAccountId}
+                onChange={e => {
+                  const nextAccId = e.target.value;
+                  setPbConfig(prev => ({ ...prev, selectedAdAccountId: nextAccId }));
+                  const matchingPx = metaPixels.find(px => px.adAccountId === nextAccId);
+                  if (matchingPx) {
+                    setActiveMetaPixel({ id: matchingPx.id, name: matchingPx.name });
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-emerald-700/70 bg-zinc-900 text-zinc-100 font-mono text-xs outline-none focus:border-emerald-500"
+              >
+                {metaAdAccounts.map(acc => {
+                  const isFunctional =
+                    acc.id === 'act_1048211497774834' || /landingcod/i.test(String(acc.name || ''));
+                  return (
+                    <option key={acc.id} value={acc.id}>
+                      {isFunctional ? '✅ ' : '⚠️ '}
+                      {acc.name} ({acc.id}) {acc.currency ? `· ${acc.currency}` : ''}
+                      {isFunctional ? ' [FUNCIONAL ACTIVA]' : ' [Personal - No usar]'}
+                    </option>
+                  );
+                })}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={pbConfig.selectedAdAccountId}
+                onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
+                placeholder={`act_1048211497774834 (${activeAdAccountName})`}
+                className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
+              />
+            )}
+          </div>
+          <div>
+            <label className="block text-zinc-400 mb-1 font-medium">Presupuesto Diario (Gs.)</label>
+            <input
+              type="number"
+              value={pbConfig.dailyBudgetGs}
+              onChange={e => setPbConfig(prev => ({ ...prev, dailyBudgetGs: Number(e.target.value) || 50000 }))}
+              placeholder="65000"
+              className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
+            />
+          </div>
+        </div>
 
+        <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-bold text-emerald-300">
+              {metaConnected
+                ? `Activo: Cuenta "${activeAdAccountName}" (act_1048211497774834)`
+                : 'Autenticación OAuth de Meta Ads:'}
+            </span>
+            {metaPages.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-400">Página FB:</span>
+                <select
+                  value={pbConfig.selectedFacebookPageId}
+                  onChange={e =>
+                    setPbConfig(prev => ({ ...prev, selectedFacebookPageId: e.target.value }))
+                  }
+                  className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-emerald-700/70 text-zinc-100 font-mono text-[11px]"
+                >
+                  {metaPages.map(pg => {
+                    const isLandingShop =
+                      String(pg.id) === '1050835598123904' ||
+                      /landingcod\s*shop/i.test(String(pg.name || ''));
+                    return (
+                      <option key={pg.id} value={pg.id}>
+                        {isLandingShop ? '✅ ' : ''}
+                        {pg.name} ({pg.id})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+            <div className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700/80 text-emerald-200 font-mono text-[11px]">
+              Píxel 834: <strong>{activeMetaPixel.name}</strong> ({activeMetaPixel.id})
+            </div>
+            <div className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700/80 text-emerald-200 font-mono text-[11px]">
+              Paraguay (PY) · 18-65 años
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleConnectFacebookOAuth(true)}
+            className="px-3 py-1.5 rounded-lg bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] font-semibold text-[11px] inline-flex items-center justify-center leading-none">
+              f
+            </span>
+            <span>
+              {metaConnected
+                ? 'Cambiar / Reconectar Facebook OAuth'
+                : 'Iniciar Sesión con Facebook OAuth'}
+            </span>
+          </button>
+        </div>
+
+        {lastTokenSelfDestructAt && (
+          <p className="text-[11px] text-emerald-400 font-mono">
+            Credenciales autodestruidas del navegador a las {lastTokenSelfDestructAt} y guardadas únicamente en el servidor.
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={savingSettings}
+          className="w-full py-2.5 rounded-lg bg-emerald-500 text-black text-xs font-bold hover:bg-emerald-400 cursor-pointer transition-colors disabled:opacity-50"
+        >
+          {savingSettings
+            ? 'Guardando en Backend...'
+            : 'Guardar Credenciales en Backend y Autodestruir del Navegador'}
+        </button>
+      </form>
+    </div>
+  );
+
+  return (
+    <div data-testid="autoads-view" className="max-w-6xl mx-auto space-y-4 font-sans text-zinc-100">
+      {/* ===================================================================== */}
+      {/* INTERFAZ 1: PORTAL DE INICIO (SOLO SE MUESTRA EN INICIO, SIN BARULLO)  */}
+      {/* ===================================================================== */}
+      {activeWorkspaceTab === 'inicio' && (
+        <>
+          <div className="p-3.5 sm:px-5 rounded-2xl bg-[#0f1115] border border-zinc-800/90 flex flex-wrap items-center justify-between gap-2.5 shadow-lg">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 text-emerald-400 flex items-center justify-center font-semibold text-xs shrink-0">
+                ▲
+              </div>
+              <h1 className="text-sm sm:text-base font-bold text-zinc-100">AutoAds Piloto IA</h1>
+
+              <button
+                type="button"
+                data-testid="facebook-oauth-header-btn"
+                onClick={() => handleConnectFacebookOAuth(metaConnected ? true : false)}
+                disabled={connectingFacebookOAuth}
+                className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                  metaConnected
+                    ? 'border-emerald-800/80 bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300'
+                    : 'border-[#1877F2] bg-[#1877F2] hover:bg-[#166fe5] text-white'
+                }`}
+              >
+                {connectingFacebookOAuth ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <span className="w-3.5 h-3.5 rounded-full bg-white text-[#1877F2] font-bold text-[10px] inline-flex items-center justify-center leading-none">
+                    f
+                  </span>
+                )}
+                <span>
+                  {metaConnected
+                    ? `${activeAdAccountName} (834) · Píxel ${activeMetaPixel.id.slice(-3)}`
+                    : 'Conectar Meta Ads'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="cloudinary-header-status-pill"
+                onClick={() => {
+                  setConexionSubTab('cloudinary');
+                  setActiveWorkspaceTab('conexion');
+                }}
+                className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  cloudinaryStatus?.configured
+                    ? 'border-sky-700/70 bg-sky-950/60 hover:bg-sky-900/60 text-sky-300'
+                    : 'border-amber-700/70 bg-amber-950/50 hover:bg-amber-900/50 text-amber-300'
+                }`}
+              >
+                <Cloud className="w-3 h-3" />
+                <span>
+                  {cloudinaryStatus?.configured
+                    ? `Cloudinary: ${cloudinaryStatus.cloudName}`
+                    : 'Cloudinary: Pendiente ENV'}
+                </span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setShowSettingsDrawer(prev => !prev)}
+                className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  showSettingsDrawer
+                    ? 'border-emerald-600 bg-emerald-950/70 text-emerald-300'
+                    : 'border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200'
+                }`}
+              >
+                <Settings2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Configuración</span>
+              </button>
+
+              <a
+                href="https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=1048211497774834"
+                target="_blank"
+                rel="noreferrer"
+                className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1 transition-colors"
+              >
+                <span>Ads Manager</span>
+                <ExternalLink className="w-3 h-3 text-zinc-400" />
+              </a>
+            </div>
+          </div>
+
+          {showSettingsDrawer && renderSettingsVaultForm()}
+
+          {/* Tarjetas Limpias del Portal Principal */}
+          <div
+            data-testid="autoads-inicio-hub"
+            className="grid grid-cols-1 md:grid-cols-3 gap-4"
+          >
             <button
               type="button"
-              data-testid="autoads-tab-campanas"
+              data-testid="hub-card-campanas"
               onClick={() => {
                 setSelectedCampaignId(null);
                 setActiveWorkspaceTab('campanas');
               }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
-                activeWorkspaceTab === 'campanas'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+              className="text-left p-5 rounded-2xl bg-[#0f1115] border border-zinc-800 hover:border-emerald-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
             >
-              <Megaphone className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Campañas ({publishedCampaigns.length})</span>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400">
+                    <Megaphone className="w-5 h-5" />
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-700/70 text-emerald-300 font-mono text-xs font-bold">
+                    {publishedCampaigns.length} {publishedCampaigns.length === 1 ? 'campaña' : 'campañas'}
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-zinc-100 group-hover:text-emerald-300 transition-colors">
+                    Campañas en Meta Ads
+                  </h2>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    Ingresá a cada campaña en su interfaz privada con Anuncios, Grupo de Anuncios y reemplazo directo en Meta.
+                  </p>
+                </div>
+              </div>
+              <div className="pt-3 border-t border-zinc-800/80 text-xs font-bold text-emerald-400">
+                Abrir Campañas →
+              </div>
             </button>
 
             <button
               type="button"
-              data-testid="autoads-tab-crear"
+              data-testid="hub-card-crear"
               onClick={() => setActiveWorkspaceTab('crear')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
-                activeWorkspaceTab === 'crear'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+              className="text-left p-5 rounded-2xl bg-[#0f1115] border border-zinc-800 hover:border-emerald-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
             >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Crear Campaña</span>
-              {creatives.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-700/70 text-emerald-300 font-mono text-[10px]">
-                  {creatives.length}
-                </span>
-              )}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[11px] font-bold">
+                    {creatives.length > 0 ? `${creatives.length} creativos` : 'Nuevo Estudio'}
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-zinc-100 group-hover:text-emerald-300 transition-colors">
+                    Crear Campaña &amp; Anuncios IA
+                  </h2>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    Estudio dedicado para investigar, generar creativos en Cloudinary con precios en Guaraníes y publicar en Paraguay.
+                  </p>
+                </div>
+              </div>
+              <div className="pt-3 border-t border-zinc-800/80 text-xs font-bold text-emerald-400">
+                Abrir Creador de Campañas →
+              </div>
             </button>
 
             <button
               type="button"
-              data-testid="autoads-tab-conexion"
-              onClick={() => setActiveWorkspaceTab('conexion')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
-                activeWorkspaceTab === 'conexion'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
+              data-testid="hub-card-conexion"
+              onClick={() => {
+                setConexionSubTab('cloudinary');
+                setActiveWorkspaceTab('conexion');
+              }}
+              className="text-left p-5 rounded-2xl bg-[#0f1115] border border-zinc-800 hover:border-sky-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
             >
-              <Cloud className="w-3.5 h-3.5 text-sky-400" />
-              <span>Cuenta Meta &amp; Cloudinary</span>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/35 flex items-center justify-center text-sky-400">
+                    <Cloud className="w-5 h-5" />
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold border ${
+                      cloudinaryStatus?.configured
+                        ? 'bg-emerald-950/80 border-emerald-700/70 text-emerald-300'
+                        : 'bg-amber-950/80 border-amber-700/70 text-amber-300'
+                    }`}
+                  >
+                    {cloudinaryStatus?.configured ? '● CLOUDINARY ACTIVO' : 'CONFIGURAR ENV'}
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-zinc-100 group-hover:text-sky-300 transition-colors">
+                    Cuenta Meta &amp; Cloudinary
+                  </h2>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    Panel separado por pestañas para Cloudinary CDN, Portafolio/Píxel Meta, 12 Eventos CAPI y APIs IA.
+                  </p>
+                </div>
+              </div>
+              <div className="pt-3 border-t border-zinc-800/80 text-xs font-bold text-sky-400">
+                Abrir Conexiones &amp; Cloudinary →
+              </div>
             </button>
           </div>
-
-          <span className="text-[10px] font-mono text-zinc-400 hidden sm:inline-flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>
-              {AUTOADS_LLM_MODEL} · {selectedImageModel}
-              {!onlyImagesMode ? ` · ${selectedVideoModel}` : ''}
-            </span>
-          </span>
-        </div>
-      </div>
-
-      {/* ===================================================================== */}
-      {/* HUB DE INICIO: TARJETAS PRINCIPALES LADO A LADO (CERO AMONTONAMIENTO) */}
-      {/* ===================================================================== */}
-      {activeWorkspaceTab === 'inicio' && (
-        <div
-          data-testid="autoads-inicio-hub"
-          className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1"
-        >
-          {/* Tarjeta 1: Campañas Privadas */}
-          <button
-            type="button"
-            data-testid="hub-card-campanas"
-            onClick={() => {
-              setSelectedCampaignId(null);
-              setActiveWorkspaceTab('campanas');
-            }}
-            className="text-left p-5 rounded-xl bg-[#0f0f11] border border-zinc-800 hover:border-emerald-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400">
-                  <Megaphone className="w-5 h-5" />
-                </div>
-                <span className="px-2.5 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-700/70 text-emerald-300 font-mono text-xs font-bold">
-                  {publishedCampaigns.length} {publishedCampaigns.length === 1 ? 'campaña' : 'campañas'}
-                </span>
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-zinc-100 group-hover:text-emerald-300 transition-colors">
-                  Campañas en Meta Ads
-                </h2>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                  Abrí el panel exclusivo de campañas. Al tocar una campaña, se despliega su vista privada: <strong className="text-zinc-300">Campaña → Grupo de Anuncios → Anuncios</strong>, para regenerar y reemplazar anuncios directo en Meta.
-                </p>
-              </div>
-            </div>
-            <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs font-bold text-emerald-400">
-              <span>Abrir panel de Campañas →</span>
-            </div>
-          </button>
-
-          {/* Tarjeta 2: Crear Nueva Campaña */}
-          <button
-            type="button"
-            data-testid="hub-card-crear"
-            onClick={() => setActiveWorkspaceTab('crear')}
-            className="text-left p-5 rounded-xl bg-[#0f0f11] border border-zinc-800 hover:border-emerald-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[11px] font-bold">
-                  {creatives.length > 0 ? `${creatives.length} creativos listos` : 'Nuevo Estudio'}
-                </span>
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-zinc-100 group-hover:text-emerald-300 transition-colors">
-                  Crear Campaña &amp; Anuncios IA
-                </h2>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                  Investigación competitiva, generación de imágenes en Cloudinary ({selectedImageModel}), precios reales en Guaraníes y publicación en 1 clic hacia Paraguay (PY).
-                </p>
-              </div>
-            </div>
-            <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs font-bold text-emerald-400">
-              <span>Abrir Creador de Campañas →</span>
-            </div>
-          </button>
-
-          {/* Tarjeta 3: Cloudinary & Cuenta Meta */}
-          <button
-            type="button"
-            data-testid="hub-card-conexion"
-            onClick={() => setActiveWorkspaceTab('conexion')}
-            className="text-left p-5 rounded-xl bg-[#0f0f11] border border-zinc-800 hover:border-sky-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/35 flex items-center justify-center text-sky-400">
-                  <Cloud className="w-5 h-5" />
-                </div>
-                <span
-                  className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold border ${
-                    cloudinaryStatus?.configured
-                      ? 'bg-emerald-950/80 border-emerald-700/70 text-emerald-300'
-                      : 'bg-amber-950/80 border-amber-700/70 text-amber-300'
-                  }`}
-                >
-                  {cloudinaryStatus?.configured ? '● CLOUDINARY ACTIVO' : 'CONFIGURAR ENV'}
-                </span>
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-zinc-100 group-hover:text-sky-300 transition-colors">
-                  Cloudinary &amp; Cuenta Meta / CAPI
-                </h2>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                  Imágenes servidas directo desde Cloudinary (cero Supabase), estado de Facebook OAuth, Portafolio Landingcod, Cuenta 834, Píxel 377 y 12 Eventos CAPI.
-                </p>
-              </div>
-            </div>
-            <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs font-bold text-sky-400">
-              <span>Ver Cloudinary, Variables Railway y Meta →</span>
-            </div>
-          </button>
-        </div>
+        </>
       )}
 
       {/* ===================================================================== */}
-      {/* TAB: CUENTA META OFICIAL & AUDITORÍA CAPI (SIN RUIDO EN INICIO)       */}
+      {/* INTERFAZ 2: CUENTA META & CLOUDINARY (INDEPENDIENTE CON PESTAÑAS)     */}
       {/* ===================================================================== */}
       {activeWorkspaceTab === 'conexion' && (
-        <div className="space-y-3.5">
-          <div
-            data-testid="meta-official-reference-card"
-            className="p-4 rounded-xl bg-[#0f0f11] border border-emerald-900/60 space-y-3"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-semibold text-[10px] uppercase tracking-wider">
-                  Meta Graph Live
-                </span>
-                <span className="text-xs font-bold text-zinc-100">
-                  Portafolio, Cuenta 834, Píxel 377 y Fanpage Oficial
-                </span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handleDiscoverLiveMetaNames}
-                  disabled={syncingLiveMetaNames}
-                  data-testid="btn-discover-live-meta-names"
-                  className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-[11px] inline-flex items-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  {syncingLiveMetaNames ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  )}
-                  <span>
-                    {metaConnected
-                      ? 'Actualizar Nombres Reales (834 / 377)'
-                      : 'Conectar y Descubrir Nombres Meta'}
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
-              <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
-                    1. Portafolio Comercial
-                  </span>
-                  <div className="text-sm font-semibold text-zinc-100 mt-0.5">Landingcod</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleCopyMetaRef('portfolio', 'Portafolio Comercial', 'Landingcod')}
-                  className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center cursor-pointer"
-                >
-                  {copiedRefKey === 'portfolio' ? '✅ Copiado' : '📋 Copiar Landingcod'}
-                </button>
-              </div>
-
-              <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
-                <div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                      2. Cuenta (834)
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
-                      ACTIVA
-                    </span>
-                  </div>
-                  <div data-testid="live-ad-account-name-834" className="text-sm font-semibold text-white mt-0.5">
-                    {activeAdAccountName}
-                  </div>
-                  <div className="text-[11px] font-mono text-emerald-300 mt-0.5">ID: 1048211497774834</div>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleCopyMetaRef('acc_num', `ID Cuenta ${activeAdAccountName} (834)`, '1048211497774834')
-                    }
-                    className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-semibold cursor-pointer"
-                  >
-                    {copiedRefKey === 'acc_num' ? '✅ OK' : '📋 ID 834'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleCopyMetaRef('acc_name', 'Nombre Cuenta Publicitaria (834)', activeAdAccountName)
-                    }
-                    className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
-                  >
-                    {copiedRefKey === 'acc_name' ? '✅ OK' : '📋 Nombre'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
-                <div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                      3. Píxel (377)
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
-                      ACTIVO
-                    </span>
-                  </div>
-                  <div data-testid="live-pixel-name-377" className="text-sm font-semibold text-white mt-0.5">
-                    {activeMetaPixel.name}
-                  </div>
-                  <div className="text-[11px] font-mono text-emerald-300 mt-0.5">ID: {activeMetaPixel.id}</div>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleCopyMetaRef('pixel_id', `ID Píxel ${activeMetaPixel.name} (377)`, activeMetaPixel.id)
-                    }
-                    className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-semibold cursor-pointer"
-                  >
-                    {copiedRefKey === 'pixel_id' ? '✅ OK' : '📋 ID 377'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleCopyMetaRef('pixel_name', 'Nombre del Píxel (377)', activeMetaPixel.name)
-                    }
-                    className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
-                  >
-                    {copiedRefKey === 'pixel_name' ? '✅ OK' : '📋 Nombre'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
-                    4. Página Facebook
-                  </span>
-                  <div className="text-sm font-semibold text-zinc-100 mt-0.5">Landingcod Shop</div>
-                  <div className="text-[11px] font-mono text-zinc-300 mt-0.5">ID: 1050835598123904</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleCopyMetaRef('page_id', 'ID Página Landingcod Shop', '1050835598123904')
-                  }
-                  className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center cursor-pointer"
-                >
-                  {copiedRefKey === 'page_id' ? '✅ Copiado' : '📋 Copiar ID Página'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl border border-emerald-900/70 bg-[#0f0f11] space-y-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
-                  Los 12 Eventos del Píxel &amp; Túnel First-Party CAPI (EMQ {capiAudit.emqScoreEstimated})
-                </span>
-              </div>
-              <span className="text-[11px] font-mono text-zinc-400">
-                {capiAudit.lastTestAt ? `Último test en vivo: ${capiAudit.lastTestAt}` : 'SHA-256 Advanced Matching Activo'}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-              {capiAudit.eventsList.map(evName => (
-                <div
-                  key={evName}
-                  className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center gap-1.5 text-[11px] text-zinc-200 font-mono"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-                  <span className="truncate">{evName}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <AutoAdsCloudinaryPanel
-            status={cloudinaryStatus}
-            resources={cloudinaryResources}
-            loadingResources={loadingCloudinaryResources}
-            onRefreshResources={() => refreshCloudinaryData()}
-            onCopyText={handleCopyMetaRef}
-            copiedKey={copiedRefKey}
-          />
-        </div>
-      )}
-
-      {/* Modal rápido CAPI si se presionó desde la cabecera sin cambiar de pestaña */}
-      {showCapiDetailsModal && activeWorkspaceTab !== 'conexion' && (
-        <div className="p-3.5 rounded-xl border border-emerald-900/70 bg-[#0f0f11] space-y-2.5">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
-                Píxel Universal &amp; Túnel CAPI ({capiAudit.eventsList.length} Eventos · EMQ {capiAudit.emqScoreEstimated})
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowCapiDetailsModal(false)}
-              className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400 hover:text-zinc-200 cursor-pointer"
-            >
-              Cerrar ✕
-            </button>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-1.5">
-            {capiAudit.eventsList.map(evName => (
-              <div
-                key={evName}
-                className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 flex items-center gap-1.5 text-[11px] text-zinc-200 font-mono"
+        <div
+          data-testid="autoads-conexion-workspace"
+          className="rounded-2xl bg-[#090a0c] border border-sky-500/30 shadow-2xl overflow-hidden"
+        >
+          {/* Cabecera Propia con Pestañas Internas */}
+          <div className="px-4 py-3 bg-[#0f1115] border-b border-zinc-800/90 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                data-testid="autoads-conexion-back-inicio"
+                onClick={() => setActiveWorkspaceTab('inicio')}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/90 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                <span className="truncate">{evName}</span>
+                <ArrowLeft className="w-3.5 h-3.5 text-sky-400" />
+                <span>Inicio</span>
+              </button>
+              <span className="h-4 w-px bg-zinc-800 hidden sm:inline-block" />
+              <div className="flex items-center gap-2">
+                <Cloud className="w-4 h-4 text-sky-400" />
+                <h2 className="text-sm font-bold text-zinc-100">Cuenta Meta &amp; Cloudinary</h2>
               </div>
-            ))}
+            </div>
+
+            <div className="bg-zinc-950 p-1 rounded-xl border border-zinc-800 inline-flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                data-testid="conexion-subtab-cloudinary"
+                onClick={() => setConexionSubTab('cloudinary')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-all ${
+                  conexionSubTab === 'cloudinary'
+                    ? 'bg-sky-500 text-black font-bold shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Cloudinary ({cloudinaryResources.length})
+              </button>
+              <button
+                type="button"
+                data-testid="conexion-subtab-meta"
+                onClick={() => setConexionSubTab('meta')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-all ${
+                  conexionSubTab === 'meta'
+                    ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Cuenta Meta &amp; Píxel
+              </button>
+              <button
+                type="button"
+                data-testid="conexion-subtab-capi"
+                onClick={() => setConexionSubTab('capi')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-all ${
+                  conexionSubTab === 'capi'
+                    ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                CAPI &amp; Eventos ({capiAudit.eventsList.length})
+              </button>
+              <button
+                type="button"
+                data-testid="conexion-subtab-apis"
+                onClick={() => setConexionSubTab('apis')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-all ${
+                  conexionSubTab === 'apis'
+                    ? 'bg-zinc-200 text-black font-bold shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                APIs IA &amp; Vault
+              </button>
+            </div>
+          </div>
+
+          {/* Cuerpo Limpio Según Pestaña Interna Activa */}
+          <div className="p-4 sm:p-5">
+            {conexionSubTab === 'cloudinary' && (
+              <AutoAdsCloudinaryPanel
+                status={cloudinaryStatus}
+                resources={cloudinaryResources}
+                loadingResources={loadingCloudinaryResources}
+                onRefreshResources={() => refreshCloudinaryData()}
+                onCopyText={handleCopyMetaRef}
+                copiedKey={copiedRefKey}
+              />
+            )}
+
+            {conexionSubTab === 'meta' && (
+              <div
+                data-testid="meta-official-reference-card"
+                className="p-4 rounded-xl bg-[#0f1115] border border-emerald-900/50 space-y-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-semibold text-[10px] uppercase tracking-wider">
+                      Meta Graph Live
+                    </span>
+                    <span className="text-xs font-bold text-zinc-100">
+                      Portafolio, Cuenta 834, Píxel 377 y Fanpage Oficial
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleConnectFacebookOAuth(metaConnected ? true : false)}
+                      disabled={connectingFacebookOAuth}
+                      className="px-2.5 py-1 rounded-lg bg-[#1877F2] hover:bg-[#166fe5] text-white font-semibold text-[11px] inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span className="w-3.5 h-3.5 rounded-full bg-white text-[#1877F2] font-bold text-[10px] inline-flex items-center justify-center leading-none">
+                        f
+                      </span>
+                      <span>{metaConnected ? 'Reconectar OAuth' : 'Conectar Meta OAuth'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDiscoverLiveMetaNames}
+                      disabled={syncingLiveMetaNames}
+                      data-testid="btn-discover-live-meta-names"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-[11px] inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      {syncingLiveMetaNames ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {metaConnected
+                          ? 'Actualizar Nombres Reales (834 / 377)'
+                          : 'Descubrir Nombres Meta'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+                  <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
+                        1. Portafolio Comercial
+                      </span>
+                      <div className="text-sm font-semibold text-zinc-100 mt-0.5">Landingcod</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyMetaRef('portfolio', 'Portafolio Comercial', 'Landingcod')}
+                      className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center cursor-pointer"
+                    >
+                      {copiedRefKey === 'portfolio' ? '✅ Copiado' : 'Copiar Landingcod'}
+                    </button>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
+                    <div>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                          2. Cuenta (834)
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
+                          ACTIVA
+                        </span>
+                      </div>
+                      <div data-testid="live-ad-account-name-834" className="text-sm font-semibold text-white mt-0.5">
+                        {activeAdAccountName}
+                      </div>
+                      <div className="text-[11px] font-mono text-emerald-300 mt-0.5">ID: 1048211497774834</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopyMetaRef('acc_num', `ID Cuenta ${activeAdAccountName} (834)`, '1048211497774834')
+                        }
+                        className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-semibold cursor-pointer"
+                      >
+                        {copiedRefKey === 'acc_num' ? '✅ OK' : 'ID 834'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopyMetaRef('acc_name', 'Nombre Cuenta Publicitaria (834)', activeAdAccountName)
+                        }
+                        className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
+                      >
+                        {copiedRefKey === 'acc_name' ? '✅ OK' : 'Nombre'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
+                    <div>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                          3. Píxel (377)
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
+                          ACTIVO
+                        </span>
+                      </div>
+                      <div data-testid="live-pixel-name-377" className="text-sm font-semibold text-white mt-0.5">
+                        {activeMetaPixel.name}
+                      </div>
+                      <div className="text-[11px] font-mono text-emerald-300 mt-0.5">ID: {activeMetaPixel.id}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopyMetaRef('pixel_id', `ID Píxel ${activeMetaPixel.name} (377)`, activeMetaPixel.id)
+                        }
+                        className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-semibold cursor-pointer"
+                      >
+                        {copiedRefKey === 'pixel_id' ? '✅ OK' : 'ID 377'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopyMetaRef('pixel_name', 'Nombre del Píxel (377)', activeMetaPixel.name)
+                        }
+                        className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
+                      >
+                        {copiedRefKey === 'pixel_name' ? '✅ OK' : 'Nombre'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
+                        4. Página Facebook
+                      </span>
+                      <div className="text-sm font-semibold text-zinc-100 mt-0.5">Landingcod Shop</div>
+                      <div className="text-[11px] font-mono text-zinc-300 mt-0.5">ID: 1050835598123904</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopyMetaRef('page_id', 'ID Página Landingcod Shop', '1050835598123904')
+                      }
+                      className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center cursor-pointer"
+                    >
+                      {copiedRefKey === 'page_id' ? '✅ Copiado' : 'Copiar ID Página'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {conexionSubTab === 'capi' && (
+              <div className="p-4 rounded-xl border border-emerald-900/60 bg-[#0f1115] space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap pb-2.5 border-b border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
+                      12 Eventos del Píxel &amp; Túnel First-Party CAPI (EMQ {capiAudit.emqScoreEstimated})
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono text-zinc-400">
+                      {capiAudit.lastTestAt ? `Último test: ${capiAudit.lastTestAt}` : 'SHA-256 Advanced Matching'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleVerifyCapiTunnel}
+                      disabled={testingCapi}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer disabled:opacity-60"
+                    >
+                      {testingCapi && <Loader2 className="w-3 h-3 animate-spin" />}
+                      <span>Probar Túnel CAPI</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                  {capiAudit.eventsList.map(evName => (
+                    <div
+                      key={evName}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center gap-1.5 text-[11px] text-zinc-200 font-mono"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                      <span className="truncate">{evName}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {conexionSubTab === 'apis' && renderSettingsVaultForm()}
           </div>
         </div>
       )}
 
       {/* ===================================================================== */}
-      {/* TAB DEDICADA: CAMPAÑAS Y VISTA PRIVADA POR CAMPAÑA                    */}
+      {/* INTERFAZ 3: CAMPAÑAS Y VISTA PRIVADA POR CAMPAÑA (INDEPENDIENTE)      */}
       {/* ===================================================================== */}
       {activeWorkspaceTab === 'campanas' && (
         <AutoAdsCampaignsPanel
           campaigns={publishedCampaigns}
           selectedCampaign={selectedCampaignForPanel}
           onSelectCampaign={camp => setSelectedCampaignId(camp ? camp.id || camp.campaignId : null)}
+          onBackToInicio={() => {
+            setSelectedCampaignId(null);
+            setActiveWorkspaceTab('inicio');
+          }}
           onGoToCreateCampaign={() => setActiveWorkspaceTab('crear')}
           onSyncLiveCampaigns={handleSyncLiveMetaCampaigns}
           syncingCampaigns={syncingLiveCampaigns}
@@ -2819,208 +2994,32 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       )}
 
       {/* ===================================================================== */}
-      {/* 2. DRAWER DE OPENROUTER + SLOT PIPEBOARD CON AUTODESTRUCCIÓN          */}
-      {/* ===================================================================== */}
-      {showSettingsDrawer && (
-        <div className="p-4 rounded-lg border border-zinc-800 bg-[#0f0f11] space-y-3">
-          <form onSubmit={handleSaveConfig} className="space-y-3" autoComplete="off">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-wider">
-                🔌 Configuración OpenRouter IA &amp; Slot Pipeboard · Blindaje Backend (Autodestrucción en Navegador)
-              </h3>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
-                  {hasOpenRouterKeyInBackend
-                    ? `🤖 OpenRouter Activo (${openRouterKeyPreview || '••••••••'})`
-                    : '⚠️ Sin OpenRouter Key'}
-                </span>
-                <span className="px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
-                  {hasPipeboardTokenInBackend
-                    ? `🛡️ Pipeboard (${pipeboardTokenPreview || '••••••••'})`
-                    : '🔒 Cero APIs en Navegador'}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-              <div>
-                <label className="block text-emerald-300 mb-1 font-bold">
-                  API Key de OpenRouter (sk-or-v1-...)
-                </label>
-                <input
-                  type="password"
-                  name="openrouter_onetime_secret"
-                  autoComplete="new-password"
-                  spellCheck={false}
-                  data-lpignore="true"
-                  value={openRouterKeyInput}
-                  onChange={e => setOpenRouterKeyInput(e.target.value)}
-                  placeholder={
-                    hasOpenRouterKeyInBackend
-                      ? `Activa (${openRouterKeyPreview}) · Pegá otra para cambiar...`
-                      : 'sk-or-v1-... (se guarda en .env y store_config)'
-                  }
-                  className="w-full px-3 py-2 rounded-xl border border-emerald-700/70 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-400"
-                />
-              </div>
-              <div>
-                <label className="block text-zinc-400 mb-1 font-medium">
-                  Token Meta Ads (EAA...) o Pipeboard
-                </label>
-                <input
-                  type="password"
-                  name="pipeboard_onetime_secret"
-                  autoComplete="new-password"
-                  spellCheck={false}
-                  data-lpignore="true"
-                  value={pipeboardTokenInput}
-                  onChange={e => setPipeboardTokenInput(e.target.value)}
-                  placeholder={
-                    metaConnected
-                      ? 'Conectado vía Facebook OAuth / Token...'
-                      : hasPipeboardTokenInBackend
-                        ? 'Blindada en Backend (pegá otra para reemplazar)...'
-                        : 'EAA... o pipeboard_... (se guarda en backend)'
-                  }
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-emerald-300 mb-1 font-bold">
-                  Cuenta Publicitaria Funcional
-                </label>
-                {metaAdAccounts.length > 0 ? (
-                  <select
-                    value={pbConfig.selectedAdAccountId}
-                    onChange={e => {
-                      const nextAccId = e.target.value;
-                      setPbConfig(prev => ({ ...prev, selectedAdAccountId: nextAccId }));
-                      const matchingPx = metaPixels.find(px => px.adAccountId === nextAccId);
-                      if (matchingPx) {
-                        setActiveMetaPixel({ id: matchingPx.id, name: matchingPx.name });
-                      }
-                    }}
-                    className="w-full px-3 py-2 rounded-xl border border-emerald-700/70 bg-zinc-900 text-zinc-100 font-mono text-xs outline-none focus:border-emerald-500"
-                  >
-                    {metaAdAccounts.map(acc => {
-                      const isFunctional =
-                        acc.id === 'act_1048211497774834' || /landingcod/i.test(String(acc.name || ''));
-                      return (
-                        <option key={acc.id} value={acc.id}>
-                          {isFunctional ? '✅ ' : '⚠️ '}
-                          {acc.name} ({acc.id}) {acc.currency ? `· ${acc.currency}` : ''}
-                          {isFunctional ? ' [FUNCIONAL ACTIVA]' : ' [Personal - No usar]'}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={pbConfig.selectedAdAccountId}
-                    onChange={e => setPbConfig(prev => ({ ...prev, selectedAdAccountId: e.target.value }))}
-                    placeholder={`act_1048211497774834 (${activeAdAccountName})`}
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
-                  />
-                )}
-              </div>
-              <div>
-                <label className="block text-zinc-400 mb-1 font-medium">Presupuesto Diario (Gs.)</label>
-                <input
-                  type="number"
-                  value={pbConfig.dailyBudgetGs}
-                  onChange={e => setPbConfig(prev => ({ ...prev, dailyBudgetGs: Number(e.target.value) || 50000 }))}
-                  placeholder="65000"
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 font-mono text-xs outline-none focus:border-emerald-500"
-                />
-              </div>
-            </div>
-
-            {/* Resumen claro de Cuenta Publicitaria + Página FB + Píxel Principal de la cuenta 834 */}
-            <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-bold text-emerald-300">
-                  {metaConnected
-                    ? `🟢 Activo: Cuenta "${activeAdAccountName}" (act_1048211497774834)`
-                    : '🔵 Autenticación OAuth de Meta Ads:'}
-                </span>
-                {metaPages.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-zinc-400">Página FB:</span>
-                    <select
-                      value={pbConfig.selectedFacebookPageId}
-                      onChange={e =>
-                        setPbConfig(prev => ({ ...prev, selectedFacebookPageId: e.target.value }))
-                      }
-                      className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-emerald-700/70 text-zinc-100 font-mono text-[11px]"
-                    >
-                      {metaPages.map(pg => {
-                        const isLandingShop =
-                          String(pg.id) === '1050835598123904' ||
-                          /landingcod\s*shop/i.test(String(pg.name || ''));
-                        return (
-                          <option key={pg.id} value={pg.id}>
-                            {isLandingShop ? '✅ ' : ''}
-                            {pg.name} ({pg.id})
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                )}
-                <div className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700/80 text-emerald-200 font-mono text-[11px]">
-                  Píxel Cuenta 834: <strong>{activeMetaPixel.name}</strong> ({activeMetaPixel.id})
-                </div>
-                <div className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700/80 text-emerald-200 font-mono text-[11px] flex items-center gap-1">
-                  <span>🇵🇾 País:</span>
-                  <strong>Paraguay (PY)</strong>
-                  <span className="text-zinc-400">· 18-65 años</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleConnectFacebookOAuth(true)}
-                className="px-3 py-1.5 rounded-lg bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] font-semibold text-[11px] inline-flex items-center justify-center leading-none">
-                  f
-                </span>
-                <span>
-                  {metaConnected
-                    ? 'Cambiar / Reconectar Cuenta de Facebook OAuth'
-                    : 'Iniciar Sesión con Facebook (OAuth 1-Clic)'}
-                </span>
-              </button>
-            </div>
-
-            {lastTokenSelfDestructAt && (
-              <p className="text-[11px] text-emerald-400 font-mono">
-                Credenciales autodestruidas del navegador a las {lastTokenSelfDestructAt} y guardadas únicamente en el servidor.
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={savingSettings}
-              className="w-full py-2.5 rounded-lg bg-emerald-500 text-black text-xs font-bold hover:bg-emerald-400 cursor-pointer transition-colors disabled:opacity-50"
-            >
-              {savingSettings
-                ? 'Guardando en Backend...'
-                : '🔒 Guardar Credenciales en Backend y Autodestruir del Navegador'}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* ===================================================================== */}
-      {/* TAB PRINCIPAL: CREAR CAMPAÑA & CREATIVOS (FORMAS HORIZONTALES LIMPIAS) */}
+      {/* INTERFAZ 4: CREAR CAMPAÑA & CREATIVOS (INDEPENDIENTE CON CABECERA)    */}
       {/* ===================================================================== */}
       {activeWorkspaceTab === 'crear' && (
-        <>
-          <div className="bg-[#0f0f11] rounded-xl border border-zinc-800/90 p-3.5 sm:p-4 space-y-3">
-            {/* Fila Horizontal 1: Origen del Producto + Modo Solo Imágenes (Compacto) + Guardado */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-zinc-800/80">
-              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 w-fit">
+        <div
+          data-testid="autoads-crear-workspace"
+          className="rounded-2xl bg-[#090a0c] border border-emerald-500/25 shadow-2xl overflow-hidden"
+        >
+          {/* Cabecera Única Dedicada a Crear Campaña */}
+          <div className="px-4 py-3 bg-[#0f1115] border-b border-zinc-800/90 flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                data-testid="autoads-crear-back-inicio"
+                onClick={() => setActiveWorkspaceTab('inicio')}
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/90 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Inicio</span>
+              </button>
+              <span className="h-4 w-px bg-zinc-800 hidden sm:inline-block" />
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <h2 className="text-sm font-bold text-zinc-100">Crear Campaña</h2>
+              </div>
+
+              <div className="flex items-center gap-1 bg-zinc-950 p-0.5 rounded-xl border border-zinc-800">
                 <button
                   type="button"
                   onClick={() => {
@@ -3028,13 +3027,13 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     const key = computeWorkspaceKey('catalog', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
                     applySavedWorkspaceToState(workspacesCache[key]);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
                     sourceMode === 'catalog'
                       ? 'bg-zinc-800 text-white'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
-                  📄 Página Creada
+                  Página Creada
                 </button>
                 <button
                   type="button"
@@ -3043,7 +3042,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     const key = computeWorkspaceKey('external_url', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
                     applySavedWorkspaceToState(workspacesCache[key]);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 ${
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 ${
                     sourceMode === 'external_url'
                       ? 'bg-zinc-800 text-white'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -3053,50 +3052,51 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   <span>URL Externa</span>
                 </button>
               </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Switch Horizontal Compacto: Modo 100% Solo Imágenes vs Mixto */}
-                <div
-                  className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center gap-2.5"
-                  title={
-                    onlyImagesMode
-                      ? 'Los 6 anuncios se generan como imágenes con OpenAI GPT Image 2.6 Sunburst (cero videos).'
-                      : '4 Imágenes (Sunburst) + 2 Videos Reels de 15s (Gemini Omni 1.2 Flash). Activá para usar 100% imágenes.'
-                  }
-                >
-                  <span className="text-[11px] font-semibold text-zinc-200 whitespace-nowrap">
-                    {onlyImagesMode ? '🖼️ Solo Imágenes (6×)' : '🎬 4 Img + 2 Reels'}
-                  </span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={onlyImagesMode}
-                    data-testid="autoads-only-images-switch"
-                    onClick={() => handleToggleOnlyImagesMode(!onlyImagesMode)}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-                      onlyImagesMode ? 'bg-emerald-500' : 'bg-zinc-700'
-                    }`}
-                    title="Alternar entre Modo 100% Solo Imágenes (6 imágenes) y Modo Mixto (4 imágenes + 2 Reels)"
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition duration-200 ${
-                        onlyImagesMode ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <span
-                  className="px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-800/70 text-[11px] font-mono text-emerald-300 inline-flex items-center gap-1"
-                  title="Todo tu progreso se guarda automáticamente en el backend"
-                >
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span>💾 Guardado{lastBackendSavedAt ? ` · ${lastBackendSavedAt}` : ''}</span>
-                </span>
-              </div>
             </div>
 
-            {/* Fila Horizontal 2: Selector de Producto o URL Externa */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center gap-2"
+                title={
+                  onlyImagesMode
+                    ? 'Los 6 anuncios se generan como imágenes con OpenAI GPT Image 2.6 Sunburst.'
+                    : '4 Imágenes (Sunburst) + 2 Videos Reels de 15s (Gemini Omni 1.2 Flash).'
+                }
+              >
+                <span className="text-[11px] font-semibold text-zinc-200 whitespace-nowrap">
+                  {onlyImagesMode ? 'Solo Imágenes (6×)' : '4 Img + 2 Reels'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={onlyImagesMode}
+                  data-testid="autoads-only-images-switch"
+                  onClick={() => handleToggleOnlyImagesMode(!onlyImagesMode)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                    onlyImagesMode ? 'bg-emerald-500' : 'bg-zinc-700'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition duration-200 ${
+                      onlyImagesMode ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <span
+                className="px-2 py-1 rounded-lg bg-emerald-950/70 border border-emerald-800/70 text-[11px] font-mono text-emerald-300 inline-flex items-center gap-1"
+                title="Progreso guardado automáticamente en el backend"
+              >
+                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span>Guardado{lastBackendSavedAt ? ` · ${lastBackendSavedAt}` : ''}</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-5 space-y-4">
+          <div className="bg-[#0f1115] rounded-xl border border-zinc-800/90 p-3.5 space-y-3">
+            {/* Selector de Producto o URL Externa */}
             {sourceMode === 'catalog' ? (
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div className="flex-1">
@@ -3146,7 +3146,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               </div>
             )}
 
-            {/* Fila Horizontal 3: Flujo Secuencial en 3 Pasos */}
+            {/* Flujo Secuencial en 3 Pasos */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
               <button
                 type="button"
@@ -3326,54 +3326,44 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           </div>
 
           {/* ===================================================================== */}
-          {/* 4. PREVISUALIZACIÓN EXACTA DE ANUNCIOS CON FILTRO POR BLOQUE          */}
+          {/* PREVISUALIZACIÓN EXACTA DE ANUNCIOS CON PESTAÑAS DE FILTRO            */}
           {/* ===================================================================== */}
           {creatives.length > 0 && (
             <div className="space-y-3">
-              <div className="p-3.5 rounded-xl bg-[#0f0f11] border border-zinc-800/90 flex flex-wrap items-center justify-between gap-2.5">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h2 className="text-xs sm:text-sm font-bold text-zinc-100">
-                    Vista Previa Feed ({filteredCreativeEntries.length}/{creatives.length})
-                  </h2>
-                  <div className="bg-zinc-950 p-0.5 rounded-lg border border-zinc-800 inline-flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setCreativesFilter('all')}
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-colors ${
-                        creativesFilter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      Todos ({creatives.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCreativesFilter('feed')}
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-colors ${
-                        creativesFilter === 'feed' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      Anuncios #1–#3
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCreativesFilter('pack_reels')}
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-colors ${
-                        creativesFilter === 'pack_reels' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      {onlyImagesMode ? 'Anuncios #4–#6' : 'Packs & Reels #4–#6'}
-                    </button>
-                  </div>
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                <div className="bg-zinc-950 p-1 rounded-xl border border-zinc-800 inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setCreativesFilter('all')}
+                    className={`px-3 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
+                      creativesFilter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Todos ({creatives.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreativesFilter('feed')}
+                    className={`px-3 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
+                      creativesFilter === 'feed' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Anuncios #1–#3
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreativesFilter('pack_reels')}
+                    className={`px-3 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
+                      creativesFilter === 'pack_reels' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    {onlyImagesMode ? 'Anuncios #4–#6' : 'Packs & Reels #4–#6'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleStep3PublishNow}
-                  disabled={workflowStep === 'publishing'}
-                  className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Publicar Todos en Meta Ads</span>
-                </button>
+
+                <span className="text-[11px] font-mono text-zinc-500">
+                  Mostrando {filteredCreativeEntries.length} de {creatives.length} creativos
+                </span>
               </div>
 
               {/* Grid de los Anuncios con Diseño Limpio Tipo Feed Facebook / Instagram */}
@@ -3727,7 +3717,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           </div>
         </div>
       )}
-        </>
+          </div>
+        </div>
       )}
 
       {/* Pop-up Modal de Error (OpenRouter o Publicación en Meta Ads) */}
@@ -3768,7 +3759,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     if (isMetaPublishError) {
                       setShowFacebookOAuthModal(true);
                     } else {
-                      setShowSettingsDrawer(true);
+                      setConexionSubTab('apis');
+                      setActiveWorkspaceTab('conexion');
                     }
                   }}
                   className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-xs flex items-center justify-center space-x-2 transition-all shadow-lg shadow-emerald-950/40 cursor-pointer"

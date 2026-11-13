@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Cloud,
   CheckCircle2,
@@ -7,7 +7,8 @@ import {
   Loader2,
   ExternalLink,
   Copy,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ChevronDown
 } from 'lucide-react';
 
 export interface CloudinaryStatusClient {
@@ -49,6 +50,9 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
   copiedKey
 }) => {
   const configured = Boolean(status?.configured);
+  const [showEnvVars, setShowEnvVars] = useState(false);
+  const shouldShowEnvVars = !configured || showEnvVars;
+
   const envTemplate = [
     'CLOUDINARY_CLOUD_NAME=tu_cloud_name',
     'CLOUDINARY_API_KEY=tu_api_key',
@@ -59,7 +63,7 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
   return (
     <div
       data-testid="autoads-cloudinary-panel"
-      className="p-4 rounded-xl bg-[#0f0f11] border border-zinc-800 space-y-4"
+      className="p-4 rounded-xl bg-[#0f1115] border border-zinc-800/90 space-y-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-zinc-800/80">
         <div className="flex items-center gap-2.5 flex-wrap">
@@ -69,7 +73,7 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-xs sm:text-sm font-bold text-zinc-100">
-                Almacenamiento de Imágenes en Cloudinary (Cero Imágenes en Supabase)
+                Cloudinary CDN
               </h3>
               <span
                 className={`px-2 py-0.5 rounded-md text-[10px] font-bold border inline-flex items-center gap-1 ${
@@ -90,30 +94,42 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
                   </>
                 )}
               </span>
+              <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-sky-300">
+                {status?.folder || 'noelux/autoads'}
+              </span>
             </div>
-            <p className="text-[11px] text-zinc-400 mt-0.5">
-              Todas las imágenes nuevas y regeneradas se suben por API firmada a Cloudinary (carpeta{' '}
-              <code className="text-sky-300">{status?.folder || 'noelux/autoads'}</code>) y se exhiben directo desde su CDN sin guardar binarios en Supabase.
-            </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onRefreshResources}
-          disabled={loadingResources}
-          className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-black font-bold text-[11px] inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-        >
-          {loadingResources ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-2 flex-wrap">
+          {configured && (
+            <button
+              type="button"
+              onClick={() => setShowEnvVars(prev => !prev)}
+              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 font-semibold text-[11px] inline-flex items-center gap-1 cursor-pointer"
+            >
+              <span>Variables ENV</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showEnvVars ? 'rotate-180' : ''}`} />
+            </button>
           )}
-          <span>Traer Imágenes desde Cloudinary ({resources.length})</span>
-        </button>
+          <button
+            type="button"
+            onClick={onRefreshResources}
+            disabled={loadingResources}
+            className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-black font-bold text-[11px] inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+          >
+            {loadingResources ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            <span>Actualizar Galería ({resources.length})</span>
+          </button>
+        </div>
       </div>
 
-      {/* Variables de Entorno listas para pegar en Railway */}
+      {/* Variables de Entorno listas para pegar en Railway (expandido automáticamente si falta configurar) */}
+      {shouldShowEnvVars && (
       <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-[11px] font-bold text-zinc-200 uppercase tracking-wider">
@@ -164,6 +180,7 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
           También podés pegar únicamente <code className="text-zinc-300">CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME</code> en Railway si preferís usar la URL unificada de Cloudinary.
         </p>
       </div>
+      )}
 
       {/* Galería en Vivo traída desde Cloudinary API */}
       <div className="space-y-2">

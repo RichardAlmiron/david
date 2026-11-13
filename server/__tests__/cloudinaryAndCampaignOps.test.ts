@@ -19,6 +19,7 @@ import {
   replacePublishedAdInMeta
 } from '../metaCampaignOps.ts';
 import { setAutoadsDataRootForTesting } from '../autoadsStore.ts';
+import { resolveCampaignAdImageCandidates } from '../../src/components/AutoAdsCampaignsPanel.tsx';
 
 function makeEnvReader(values: Record<string, string>) {
   return (key: string) => String(values[key] || '');
@@ -425,4 +426,93 @@ test('[SIMULADO] fetchLiveMetaCampaignHierarchy combina Campaña -> Grupo de Anu
     'https://res.cloudinary.com/demo/image/upload/v1/ad1.png'
   );
   assert.equal(liveRes.campaigns[0].publishedAds[0].headline, '1x Gs. 189.000');
+});
+
+test('resolveCampaignAdImageCandidates prioriza Cloudinary/workspace y omite placeholders SVG ante fallos', () => {
+  const camp = {
+    id: 'camp-local-1',
+    campaignId: '120251318982700167',
+    campaignName: '[META IA] Noelux Proyector',
+    productId: 'prod-noelux-01',
+    productSlug: 'noelux-proyector-12-disenos',
+    productName: 'Noelux Proyector',
+    adSetId: 'adset-1',
+    landingUrl: 'https://autoads360.up.railway.app/?p=noelux-proyector-12-disenos',
+    publishedAds: []
+  } as any;
+
+  const candidates = resolveCampaignAdImageCandidates(
+    camp,
+    { adIndex: 5, imageUrl: 'https://fbcdn.net/expired-thumb.jpg' },
+    5,
+    {
+      'prod-noelux-01': {
+        productId: 'prod-noelux-01',
+        creatives: Array.from({ length: 6 }, (_, i) =>
+          i === 5
+            ? {
+              aiGeneratedImageUrl: 'https://res.cloudinary.com/dsd6cqgx0/image/upload/v1/ad6_ws.png',
+              aiGeneratedImageDataUrl: 'data:image/svg+xml;base64,PHN2Zz4='
+            }
+            : {}
+        )
+      }
+    },
+    [
+      {
+        publicId: 'noelux/autoads/noelux-proyector-12-disenos/ad_6_cdn',
+        secureUrl: 'https://res.cloudinary.com/dsd6cqgx0/image/upload/v2/ad6_cdn.png',
+        format: 'png',
+        width: 1024,
+        height: 1024,
+        bytes: 120000,
+        createdAt: '2026-11-13T12:00:00Z',
+        tags: ['autoads', 'noelux_proyector_12_disenos', 'ad_6']
+      }
+    ]
+  );
+
+  assert.deepEqual(candidates, [
+    'https://fbcdn.net/expired-thumb.jpg',
+    'https://res.cloudinary.com/dsd6cqgx0/image/upload/v1/ad6_ws.png',
+    'https://res.cloudinary.com/dsd6cqgx0/image/upload/v2/ad6_cdn.png'
+  ]);
+  assert.equal(candidates.some(c => c.startsWith('data:image/svg')), false);
+});
+
+test('AutoAds separa cada interfaz con su propia cabecera privada y pestañas internas sin amontonamiento', () => {
+  const viewSrc = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/AutoAdsView.tsx'),
+    'utf8'
+  );
+  const campPanelSrc = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/AutoAdsCampaignsPanel.tsx'),
+    'utf8'
+  );
+  const cldPanelSrc = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/AutoAdsCloudinaryPanel.tsx'),
+    'utf8'
+  );
+
+  // La cabecera principal de AutoAds solo vive dentro de Inicio (no invade Campañas/Crear/Conexión/Campaña abierta)
+  assert.equal(viewSrc.includes("{activeWorkspaceTab === 'inicio' && ("), true);
+  assert.equal(viewSrc.includes('data-testid="autoads-tab-inicio"'), false);
+  assert.equal(viewSrc.includes('data-testid="autoads-conexion-workspace"'), true);
+  assert.equal(viewSrc.includes('data-testid="autoads-crear-workspace"'), true);
+
+  // Cuenta Meta & Cloudinary usa pestañas internas en vez de apilar 3 bloques gigantes
+  assert.equal(viewSrc.includes('data-testid="conexion-subtab-cloudinary"'), true);
+  assert.equal(viewSrc.includes('data-testid="conexion-subtab-meta"'), true);
+  assert.equal(viewSrc.includes('data-testid="conexion-subtab-capi"'), true);
+  assert.equal(viewSrc.includes('data-testid="conexion-subtab-apis"'), true);
+
+  // Una campaña abierta muestra pestañas internas (Anuncios / Grupo / Campaña) sin cajas apiladas arriba de los anuncios
+  assert.equal(campPanelSrc.includes('data-testid="autoads-single-campaign-view"'), true);
+  assert.equal(campPanelSrc.includes('data-testid="campaign-subtab-anuncios"'), true);
+  assert.equal(campPanelSrc.includes('data-testid="campaign-subtab-grupo"'), true);
+  assert.equal(campPanelSrc.includes('data-testid="campaign-subtab-campana"'), true);
+  assert.equal(campPanelSrc.includes('onError={() => markUrlFailed('), true);
+
+  // Cloudinary colapsa las ENV cuando ya está conectado en Railway
+  assert.equal(cldPanelSrc.includes('const shouldShowEnvVars = !configured || showEnvVars;'), true);
 });
