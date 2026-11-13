@@ -100,7 +100,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
   // Pestañas dedicadas e interfaces privadas: Inicio -> Campañas (y vista privada de campaña) / Crear / Conexión & Cloudinary
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'inicio' | 'campanas' | 'crear' | 'conexion'>('inicio');
-  const [freshDraftMode, setFreshDraftMode] = useState<boolean>(false);
+  const [freshDraftMode, setFreshDraftMode] = useState<boolean>(true);
   const [conexionSubTab, setConexionSubTab] = useState<'cloudinary' | 'meta' | 'capi' | 'apis'>('cloudinary');
   const [creativesFilter, setCreativesFilter] = useState<'all' | 'feed' | 'pack_reels'>('all');
   const [showIntelDetails, setShowIntelDetails] = useState<boolean>(false);
@@ -671,29 +671,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
         setWorkspacesCache(loadedWorkspaces);
 
-        const resolvedMode: 'catalog' | 'external_url' =
-          loadedLastActive?.sourceMode === 'external_url' ? 'external_url' : 'catalog';
-        const resolvedProdId =
-          loadedLastActive?.selectedProductId &&
-            productPages.some(p => p.id === loadedLastActive.selectedProductId)
-            ? String(loadedLastActive.selectedProductId)
-            : productPages[0]?.id || '';
-        const resolvedExtUrl = String(loadedLastActive?.externalUrlInput || '');
-
-        setSourceMode(resolvedMode);
-        if (resolvedProdId) setSelectedProductId(resolvedProdId);
-        if (resolvedExtUrl) setExternalUrlInput(resolvedExtUrl);
         if (typeof loadedLastActive?.onlyImagesMode === 'boolean') {
           setOnlyImagesMode(loadedLastActive.onlyImagesMode);
         }
-
-        const targetKey = computeWorkspaceKey(resolvedMode, resolvedProdId, resolvedExtUrl);
-        const savedWs = loadedWorkspaces[targetKey] || loadedWorkspaces[resolvedProdId];
-        if (savedWs && savedWs.workflowStep !== 'published') {
-          applySavedWorkspaceToState(savedWs);
-        } else {
-          setFreshDraftMode(true);
-        }
+        // El creador siempre arranca desde cero para nuevas campañas; el caché sigue disponible si el usuario abre una campaña desde "Campañas -> Abrir en Creador".
+        setFreshDraftMode(true);
         setWorkspaceHydrated(true);
       })
       .catch(() => {
@@ -2661,13 +2643,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             <button
               type="button"
               data-testid="hub-card-crear"
-              onClick={() => {
-                if (workflowStep === 'published' || (!brainProfile && creatives.length === 0)) {
-                  handleStartNewCampaign();
-                } else {
-                  setActiveWorkspaceTab('crear');
-                }
-              }}
+              onClick={handleStartNewCampaign}
               className="text-left p-5 rounded-2xl bg-[#0f1115] border border-zinc-800 hover:border-emerald-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
             >
               <div className="space-y-3">
@@ -2676,9 +2652,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[11px] font-bold">
-                    {creatives.length > 0 && workflowStep !== 'published'
-                      ? `${creatives.length} en borrador`
-                      : 'Desde Cero'}
+                    Desde Cero
                   </span>
                 </div>
                 <div>

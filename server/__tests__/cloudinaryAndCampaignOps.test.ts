@@ -518,10 +518,11 @@ test('AutoAds separa cada interfaz con su propia cabecera privada y pestañas in
   assert.equal(campPanelSrc.includes('relative aspect-square rounded-xl'), true);
   assert.equal(campPanelSrc.includes('grid-cols-4 gap-1.5'), false);
 
-  // Nueva Campaña comienza siempre desde cero sin arrastrar campañas ya publicadas
+  // Crear Campaña / Nueva Campaña comienza siempre desde cero sin arrastrar campañas ya publicadas
+  assert.equal(viewSrc.includes('onClick={handleStartNewCampaign}'), true);
   assert.equal(viewSrc.includes('onGoToCreateCampaign={handleStartNewCampaign}'), true);
   assert.equal(viewSrc.includes('data-testid="autoads-fresh-start-notice"'), true);
-  assert.equal(viewSrc.includes("savedWs.workflowStep !== 'published'"), true);
+  assert.equal(viewSrc.includes('const [freshDraftMode, setFreshDraftMode] = useState<boolean>(true);'), true);
 
   // Cloudinary colapsa las ENV cuando ya está conectado en Railway
   assert.equal(cldPanelSrc.includes('const shouldShowEnvVars = !configured || showEnvVars;'), true);
