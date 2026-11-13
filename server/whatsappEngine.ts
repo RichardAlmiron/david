@@ -5129,7 +5129,47 @@ ${previousAiFollowUps.map((t, idx) => `  [${idx + 1}] "${t}"`).join('\n')}
   customerInactivityTimers.set(cleanPhone, timer);
 }
 
-// Trigger AI Text Mode ("💬 Texto") immediately when Admin clicks "💬 Texto" or when autoChatOnOrder triggers in 'texto' mode
+// Evaluar de forma pura y determinística si la conversación de un pedido YA comenzó (impide reinicios al Paso #1)
+export function hasConversationAlreadyStarted(
+  cleanPhone: string,
+  matchedOrder: any | null,
+  history: WaChatMessage[],
+  persistedConvStep?: number
+): boolean {
+  const ordIdStr = String(matchedOrder?.reservaid || '').trim();
+  if (matchedOrder?.datosConfirmados || matchedOrder?.agenteCompletado) return true;
+  if ((Number(matchedOrder?.convStep) || 1) >= 2) return true;
+  if (matchedOrder?.locationTextSentOnce) return true;
+  if (matchedOrder?.ultimoMensajeIA && String(matchedOrder.ultimoMensajeIA).trim()) return true;
+  if (matchedOrder?.waCommercialSentStages?.stage1_welcome) return true;
+  if (ordIdStr && sentWelcomeStageByOrderId.has(ordIdStr)) return true;
+
+  if (!matchedOrder && (Number(persistedConvStep) || 1) >= 2) return true;
+
+  const orderCreatedMs = matchedOrder?.fecha ? new Date(matchedOrder.fecha).getTime() : 0;
+  return (Array.isArray(history) ? history : []).some(m => {
+    if (m.sender !== 'ai' && m.sender !== 'agent') return false;
+    if (m.status !== 'sent' && m.status !== 'pending_connection') return false;
+    if (ordIdStr && m.orderId) return m.orderId === ordIdStr;
+    if (orderCreatedMs && m.timestamp) {
+      const msgMs = new Date(m.timestamp).getTime();
+      if (Number.isFinite(msgMs) && msgMs < orderCreatedMs - 60_000) return false;
+    }
+    return true;
+  });
+}
+
+// Devolver el último mensaje del cliente únicamente si aún no fue respondido por la IA ni por el dueño
+export function getLatestUnansweredClientMessage(history: WaChatMessage[]): WaChatMessage | null {
+  if (!Array.isArray(history) || history.length === 0) return null;
+  const lastMsg = history[history.length - 1];
+  if (lastMsg && lastMsg.sender === 'client') {
+    return lastMsg;
+  }
+  return null;
+}
+
+// Trigger AI Text Mode ("💬 Texto") immediately ONLY if unanswered client message exists or conversation hasn't started yet
 export async function triggerAiConfirmationForOrder(
   phone: string,
   orderId?: string,
@@ -5154,10 +5194,16 @@ export async function triggerAiConfirmationForOrder(
   }
 
   const history = getChatHistory(cleanPhone).messages;
-  const lastMsg = history.length > 0 ? history[history.length - 1] : null;
+  const unansweredClientMsg = getLatestUnansweredClientMessage(history);
+  const hasStarted = hasConversationAlreadyStarted(
+    cleanPhone,
+    matchedOrder,
+    history,
+    storage.convSteps?.[cleanPhone]
+  );
 
-  // 1. If the last message in the chat was from the client and not forceRestart, reply in AUDIO and advance the conversation
-  if (!forceRestart && lastMsg && lastMsg.sender === 'client') {
+  // 1. If the last message in the chat was from the client and not forceRestart, reply in TEXTO and advance contextually
+  if (!forceRestart && unansweredClientMsg) {
     const {
       reply,
       secondaryAudioReply,
@@ -5166,13 +5212,13 @@ export async function triggerAiConfirmationForOrder(
       regenerateWelcomeImage
     } = await generateSmartAiReply(
       cleanPhone,
-      lastMsg.text,
-      Boolean(lastMsg.isAudioNote || String(lastMsg.text || '').startsWith('🎤'))
+      unansweredClientMsg.text,
+      Boolean(unansweredClientMsg.isAudioNote || String(unansweredClientMsg.text || '').startsWith('🎤'))
     );
     if (reply) {
       if (matchedOrder) {
         matchedOrder.modoIA = 'automatico';
-        matchedOrder.canalIA = 'audio';
+        matchedOrder.canalIA = 'texto';
         matchedOrder.convStep = convStep;
         matchedOrder.atendidoPorIA = true;
         matchedOrder.ultimoMensajeIA = reply;
@@ -5184,7 +5230,7 @@ export async function triggerAiConfirmationForOrder(
         convStep,
         matchedOrder?.reservaid,
         undefined,
-        'audio',
+        'texto',
         undefined,
         locationTextConfirmation,
         false,
@@ -5196,7 +5242,16 @@ export async function triggerAiConfirmationForOrder(
     }
   }
 
-  // 2. Iniciar confirmación Express con Imagen Única + Audio #1 + Tarjeta de Ciudad/Barrio/GPS en Texto
+  // Guardia Contextual: si la conversación YA comenzó (Paso >= 2 o mensaje IA previo), JAMÁS reiniciar al Paso #1
+  if (!forceRestart && hasStarted) {
+    const currentStep = getOrderConvStep(cleanPhone, matchedOrder);
+    console.log(
+      `[AI Context Guard] Conversación de ${cleanPhone} ya va por Paso ${currentStep}/5 (sin mensaje pendiente del cliente). Se evita autodisparo/reinicio al Paso #1.`
+    );
+    return;
+  }
+
+  // 2. Iniciar confirmación Express con Imagen Única + Saludo #1 + Tarjeta de Ciudad/Barrio/GPS en Texto
   const { text: initialText, locationTextConfirmation: initialLocCard, error: initError } =
     await buildInitialOrderAiMessage(matchedOrder);
   if (initError) {
@@ -5214,7 +5269,7 @@ export async function triggerAiConfirmationForOrder(
   }
   if (matchedOrder) {
     matchedOrder.modoIA = 'automatico';
-    matchedOrder.canalIA = 'audio';
+    matchedOrder.canalIA = 'texto';
     matchedOrder.convStep = 3;
     matchedOrder.locationTextSentOnce = true;
     matchedOrder.atendidoPorIA = true;
@@ -5232,7 +5287,7 @@ export async function triggerAiConfirmationForOrder(
     3,
     matchedOrder?.reservaid,
     undefined,
-    'audio',
+    'texto',
     undefined,
     initialLocCard,
     false,
@@ -5810,18 +5865,12 @@ async function executeStartOrAdvanceVoiceCallSerial(
   }
 
   const history = getChatHistory(cleanPhone).messages;
-  const ordIdStr = String(matchedOrder?.reservaid || orderId || '').trim();
-  const anyVoiceOrAudioSent =
-    Boolean(ordIdStr && sentWelcomeStageByOrderId.has(ordIdStr)) ||
-    Boolean(matchedOrder?.waCommercialSentStages?.stage1_welcome) ||
-    Boolean(matchedOrder?.atendidoPorIA && matchedOrder?.ultimoMensajeIA) ||
-    history.some(
-      m =>
-        m.sender === 'ai' &&
-        (m.isAudioNote || m.commercialStage === 'stage1_welcome') &&
-        (m.status === 'sent' || m.status === 'pending_connection') &&
-        (!orderId || m.orderId === orderId)
-    );
+  const anyVoiceOrAudioSent = hasConversationAlreadyStarted(
+    cleanPhone,
+    matchedOrder,
+    history,
+    storage.convSteps?.[cleanPhone]
+  );
   const lastMsg = history.length > 0 ? history[history.length - 1] : null;
 
   // 1. If customer spoke or replied during the voice note conversation
@@ -5871,7 +5920,7 @@ async function executeStartOrAdvanceVoiceCallSerial(
       convStep,
       updatedOrder?.reservaid,
       undefined,
-      'audio',
+      cleanChannel,
       undefined,
       locationTextConfirmation,
       false,
@@ -5888,7 +5937,7 @@ async function executeStartOrAdvanceVoiceCallSerial(
       matchedOrder: updatedOrder,
       message: turnRes.message,
       sentViaSocket: turnRes.sentViaSocket,
-      channel: 'audio',
+      channel: cleanChannel,
       callRung: turnRes.callRung
     };
   }
@@ -5900,7 +5949,7 @@ async function executeStartOrAdvanceVoiceCallSerial(
     const initialLocCard = initRes?.locationTextConfirmation || '';
     if (matchedOrder) {
       matchedOrder.modoIA = 'automatico';
-      matchedOrder.canalIA = 'audio';
+      matchedOrder.canalIA = cleanChannel;
       matchedOrder.vozAgente = activeVoice.id;
       matchedOrder.vozAgenteNombre = activeVoice.name;
       matchedOrder.convStep = 3;
@@ -5938,7 +5987,7 @@ async function executeStartOrAdvanceVoiceCallSerial(
       3,
       matchedOrder?.reservaid,
       undefined,
-      'audio',
+      cleanChannel,
       undefined,
       initialLocCard,
       false,
@@ -5954,7 +6003,7 @@ async function executeStartOrAdvanceVoiceCallSerial(
       matchedOrder,
       message: turnRes.message,
       sentViaSocket: turnRes.sentViaSocket,
-      channel: 'audio',
+      channel: cleanChannel,
       callRung: turnRes.callRung
     };
   }
@@ -6013,64 +6062,71 @@ async function executeStartOrAdvanceVoiceCallSerial(
     };
   }
 
-  // 4. Si el Agente YA envió su audio inicial y el último mensaje sigue siendo del Agente (sin resetCall), NO repetir el saludo
+  // 4. Contextualización estricta: si la conversación YA comenzó (Paso >= 2 o saludo ya enviado),
+  // JAMÁS reiniciar al Paso #1; responder únicamente si quedó un mensaje del cliente sin contestar.
   const currentStep = getOrderConvStep(cleanPhone, matchedOrder);
   const lastAiMsg = [...history].reverse().find(m => m.sender === 'ai' && !m.imageUrl);
-  if (!resetCall && anyVoiceOrAudioSent && lastMsg?.sender === 'ai' && lastAiMsg) {
-    return {
-      reply: typeof lastAiMsg.text === 'string' ? lastAiMsg.text : '',
-      audioDataUrl: lastAiMsg.audioDataUrl || null,
-      convStep: currentStep,
-      voiceEngine: lastAiMsg.voiceEngine || activeVoice.name,
-      matchedOrder,
-      message: lastAiMsg,
-      sentViaSocket: lastAiMsg.status === 'sent',
-      channel: 'audio',
-      callRung: false
-    };
+  const unansweredClient = getLatestUnansweredClientMessage(history);
+  if (!resetCall && anyVoiceOrAudioSent && unansweredClient) {
+    const {
+      reply,
+      secondaryAudioReply,
+      locationTextConfirmation,
+      matchedOrder: updatedOrder,
+      convStep,
+      regenerateWelcomeImage
+    } = await generateSmartAiReply(
+      cleanPhone,
+      unansweredClient.text,
+      Boolean(unansweredClient.isAudioNote || String(unansweredClient.text || '').startsWith('🎤'))
+    );
+    if (reply) {
+      if (updatedOrder) {
+        updatedOrder.modoIA = 'automatico';
+        updatedOrder.canalIA = cleanChannel;
+        updatedOrder.convStep = convStep;
+        updatedOrder.atendidoPorIA = true;
+        updatedOrder.ultimoMensajeIA = reply;
+        savePedidos(pedidos);
+      }
+      const turnRes = await sendWhatsAppVoiceCallTurn(
+        cleanPhone,
+        reply,
+        convStep,
+        updatedOrder?.reservaid || matchedOrder?.reservaid,
+        undefined,
+        cleanChannel,
+        undefined,
+        locationTextConfirmation,
+        false,
+        secondaryAudioReply,
+        regenerateWelcomeImage ? 'stage1_welcome' : undefined,
+        Boolean(regenerateWelcomeImage)
+      );
+      return {
+        reply,
+        audioDataUrl: turnRes.audioDataUrl,
+        convStep,
+        voiceEngine: turnRes.voiceEngine,
+        matchedOrder: updatedOrder || matchedOrder,
+        message: turnRes.message,
+        sentViaSocket: turnRes.sentViaSocket,
+        channel: cleanChannel,
+        callRung: turnRes.callRung
+      };
+    }
   }
-
-  const initFallback = currentStep <= 3 ? await buildInitialOrderAiMessage(matchedOrder) : null;
-  const textToSpeak =
-    initFallback?.text ||
-    (typeof lastAiMsg?.text === 'string' ? lastAiMsg.text : 'Hola, ¿qué tal? ¿Cómo estás?');
-  const companionCard =
-    initFallback && !matchedOrder?.locationTextSentOnce ? initFallback.locationTextConfirmation : undefined;
-
-  if (matchedOrder) {
-    matchedOrder.modoIA = 'automatico';
-    matchedOrder.canalIA = 'audio';
-    matchedOrder.atendidoPorIA = true;
-    matchedOrder.ultimoMensajeIA = textToSpeak;
-    if (companionCard) matchedOrder.locationTextSentOnce = true;
-    savePedidos(pedidos);
-  }
-
-  const turnRes = await sendWhatsAppVoiceCallTurn(
-    cleanPhone,
-    textToSpeak,
-    currentStep,
-    matchedOrder?.reservaid,
-    undefined,
-    'audio',
-    undefined,
-    companionCard,
-    false,
-    undefined,
-    currentStep <= 3 && matchedOrder ? 'stage1_welcome' : undefined,
-    false
-  );
 
   return {
-    reply: textToSpeak,
-    audioDataUrl: turnRes.audioDataUrl,
+    reply: typeof lastAiMsg?.text === 'string' ? lastAiMsg.text : '',
+    audioDataUrl: lastAiMsg?.audioDataUrl || null,
     convStep: currentStep,
-    voiceEngine: turnRes.voiceEngine,
+    voiceEngine: lastAiMsg?.voiceEngine || activeVoice.name,
     matchedOrder,
-    message: turnRes.message,
-    sentViaSocket: turnRes.sentViaSocket,
-    channel: 'audio',
-    callRung: turnRes.callRung
+    message: lastAiMsg || lastMsg || ({} as WaChatMessage),
+    sentViaSocket: false,
+    channel: cleanChannel,
+    callRung: false
   };
 }
 
@@ -8054,8 +8110,79 @@ async function flushPendingMessages(session: WaSessionRuntime) {
     if (changed) {
       saveChatsStorage(storage);
       scheduleCloudStateSync(true);
+      const chatPhones = Object.keys(storage.chats || {}).slice(-40);
+      for (const chPhone of chatPhones) {
+        syncCustomerChatToCloud(chPhone).catch(() => { });
+      }
     }
   } catch (e) { }
+}
+
+const CHAT_STATUS_PRIORITY: Record<string, number> = {
+  error: 0,
+  pending_connection: 1,
+  sent: 2,
+  delivered: 3,
+  read: 4
+};
+
+// Combina el historial local y el respaldo en la nube WACHAT-* sin resucitar recordatorios offline antiguos
+// que ya fueron colapsados y enviados al reconectar WhatsApp.
+export function reconcileLocalAndCloudChatMessages(
+  localMessages: WaChatMessage[],
+  cloudMessages: WaChatMessage[]
+): WaChatMessage[] {
+  const safeLocal = Array.isArray(localMessages) ? localMessages.filter(Boolean) : [];
+  const safeCloud = Array.isArray(cloudMessages) ? cloudMessages.filter(Boolean) : [];
+  if (safeLocal.length === 0) return collapseStackedOfflineAiMessages(safeCloud).nextMessages;
+  if (safeCloud.length === 0) return safeLocal;
+
+  const localHasNoPending = !safeLocal.some(m => m.status === 'pending_connection');
+  let latestLocalSentAiMs = 0;
+  for (const m of safeLocal) {
+    if (m.sender === 'ai' && m.status === 'sent') {
+      const ts = new Date(m.timestamp || 0).getTime();
+      if (Number.isFinite(ts) && ts > latestLocalSentAiMs) latestLocalSentAiMs = ts;
+    }
+  }
+
+  const byId = new Map<string, WaChatMessage>();
+  for (const cm of safeCloud) {
+    if (!cm?.id) continue;
+    if (cm.sender === 'ai' && cm.status === 'pending_connection' && localHasNoPending && latestLocalSentAiMs > 0) {
+      const cmTs = new Date(cm.timestamp || 0).getTime();
+      if (!Number.isFinite(cmTs) || cmTs <= latestLocalSentAiMs) {
+        continue;
+      }
+    }
+    byId.set(cm.id, cm);
+  }
+
+  for (const lm of safeLocal) {
+    if (!lm?.id) continue;
+    const prev = byId.get(lm.id);
+    if (!prev) {
+      byId.set(lm.id, lm);
+      continue;
+    }
+    const prevPrio = CHAT_STATUS_PRIORITY[prev.status || 'sent'] ?? 2;
+    const localPrio = CHAT_STATUS_PRIORITY[lm.status || 'sent'] ?? 2;
+    byId.set(lm.id, {
+      ...prev,
+      ...lm,
+      status: localPrio >= prevPrio ? lm.status : prev.status,
+      audioDataUrl: lm.audioDataUrl || prev.audioDataUrl,
+      imageUrl: lm.imageUrl || prev.imageUrl
+    });
+  }
+
+  const merged = Array.from(byId.values()).sort((a, b) => {
+    const ta = new Date(a.timestamp || 0).getTime();
+    const tb = new Date(b.timestamp || 0).getTime();
+    return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+  });
+
+  return collapseStackedOfflineAiMessages(merged).nextMessages;
 }
 
 // ============================================================================
@@ -8834,9 +8961,13 @@ async function restoreCloudStateAndWaSessionsOnBoot(): Promise<void> {
         let restoredAny = false;
         if (parsedEng.chats && typeof parsedEng.chats === 'object') {
           for (const [ph, msgs] of Object.entries(parsedEng.chats)) {
-            if (Array.isArray(msgs) && msgs.length > 0 && (!storage.chats[ph] || storage.chats[ph].length === 0)) {
-              storage.chats[ph] = msgs as WaChatMessage[];
-              restoredAny = true;
+            if (Array.isArray(msgs) && msgs.length > 0) {
+              const existing = storage.chats[ph] || [];
+              const reconciled = reconcileLocalAndCloudChatMessages(existing, msgs as WaChatMessage[]);
+              if (existing.length === 0 || reconciled.length !== existing.length) {
+                storage.chats[ph] = reconciled;
+                restoredAny = true;
+              }
             }
           }
         }
@@ -9690,7 +9821,22 @@ export async function connectWhatsAppEngine(
         })();
 
         setTimeout(() => {
-          flushPendingMessages(session).catch(() => { });
+          flushPendingMessages(session)
+            .then(() => {
+              // Sanar en Supabase (WACHAT-*) historiales recientes ya vaciados/colapsados para no mostrar relojes fantasma en UI
+              try {
+                const stAfterFlush = loadChatsStorage();
+                const cutoffMs = Date.now() - 48 * 3600 * 1000;
+                for (const [ph, list] of Object.entries(stAfterFlush.chats || {})) {
+                  if (!Array.isArray(list) || list.length === 0) continue;
+                  const lastTs = new Date(list[list.length - 1]?.timestamp || 0).getTime();
+                  if (lastTs >= cutoffMs && !list.some(m => m.status === 'pending_connection')) {
+                    syncCustomerChatToCloud(ph).catch(() => { });
+                  }
+                }
+              } catch {}
+            })
+            .catch(() => { });
           // Auto-recuperación de bienvenida: si entró un pedido oficial durante los 0-5s de reconexión de WhatsApp
           // y aún no recibió su saludo inicial (Paso 1), dispararlo automáticamente apenas el socket está conectado
           try {

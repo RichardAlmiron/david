@@ -18,6 +18,7 @@ import {
   getWhatsAppEngineState,
   getRecentIncomingDiagnostics,
   getChatHistory,
+  reconcileLocalAndCloudChatMessages,
   getAllChatsSummary,
   sendWhatsAppMessage,
   setCustomerChatMode,
@@ -1501,11 +1502,14 @@ function registerApiServerMiddlewares(server: any) {
                     });
                     if (rows?.[0]?.dispositivo) {
                       const cData = JSON.parse(rows[0].dispositivo);
-                      if (Array.isArray(cData.messages) && cData.messages.length > finalMessages.length) {
-                        finalMessages = cData.messages;
-                        if (cData.mode) finalMode = cData.mode;
-                        if (cData.channel) finalChannel = cData.channel;
-                        if (cData.convStep) finalConvStep = cData.convStep;
+                      if (Array.isArray(cData.messages) && cData.messages.length > 0) {
+                        const hadNoLocal = finalMessages.length === 0;
+                        finalMessages = reconcileLocalAndCloudChatMessages(finalMessages, cData.messages);
+                        if (hadNoLocal && cData.mode) finalMode = cData.mode;
+                        if (hadNoLocal && cData.channel) finalChannel = cData.channel;
+                        if (cData.convStep && Number(cData.convStep) > (Number(finalConvStep) || 1)) {
+                          finalConvStep = cData.convStep;
+                        }
                       }
                     }
                   } catch (e) { }

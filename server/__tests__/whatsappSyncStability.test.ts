@@ -61,3 +61,65 @@ test('collapseStackedOfflineAiMessages prevents replaying multiple queued hourly
   assert.equal(resNoPriorSent.changed, true);
   assert.deepEqual(resNoPriorSent.nextMessages.map(m => m.id), ['w0', 't1']);
 });
+
+test('hasConversationAlreadyStarted and getLatestUnansweredClientMessage block restarting from step 1 on progressed chats', async () => {
+  const { hasConversationAlreadyStarted, getLatestUnansweredClientMessage } = await import('../whatsappEngine');
+
+  const progressedOrder = {
+    reservaid: 'NX-955908',
+    convStep: 3,
+    datosConfirmados: false,
+    ultimoMensajeIA: 'Hola Fabiola',
+    fecha: '2026-11-13T02:52:00Z'
+  };
+  assert.equal(hasConversationAlreadyStarted('595982931098', progressedOrder, []), true);
+
+  // Admin message last -> no unanswered client message, must NOT trigger unsolicited AI message
+  const adminLastHistory = [
+    { id: 'm1', phone: '595982931098', sender: 'ai' as const, text: 'Paso 3', timestamp: '2026-11-13T02:52:24Z', status: 'sent' as const },
+    { id: 'm2', phone: '595982931098', sender: 'client' as const, text: 'Sí, correcto', timestamp: '2026-11-13T03:00:00Z', status: 'delivered' as const },
+    { id: 'm3', phone: '595982931098', sender: 'admin' as const, text: 'Te confirmo!', timestamp: '2026-11-13T03:01:00Z', status: 'sent' as const }
+  ];
+  assert.equal(getLatestUnansweredClientMessage(adminLastHistory), null);
+
+  // Client message last -> returns that exact client message for contextual reply
+  const clientLastHistory = adminLastHistory.slice(0, 2);
+  assert.equal(getLatestUnansweredClientMessage(clientLastHistory)?.id, 'm2');
+
+  // Brand-new order on same phone after an older completed order should allow starting once
+  const brandNewOrder = {
+    reservaid: 'NX-NEW-1',
+    convStep: 1,
+    datosConfirmados: false,
+    ultimoMensajeIA: '',
+    fecha: '2026-11-13T12:00:00Z'
+  };
+  assert.equal(
+    hasConversationAlreadyStarted('595982931098', brandNewOrder, [
+      { id: 'old1', phone: '595982931098', orderId: 'NX-955908', sender: 'ai', text: 'Anterior', timestamp: '2026-11-13T02:52:24Z', status: 'sent' }
+    ]),
+    false
+  );
+});
+
+test('reconcileLocalAndCloudChatMessages drops stale collapsed cloud pending_connection ghosts while preserving client messages', async () => {
+  const { reconcileLocalAndCloudChatMessages } = await import('../whatsappEngine');
+
+  const localCollapsed = [
+    { id: 'm1', phone: '595982931098', sender: 'ai' as const, text: 'Saludo', timestamp: '2026-11-13T02:52:24Z', status: 'sent' as const, isAudioNote: true, audioDataUrl: 'data:audio/ogg;base64,AAA' },
+    { id: 'kq5i4', phone: '595982931098', sender: 'ai' as const, text: '8 horas', timestamp: '2026-11-13T10:58:39Z', status: 'sent' as const, isAudioNote: true }
+  ];
+  const staleCloud = [
+    { id: 'm1', phone: '595982931098', sender: 'ai' as const, text: 'Saludo', timestamp: '2026-11-13T02:52:24Z', status: 'sent' as const, isAudioNote: true },
+    { id: 'odh18', phone: '595982931098', sender: 'ai' as const, text: '3 horas', timestamp: '2026-11-13T05:57:58Z', status: 'pending_connection' as const, isAudioNote: true },
+    { id: 'pftxh', phone: '595982931098', sender: 'ai' as const, text: '7 horas', timestamp: '2026-11-13T09:58:29Z', status: 'pending_connection' as const, isAudioNote: true },
+    { id: 'kq5i4', phone: '595982931098', sender: 'ai' as const, text: '8 horas', timestamp: '2026-11-13T10:58:39Z', status: 'pending_connection' as const, isAudioNote: true },
+    { id: 'cli1', phone: '595982931098', sender: 'client' as const, text: 'Ya vi, es casa azul', timestamp: '2026-11-13T11:05:00Z', status: 'delivered' as const }
+  ];
+
+  const reconciled = reconcileLocalAndCloudChatMessages(localCollapsed, staleCloud);
+  assert.deepEqual(reconciled.map(m => m.id), ['m1', 'kq5i4', 'cli1']);
+  assert.equal(reconciled[0].audioDataUrl, 'data:audio/ogg;base64,AAA');
+  assert.equal(reconciled[1].status, 'sent');
+  assert.equal(reconciled.some(m => m.status === 'pending_connection'), false);
+});

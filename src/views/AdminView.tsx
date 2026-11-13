@@ -1361,11 +1361,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     setLoadingSessionMap(prev => ({ ...prev, [sessionId]: false }));
   };
 
-  // Poll live WhatsApp chat messages for the currently open customer order
+  // Poll live WhatsApp chat messages for the currently open customer order (solo lectura, sin autodisparo)
   const fetchLiveOrderChat = async (phone: string) => {
     if (!phone) return;
     const cleanPhone = formatWaPhone(phone);
     let loadedMessages: any[] = [];
+    let fetchedOk = false;
     let detectedMode = modalAiMode;
     let detectedChannel = modalAiChannel;
 
@@ -1375,20 +1376,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
-        if (Array.isArray(data.messages) && data.messages.length > 0) {
+        fetchedOk = true;
+        if (Array.isArray(data.messages)) {
           loadedMessages = data.messages;
-          if (data.mode === 'automatico' || data.mode === 'manual') {
-            detectedMode = data.mode;
-          }
-          if (data.channel === 'audio' || data.channel === 'texto') {
-            detectedChannel = data.channel;
-          }
+        }
+        if (data.mode === 'automatico' || data.mode === 'manual') {
+          detectedMode = data.mode;
+        }
+        if (data.channel === 'audio' || data.channel === 'texto') {
+          detectedChannel = data.channel;
         }
       }
     } catch (e) { }
 
-
-    if (loadedMessages.length > 0) {
+    if (fetchedOk) {
       setLiveChatMessages(loadedMessages);
       setModalAiMode(detectedMode);
       setModalAiChannel(detectedChannel);
@@ -1622,13 +1623,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     );
   };
 
-  // Enviar Nota de Voz pura ('audio' - OGG/Opus real sin texto duplicado) y abrir consola de chat
-  const handleSendOrderAudioNote = async (order: Order, customText?: string) => {
+  // Enviar Nota de Voz o Respuesta Contextual IA y actualizar consola de chat
+  const handleSendOrderAudioNote = async (
+    order: Order,
+    customText?: string,
+    channelOverride: 'audio' | 'texto' = 'audio'
+  ) => {
     const cleanPhone = formatWaPhone(order.celular);
     setActiveAiOrder(order);
-    setModalAiMode('manual');
-    setModalAiChannel('audio');
-    showToast(`🎤 Generando y enviando Nota de Voz IA (OGG/Opus) a ${order.nombre}...`);
+    setModalAiChannel(channelOverride);
+    showToast(
+      customText
+        ? `🎤 Generando y enviando respuesta IA (${channelOverride === 'audio' ? 'Nota de Voz' : 'Texto'}) a ${order.nombre}...`
+        : `🤖 Verificando contexto (Paso ${order.convStep || 1}/5) para ${order.nombre}...`
+    );
 
     let handledLocal = false;
     try {
@@ -1639,7 +1647,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
           phone: cleanPhone,
           orderId: order.reservaid,
           resetCall: false,
-          channel: 'audio',
+          channel: channelOverride,
           customText: customText ? customText.trim() : undefined
         })
       });
@@ -1652,14 +1660,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         }
         if (data.sentViaSocket) {
           showToast(
-            `✅ Nota de Voz IA (OGG/Opus) enviada al WhatsApp de ${order.nombre}`
+            channelOverride === 'audio'
+              ? `✅ Nota de Voz IA (OGG/Opus) enviada al WhatsApp de ${order.nombre}`
+              : `✅ Respuesta IA en texto enviada al WhatsApp de ${order.nombre}`
+          );
+        } else if (!data.callRung && !customText) {
+          showToast(
+            `ℹ️ La conversación con ${order.nombre} ya va por el Paso ${data.convStep || order.convStep || 1}/5 (sin mensaje nuevo del cliente pendiente).`
           );
         } else {
-          showToast(
-            `🎤 Nota de Voz IA lista para ${order.nombre}`
-          );
+          showToast(`🎤 Nota de Voz IA lista para ${order.nombre}`);
         }
-        if (data.reply) {
+        if (data.reply && (data.sentViaSocket || customText)) {
           playSpokenAudio(data.reply, data.audioDataUrl);
         }
       }
@@ -1671,7 +1683,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         phone: cleanPhone,
         orderId: order.reservaid,
         resetCall: false,
-        channel: 'audio',
+        channel: channelOverride,
         customText: customText ? customText.trim() : undefined
       });
       setTimeout(() => {
@@ -1998,28 +2010,29 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     }
   };
 
-  // Open the embedded WhatsApp chat console for a customer (Always defaults to "Yo Escribo" / Manual mode)
+  // Open the embedded WhatsApp chat console in pure read-only view (ZERO autodisparo / no auto-send on open)
   const handleOpenOrderWhatsAppChat = async (
     order: Order,
     initialChannel: 'audio' | 'texto' = 'audio'
   ) => {
+    setLiveChatMessages([]);
     setActiveAiOrder(order);
-    // Modo "Yo Escribo" (manual) por defecto absoluto al entrar al chat para permitir escribir sin que la IA interrumpa
-    setModalAiMode('manual');
-    setModalAiChannel(initialChannel);
+    setModalAiMode(order.modoIA === 'automatico' ? 'automatico' : 'manual');
+    setModalAiChannel(order.canalIA || initialChannel);
     await fetchLiveOrderChat(order.celular);
   };
 
-  // Switch between AI channels ('audio' | 'texto') and "👤 Yo Escribo" ('manual')
+  // Switch between AI channels ('audio' | 'texto') and "👤 Yo Escribo" ('manual') without auto-firing unless explicitly requested
   const handleSwitchOrderChatMode = async (
     order: Order,
     nextMode: 'automatico' | 'manual',
-    nextChannel: 'audio' | 'texto' = modalAiChannel
+    nextChannel: 'audio' | 'texto' = modalAiChannel,
+    triggerAiNow = false
   ) => {
     setModalAiMode(nextMode);
     setModalAiChannel(nextChannel);
     const cleanPhone = formatWaPhone(order.celular);
-    const triggerAiNow = nextMode === 'automatico';
+    const shouldTrigger = nextMode === 'automatico' && Boolean(triggerAiNow);
 
     let handledLocal = false;
     try {
@@ -2030,7 +2043,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
           phone: cleanPhone,
           mode: nextMode,
           channel: nextChannel,
-          triggerAiNow,
+          triggerAiNow: shouldTrigger,
           orderId: order.reservaid
         })
       });
@@ -2050,7 +2063,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         phone: cleanPhone,
         mode: nextMode,
         channel: nextChannel,
-        triggerAiNow,
+        triggerAiNow: shouldTrigger,
         orderId: order.reservaid
       });
       setTimeout(() => {
@@ -2066,10 +2079,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
     if (nextMode === 'manual') {
       showToast(`👤 Yo Escribo activado: Ahora vos le escribís directamente a ${order.nombre}.`);
-    } else if (nextChannel === 'audio') {
-      showToast(`🎤 Modo AUDIO IA (Nota de Voz OGG/Opus) activado y enviado para ${order.nombre}.`);
+    } else if (shouldTrigger) {
+      showToast(
+        nextChannel === 'audio'
+          ? `🎤 Modo AUDIO IA activado y procesado en contexto para ${order.nombre}.`
+          : `💬 Modo TEXTO IA activado y procesado en contexto para ${order.nombre}.`
+      );
     } else {
-      showToast(`💬 Modo TEXTO IA activado y enviado para ${order.nombre}.`);
+      showToast(
+        nextChannel === 'audio'
+          ? `🎤 Modo AUDIO IA activado para ${order.nombre} (contextualizado al Paso ${order.convStep || 1}/5, sin autodisparo).`
+          : `💬 Modo TEXTO IA activado para ${order.nombre} (contextualizado al Paso ${order.convStep || 1}/5, sin autodisparo).`
+      );
     }
   };
 
@@ -3783,7 +3804,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                           )}
                                         </div>
 
-                                        {/* DERECHA: Precio + Accesos Rápidos Compactos (Chatear, Archivar, Eliminar y Abrir Detalle) */}
+                                        {/* DERECHA: Precio + Accesos Rápidos Compactos (Mensaje, Archivar, Eliminar y Abrir Detalle) */}
                                         <div className="flex items-center gap-1.5 shrink-0">
                                           {/* Pack y Monto siempre 100% visible */}
                                           <span
@@ -3841,10 +3862,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                               handleOpenOrderWhatsAppChat(ord, preferredChannel);
                                             }}
                                             className="h-8 px-3 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer transition-all bg-[#25D366] hover:bg-[#1ebd5a] text-black shadow-sm"
-                                            title="Abrir chat de este pedido"
+                                            title="Ver mensajes del chat de este pedido (solo lectura, sin autodisparo)"
                                           >
                                             <MessageCircle className="w-3 h-3 text-black" />
-                                            <span className="hidden sm:inline">Chatear</span>
+                                            <span className="hidden sm:inline">Mensaje</span>
                                             {msgCount > 0 && (
                                               <span className="px-1 rounded-full bg-[#0b3d2e] text-[#25D366] text-[10px] font-bold tabular-nums">
                                                 {msgCount}
@@ -4966,13 +4987,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 </div>
               </div>
 
-              {/* Controles de Canal y Autorización dentro del Chat: Yo Escribo | Texto IA | Audio IA */}
+              {/* Controles de Canal y Autorización dentro del Chat: Yo Escribo | Texto IA | Audio IA (solo cambia el modo, sin autodisparo) */}
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <div className="inline-flex items-center bg-zinc-950 p-1 rounded-xl border border-zinc-800 gap-1">
-                  {/* 1. MODO MANUAL: YO ESCRIBO (Default cuando abre chat) */}
+                  {/* 1. MODO MANUAL: YO ESCRIBO */}
                   <button
                     type="button"
-                    onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'manual', modalAiChannel)}
+                    onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'manual', modalAiChannel, false)}
                     className={`px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 cursor-pointer transition-all ${
                       modalAiMode === 'manual'
                         ? 'bg-amber-400 text-black shadow-sm'
@@ -4987,13 +5008,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   {/* 2. TEXTO IA */}
                   <button
                     type="button"
-                    onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'texto')}
+                    onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'texto', false)}
                     className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-all ${
                       modalAiMode === 'automatico' && modalAiChannel === 'texto'
                         ? 'bg-emerald-500 text-black shadow-sm'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
                     }`}
-                    title="Activar que el Agente IA responda automáticamente por texto"
+                    title="Activar Agente IA por texto (en contexto, sin autodisparo)"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     <span>IA Texto</span>
@@ -5002,13 +5023,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   {/* 3. AUDIO IA */}
                   <button
                     type="button"
-                    onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'audio')}
+                    onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'audio', false)}
                     className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-all ${
                       modalAiMode === 'automatico' && modalAiChannel === 'audio'
                         ? 'bg-emerald-500 text-black shadow-sm'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
                     }`}
-                    title="Activar que el Agente IA responda con notas de voz OGG/Opus"
+                    title="Activar Agente IA con notas de voz OGG/Opus (en contexto, sin autodisparo)"
                   >
                     <Volume2 className="w-3.5 h-3.5" />
                     <span>IA Audio</span>
@@ -5044,45 +5065,59 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               ref={chatScrollContainerRef}
               className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#09090b]"
             >
-              <div className="text-center">
+              <div className="text-center flex flex-wrap items-center justify-center gap-2">
                 <span className="inline-block px-3.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/25">
                   {modalAiMode === 'automatico'
                     ? modalAiChannel === 'audio'
-                      ? '🎤 Modo Audio IA Activo: El Agente IA envía y responde con Notas de Voz OGG/Opus (Deepgram Aura-2) al WhatsApp del cliente.'
-                      : '💬 Modo Texto IA Activo: El Agente IA conversa por texto con el cliente, confirma su dirección y guarda la referencia de su casa.'
-                    : '👤 Modo "Yo Escribo" Activo: El Agente IA está en espera. Podés elegir arriba 🎤 Audio IA o 💬 Texto IA.'}
+                      ? '🎤 Modo Audio IA Activo: Responde en contexto según la etapa actual.'
+                      : '💬 Modo Texto IA Activo: Responde en contexto según la etapa actual.'
+                    : '👤 Modo "Yo Escribo" Activo: Vista de lectura/escritura manual (la IA no autodispara).'}
+                </span>
+                <span className="inline-block px-3 py-1.5 rounded-xl bg-zinc-900 text-zinc-300 text-[11px] font-bold border border-zinc-700">
+                  {activeAiOrder.datosConfirmados
+                    ? `✅ Confirmado (Paso ${activeAiOrder.convStep || 5}/5)`
+                    : `📍 Etapa actual: Paso ${activeAiOrder.convStep || 1}/5${liveChatMessages.length > 0 ? ` · ${liveChatMessages.length} msg` : ' · Sin mensajes'}`}
                 </span>
               </div>
 
               {liveChatMessages.length === 0 ? (
-                <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800 max-w-xl mx-auto space-y-3 mt-4 text-center">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                    Pedido recibido de {activeAiOrder.nombre} ({activeAiOrder.producto})
+                activeAiOrder.ultimoMensajeIA || activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 2 ? (
+                  <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800 max-w-xl mx-auto space-y-2 mt-4 text-center">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                      Conversación ya iniciada con {activeAiOrder.nombre} (Paso {activeAiOrder.convStep || 2}/5)
+                    </div>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      El agente ya registró avance en este pedido y no reiniciará desde el saludo #1. Podés escribir un mensaje manual abajo si necesitás contactarlo.
+                    </p>
                   </div>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    Elegí cómo querés que el Agente IA atienda este pedido ahora mismo: mandando{' '}
-                    <strong>Audio de Voz</strong> o chateando con{' '}
-                    <strong>Texto</strong>:
-                  </p>
-                  <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'audio')}
-                      className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-semibold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Volume2 className="w-4 h-4" />
-                      <span>1. Mandar 🎤 Audio de Voz IA</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'texto')}
-                      className="px-3.5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>2. Chatear con 💬 Texto IA</span>
-                    </button>
+                ) : (
+                  <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800 max-w-xl mx-auto space-y-3 mt-4 text-center">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                      Pedido recibido de {activeAiOrder.nombre} ({activeAiOrder.producto})
+                    </div>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      Este pedido aún no tiene mensajes. Elegí cómo querés iniciar el contacto:
+                    </p>
+                    <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'audio', true)}
+                        className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-semibold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                        <span>1. Mandar 🎤 Audio de Voz IA</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'texto', true)}
+                        className="px-3.5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>2. Iniciar con 💬 Texto IA</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )
               ) : (
                 liveChatMessages.map(msg => {
                   const isOutgoing = msg.sender === 'admin' || msg.sender === 'ai';
@@ -5171,6 +5206,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
             {/* CAMPO DE WHATSAPP INCRUSTADO PARA ESCRIBIR Y ENVIAR DESDE EL SISTEMA */}
             <div className="p-3 sm:p-4 bg-zinc-900 border-t border-zinc-800 space-y-2 shrink-0">
+              {liveChatMessages.length > 0 &&
+                liveChatMessages[liveChatMessages.length - 1]?.sender === 'client' &&
+                !activeAiOrder.datosConfirmados && (
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-xs">
+                    <span className="text-emerald-200 font-medium">
+                      📩 El cliente respondió último (Paso {activeAiOrder.convStep || 3}/5). Podés responderle en contexto sin reiniciar desde cero:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSendOrderAudioNote(activeAiOrder, undefined, modalAiChannel)}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs shrink-0 cursor-pointer"
+                    >
+                      🤖 Responder en contexto
+                    </button>
+                  </div>
+                )}
               <form
                 onSubmit={e => {
                   e.preventDefault();
