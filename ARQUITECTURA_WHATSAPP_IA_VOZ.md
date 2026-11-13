@@ -150,3 +150,18 @@ Una vez que el pedido está confirmado (`datosConfirmados === true`) y fuera de 
 - El flujo Express de WhatsApp en 1 paso (`"CORRECTO"`), la Compuerta Audio-Primero (`1s`) y el Muro de Hierro (`isOfficialRegisteredProductOrder`) **permanecen 100% intactos** y NO afectan las métricas del algoritmo publicitario (`Circuito A`, optimizado sobre formularios web confirmados `Lead`).
 - De forma paralela e independiente, AutoAds v2 dispone del endpoint `POST /api/attribution/wa-token` (tokens `AA-XXXXX` en `wa_attribution_tokens`, vigencia 30 días) y del matching telefónico normalizado (`5959XXXXXXXX`, `phone_stitch_30d`) en [`server/attributionAndOrders.ts`](./server/attributionAndOrders.ts) para recuperar la atribución publicitaria cuando un visitante derivado por WhatsApp termina completando un pedido.
 - **Hidratación y Sincronización Autoritativa en Supabase (`server/autoadsStore.ts`)**: Tras redespliegues en Railway o búsquedas sin coincidencia en memoria, tanto `resolveWaTokenFromText` como los registros de `wa_attribution_tokens` se hidratan bajo demanda desde Supabase vía `hydrateAutoadsFromSupabase()` / `postgrestSelect()`, y cualquier escritura pendiente en cola se reintenta mediante `flushPendingSupabaseSyncs()` (`POST /api/sync/retry-queues`), sin depender de archivos JSON locales efímeros. Documentación completa en [`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md).
+
+---
+
+## 10. Consola Administrativa en 2 Etapas, Cero Autodisparo e Imágenes en `localStorage`
+
+1. **Flujo Visual Unificado en 2 Etapas (`Etapa 1/2` y `Etapa 2/2`):**
+   - **Etapa 1/2:** Saludo inicial en audio + Imagen personalizada (esperando respuesta `"CORRECTO"`).
+   - **Etapa 2/2:** Pedido confirmado (`datosConfirmados = true`) y agradecimiento final.
+   - El botón en cada tarjeta del pedido se llama **`Mensaje`** con el contador explícito **`N msg`** (para no confundirlo con la etapa).
+2. **Cero Autodisparo y Contextualización Estricta (`AdminView.tsx` + `whatsappEngine.ts`):**
+   - Abrir la consola con **`Mensaje`** o alternar entre `👤 Yo Escribo`, `IA Texto` e `IA Audio` es **100% libre de autodisparo** (`triggerAiNow = false`).
+   - En el servidor, `hasConversationAlreadyStarted()` y `getLatestUnansweredClientMessage()` impiden reiniciar la charla al saludo #1 cuando el pedido ya avanzó, respondiendo únicamente en contexto si el último mensaje sin contestar es del cliente (o mediante el botón manual **`🔄 Re-disparar etapa`**).
+3. **Conciliación de Cola Offline (`WACHAT-*`) y Caché Local de Imágenes:**
+   - Al reconectar WhatsApp, `flushPendingMessages()` y `reconcileLocalAndCloudChatMessages()` sincronizan `WACHAT-*` y descartan recordatorios `pending_connection` antiguos ya colapsados y enviados.
+   - Las imágenes entrantes enviadas por clientes (`client_*`) se cachean en el **`localStorage` del navegador** (`noelux_chat_imgs_<orderId>`) sin almacenarse en la base de datos, y se purgan automáticamente al eliminar el pedido.

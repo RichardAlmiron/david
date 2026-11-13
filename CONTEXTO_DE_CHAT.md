@@ -1265,3 +1265,16 @@ Al auditar las conversaciones reales en producción (incluyendo el caso de la cl
   - *Limitaciones reales observadas:* el entorno local no cuenta con Railway CLI para hacer streaming de logs stdout internos del contenedor en Railway, y las rutas protegidas de escritura ERP (`POST /api/erp/...`) requieren sesión/autenticación administrativa activa para invocación directa en producción.
 - **Actualización documental y `push`:** Sincronizados [`README.md`](./README.md), [`CEREBRO_AUTOADS.md`](./CEREBRO_AUTOADS.md), [`ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md`](./ARQUITECTURA_CONSTRUCTOR_PLANTILLAS_IA_META_DEEPSEEK.md), [`ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md`](./ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md), [`ARQUITECTURA_WHATSAPP_IA_VOZ.md`](./ARQUITECTURA_WHATSAPP_IA_VOZ.md), [`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md) y [`CONTEXTO_DE_CHAT.md`](./CONTEXTO_DE_CHAT.md).
 
+---
+
+## 42. Fase 81 — Estabilidad Multi-Deploy WhatsApp, Consola `Mensaje` Sin Autodisparo (2 Etapas) e Imágenes en `localStorage`
+
+- **Estabilidad de Sesión WhatsApp (`WALOCK-leader` + Reconexión):**
+  - Aislamiento por servicio/entorno (`getDeploymentServiceScope`, `evaluateProductionRuntime`, `isSameDeploymentServiceLock`) para evitar robos de sesión entre contenedores; preservación de QR (`qr_ready` vs `connecting`), timeouts de versión Baileys y limpieza de mensajes offline apilados (`collapseStackedOfflineAiMessages`).
+  - Conciliación `reconcileLocalAndCloudChatMessages()` + sincronización `syncCustomerChatToCloud()` tras `flushPendingMessages()` para eliminar relojes `pending_connection` fantasma en `WACHAT-*`.
+- **Consola `Mensaje` en 2 Etapas, Cero Autodisparo y Contextualización:**
+  - Botón de tarjeta renombrado a **`Mensaje`** con etiqueta **`N msg`**, apertura 100% de solo lectura (`triggerAiNow = false` al cambiar modos) y vista clara de **`Etapa 1/2 · Saludo + Imagen`** vs **`Etapa 2/2 · Confirmado`** con botón manual **`🔄 Re-disparar etapa`** y **`🤖 Responder en contexto`**.
+  - Guardia en `whatsappEngine.ts` (`hasConversationAlreadyStarted`, `getLatestUnansweredClientMessage`) para no reiniciar nunca al saludo #1.
+- **Imágenes entrantes de clientes en `localStorage`:**
+  - Descarga de imágenes enviadas por clientes en `messages.upsert` con caché local por pedido en el navegador (`noelux_chat_imgs_<orderId>`) y eliminación automática al borrar el pedido, sin acumular binarios en la base de datos.
+
