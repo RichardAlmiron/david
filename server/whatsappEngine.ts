@@ -1,16 +1,22 @@
 import makeWASocket, {
-  useMultiFileAuthState,
   DisconnectReason,
   fetchLatestWaWebVersion,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-  encodeSignedDeviceIdentity,
   jidEncode,
   generateMessageIDV2,
   downloadMediaMessage,
   Browsers,
+  proto,
   type WASocket
 } from '@whiskeysockets/baileys';
+import {
+  createAtomicMultiFileAuthState,
+  withPhoneOutboundLock,
+  installWhatsAppE2eeReliabilityLayer,
+  atomicWriteFileSync,
+  type WaE2eeController
+} from './waE2eeReliability';
 // @ts-ignore
 import WebSocket from 'ws';
 import QRCode from 'qrcode';
@@ -23,7 +29,9 @@ import zlib from 'zlib';
 import type { WaCommercialStageId } from '../src/types';
 import {
   VIP_PREPAYMENT_DISCOUNT_GS,
-  resolvePostTurnCommercialStage
+  resolvePostTurnCommercialStage,
+  resolveOrderCommercialPackAndPrice,
+  getCatalogPackPrices
 } from '../src/utils/waStageCommercials';
 import {
   formatGuaraniesSpeech,
@@ -172,6 +180,7 @@ interface WaSessionRuntime {
   isConnecting: boolean;
   lastSaveCredsPromise: Promise<any>;
   lastKeyWritePromise?: Promise<any>;
+  e2eeController?: WaE2eeController;
 }
 
 // Detección automática de Volumen Persistente en Railway (/data o RAILWAY_VOLUME_MOUNT_PATH):
@@ -208,6 +217,7 @@ const DELETED_ORDERS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'deleted_ord
 const SELLER_CHATS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'seller_agent_chats.json');
 const ADMIN_SESSIONS_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'admin_sessions.json');
 const AUTOADS_WORKSPACES_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'autoads_workspaces.json');
+const SENT_PROTO_CACHE_FILE = path.resolve(PERSISTENT_PATHS.dataRoot, 'wa_sent_protos_cache.json');
 
 export function getPersistentDataPaths() {
   return {
@@ -1387,7 +1397,11 @@ const unclearReplyCounter = new Map<string, number>();
 
 let cloudPollerStarted = false;
 const recentlySentMsgIds = new Set<string>();
-const recentSentProtoMessages = new Map<string, any>();
+const SENT_PROTO_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_SENT_PROTO_CACHE = 300;
+const recentSentProtoMessages = new Map<string, { msg: any; savedAt: number }>();
+let sentProtoCacheHydrated = false;
+let sentProtoFlushTimer: NodeJS.Timeout | null = null;
 const recentIncomingDiagnostics: Array<{
   ts: string;
   remoteJid: string;
@@ -1399,10 +1413,82 @@ const recentIncomingDiagnostics: Array<{
   status: string;
 }> = [];
 
-function recordSentProtoMessage(msgId?: string, protoMsg?: any) {
+function hydrateSentProtoCacheOnce() {
+  if (sentProtoCacheHydrated) return;
+  sentProtoCacheHydrated = true;
+  try {
+    if (!fs.existsSync(SENT_PROTO_CACHE_FILE)) return;
+    const raw = JSON.parse(fs.readFileSync(SENT_PROTO_CACHE_FILE, 'utf-8'));
+    const entries = Array.isArray(raw) ? raw : [];
+    const now = Date.now();
+    for (const item of entries) {
+      if (!item?.id || !item?.b64 || typeof item.savedAt !== 'number') continue;
+      if (now - item.savedAt > SENT_PROTO_TTL_MS) continue;
+      try {
+        const decoded = proto.Message.decode(Buffer.from(String(item.b64), 'base64'));
+        recentSentProtoMessages.set(String(item.id), { msg: decoded, savedAt: item.savedAt });
+      } catch {}
+    }
+  } catch {}
+}
+
+function flushSentProtoCacheNow() {
+  if (sentProtoFlushTimer) {
+    clearTimeout(sentProtoFlushTimer);
+    sentProtoFlushTimer = null;
+  }
+  try {
+    const now = Date.now();
+    const serialized: Array<{ id: string; b64: string; savedAt: number }> = [];
+    for (const [id, entry] of recentSentProtoMessages.entries()) {
+      if (now - entry.savedAt > SENT_PROTO_TTL_MS) {
+        recentSentProtoMessages.delete(id);
+        continue;
+      }
+      try {
+        const encoded = proto.Message.encode(entry.msg).finish();
+        serialized.push({
+          id,
+          b64: Buffer.from(encoded).toString('base64'),
+          savedAt: entry.savedAt
+        });
+      } catch {}
+    }
+    const trimmed = serialized.slice(-MAX_SENT_PROTO_CACHE);
+    atomicWriteFileSync(SENT_PROTO_CACHE_FILE, JSON.stringify(trimmed));
+  } catch {}
+}
+
+function scheduleSentProtoCacheFlush() {
+  if (sentProtoFlushTimer) return;
+  sentProtoFlushTimer = setTimeout(() => {
+    sentProtoFlushTimer = null;
+    flushSentProtoCacheNow();
+  }, 50);
+  sentProtoFlushTimer.unref?.();
+}
+
+export function recordSentProtoMessage(msgId?: string, protoMsg?: any) {
   if (!msgId || !protoMsg) return;
-  recentSentProtoMessages.set(msgId, protoMsg);
-  setTimeout(() => recentSentProtoMessages.delete(msgId), 10 * 60 * 1000);
+  hydrateSentProtoCacheOnce();
+  recentSentProtoMessages.set(msgId, { msg: protoMsg, savedAt: Date.now() });
+  if (recentSentProtoMessages.size > MAX_SENT_PROTO_CACHE) {
+    const oldestKey = recentSentProtoMessages.keys().next().value;
+    if (oldestKey) recentSentProtoMessages.delete(oldestKey);
+  }
+  scheduleSentProtoCacheFlush();
+}
+
+export function lookupSentProtoMessage(msgId?: string): any {
+  if (!msgId) return undefined;
+  hydrateSentProtoCacheOnce();
+  const entry = recentSentProtoMessages.get(msgId);
+  if (!entry) return undefined;
+  if (Date.now() - entry.savedAt > SENT_PROTO_TTL_MS) {
+    recentSentProtoMessages.delete(msgId);
+    return undefined;
+  }
+  return entry.msg;
 }
 
 const MAX_INCOMING_DIAGNOSTICS = 80;
@@ -1734,27 +1820,28 @@ function persistLidPhoneMapping(
   lidToPhoneCache.set(lidDigits, cleanPhone);
   phoneToLidCache.set(cleanPhone, lidDigits);
 
-  try {
-    if (session?.authDir && fs.existsSync(session.authDir)) {
-      const fwdPath = path.join(session.authDir, `lid-mapping-${cleanPhone}.json`);
-      const revPath = path.join(session.authDir, `lid-mapping-${lidDigits}_reverse.json`);
-      if (!fs.existsSync(fwdPath)) {
-        fs.writeFileSync(fwdPath, JSON.stringify(lidDigits), 'utf8');
-      }
-      if (!fs.existsSync(revPath)) {
-        fs.writeFileSync(revPath, JSON.stringify(cleanPhone), 'utf8');
-      }
-    }
-  } catch {}
-
-  try {
-    const sockAny = session?.sock as any;
-    if (sockAny?.signalRepository?.lidMapping?.storeLIDPNMappings) {
+  const sockAny = session?.sock as any;
+  if (sockAny?.signalRepository?.lidMapping?.storeLIDPNMappings) {
+    try {
       Promise.resolve(
         sockAny.signalRepository.lidMapping.storeLIDPNMappings([
           { lid: `${lidDigits}@lid`, pn: `${cleanPhone}@s.whatsapp.net` }
         ])
       ).catch(() => {});
+    } catch {}
+    return;
+  }
+
+  try {
+    if (session?.authDir && fs.existsSync(session.authDir)) {
+      const fwdPath = path.join(session.authDir, `lid-mapping-${cleanPhone}.json`);
+      const revPath = path.join(session.authDir, `lid-mapping-${lidDigits}_reverse.json`);
+      if (!fs.existsSync(fwdPath)) {
+        atomicWriteFileSync(fwdPath, JSON.stringify(lidDigits));
+      }
+      if (!fs.existsSync(revPath)) {
+        atomicWriteFileSync(revPath, JSON.stringify(cleanPhone));
+      }
     }
   } catch {}
 }
@@ -2831,7 +2918,8 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
                 secondaryAudioReply,
                 locationTextConfirmation,
                 matchedOrder,
-                convStep
+                convStep,
+                regenerateWelcomeImage
               } = await generateSmartAiReply(cleanPhone, String(cmd.text).trim());
               if (reply) {
                 await sendWhatsAppVoiceCallTurn(
@@ -2844,7 +2932,9 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
                   undefined,
                   locationTextConfirmation,
                   false,
-                  secondaryAudioReply
+                  secondaryAudioReply,
+                  regenerateWelcomeImage ? 'stage1_welcome' : undefined,
+                  Boolean(regenerateWelcomeImage)
                 );
               }
             }
@@ -3828,44 +3918,50 @@ export async function dispatchStageCommercialForOrderIfNeeded(
     let msgId = `wacom-${stageId}-${Date.now()}`;
 
     if (activeSession && activeSession.sock) {
-      try {
-        const jid = outboundJid || resolveOutboundWhatsAppJid(cleanPhone);
-        const preMsgId = generateMessageIDV2(activeSession.sock.user?.id);
-        recentlySentMsgIds.add(preMsgId);
-        setTimeout(() => recentlySentMsgIds.delete(preMsgId), 45000);
+      await withPhoneOutboundLock(cleanPhone, async () => {
+        try {
+          const sock = activeSession.sock;
+          if (!sock) return;
+          const jid = outboundJid || resolveOutboundWhatsAppJid(cleanPhone);
+          await activeSession.e2eeController?.ensureOutboundSessionReady(jid, cleanPhone);
+          const preMsgId = generateMessageIDV2(sock.user?.id);
+          recentlySentMsgIds.add(preMsgId);
+          setTimeout(() => recentlySentMsgIds.delete(preMsgId), 45000);
 
-        const sentImg = await activeSession.sock.sendMessage(
-          jid,
-          {
-            image: imageBuffer,
-            mimetype: 'image/jpeg'
-          } as any,
-          { messageId: preMsgId }
-        );
+          const sentImg = await sock.sendMessage(
+            jid,
+            {
+              image: imageBuffer,
+              mimetype: 'image/jpeg'
+            } as any,
+            { messageId: preMsgId }
+          );
 
-        if (sentImg?.key?.id) {
-          msgId = sentImg.key.id;
-          sentViaWaSocket = true;
-          recentlySentMsgIds.add(msgId);
-          setTimeout(() => recentlySentMsgIds.delete(msgId), 45000);
-          recordSentProtoMessage(msgId, sentImg.message);
-        } else {
+          if (sentImg?.key?.id) {
+            msgId = sentImg.key.id;
+            sentViaWaSocket = true;
+            recentlySentMsgIds.add(msgId);
+            setTimeout(() => recentlySentMsgIds.delete(msgId), 45000);
+            recordSentProtoMessage(msgId, sentImg.message);
+            activeSession.e2eeController?.markPhoneHealthy(cleanPhone);
+          } else {
+            recordIncomingDiagnostic({
+              remoteJid: jid,
+              resolvedPhone: cleanPhone,
+              hasMessage: false,
+              status: 'outbound_image_no_key_id'
+            });
+          }
+        } catch (waImgErr: any) {
+          console.error(`[StageCommercial ${stageId}] Error enviando imagen por Baileys:`, waImgErr);
           recordIncomingDiagnostic({
-            remoteJid: jid,
+            remoteJid: outboundJid || `${cleanPhone}@s.whatsapp.net`,
             resolvedPhone: cleanPhone,
             hasMessage: false,
-            status: 'outbound_image_no_key_id'
+            status: `outbound_image_error:${String(waImgErr?.message || waImgErr).slice(0, 80)}`
           });
         }
-      } catch (waImgErr: any) {
-        console.error(`[StageCommercial ${stageId}] Error enviando imagen por Baileys:`, waImgErr);
-        recordIncomingDiagnostic({
-          remoteJid: outboundJid || `${cleanPhone}@s.whatsapp.net`,
-          resolvedPhone: cleanPhone,
-          hasMessage: false,
-          status: `outbound_image_error:${String(waImgErr?.message || waImgErr).slice(0, 80)}`
-        });
-      }
+      });
     }
 
     const qtyNum = Math.max(1, Math.round(Number(liveOrder.cantidad) || 1));
@@ -4732,7 +4828,8 @@ export const IMAGE_AFTER_AUDIO_DELAY_MS = 5000;
 // 1) Audio #1 enviado PRIMERO pidiendo al cliente que mire la imagen que le va a llegar abajo (5s después) y confirme con "CORRECTO"
 // 2) Imagen #1 generada dinámicamente con TODOS los datos del cliente (nombre, celular, ciudad, barrio/dirección, monto, SIN GPS), enviada 5s DESPUÉS del Audio #1 (queda abajo del audio)
 export async function buildInitialOrderAiMessage(
-  order: any
+  order: any,
+  productOverride?: any
 ): Promise<{ text: string; locationTextConfirmation: string; error?: string }> {
   const rawName = String(order?.nombre || '').trim();
   const firstName = getNaturalFirstName(rawName);
@@ -4749,7 +4846,9 @@ export async function buildInitialOrderAiMessage(
         : qty === 3
           ? 'el pack de tres unidades'
           : `el paquete de ${qty} unidades`;
-  const rawMontoNum = Number(String(order?.monto || '189000').replace(/\D/g, '')) || 189000;
+  const matchedProd = productOverride || resolveMatchedProductPageForOrder(order);
+  const resolvedPackPrice = resolveOrderCommercialPackAndPrice(order, matchedProd);
+  const rawMontoNum = Number(String(order?.monto || '').replace(/\D/g, '')) || resolvedPackPrice.officialPriceGs;
   const montoSpeech = formatGuaraniesSpeech(rawMontoNum);
 
   if (order?.direccion && /\[GPS:|google\.com\/maps|maps\.google\.com/i.test(String(order.direccion))) {
@@ -4767,6 +4866,31 @@ export async function buildInitialOrderAiMessage(
     text: normalizeParaguayanPhonesInText(expressGreetingAudio),
     locationTextConfirmation: ''
   };
+}
+
+export function buildConfirmationSuccessAudioText(order: any, productOverride?: any): string {
+  const rawCustomerName = String(order?.nombre || '').trim();
+  const customerFirstName = getNaturalFirstName(rawCustomerName);
+  const displayFirstName = customerFirstName && customerFirstName !== 'qué tal' ? customerFirstName : 'cliente';
+  const shortProduct = getNaturalProductName(order?.producto);
+  const packQty = Math.max(1, Math.round(Number(order?.cantidad || order?.pack || 1) || 1));
+  const packSpeech =
+    packQty === 1
+      ? 'tu paquete de una unidad'
+      : packQty === 2
+        ? 'tu pack de dos unidades'
+        : packQty === 3
+          ? 'tu pack de tres unidades'
+          : `tu pack de ${packQty} unidades`;
+  const matchedProd = productOverride || resolveMatchedProductPageForOrder(order);
+  const resolvedPackPrice = resolveOrderCommercialPackAndPrice(order, matchedProd);
+  const rawMontoNum = Number(String(order?.monto || '').replace(/\D/g, '')) || resolvedPackPrice.officialPriceGs;
+  const montoSpeech = formatGuaraniesSpeech(rawMontoNum);
+  const productDePhrase = /^el\s+/i.test(shortProduct)
+    ? `del ${shortProduct.replace(/^el\s+/i, '')}`
+    : `de ${shortProduct}`;
+
+  return `Excelente, ${displayFirstName}, muchísimas gracias por tu confirmación. Tu pedido de ${packSpeech} ${productDePhrase} por un total de ${montoSpeech} al recibir ya está totalmente confirmado y pasa directo a empaquetado a tu nombre.`;
 }
 
 // Get or initialize current step (1..5) for a phone/order
@@ -5017,7 +5141,8 @@ export async function triggerAiConfirmationForOrder(
       reply,
       secondaryAudioReply,
       locationTextConfirmation,
-      convStep
+      convStep,
+      regenerateWelcomeImage
     } = await generateSmartAiReply(
       cleanPhone,
       lastMsg.text,
@@ -5042,7 +5167,9 @@ export async function triggerAiConfirmationForOrder(
         undefined,
         locationTextConfirmation,
         false,
-        secondaryAudioReply
+        secondaryAudioReply,
+        regenerateWelcomeImage ? 'stage1_welcome' : undefined,
+        Boolean(regenerateWelcomeImage)
       );
       return;
     }
@@ -5261,190 +5388,202 @@ export async function sendWhatsAppVoiceCallTurn(
   activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 15_000);
 
   if (activeSession && activeSession.sock) {
-    const jid = preResolvedJid || resolveOutboundWhatsAppJid(cleanPhone);
+    const turnResult = await withPhoneOutboundLock(cleanPhone, async () => {
+      const sock = activeSession.sock;
+      if (!sock) return null;
+      const jid = preResolvedJid || resolveOutboundWhatsAppJid(cleanPhone);
 
-    const preMsgId = generateMessageIDV2(activeSession.sock.user?.id);
-    recentlySentMsgIds.add(preMsgId);
-    setTimeout(() => recentlySentMsgIds.delete(preMsgId), 60000);
-    let msgId = preMsgId;
-    let anySent = false;
+      await activeSession.e2eeController?.ensureOutboundSessionReady(jid, cleanPhone);
 
-    // 1. PRIMERO SIEMPRE EL AUDIO: enviar la nota de voz PTT OGG/Opus antes de autorizar cualquier imagen
-    if (channel === 'audio' && tts.audioBuffer) {
-      try {
-        await activeSession.sock.sendPresenceUpdate('recording', jid).catch(() => {});
-        const sentAudio = await activeSession.sock.sendMessage(
-          jid,
-          {
-            audio: tts.audioBuffer,
-            mimetype: 'audio/ogg; codecs=opus',
-            ptt: true,
-            seconds: tts.durationSeconds,
-            waveform: tts.waveform
-          } as any,
-          { messageId: preMsgId }
-        );
-        if (sentAudio?.key?.id) {
-          msgId = sentAudio.key.id;
-          anySent = true;
-          recentlySentMsgIds.add(msgId);
-          setTimeout(() => recentlySentMsgIds.delete(msgId), 60000);
-          recordSentProtoMessage(msgId, sentAudio.message);
-        }
-        recentOutboundByPhone.set(cleanPhone, { orderId, sentAt: Date.now(), sessionId: activeSession.id });
-        activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 12_000);
-        cacheRecipientLidMapping(activeSession, cleanPhone, orderId).catch(() => {});
-      } catch (audioErr: any) {
-        console.error('[Deepgram OGG/Opus PTT Send Error]:', audioErr);
-        recordIncomingDiagnostic({
-          remoteJid: jid,
-          resolvedPhone: cleanPhone,
-          hasMessage: false,
-          status: `outbound_audio_error:${String(audioErr?.message || audioErr).slice(0, 80)}`
-        });
-      }
-    }
+      const preMsgId = generateMessageIDV2(sock.user?.id);
+      recentlySentMsgIds.add(preMsgId);
+      setTimeout(() => recentlySentMsgIds.delete(preMsgId), 60000);
+      let msgId = preMsgId;
+      let anySent = false;
 
-    // 2. Si no se pudo enviar como audio (o si el canal es texto), enviar en texto para garantizar que el cliente jamás quede en silencio
-    if (!anySent) {
-      try {
-        const textPayload = cleanLocationText ? `${spokenText}\n\n${cleanLocationText}` : spokenText;
-        const sentText = await activeSession.sock.sendMessage(
-          jid,
-          { text: textPayload },
-          { messageId: preMsgId }
-        );
-        if (sentText?.key?.id) {
-          msgId = sentText.key.id;
-          anySent = true;
-          recentlySentMsgIds.add(sentText.key.id);
-          setTimeout(() => recentlySentMsgIds.delete(sentText.key.id!), 60000);
-          recordSentProtoMessage(sentText.key.id, sentText.message);
-        }
-        recentOutboundByPhone.set(cleanPhone, { orderId, sentAt: Date.now(), sessionId: activeSession.id });
-        activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 12_000);
-        cacheRecipientLidMapping(activeSession, cleanPhone, orderId).catch(() => {});
-      } catch (textErr: any) {
-        console.error('[Voice Note Fallback Text Error]:', textErr);
-        recordIncomingDiagnostic({
-          remoteJid: jid,
-          resolvedPhone: cleanPhone,
-          hasMessage: false,
-          status: `outbound_text_error:${String(textErr?.message || textErr).slice(0, 80)}`
-        });
-      }
-    }
-
-    if (anySent) {
-      const senderLabel =
-        channel === 'audio' && tts.audioBuffer
-          ? `🎤 ${tts.voiceProfile.name} · Nota de Voz (Paso ${convStep}/5)`
-          : `🤖 Agente IA (Paso ${convStep}/5)`;
-
-      const savedMsg = appendChatMessage(cleanPhone, {
-        id: msgId,
-        sender: 'ai',
-        senderName: senderLabel,
-        text: spokenText,
-        status: 'sent',
-        orderId,
-        sessionId: activeSession.id,
-        isVoiceCall: false,
-        isAudioNote: channel === 'audio',
-        agentChannel: channel,
-        convStep,
-        voiceEngine: tts.engine,
-        audioDataUrl: tts.audioDataUrl || undefined
-      });
-
-      // 3. COMPUERTA ESTRICTA AUDIO-PRIMERO:
-      // Una vez enviado el audio por el agente, esperar exactamente 5 segundos (5000ms) mientras escucha el audio
-      // antes de enviar la imagen abajo.
-      if (effectiveCommercialStage) {
-        activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 20_000);
-        await new Promise(resolve => setTimeout(resolve, IMAGE_AFTER_AUDIO_DELAY_MS));
-        await dispatchStageCommercialForOrderIfNeeded(
-          cleanPhone,
-          officialOrderCheck,
-          effectiveCommercialStage,
-          activeSession.id,
-          forceRegenerateCommercial,
-          preGeneratedCommercial
-        );
-        activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 10_000);
-
-        // Si acabamos de enviar la Imagen #1 de Bienvenida (stage1_welcome), pre-renderizar en segundo plano
-        // en disco la Imagen Final de Pedido Confirmado (stage3_confirmed) SIN enviarla, para que apenas el cliente
-        // responda "CORRECTO" la imagen ya esté lista en caché y el turno de confirmación salga al instante.
-        if (effectiveCommercialStage === 'stage1_welcome' && officialOrderCheck) {
-          setImmediate(() => {
-            const matchedProductBg = resolveMatchedProductPageForOrder(officialOrderCheck);
-            renderPersonalizedOrderConfirmedImage({
-              order: officialOrderCheck,
-              product: matchedProductBg,
-              openRouterApiKey: getOpenRouterApiKey(),
-              openRouterImageModel: getOpenRouterImageModel(),
-              appReferer:
-                process.env.APP_URL ||
-                process.env.PUBLIC_URL ||
-                'https://noelux.app',
-              forceRegenerate: false
-            }).catch(() => {});
+      // 1. PRIMERO SIEMPRE EL AUDIO: enviar la nota de voz PTT OGG/Opus antes de autorizar cualquier imagen
+      if (channel === 'audio' && tts.audioBuffer) {
+        try {
+          await sock.sendPresenceUpdate('recording', jid).catch(() => {});
+          const sentAudio = await sock.sendMessage(
+            jid,
+            {
+              audio: tts.audioBuffer,
+              mimetype: 'audio/ogg; codecs=opus',
+              ptt: true,
+              seconds: tts.durationSeconds,
+              waveform: tts.waveform
+            } as any,
+            { messageId: preMsgId }
+          );
+          if (sentAudio?.key?.id) {
+            msgId = sentAudio.key.id;
+            anySent = true;
+            recentlySentMsgIds.add(msgId);
+            setTimeout(() => recentlySentMsgIds.delete(msgId), 60000);
+            recordSentProtoMessage(msgId, sentAudio.message);
+            activeSession.e2eeController?.markPhoneHealthy(cleanPhone);
+          }
+          recentOutboundByPhone.set(cleanPhone, { orderId, sentAt: Date.now(), sessionId: activeSession.id });
+          activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 12_000);
+          cacheRecipientLidMapping(activeSession, cleanPhone, orderId).catch(() => {});
+        } catch (audioErr: any) {
+          console.error('[Deepgram OGG/Opus PTT Send Error]:', audioErr);
+          recordIncomingDiagnostic({
+            remoteJid: jid,
+            resolvedPhone: cleanPhone,
+            hasMessage: false,
+            status: `outbound_audio_error:${String(audioErr?.message || audioErr).slice(0, 80)}`
           });
         }
       }
 
-      // 4. Si este turno incluye tarjeta en TEXTO (Ciudad/Barrio/GPS inicial), enviarla tras breve pausa
-      if (channel === 'audio' && cleanLocationText) {
-        await new Promise(resolve => setTimeout(resolve, 650));
+      // 2. Si no se pudo enviar como audio (o si el canal es texto), enviar en texto para garantizar que el cliente jamás quede en silencio
+      if (!anySent) {
         try {
-          if (activeSession.sock) {
-            await activeSession.sock.sendPresenceUpdate('paused', jid).catch(() => {});
-          }
-          await sendWhatsAppMessage(
-            cleanPhone,
-            cleanLocationText,
-            'ai',
-            orderId,
-            activeSession.id
+          const textPayload = cleanLocationText ? `${spokenText}\n\n${cleanLocationText}` : spokenText;
+          const sentText = await sock.sendMessage(
+            jid,
+            { text: textPayload },
+            { messageId: preMsgId }
           );
-        } catch (locErr) {
-          console.error('[Location Text Companion Error]:', locErr);
+          if (sentText?.key?.id) {
+            msgId = sentText.key.id;
+            anySent = true;
+            recentlySentMsgIds.add(sentText.key.id);
+            setTimeout(() => recentlySentMsgIds.delete(sentText.key.id!), 60000);
+            recordSentProtoMessage(sentText.key.id, sentText.message);
+            activeSession.e2eeController?.markPhoneHealthy(cleanPhone);
+          }
+          recentOutboundByPhone.set(cleanPhone, { orderId, sentAt: Date.now(), sessionId: activeSession.id });
+          activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 12_000);
+          cacheRecipientLidMapping(activeSession, cleanPhone, orderId).catch(() => {});
+        } catch (textErr: any) {
+          console.error('[Voice Note Fallback Text Error]:', textErr);
+          recordIncomingDiagnostic({
+            remoteJid: jid,
+            resolvedPhone: cleanPhone,
+            hasMessage: false,
+            status: `outbound_text_error:${String(textErr?.message || textErr).slice(0, 80)}`
+          });
         }
       }
 
-      // 5. Si este turno tiene un SEGUNDO AUDIO consecutivo distinto, enviarlo sin ninguna imagen de promoción
-      const cleanSecondaryAudio = typeof secondaryAudioText === 'string' ? secondaryAudioText.trim() : '';
-      if (cleanSecondaryAudio) {
-        await new Promise(resolve => setTimeout(resolve, 850));
-        await sendWhatsAppVoiceCallTurn(
-          cleanPhone,
-          cleanSecondaryAudio,
-          convStep,
+      if (anySent) {
+        const senderLabel =
+          channel === 'audio' && tts.audioBuffer
+            ? `🎤 ${tts.voiceProfile.name} · Nota de Voz (Paso ${convStep}/5)`
+            : `🤖 Agente IA (Paso ${convStep}/5)`;
+
+        const savedMsg = appendChatMessage(cleanPhone, {
+          id: msgId,
+          sender: 'ai',
+          senderName: senderLabel,
+          text: spokenText,
+          status: 'sent',
           orderId,
-          activeSession.id,
-          'audio',
-          resolvedVoiceId,
-          undefined,
-          true
-        );
-      }
+          sessionId: activeSession.id,
+          isVoiceCall: false,
+          isAudioNote: channel === 'audio',
+          agentChannel: channel,
+          convStep,
+          voiceEngine: tts.engine,
+          audioDataUrl: tts.audioDataUrl || undefined
+        });
 
-      if (!isFollowUpTurn && convStep < 5) {
-        scheduleCustomerInactivityFollowUp(cleanPhone, orderId, activeSession.id);
-      } else if (convStep >= 5) {
-        cancelCustomerInactivityFollowUp(cleanPhone);
-      }
+        // 3. COMPUERTA ESTRICTA AUDIO-PRIMERO:
+        // Una vez enviado el audio por el agente, esperar exactamente 5 segundos (5000ms) mientras escucha el audio
+        // antes de enviar la imagen abajo.
+        if (effectiveCommercialStage) {
+          activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 20_000);
+          await new Promise(resolve => setTimeout(resolve, IMAGE_AFTER_AUDIO_DELAY_MS));
+          await dispatchStageCommercialForOrderIfNeeded(
+            cleanPhone,
+            officialOrderCheck,
+            effectiveCommercialStage,
+            activeSession.id,
+            forceRegenerateCommercial,
+            preGeneratedCommercial
+          );
+          activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 10_000);
 
-      scheduleCloudStateSync(true);
-      return {
-        sentViaSocket: true,
-        message: savedMsg,
-        audioDataUrl: tts.audioDataUrl,
-        convStep,
-        voiceEngine: tts.engine,
-        callRung: false
-      };
+          // Si acabamos de enviar la Imagen #1 de Bienvenida (stage1_welcome), pre-renderizar en segundo plano
+          // en disco la Imagen Final de Pedido Confirmado (stage3_confirmed) SIN enviarla, para que apenas el cliente
+          // responda "CORRECTO" la imagen ya esté lista en caché y el turno de confirmación salga al instante.
+          if (effectiveCommercialStage === 'stage1_welcome' && officialOrderCheck) {
+            setImmediate(() => {
+              const matchedProductBg = resolveMatchedProductPageForOrder(officialOrderCheck);
+              renderPersonalizedOrderConfirmedImage({
+                order: officialOrderCheck,
+                product: matchedProductBg,
+                openRouterApiKey: getOpenRouterApiKey(),
+                openRouterImageModel: getOpenRouterImageModel(),
+                appReferer:
+                  process.env.APP_URL ||
+                  process.env.PUBLIC_URL ||
+                  'https://noelux.app',
+                forceRegenerate: false
+              }).catch(() => {});
+            });
+          }
+        }
+
+        // 4. Si este turno incluye tarjeta en TEXTO (Ciudad/Barrio/GPS inicial), enviarla tras breve pausa
+        if (channel === 'audio' && cleanLocationText) {
+          await new Promise(resolve => setTimeout(resolve, 650));
+          try {
+            if (activeSession.sock) {
+              await activeSession.sock.sendPresenceUpdate('paused', jid).catch(() => {});
+            }
+            await sendWhatsAppMessage(
+              cleanPhone,
+              cleanLocationText,
+              'ai',
+              orderId,
+              activeSession.id
+            );
+          } catch (locErr) {
+            console.error('[Location Text Companion Error]:', locErr);
+          }
+        }
+
+        // 5. Si este turno tiene un SEGUNDO AUDIO consecutivo distinto, enviarlo sin ninguna imagen de promoción
+        const cleanSecondaryAudio = typeof secondaryAudioText === 'string' ? secondaryAudioText.trim() : '';
+        if (cleanSecondaryAudio) {
+          await new Promise(resolve => setTimeout(resolve, 850));
+          await sendWhatsAppVoiceCallTurn(
+            cleanPhone,
+            cleanSecondaryAudio,
+            convStep,
+            orderId,
+            activeSession.id,
+            'audio',
+            resolvedVoiceId,
+            undefined,
+            true
+          );
+        }
+
+        if (!isFollowUpTurn && convStep < 5) {
+          scheduleCustomerInactivityFollowUp(cleanPhone, orderId, activeSession.id);
+        } else if (convStep >= 5) {
+          cancelCustomerInactivityFollowUp(cleanPhone);
+        }
+
+        scheduleCloudStateSync(true);
+        return {
+          sentViaSocket: true,
+          message: savedMsg,
+          audioDataUrl: tts.audioDataUrl,
+          convStep,
+          voiceEngine: tts.engine,
+          callRung: false
+        };
+      }
+      return null;
+    });
+    if (turnResult) {
+      return turnResult;
     }
   }
 
@@ -5683,7 +5822,8 @@ async function executeStartOrAdvanceVoiceCallSerial(
       secondaryAudioReply,
       locationTextConfirmation,
       matchedOrder: updatedOrder,
-      convStep
+      convStep,
+      regenerateWelcomeImage
     } = await generateSmartAiReply(
       cleanPhone,
       customerSpokenText.trim(),
@@ -5714,7 +5854,9 @@ async function executeStartOrAdvanceVoiceCallSerial(
       undefined,
       locationTextConfirmation,
       false,
-      secondaryAudioReply
+      secondaryAudioReply,
+      regenerateWelcomeImage ? 'stage1_welcome' : undefined,
+      Boolean(regenerateWelcomeImage)
     );
 
     return {
@@ -5803,7 +5945,8 @@ async function executeStartOrAdvanceVoiceCallSerial(
       secondaryAudioReply,
       locationTextConfirmation,
       matchedOrder: updatedOrder,
-      convStep
+      convStep,
+      regenerateWelcomeImage
     } = await generateSmartAiReply(
       cleanPhone,
       lastMsg.text,
@@ -5832,7 +5975,9 @@ async function executeStartOrAdvanceVoiceCallSerial(
       undefined,
       locationTextConfirmation,
       false,
-      secondaryAudioReply
+      secondaryAudioReply,
+      regenerateWelcomeImage ? 'stage1_welcome' : undefined,
+      Boolean(regenerateWelcomeImage)
     );
     return {
       reply,
@@ -5920,6 +6065,7 @@ export async function generateSmartAiReply(
   convStep: number;
   error?: string;
   forceAudioReply?: boolean;
+  regenerateWelcomeImage?: boolean;
 }> {
   return generateContextualAiReply(phone, incomingText, isFromAudio);
 }
@@ -7196,6 +7342,7 @@ export async function generateContextualAiReply(
   convStep: number;
   error?: string;
   forceAudioReply?: boolean;
+  regenerateWelcomeImage?: boolean;
 }> {
   const pedidos = loadPedidos();
   const activeCandidate = findActiveOrderForPhone(phone);
@@ -7490,9 +7637,15 @@ export async function generateContextualAiReply(
   const customerFirstName = getNaturalFirstName(rawCustomerName);
   const displayFirstName = customerFirstName && customerFirstName !== 'qué tal' ? customerFirstName : 'cliente';
   const shortProduct = getNaturalProductName(matchedOrder?.producto);
-  const packQty = Math.min(3, Math.max(1, Number(matchedOrder?.cantidad || matchedOrder?.pack || 1) || 1));
+  const packQty = Math.max(1, Math.round(Number(matchedOrder?.cantidad || matchedOrder?.pack || 1) || 1));
   const packSpeech =
-    packQty === 3 ? 'tu pack de tres unidades' : packQty === 2 ? 'tu pack de dos unidades' : 'tu unidad';
+    packQty === 1
+      ? 'tu paquete de una unidad'
+      : packQty === 2
+        ? 'tu pack de dos unidades'
+        : packQty === 3
+          ? 'tu pack de tres unidades'
+          : `tu pack de ${packQty} unidades`;
 
   if (matchedOrder && mapReplacementRes.updated) {
     matchedOrder.awaitingMapCorrection = false;
@@ -7567,7 +7720,7 @@ export async function generateContextualAiReply(
     };
 
     // PASO 2 FINAL: Audio único de confirmación y pase a empaquetado (sin promoción de pago anticipado)
-    const confirmAudio = `Excelente, ${displayFirstName}, muchísimas gracias por tu confirmación. Tu pedido de ${packSpeech} de ${shortProduct} ya está totalmente confirmado y pasa directo a empaquetado a tu nombre.`;
+    const confirmAudio = buildConfirmationSuccessAudioText(matchedOrder);
 
     setOrderConvStep(cleanPhone, matchedOrder, 5);
     matchedOrder.convStep = 5;
@@ -7603,7 +7756,7 @@ export async function generateContextualAiReply(
     return finalizeExpressConfirmationAndPromoTurn();
   }
 
-  // 2. Si el cliente hizo una consulta, reportó un cambio de barrio/ciudad/nombre o respondió con otra frase, analizar con Deepgram LLM en Audio
+  // 2. Si el cliente hizo una consulta, reportó un cambio de barrio/ciudad/nombre/paquete o respondió con otra frase, analizar con Deepgram LLM en Audio
   let llmReply = '';
   let llmSpeechAct = '';
   let llmCoherent = false;
@@ -7612,22 +7765,27 @@ export async function generateContextualAiReply(
   let correctedName = '';
   let correctedCity = '';
   let correctedAddress = '';
+  let correctedPackQty = 0;
+
+  const matchedProdForPricing = resolveMatchedProductPageForOrder(matchedOrder);
+  const catalogPrices = getCatalogPackPrices(matchedProdForPricing);
 
   if (deepgramKey) {
     try {
       const expressSystemPrompt = `Sos un ejecutivo humano real, cálido y muy eficiente del área de confirmación de envíos de Noelux en Paraguay. Hablás español paraguayo natural (usás "vos", "tenés", "podés").
 Tu respuesta en "reply" se convierte directamente a VOZ (Nota de Audio TTS), por lo que ESTÁ PROHIBIDO usar emojis, asteriscos, enlaces URL, y ESTÁ PROHIBIDO pronunciar el nombre de la calle, barrio o ciudad en el audio.
-REGLA DE MONEDA: Siempre escribí los montos en letras seguidos de la palabra "guaraníes" (ej. "${formatGuaraniesSpeech(matchedOrder?.monto || 189000)}").
+REGLA DE MONEDA: Siempre escribí los montos en letras seguidos de la palabra "guaraníes" (ej. "${formatGuaraniesSpeech(matchedOrder?.monto || catalogPrices[1])}").
 
 CONTEXTO DE CONFIRMACIÓN EXPRESS CON IMAGEN DINÁMICA PERSONALIZADA:
-- Ya le enviamos al cliente nuestro Audio #1 pidiendo que mire la imagen de abajo que le acabamos de enviar, seguido 1 segundo después por su Imagen #1 VIP generada dinámicamente con TODOS sus datos de entrega (${packSpeech} de ${shortProduct}, nombre ${rawCustomerName}, teléfono ${formatPhoneForSpeech(matchedOrder?.celular || cleanPhone)}, ciudad ${matchedOrder?.ciudad || ''}, barrio/dirección ${cleanStreetAddressText(matchedOrder?.direccion || '')}) SIN enlaces GPS.
-- NUNCA le pidas GPS al cliente ni le envíes enlaces de mapas o Google Maps; la confirmación se basa en los datos mostrados en su imagen (nombre, ciudad, barrio y dirección).
+- Ya le enviamos al cliente nuestro Audio #1 pidiendo que mire la imagen de abajo que le acabamos de enviar, seguido 5 segundos después por su Imagen #1 VIP generada dinámicamente con TODOS sus datos de entrega (${packSpeech} de ${shortProduct}, monto ${formatGuaraniesSpeech(matchedOrder?.monto || catalogPrices[1])}, nombre ${rawCustomerName}, teléfono ${formatPhoneForSpeech(matchedOrder?.celular || cleanPhone)}, ciudad ${matchedOrder?.ciudad || ''}, barrio/dirección ${cleanStreetAddressText(matchedOrder?.direccion || '')}) SIN enlaces GPS.
+- NUNCA le pidas GPS al cliente ni le envíes enlaces de mapas o Google Maps; la confirmación se basa en los datos mostrados en su imagen (nombre, ciudad, barrio, dirección y paquete).
 - Solo necesitamos que el cliente confirme si esos datos están bien diciendo o escribiendo la palabra "correcto".
 - Si el cliente ya está confirmando con otras palabras claras (ej. "todo impecable mandame nomás", "esos mismos son mis datos", "sí señor todo bien"), marcá "speechAct": "STEP_CONFIRMATION_COMPLETE" y "orderConfirmed": true.
-- Si el cliente corrige su nombre, su ciudad o su barrio/calle, extraelo en "correctedName", "correctedCity" o "correctedAddress", poné "speechAct": "DATA_CORRECTION_OR_UPDATE", "orderConfirmed": false, y en "reply" confirmále que ya corregiste ese dato acá abajo y pedile que te diga la palabra "correcto" para cerrar su confirmación.
+- Si el cliente pide CAMBIAR DE PAQUETE / CANTIDAD (ej. "quiero dos paquetes", "mejor mandame el pack 2", "cambiame a tres unidades"): extraé "correctedPackQty": 1, 2 o 3 (número entero), poné "speechAct": "DATA_CORRECTION_OR_UPDATE", "orderConfirmed": false, y en "reply" confirmále el nuevo paquete con su precio oficial (Pack 1: ${formatGuaraniesSpeech(catalogPrices[1])}; Pack 2: ${formatGuaraniesSpeech(catalogPrices[2])}; Pack 3: ${formatGuaraniesSpeech(catalogPrices[3])}) y decile: "Acá abajo te paso la nueva imagen actualizada con tu paquete; mirala y confirmame con la palabra correcto".
+- Si el cliente corrige su nombre, su ciudad o su barrio/calle: extraelo en "correctedName", "correctedCity" o "correctedAddress", poné "speechAct": "DATA_CORRECTION_OR_UPDATE", "orderConfirmed": false, y en "reply" confirmále que ya corregiste ese dato acá abajo y pedile que te diga la palabra "correcto" para cerrar su confirmación.
 - Si el cliente hace una pregunta sobre el producto (${shortProduct}) o el envío, respondé su consulta con calidez usando este conocimiento:
 ${contextoIA}
-Y al final de tu audio recordále amablemente: "Si los datos de entrega que ves en tu imagen acá arriba están bien, decime o escribime la palabra correcto así ya pasamos tu pedido a empaquetado".`;
+Y al final de tu audio recordále amablemente: "Si los datos de entrega que ves en tu imagen que te envié están bien, decime o escribime la palabra correcto así ya pasamos tu pedido a empaquetado".`;
 
       const rawLlmOutput = await callDeepgramAgentLLM(
         expressSystemPrompt,
@@ -7651,6 +7809,10 @@ Y al final de tu audio recordále amablemente: "Si los datos de entrega que ves 
         correctedName = String(parsed.correctedName || '').trim();
         correctedCity = String(parsed.correctedCity || '').trim();
         correctedAddress = String(parsed.correctedAddress || '').trim();
+        const parsedPack = Math.round(Number(parsed.correctedPackQty || 0));
+        if (parsedPack >= 1 && parsedPack <= 10) {
+          correctedPackQty = parsedPack;
+        }
       }
     } catch (e: any) {
       console.warn('[Express Confirmation LLM Warning]:', e?.message || e);
@@ -7662,12 +7824,38 @@ Y al final de tu audio recordále amablemente: "Si los datos de entrega que ves 
   }
 
   let updatedLocationCard: string | undefined = undefined;
+  let regenerateWelcomeImage = false;
   if (llmCoherent) {
     if (correctedName) matchedOrder.nombre = correctedName;
     if (correctedCity) matchedOrder.ciudad = correctedCity;
     if (correctedAddress) matchedOrder.direccion = cleanStreetAddressText(correctedAddress);
     if (extractedHouseRef) matchedOrder.referenciaCasa = extractedHouseRef;
+    if (correctedPackQty >= 1 && correctedPackQty !== packQty) {
+      const resolvedNewPack = resolveOrderCommercialPackAndPrice(correctedPackQty, matchedProdForPricing);
+      matchedOrder.cantidad = resolvedNewPack.unitCount;
+      matchedOrder.monto = resolvedNewPack.officialPriceGs;
+      matchedOrder.waCommercialSentStages = {
+        ...(matchedOrder.waCommercialSentStages || {}),
+        stage1_welcome: false,
+        stage3_confirmed: false
+      };
+      if (orderKeyForStage) {
+        sentWelcomeStageByOrderId.delete(orderKeyForStage);
+        sentConfirmedStageByOrderId.delete(orderKeyForStage);
+      }
+      regenerateWelcomeImage = true;
+    }
     if (correctedName || correctedCity || correctedAddress) {
+      matchedOrder.waCommercialSentStages = {
+        ...(matchedOrder.waCommercialSentStages || {}),
+        stage1_welcome: false,
+        stage3_confirmed: false
+      };
+      if (orderKeyForStage) {
+        sentWelcomeStageByOrderId.delete(orderKeyForStage);
+        sentConfirmedStageByOrderId.delete(orderKeyForStage);
+      }
+      regenerateWelcomeImage = true;
       updatedLocationCard = buildExpressInitialAddressTextCard(matchedOrder);
     }
   }
@@ -7693,6 +7881,7 @@ Y al final de tu audio recordále amablemente: "Si los datos de entrega que ves 
     matchedOrder,
     convStep: 3,
     forceAudioReply: true,
+    regenerateWelcomeImage,
     error: apiWarning || undefined
   };
 }
@@ -7704,84 +7893,101 @@ async function flushPendingMessages(session: WaSessionRuntime) {
     const storage = loadChatsStorage();
     let changed = false;
     for (const [phone, messages] of Object.entries(storage.chats)) {
-      for (const msg of messages) {
-        if (msg.status === 'pending_connection' && (msg.sender === 'admin' || msg.sender === 'ai')) {
-          try {
-            const jid = resolveOutboundWhatsAppJid(phone);
-            if (msg.isVoiceCall || msg.isAudioNote) {
-              let audioSentOk = false;
-              try {
-                const tts = await synthesizeSpeechSelfHosted(msg.text);
-                if (tts.audioBuffer && session.sock) {
-                  const sentAudio = await session.sock.sendMessage(jid, {
-                    audio: tts.audioBuffer,
-                    mimetype: 'audio/ogg; codecs=opus',
-                    ptt: true,
-                    seconds: tts.durationSeconds,
-                    waveform: tts.waveform
-                  } as any);
-                  if (sentAudio?.key?.id) {
-                    audioSentOk = true;
-                    if (tts.audioDataUrl) {
-                      msg.audioDataUrl = tts.audioDataUrl;
+      const hasPending = messages.some(
+        msg => msg.status === 'pending_connection' && (msg.sender === 'admin' || msg.sender === 'ai')
+      );
+      if (!hasPending) continue;
+
+      const cleanPhone = normalizeWaPhone(phone) || phone;
+      await withPhoneOutboundLock(cleanPhone, async () => {
+        const jid = resolveOutboundWhatsAppJid(phone);
+        if (jid) {
+          await session.e2eeController?.ensureOutboundSessionReady(jid, cleanPhone);
+        }
+        for (const msg of messages) {
+          if (msg.status === 'pending_connection' && (msg.sender === 'admin' || msg.sender === 'ai')) {
+            try {
+              const sock = session.sock;
+              if (!sock || !jid) break;
+              if (msg.isVoiceCall || msg.isAudioNote) {
+                let audioSentOk = false;
+                try {
+                  const tts = await synthesizeSpeechSelfHosted(msg.text);
+                  if (tts.audioBuffer && session.sock) {
+                    const sentAudio = await session.sock.sendMessage(jid, {
+                      audio: tts.audioBuffer,
+                      mimetype: 'audio/ogg; codecs=opus',
+                      ptt: true,
+                      seconds: tts.durationSeconds,
+                      waveform: tts.waveform
+                    } as any);
+                    if (sentAudio?.key?.id) {
+                      audioSentOk = true;
+                      if (tts.audioDataUrl) {
+                        msg.audioDataUrl = tts.audioDataUrl;
+                      }
+                      msg.voiceEngine = tts.engine;
+                      recentlySentMsgIds.add(sentAudio.key.id);
+                      setTimeout(() => recentlySentMsgIds.delete(sentAudio.key.id!), 30000);
+                      recordSentProtoMessage(sentAudio.key.id, sentAudio.message);
+                      session.e2eeController?.markPhoneHealthy(cleanPhone);
                     }
-                    msg.voiceEngine = tts.engine;
-                    recentlySentMsgIds.add(sentAudio.key.id);
-                    setTimeout(() => recentlySentMsgIds.delete(sentAudio.key.id!), 30000);
-                    recordSentProtoMessage(sentAudio.key.id, sentAudio.message);
                   }
-                }
-              } catch {}
-              if (msg.isAudioNote && !audioSentOk) {
-                continue;
-              }
-            }
-            if (!msg.isAudioNote) {
-              if (msg.imageUrl && String(msg.imageUrl).trim()) {
-                const relImgPath = String(msg.imageUrl).replace(/^\/+/, '');
-                if (relImgPath.includes('promo_prepayment')) {
-                  msg.status = 'sent';
-                  changed = true;
+                } catch {}
+                if (msg.isAudioNote && !audioSentOk) {
                   continue;
                 }
-                const candidateImgPath = path.resolve(process.cwd(), 'public', relImgPath);
-                const resolvedQueuedImgPath = fs.existsSync(candidateImgPath) ? candidateImgPath : '';
-                if (resolvedQueuedImgPath) {
-                  // Garantizar que también al vaciar cola offline la imagen salga 5 segundos después del audio previo
-                  await new Promise(resolve => setTimeout(resolve, IMAGE_AFTER_AUDIO_DELAY_MS));
-                  const queuedImgBuf = fs.readFileSync(resolvedQueuedImgPath);
-                  const sentImg = await session.sock.sendMessage(jid, {
-                    image: queuedImgBuf,
-                    mimetype: 'image/jpeg'
-                  } as any);
-                  if (sentImg?.key?.id) {
-                    recentlySentMsgIds.add(sentImg.key.id);
-                    setTimeout(() => recentlySentMsgIds.delete(sentImg.key.id!), 30000);
-                    recordSentProtoMessage(sentImg.key.id, sentImg.message);
+              }
+              if (!msg.isAudioNote) {
+                if (msg.imageUrl && String(msg.imageUrl).trim()) {
+                  const relImgPath = String(msg.imageUrl).replace(/^\/+/, '');
+                  if (relImgPath.includes('promo_prepayment')) {
+                    msg.status = 'sent';
+                    changed = true;
+                    continue;
+                  }
+                  const candidateImgPath = path.resolve(process.cwd(), 'public', relImgPath);
+                  const resolvedQueuedImgPath = fs.existsSync(candidateImgPath) ? candidateImgPath : '';
+                  if (resolvedQueuedImgPath) {
+                    // Garantizar que también al vaciar cola offline la imagen salga 5 segundos después del audio previo
+                    await new Promise(resolve => setTimeout(resolve, IMAGE_AFTER_AUDIO_DELAY_MS));
+                    const queuedImgBuf = fs.readFileSync(resolvedQueuedImgPath);
+                    const sentImg = await sock.sendMessage(jid, {
+                      image: queuedImgBuf,
+                      mimetype: 'image/jpeg'
+                    } as any);
+                    if (sentImg?.key?.id) {
+                      recentlySentMsgIds.add(sentImg.key.id);
+                      setTimeout(() => recentlySentMsgIds.delete(sentImg.key.id!), 30000);
+                      recordSentProtoMessage(sentImg.key.id, sentImg.message);
+                      session.e2eeController?.markPhoneHealthy(cleanPhone);
+                    }
+                  } else {
+                    const sent = await sock.sendMessage(jid, { text: msg.text });
+                    if (sent?.key?.id) {
+                      recentlySentMsgIds.add(sent.key.id);
+                      setTimeout(() => recentlySentMsgIds.delete(sent.key.id!), 30000);
+                      recordSentProtoMessage(sent.key.id, sent.message);
+                      session.e2eeController?.markPhoneHealthy(cleanPhone);
+                    }
                   }
                 } else {
-                  const sent = await session.sock.sendMessage(jid, { text: msg.text });
+                  const sent = await sock.sendMessage(jid, { text: msg.text });
                   if (sent?.key?.id) {
                     recentlySentMsgIds.add(sent.key.id);
                     setTimeout(() => recentlySentMsgIds.delete(sent.key.id!), 30000);
                     recordSentProtoMessage(sent.key.id, sent.message);
+                    session.e2eeController?.markPhoneHealthy(cleanPhone);
                   }
                 }
-              } else {
-                const sent = await session.sock.sendMessage(jid, { text: msg.text });
-                if (sent?.key?.id) {
-                  recentlySentMsgIds.add(sent.key.id);
-                  setTimeout(() => recentlySentMsgIds.delete(sent.key.id!), 30000);
-                  recordSentProtoMessage(sent.key.id, sent.message);
-                }
               }
-            }
-            msg.status = 'sent';
-            msg.sessionId = session.id;
-            changed = true;
-          } catch {}
+              msg.status = 'sent';
+              msg.sessionId = session.id;
+              changed = true;
+            } catch {}
+          }
         }
-      }
+      });
     }
     if (changed) {
       saveChatsStorage(storage);
@@ -7867,6 +8073,7 @@ async function yieldToNewerDeployLeader(reason: string, newerEpoch?: number): Pr
     console.log(`[NASA Handoff] 🤝 Contenedor saliente (${MY_INSTANCE_ID}) cediendo liderazgo (${reason})...`);
     try {
       // 1. Cancelar timers diferidos para ejecutar el flush definitivo ahora mismo
+      flushSentProtoCacheNow();
       for (const [id, timer] of authBackupTimers) {
         clearTimeout(timer);
         authBackupTimers.delete(id);
@@ -7879,6 +8086,7 @@ async function yieldToNewerDeployLeader(reason: string, newerEpoch?: number): Pr
         s.isConnecting = false;
         const activeSock = s.sock;
         s.sock = null;
+        s.e2eeController = undefined;
 
         await Promise.race([
           Promise.allSettled([
@@ -8721,10 +8929,12 @@ export function ensureBootCloudRestoreCompleted(): Promise<void> {
 
 // Cleanly tear down a specific session's socket without triggering reconnect loops
 async function stopSessionSocket(session: WaSessionRuntime, clearSession = true): Promise<void> {
+  flushSentProtoCacheNow();
   session.socketSeq++;
   session.isConnecting = false;
   const oldSock = session.sock;
   session.sock = null;
+  session.e2eeController = undefined;
 
   if (oldSock) {
     try {
@@ -8877,7 +9087,7 @@ export async function connectWhatsAppEngine(
     sanitizeAuthDirectory(session.authDir);
 
     await session.lastSaveCredsPromise.catch(() => { });
-    const { state, saveCreds } = await useMultiFileAuthState(session.authDir);
+    const { state, saveCreds } = await createAtomicMultiFileAuthState(session.authDir);
 
     let version: [number, number, number] = [2, 3000, 1052855845];
     try {
@@ -8985,12 +9195,9 @@ export async function connectWhatsAppEngine(
       // Deduplicar destinatarios en envíos 1-a-1 y Self-Chat únicamente cuando hay duplicados reales
       patchMessageBeforeSending: (msg: any, recipientJids?: string[]) =>
         dedupePatchMessageBeforeSending(msg, recipientJids),
-      maxMsgRetryCount: 6,
+      maxMsgRetryCount: 8,
       getMessage: async (key: any) => {
-        if (key?.id && recentSentProtoMessages.has(key.id)) {
-          return recentSentProtoMessages.get(key.id);
-        }
-        return undefined;
+        return lookupSentProtoMessage(key?.id);
       },
       markOnlineOnConnect: true,
       enableAutoSessionRecreation: true,
@@ -9000,6 +9207,24 @@ export async function connectWhatsAppEngine(
       defaultQueryTimeoutMs: 60000,
       keepAliveIntervalMs: 25000
     });
+
+    const e2eeController = installWhatsAppE2eeReliabilityLayer({
+      sock: newSock,
+      authState: { creds: state.creds, keys: cacheableKeys },
+      sessionId: session.id,
+      userDevicesCache,
+      maxMsgRetryCount: 8,
+      recordProto: (msgId, protoMsg) => recordSentProtoMessage(msgId, protoMsg),
+      lookupProto: (msgId) => lookupSentProtoMessage(msgId),
+      resolveCleanPhone: (jid) => resolveJidToCleanPhone(session, jid),
+      prepareRecipientAddressing: (cleanPhone) => cacheRecipientLidMapping(session, cleanPhone),
+      altResolver: {
+        getLidForPhoneDigits: (ph) => phoneToLidCache.get(normalizeWaPhone(ph) || ph),
+        getPhoneDigitsForLid: (lid) => lidToPhoneCache.get(String(lid || '').replace(/\D/g, ''))
+      },
+      onDiagnostic: (entry) => recordIncomingDiagnostic(entry)
+    });
+    session.e2eeController = e2eeController;
 
     // Wire-level tap: confirma si los stanzas CB:message / CB:notification / CB:ack llegan del servidor WA
     // incluso antes de descifrado Signal o event-buffer. Cero mutación, solo telemetría.
@@ -9044,6 +9269,20 @@ export async function connectWhatsAppEngine(
             remoteJid: from || 'notification',
             hasMessage: false,
             status: `wire_cb_notif:${nType}:${from}`.slice(0, 140)
+          });
+        } catch { }
+      });
+
+      (newSock as any).ws?.on?.('CB:receipt,type:retry', (node: any) => {
+        try {
+          const from = String(node?.attrs?.from || '');
+          const id = String(node?.attrs?.id || '');
+          const hasCached = Boolean(lookupSentProtoMessage(id));
+          console.log(`[WA Wire CB:receipt RETRY] id=${id} from=${from} cachedProto=${hasCached}`);
+          recordIncomingDiagnostic({
+            remoteJid: from || 'receipt_retry',
+            hasMessage: hasCached,
+            status: `wire_cb_retry:${id}:cached=${hasCached}`.slice(0, 140)
           });
         } catch { }
       });
@@ -9135,60 +9374,26 @@ export async function connectWhatsAppEngine(
 
     // =========================================================================
     // BLINDAJE CRIPTOGRÁFICO SIGNAL PARA BAILEYS 7.0.0-rc14:
-    // 1. Evita que getUSyncDevices -> assertSessions(lids, true) cierre y destruya sesiones Signal sanas al enviar mensajes.
-    // 2. Convierte 'Key used already or never filled' (MISSING_KEYS_ERROR_TEXT) en un error recuperable ('Bad MAC')
-    //    para que Baileys envíe un retry receipt nativo en vez de descartar el mensaje con NACK 487, SIN borrar la sesión en el primer intento.
+    // 1. Permitimos SIEMPRE que injectE2ESession procese el key bundle fresco cuando el teléfono
+    //    del cliente envía un Retry Receipt ("Esperando el mensaje. Esto puede tomar tiempo."),
+    //    re-cifrando y entregando de inmediato el audio/imagen al destinatario.
+    // 2. Convierte 'Key used already or never filled' (MISSING_KEYS_ERROR_TEXT) en 'Bad MAC'
+    //    para que Baileys envíe un retry receipt nativo al descifrar entrantes.
     // =========================================================================
-    const forceRecreateSignalAddrs = new Set<string>();
     const rawSignalRepo = (newSock as any).signalRepository;
-    if (rawSignalRepo) {
-      if (typeof rawSignalRepo.injectE2ESession === 'function') {
-        const origInjectE2ESession = rawSignalRepo.injectE2ESession.bind(rawSignalRepo);
-        rawSignalRepo.injectE2ESession = async (opts: any) => {
-          try {
-            const jid = String(opts?.jid || '');
-            const addr =
-              jid && typeof rawSignalRepo.jidToSignalProtocolAddress === 'function'
-                ? String(rawSignalRepo.jidToSignalProtocolAddress(jid))
-                : '';
-            if (addr && !forceRecreateSignalAddrs.has(addr)) {
-              const validation = await rawSignalRepo.validateSession(jid);
-              if (validation?.exists) {
-                return;
-              }
-            }
-            if (addr) {
-              forceRecreateSignalAddrs.delete(addr);
-            }
-          } catch {}
-          return origInjectE2ESession(opts);
-        };
-      }
-
-      if (typeof rawSignalRepo.decryptMessage === 'function') {
-        const origDecryptMessage = rawSignalRepo.decryptMessage.bind(rawSignalRepo);
-        rawSignalRepo.decryptMessage = async (opts: any) => {
-          try {
-            return await origDecryptMessage(opts);
-          } catch (err: any) {
-            const errMsg = String(err?.message || err || '');
-            const jid = String(opts?.jid || '');
-            try {
-              const addr =
-                jid && typeof rawSignalRepo.jidToSignalProtocolAddress === 'function'
-                  ? String(rawSignalRepo.jidToSignalProtocolAddress(jid))
-                  : '';
-              if (addr) {
-                forceRecreateSignalAddrs.add(addr);
-              }
-            } catch {}
-            if (err && typeof err === 'object' && errMsg.includes('Key used already or never filled')) {
-              err.message = 'Bad MAC';
-            }
-            throw err;
+    if (rawSignalRepo && typeof rawSignalRepo.decryptMessage === 'function') {
+      const origDecryptMessage = rawSignalRepo.decryptMessage.bind(rawSignalRepo);
+      rawSignalRepo.decryptMessage = async (opts: any) => {
+        try {
+          return await origDecryptMessage(opts);
+        } catch (err: any) {
+          const errMsg = String(err?.message || err || '');
+          if (err && typeof err === 'object' && errMsg.includes('Key used already or never filled')) {
+            err.message = 'Bad MAC';
           }
-        };
-      }
+          throw err;
+        }
+      };
     }
 
     session.sock = newSock;
@@ -9916,6 +10121,9 @@ export async function connectWhatsAppEngine(
           // Cancel any pending 1-minute inactivity follow-up timer as soon as the customer sends any message
           if (!isFromAdmin) {
             cancelCustomerInactivityFollowUp(cleanPhone);
+            if (event.type === 'notify') {
+              e2eeController.markPhoneHealthy(cleanPhone);
+            }
             scheduleWaSessionAuthBackup(session, 25000);
           }
 
@@ -10315,7 +10523,9 @@ export async function connectWhatsAppEngine(
                         undefined,
                         locationTextConfirmation,
                         false,
-                        secondaryAudioReply
+                        secondaryAudioReply,
+                        smartRes.regenerateWelcomeImage ? 'stage1_welcome' : undefined,
+                        Boolean(smartRes.regenerateWelcomeImage)
                       );
                     }
                   } catch (e) {
@@ -10562,31 +10772,38 @@ export async function sendWhatsAppMessage(
 
   if (activeSession && activeSession.sock) {
     try {
-      const jid = resolveOutboundWhatsAppJid(cleanPhone);
-      // Proactively resolve and cache @lid <-> cleanPhone in Baileys v7 before and after sending so incoming @lid replies always match this customer
-      await cacheRecipientLidMapping(activeSession, cleanPhone, orderId);
+      const sentRes = await withPhoneOutboundLock(cleanPhone, async () => {
+        const sock = activeSession.sock;
+        if (!sock) throw new Error('Socket de WhatsApp no disponible');
+        const jid = resolveOutboundWhatsAppJid(cleanPhone);
+        await activeSession.e2eeController?.ensureOutboundSessionReady(jid, cleanPhone);
 
-      try {
-        await activeSession.sock.sendPresenceUpdate('composing', jid);
-      } catch {}
+        try {
+          await sock.sendPresenceUpdate('composing', jid);
+        } catch {}
 
-      const preMsgId = generateMessageIDV2(activeSession.sock.user?.id);
-      recentlySentMsgIds.add(preMsgId);
-      setTimeout(() => recentlySentMsgIds.delete(preMsgId), 45000);
+        const preMsgId = generateMessageIDV2(sock.user?.id);
+        recentlySentMsgIds.add(preMsgId);
+        setTimeout(() => recentlySentMsgIds.delete(preMsgId), 45000);
 
-      const sent = await activeSession.sock.sendMessage(
-        jid,
-        { text },
-        { messageId: preMsgId }
-      );
-      const msgId = sent?.key?.id || preMsgId;
-      recentlySentMsgIds.add(msgId);
-      setTimeout(() => recentlySentMsgIds.delete(msgId), 45000);
-      recordSentProtoMessage(msgId, sent?.message);
-      cacheRecipientLidMapping(activeSession, cleanPhone, orderId).catch(() => {});
+        const sent = await sock.sendMessage(
+          jid,
+          { text },
+          { messageId: preMsgId }
+        );
+        const msgId = sent?.key?.id || preMsgId;
+        recentlySentMsgIds.add(msgId);
+        setTimeout(() => recentlySentMsgIds.delete(msgId), 45000);
+        recordSentProtoMessage(msgId, sent?.message);
+        if (sent?.key?.id) {
+          activeSession.e2eeController?.markPhoneHealthy(cleanPhone);
+        }
+        cacheRecipientLidMapping(activeSession, cleanPhone, orderId).catch(() => {});
+        return msgId;
+      });
 
       const savedMsg = appendChatMessage(cleanPhone, {
-        id: msgId,
+        id: sentRes,
         sender,
         senderName:
           sender === 'ai'
@@ -10845,22 +11062,28 @@ async function sendDirectRawWhatsAppToSeller(
   if (!activeSession || !activeSession.sock) return false;
 
   try {
-    const jid = `${cleanPhone}@s.whatsapp.net`;
-    const preMsgId = generateMessageIDV2(activeSession.sock.user?.id);
-    recentlySentMsgIds.add(preMsgId);
-    setTimeout(() => recentlySentMsgIds.delete(preMsgId), 45000);
+    return await withPhoneOutboundLock(cleanPhone, async () => {
+      const sock = activeSession.sock;
+      if (!sock) return false;
+      const jid = `${cleanPhone}@s.whatsapp.net`;
+      await activeSession.e2eeController?.ensureOutboundSessionReady(jid, cleanPhone);
+      const preMsgId = generateMessageIDV2(sock.user?.id);
+      recentlySentMsgIds.add(preMsgId);
+      setTimeout(() => recentlySentMsgIds.delete(preMsgId), 45000);
 
-    const sent = await activeSession.sock.sendMessage(
-      jid,
-      { text },
-      { messageId: preMsgId }
-    );
-    if (sent?.key?.id) {
-      recentlySentMsgIds.add(sent.key.id);
-      setTimeout(() => recentlySentMsgIds.delete(sent.key.id!), 45000);
-      recordSentProtoMessage(sent.key.id, sent.message);
-    }
-    return true;
+      const sent = await sock.sendMessage(
+        jid,
+        { text },
+        { messageId: preMsgId }
+      );
+      if (sent?.key?.id) {
+        recentlySentMsgIds.add(sent.key.id);
+        setTimeout(() => recentlySentMsgIds.delete(sent.key.id!), 45000);
+        recordSentProtoMessage(sent.key.id, sent.message);
+        activeSession.e2eeController?.markPhoneHealthy(cleanPhone);
+      }
+      return true;
+    });
   } catch (e) {
     return false;
   }

@@ -760,7 +760,39 @@ function sanitizePersonalizedDeliveryText(raw: string): string {
     .trim();
 }
 
-function extractCustomerShippingSummaryForVisual(
+export function buildPackVisualDirective(packQty: number): {
+  badgeText: string;
+  visualCountPrompt: string;
+} {
+  const qty = Math.max(1, Math.round(Number(packQty) || 1));
+  if (qty === 1) {
+    return {
+      badgeText: 'PACK 1 UNIDAD · 1X',
+      visualCountPrompt:
+        'SHOW EXACTLY ONE (1) SINGLE UNIT of the product prominently displayed center-stage (Pack 1 Unidad · 1x). Include a sleek gold badge reading "PACK 1 UNIDAD · 1X".'
+    };
+  }
+  if (qty === 2) {
+    return {
+      badgeText: 'PACK 2 UNIDADES · 2X',
+      visualCountPrompt:
+        'CRITICAL QUANTITY RULE: SHOW EXACTLY TWO (2) IDENTICAL UNITS of the product displayed side-by-side together as a Pack de 2 Unidades (2x) — NEVER show only 1 unit. Include a gleaming gold badge reading "PACK 2 UNIDADES · 2X".'
+    };
+  }
+  if (qty === 3) {
+    return {
+      badgeText: 'PACK 3 UNIDADES · 3X',
+      visualCountPrompt:
+        'CRITICAL QUANTITY RULE: SHOW EXACTLY THREE (3) IDENTICAL UNITS of the product arranged together neatly as a Pack de 3 Unidades (3x) — NEVER show only 1 or 2 units. Include a gleaming gold badge reading "PACK 3 UNIDADES · 3X".'
+    };
+  }
+  return {
+    badgeText: `PACK ${qty} UNIDADES · ${qty}X`,
+    visualCountPrompt: `CRITICAL QUANTITY RULE: SHOW EXACTLY ${qty} IDENTICAL UNITS of the product arranged together neatly as a Pack de ${qty} Unidades (${qty}x) — NEVER show only 1 unit. Include a gleaming gold badge reading "PACK ${qty} UNIDADES · ${qty}X".`
+  };
+}
+
+export function extractCustomerShippingSummaryForVisual(
   orderInput: Partial<Order> & Record<string, any>,
   productInput?: (MinimalProductPricingInput & { descripcion?: string; categoria?: string }) | null
 ) {
@@ -811,14 +843,22 @@ function extractCustomerShippingSummaryForVisual(
   const packQty = resolved.unitCount;
   const totalGsNum = resolved.officialPriceGs;
   const totalGsFormatted = `Gs. ${totalGsNum.toLocaleString('es-PY')}`;
-  const productImgRef = String(
-    productInput?.imagen ||
-      (packQty === 2
-        ? STUDIO_ASSETS.noeluxPack2
-        : packQty >= 3
-          ? STUDIO_ASSETS.noeluxPack3
-          : STUDIO_ASSETS.noeluxPack1)
-  );
+  const rawProductImg = String(productInput?.imagen || '').trim();
+  const isNoeluxProjectorProduct =
+    /noelux|proyector/i.test(String(productInput?.id || '')) ||
+    /noelux|proyector/i.test(productName) ||
+    /galeria-1\.jpg|noelux_/i.test(rawProductImg);
+  const productImgRef =
+    isNoeluxProjectorProduct && packQty === 2
+      ? STUDIO_ASSETS.noeluxPack2
+      : isNoeluxProjectorProduct && packQty >= 3
+        ? STUDIO_ASSETS.noeluxPack3
+        : rawProductImg ||
+          (packQty === 2
+            ? STUDIO_ASSETS.noeluxPack2
+            : packQty >= 3
+              ? STUDIO_ASSETS.noeluxPack3
+              : STUDIO_ASSETS.noeluxPack1);
 
   return {
     resolved,
@@ -994,7 +1034,7 @@ export async function renderPersonalizedOrderWelcomeImage(
     summary.reservaid.replace(/[^a-zA-Z0-9_-]/g, '') || 'NXORDER';
 
   const hashInput = JSON.stringify({
-    layoutVersion: 'square-1x1-hero-v3',
+    layoutVersion: 'square-1x1-hero-v4',
     reservaid: summary.reservaid,
     fullName: summary.fullName,
     phone: summary.phone,
@@ -1041,11 +1081,13 @@ export async function renderPersonalizedOrderWelcomeImage(
       ? `- BARRIO: ${summary.barrioOnly}\n   - CALLE: ${summary.calleOnly}`
       : `- BARRIO Y CALLE: ${summary.addressBarrio}`;
 
+  const packVisual = buildPackVisualDirective(summary.packQty);
+
   const personalizedPrompt = `Create a SPECTACULAR, luxury flagship 1:1 SQUARE (1080x1080) HERO Advertising Poster in Spanish for "NOELUX" titled "¡CONFIRMACIÓN DE PEDIDO!", crafted so it looks jaw-dropping and prestigious AND every single word is GIANT, ULTRA-CRISP, and 100% READABLE in a small mobile WhatsApp chat bubble BEFORE tapping.
 COMPOSITION & VISUAL DRAMA (3D luxury dark emerald-obsidian velvet studio, champagne gold spotlights, subtle festive shimmer bokeh):
 1. SPECTACULAR HERO HEADER (top 31% height):
-   - Left side: Dramatic studio-lit HERO showcase cutout/podium of the product from the attached reference photo (${summary.packQty}x ${summary.productName}) with golden rim lighting, overlapping a gleaming 3D emerald-and-24K-gold Verified Checkmark Seal.
-   - Right/Top area: A gleaming 3D metallic gold ribbon pill reading "#${summary.reservaid} · ENVÍO GRATIS", ABOVE an eye-catching massive glossy 3D metallic white-and-gold Hero Headline: "CONFIRMACIÓN DE PEDIDO", followed by a radiant 24K sculpted gold price plaque reading "${summary.totalGsFormatted} · PAGO AL RECIBIR".
+   - Left side: Dramatic studio-lit HERO showcase cutout/podium of the product from the attached reference photo (${summary.packQty}x ${summary.productName}) with golden rim lighting, overlapping a gleaming 3D emerald-and-24K-gold Verified Checkmark Seal. ${packVisual.visualCountPrompt}
+   - Right/Top area: A gleaming 3D metallic gold ribbon pill reading "#${summary.reservaid} · ${packVisual.badgeText} · ENVÍO GRATIS", ABOVE an eye-catching massive glossy 3D metallic white-and-gold Hero Headline: "CONFIRMACIÓN DE PEDIDO", followed by a radiant 24K sculpted gold price plaque reading "${summary.totalGsFormatted} · PAGO AL RECIBIR".
 2. SLEEK FROSTED GLASS VIP CONSOLE (middle 54% height, 94% width):
    - Ultra-premium dark frosted emerald-glass panel with glowing chamfered 24k gold bevel borders, subtle specular corner highlights, and clean modern luxury typography (NO cramped boxy table cells or heavy yellow horizontal gridlines — clean dark luxury glass breathing space with delicate faint hairline dividers).
    - Print ALL of these exact customer shipping details in LARGE EXTRA-BOLD crisp white and warm gold text with exact spelling:
@@ -1053,7 +1095,7 @@ COMPOSITION & VISUAL DRAMA (3D luxury dark emerald-obsidian velvet studio, champ
    - CELULAR: ${summary.phone}
    - CIUDAD: ${summary.cityDept}
    ${addressLinesForWelcome}
-   ${extraLineForPrompt}- PRODUCTO: ${summary.packQty}x ${summary.productName} · ${summary.totalGsFormatted}
+   ${extraLineForPrompt}- PRODUCTO: ${summary.packQty}x ${summary.productName} (${packVisual.badgeText}) · ${summary.totalGsFormatted}
 3. LUMINOUS 3D HERO CTA BUTTON (bottom 12% height):
    - Glossy emerald-to-gold 3D metallic banner with highlight shine reading: "RESPONDÉ: CORRECTO PARA CONFIRMAR" in ultra-bold giant uppercase letters ("CORRECTO" glowing bright 24k gold).
 STRICT RULES: 100% pure Spanish, zero typos, zero English words, zero GPS coordinates, zero map pins, zero Google Maps links, zero QR codes, and zero tiny unreadable fine print.`;
@@ -1101,7 +1143,7 @@ export async function renderPersonalizedOrderConfirmedImage(
     summary.reservaid.replace(/[^a-zA-Z0-9_-]/g, '') || 'NXORDER';
 
   const hashInput = JSON.stringify({
-    layoutVersion: 'square-1x1-confirmed-courier-v2',
+    layoutVersion: 'square-1x1-confirmed-courier-v3',
     reservaid: summary.reservaid,
     fullName: summary.fullName,
     phone: summary.phone,
@@ -1144,15 +1186,17 @@ export async function renderPersonalizedOrderConfirmedImage(
       ? `- CIUDAD: ${summary.cityDept}\n   - BARRIO: ${summary.barrioOnly}\n   - CALLE: ${summary.calleOnly}`
       : `- CIUDAD: ${summary.cityDept}\n   - BARRIO Y CALLE: ${summary.addressBarrio}`;
 
+  const packVisual = buildPackVisualDirective(summary.packQty);
+
   const confirmedPrompt = `Create a SPECTACULAR, celebratory luxury flagship 1:1 SQUARE (1080x1080) HERO Advertising Poster in Spanish for "NOELUX" titled "¡PEDIDO CONFIRMADO!", crafted so the customer immediately sees their order is 100% CONFIRMED in their name, receives warm congratulations, and clearly reads the 48 to 72 hours courier delivery notice inside a mobile WhatsApp chat bubble BEFORE tapping.
 COMPOSITION & VISUAL DRAMA (3D luxury emerald-obsidian & radiant 24K gold celebration studio, golden confetti shimmer bokeh, prestige parcel dispatch aesthetic):
 1. CELEBRATORY HERO HEADER (top 32% height):
-   - Left side: Dramatic studio-lit HERO showcase of the product from the attached reference photo (${summary.packQty}x ${summary.productName}) next to a gleaming 3D emerald-and-24K-gold Verified Checkmark Seal.
-   - Right/Top area: A gleaming 3D metallic gold ribbon pill reading "#${summary.reservaid} · ¡MUCHAS FELICIDADES!", ABOVE a massive glossy 3D metallic emerald-and-gold Hero Headline: "¡PEDIDO CONFIRMADO!", followed by a glowing gold subheadline: "A NOMBRE DE: ${summary.fullName.toUpperCase()}".
+   - Left side: Dramatic studio-lit HERO showcase of the product from the attached reference photo (${summary.packQty}x ${summary.productName}) next to a gleaming 3D emerald-and-24K-gold Verified Checkmark Seal. ${packVisual.visualCountPrompt}
+   - Right/Top area: A gleaming 3D metallic gold ribbon pill reading "#${summary.reservaid} · ${packVisual.badgeText} · ¡MUCHAS FELICIDADES!", ABOVE a massive glossy 3D metallic emerald-and-gold Hero Headline: "¡PEDIDO CONFIRMADO!", followed by a glowing gold subheadline: "A NOMBRE DE: ${summary.fullName.toUpperCase()}".
 2. SLEEK FROSTED GLASS VIP CONFIRMATION & COURIER CONSOLE (middle 54% height, 94% width):
    - Ultra-premium dark frosted emerald-glass panel with glowing chamfered 24k gold bevel borders and LARGE EXTRA-BOLD crisp white and warm gold typography:
    - ¡FELICIDADES, ${summary.fullName}! TU PEDIDO YA ESTÁ CONFIRMADO
-   - PRODUCTO RESERVADO: ${summary.packQty}x ${summary.productName} · ${summary.totalGsFormatted}
+   - PRODUCTO RESERVADO: ${summary.packQty}x ${summary.productName} (${packVisual.badgeText}) · ${summary.totalGsFormatted}
    ${addressLinesForConfirmed}
    - AVISO DE TRANSPORTE (48 A 72 HORAS): En unos días (48 a 72 hs) la transportadora y los agentes del courier entrarán en contacto con vos y te estarán llamando al ${summary.phone} en cuanto ya estén listos para entregarte tu producto.
 3. LUMINOUS 3D HERO FOOTER BANNER (bottom 12% height):
