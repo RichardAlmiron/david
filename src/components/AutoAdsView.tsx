@@ -100,6 +100,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
   // Pestañas dedicadas e interfaces privadas: Inicio -> Campañas (y vista privada de campaña) / Crear / Conexión & Cloudinary
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'inicio' | 'campanas' | 'crear' | 'conexion'>('inicio');
+  const [freshDraftMode, setFreshDraftMode] = useState<boolean>(false);
   const [conexionSubTab, setConexionSubTab] = useState<'cloudinary' | 'meta' | 'capi' | 'apis'>('cloudinary');
   const [creativesFilter, setCreativesFilter] = useState<'all' | 'feed' | 'pack_reels'>('all');
   const [showIntelDetails, setShowIntelDetails] = useState<boolean>(false);
@@ -332,6 +333,63 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       setAdVariationCounters({});
       setAdPhotoIndexOverride({});
       setWorkflowStep('idle');
+    }
+  };
+
+  const resetCreatorToZero = (options?: {
+    keepSourceAndProduct?: boolean;
+    pickUnusedProduct?: boolean;
+  }) => {
+    setFreshDraftMode(true);
+    setWorkflowStep('idle');
+    setBrainProfile(null);
+    setCreatives([]);
+    setAdVariationCounters({});
+    setAdPhotoIndexOverride({});
+    setEditingAdIdx(null);
+    setShowIntelDetails(false);
+    setCreatorPendingReplaceMap({});
+    setResearchProgressText('');
+    setGenerationProgressText('');
+    setCreativesFilter('all');
+
+    if (!options?.keepSourceAndProduct) {
+      setSourceMode('catalog');
+      setExternalUrlInput('');
+      setScrapedExternalProduct(null);
+      if (options?.pickUnusedProduct) {
+        const publishedProdIds = new Set(
+          publishedCampaigns.map(c => c.productId).filter(Boolean)
+        );
+        const unusedProduct = productPages.find(p => !publishedProdIds.has(p.id));
+        if (unusedProduct) {
+          setSelectedProductId(unusedProduct.id);
+        }
+      }
+    }
+  };
+
+  const handleStartNewCampaign = () => {
+    resetCreatorToZero({ pickUnusedProduct: true });
+    setSelectedCampaignId(null);
+    setActiveWorkspaceTab('crear');
+  };
+
+  const syncWorkspaceOnSelectorChange = (
+    mode: 'catalog' | 'external_url',
+    prodId: string,
+    extUrl: string
+  ) => {
+    if (freshDraftMode) {
+      resetCreatorToZero({ keepSourceAndProduct: true });
+      return;
+    }
+    const key = computeWorkspaceKey(mode, prodId, extUrl);
+    const candidateWs = workspacesCache[key];
+    if (candidateWs && candidateWs.workflowStep !== 'published') {
+      applySavedWorkspaceToState(candidateWs);
+    } else {
+      resetCreatorToZero({ keepSourceAndProduct: true });
     }
   };
 
@@ -631,8 +689,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
         const targetKey = computeWorkspaceKey(resolvedMode, resolvedProdId, resolvedExtUrl);
         const savedWs = loadedWorkspaces[targetKey] || loadedWorkspaces[resolvedProdId];
-        if (savedWs) {
+        if (savedWs && savedWs.workflowStep !== 'published') {
           applySavedWorkspaceToState(savedWs);
+        } else {
+          setFreshDraftMode(true);
         }
         setWorkspaceHydrated(true);
       })
@@ -644,6 +704,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // Guardado automático en tiempo real en el Backend cada vez que avanza un paso, se investiga o se genera una imagen o video
   useEffect(() => {
     if (!workspaceHydrated) return;
+    if (!brainProfile && creatives.length === 0) return;
     const wsKey = computeWorkspaceKey(
       sourceMode,
       selectedCatalogProduct?.id || selectedProductId,
@@ -972,6 +1033,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       return;
     }
 
+    setFreshDraftMode(false);
     setWorkflowStep('researching');
     setCreatives([]);
     setResearchProgressText(
@@ -1971,6 +2033,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       p => p.id === camp.productId || (camp.productSlug && p.slug === camp.productSlug)
     );
     if (matchedProd) {
+      setFreshDraftMode(false);
       setSourceMode('catalog');
       setSelectedProductId(matchedProd.id);
       const key = computeWorkspaceKey('catalog', matchedProd.id, externalUrlInput);
@@ -1978,6 +2041,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       setActiveWorkspaceTab('crear');
       showToast(`📣 Cargando creativos de "${matchedProd.nombre}"`);
     } else if (camp.landingUrl) {
+      setFreshDraftMode(false);
       setSourceMode('external_url');
       setExternalUrlInput(camp.landingUrl);
       const key = computeWorkspaceKey('external_url', selectedProductId, camp.landingUrl);
@@ -2597,7 +2661,13 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             <button
               type="button"
               data-testid="hub-card-crear"
-              onClick={() => setActiveWorkspaceTab('crear')}
+              onClick={() => {
+                if (workflowStep === 'published' || (!brainProfile && creatives.length === 0)) {
+                  handleStartNewCampaign();
+                } else {
+                  setActiveWorkspaceTab('crear');
+                }
+              }}
               className="text-left p-5 rounded-2xl bg-[#0f1115] border border-zinc-800 hover:border-emerald-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
             >
               <div className="space-y-3">
@@ -2606,7 +2676,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[11px] font-bold">
-                    {creatives.length > 0 ? `${creatives.length} creativos` : 'Nuevo Estudio'}
+                    {creatives.length > 0 && workflowStep !== 'published'
+                      ? `${creatives.length} en borrador`
+                      : 'Desde Cero'}
                   </span>
                 </div>
                 <div>
@@ -2971,7 +3043,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             setSelectedCampaignId(null);
             setActiveWorkspaceTab('inicio');
           }}
-          onGoToCreateCampaign={() => setActiveWorkspaceTab('crear')}
+          onGoToCreateCampaign={handleStartNewCampaign}
           onSyncLiveCampaigns={handleSyncLiveMetaCampaigns}
           syncingCampaigns={syncingLiveCampaigns}
           cloudinaryResources={cloudinaryResources}
@@ -3016,7 +3088,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               <span className="h-4 w-px bg-zinc-800 hidden sm:inline-block" />
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-emerald-400" />
-                <h2 className="text-sm font-bold text-zinc-100">Crear Campaña</h2>
+                <h2 className="text-sm font-bold text-zinc-100">
+                  {freshDraftMode || workflowStep === 'idle'
+                    ? 'Nueva Campaña (Desde Cero)'
+                    : 'Crear Campaña'}
+                </h2>
               </div>
 
               <div className="flex items-center gap-1 bg-zinc-950 p-0.5 rounded-xl border border-zinc-800">
@@ -3024,8 +3100,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   type="button"
                   onClick={() => {
                     setSourceMode('catalog');
-                    const key = computeWorkspaceKey('catalog', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
-                    applySavedWorkspaceToState(workspacesCache[key]);
+                    syncWorkspaceOnSelectorChange(
+                      'catalog',
+                      selectedCatalogProduct?.id || selectedProductId,
+                      externalUrlInput
+                    );
                   }}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
                     sourceMode === 'catalog'
@@ -3039,8 +3118,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   type="button"
                   onClick={() => {
                     setSourceMode('external_url');
-                    const key = computeWorkspaceKey('external_url', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
-                    applySavedWorkspaceToState(workspacesCache[key]);
+                    syncWorkspaceOnSelectorChange(
+                      'external_url',
+                      selectedCatalogProduct?.id || selectedProductId,
+                      externalUrlInput
+                    );
                   }}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 ${
                     sourceMode === 'external_url'
@@ -3055,6 +3137,17 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              {(workflowStep !== 'idle' || creatives.length > 0 || Boolean(brainProfile)) && (
+                <button
+                  type="button"
+                  data-testid="autoads-reset-draft-btn"
+                  onClick={() => resetCreatorToZero({ keepSourceAndProduct: true })}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RotateCw className="w-3 h-3 text-emerald-400" />
+                  <span>Desde Cero</span>
+                </button>
+              )}
               <div
                 className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center gap-2"
                 title={
@@ -3106,8 +3199,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     onChange={e => {
                       const newId = e.target.value;
                       setSelectedProductId(newId);
-                      const key = computeWorkspaceKey('catalog', newId, externalUrlInput);
-                      applySavedWorkspaceToState(workspacesCache[key]);
+                      syncWorkspaceOnSelectorChange('catalog', newId, externalUrlInput);
                     }}
                     className="w-full px-3.5 py-2 rounded-lg border border-zinc-800 bg-zinc-900 text-xs sm:text-sm font-semibold text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
                   >
@@ -3137,8 +3229,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   onChange={e => {
                     const nextUrl = e.target.value;
                     setExternalUrlInput(nextUrl);
-                    const key = computeWorkspaceKey('external_url', selectedProductId, nextUrl);
-                    applySavedWorkspaceToState(workspacesCache[key]);
+                    syncWorkspaceOnSelectorChange('external_url', selectedProductId, nextUrl);
                   }}
                   placeholder="https://... Pegá la URL de cualquier página de producto para extraer fotos y precios"
                   className="flex-1 px-3.5 py-2 rounded-lg border border-zinc-800 bg-zinc-900 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 font-mono outline-none focus:border-emerald-500"
@@ -3257,6 +3348,20 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 100% OpenRouter Oficial · Cero fallbacks ficticios
               </span>
             </div>
+
+            {workflowStep === 'idle' && !brainProfile && creatives.length === 0 && (
+              <div
+                data-testid="autoads-fresh-start-notice"
+                className="p-3 rounded-xl bg-zinc-900/60 border border-dashed border-zinc-700/80 text-xs text-zinc-300 flex items-center justify-between gap-2 flex-wrap"
+              >
+                <span>
+                  Nueva campaña lista desde cero. Elegí un producto o URL externa y presioná <strong className="text-emerald-400">1. Investigar Producto</strong>.
+                </span>
+                <span className="text-[11px] text-zinc-500">
+                  Las campañas ya creadas están en «Campañas».
+                </span>
+              </div>
+            )}
 
             {/* Barra de progreso en vivo */}
             {(workflowStep === 'researching' || workflowStep === 'generating') && (
