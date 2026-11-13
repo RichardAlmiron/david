@@ -1299,5 +1299,22 @@ Al auditar las conversaciones reales en producción (incluyendo el caso de la cl
 - **Tarjeta Horizontal Visible en Cabecera Fija del Modal ([`src/views/AdminView.tsx`](./src/views/AdminView.tsx)):**
   - Fijada (`shrink-0`) sobre el área desplazable del chat para que jamás se pierda al hacer scroll hacia abajo: muestra a la izquierda la tarjeta horizontal de **Etapa 1/2** (*Audio de saludo e imagen enviados · Esperando CORRECTO*) / **Etapa 2/2** con botón **`🔄 Re-disparar etapa`**, a la derecha la tarjeta **Último Mensaje Enviado**, y debajo la barra de **Temporizador Descriptivo Dinámico** actualizada segundo a segundo.
 
+---
+
+## 45. Fase 84 — Interfaces Privadas de Campañas AutoAds, Almacenamiento Exclusivo en Cloudinary (Cero Imágenes en Supabase) y Reemplazo Automático en Meta Ads
+
+- **Interfaces Dedicadas Sin Amontonamiento ([`src/components/AutoAdsView.tsx`](./src/components/AutoAdsView.tsx), [`src/components/AutoAdsCampaignsPanel.tsx`](./src/components/AutoAdsCampaignsPanel.tsx), [`src/components/AutoAdsCloudinaryPanel.tsx`](./src/components/AutoAdsCloudinaryPanel.tsx)):**
+  - Hub de inicio limpio con tarjetas principales lado a lado (`Inicio`, `Campañas`, `Crear Campaña`, `Cuenta Meta & Cloudinary`).
+  - Al abrir **`Campañas`**, se muestra exclusivamente el listado de campañas publicadas (`GET /api/meta/campaigns-live` + local); al seleccionar una campaña, se abre su **vista privada dedicada** con jerarquía explícita en 3 niveles: **`1. Campaña` → `2. Grupo de Anuncios (Ad Set)` → `3. Anuncios`**.
+- **Almacenamiento Exclusivo de Imágenes AutoAds en Cloudinary ([`server/cloudinaryStore.ts`](./server/cloudinaryStore.ts), [`.env.example`](./.env.example), [`server/whatsappEngine.ts`](./server/whatsappEngine.ts), [`vite.config.ts`](./vite.config.ts)):**
+  - Subida firmada SHA-1 hacia Cloudinary (`uploadImageToCloudinary`) y consulta en vivo por API (`listCloudinaryAutoAdsImages`) al generar, regenerar o publicar anuncios, conservando respaldo local en disco de Railway únicamente si las variables `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (o `CLOUDINARY_URL`) aún no fueron cargadas en Railway.
+  - **`sanitizeConfigPayloadForSupabase()`** y **`stripBase64FromAutoAdsWorkspaces()`** aseguran que ninguna imagen, blob Base64 ni workspace de AutoAds vuelva a guardarse en Supabase ni en `store_config.json`.
+  - Variables de entorno listas en `.env.example` y panel visual copiable en `Cuenta Meta & Cloudinary`: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_UPLOAD_FOLDER` (o `CLOUDINARY_URL`), consumidas vía `GET /api/cloudinary/status`, `GET /api/cloudinary/resources` y `POST /api/cloudinary/upload`.
+- **Regenerar + Eliminar Anuncio Anterior y Lanzar Reemplazo en Meta Ads ([`server/metaCampaignOps.ts`](./server/metaCampaignOps.ts)):**
+  - `replacePublishedAdInMeta()` y el endpoint `POST /api/autoads/replace-published-ad` permiten regenerar cualquier anuncio puntual (por ejemplo Anuncio #5), subir su nueva imagen en Cloudinary/Meta `/adimages`, crear el nuevo `/adcreatives` con `aa_cid`, **ejecutar `DELETE /v21.0/<oldAdId>` sobre el anuncio anterior** en Meta Ads y publicar el reemplazo dentro del mismo Ad Set actualizando la campaña y galería.
+- **Cobertura de Pruebas ([`server/__tests__/cloudinaryAndCampaignOps.test.ts`](./server/__tests__/cloudinaryAndCampaignOps.test.ts)):**
+  - `8/8` pruebas unitarias/simuladas pasando para resolución de variables Railway, firma SHA-1, bloqueo absoluto de imágenes/workspaces en Supabase, limpieza Base64, API Cloudinary, eliminación+reemplazo de Ad en Meta Graph API y jerarquía en vivo.
+
+
 
 

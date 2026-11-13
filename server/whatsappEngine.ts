@@ -41,6 +41,9 @@ import {
   evaluateExpressPromoDecisionInput
 } from '../src/utils/orderConfirmation';
 import {
+  sanitizeConfigPayloadForSupabase
+} from './cloudinaryStore';
+import {
   renderWaStageCommercialImage,
   renderPersonalizedOrderWelcomeImage,
   renderPersonalizedOrderConfirmedImage,
@@ -2289,7 +2292,7 @@ export async function persistVoiceSelectionToCloud(
 
       await insertOrUpdateSupabaseCodigo(
         `CFG-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        JSON.stringify(baseCfg)
+        JSON.stringify(sanitizeConfigPayloadForSupabase(baseCfg))
       );
     }
   } catch (e) { }

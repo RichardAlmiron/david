@@ -20,10 +20,22 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
-  Megaphone
+  Megaphone,
+  Cloud,
+  FolderOpen
 } from 'lucide-react';
 import { ProductPage } from '../types';
 import { formatGs } from '../config';
+import {
+  AutoAdsCampaignsPanel,
+  buildCampaignAdKey,
+  CampaignAdReplaceResultInfo
+} from './AutoAdsCampaignsPanel';
+import {
+  AutoAdsCloudinaryPanel,
+  CloudinaryStatusClient,
+  CloudinaryMediaClient
+} from './AutoAdsCloudinaryPanel';
 import {
   AutoAdsBrainProfile,
   createDefaultBrainProfile,
@@ -85,8 +97,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // Interruptor (Switch) para que el usuario pueda evitar que se creen los 2 Reels de video y hacer que TODO el paquete sea 100% de Imágenes
   const [onlyImagesMode, setOnlyImagesMode] = useState<boolean>(false);
 
-  // Pestañas horizontales, filtro de vista previa y acordeón de estrategia (sin sidebar interno)
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'crear' | 'campanas' | 'conexion'>('crear');
+  // Pestañas dedicadas e interfaces privadas: Inicio -> Campañas (y vista privada de campaña) / Crear / Conexión & Cloudinary
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'inicio' | 'campanas' | 'crear' | 'conexion'>('inicio');
   const [creativesFilter, setCreativesFilter] = useState<'all' | 'feed' | 'pack_reels'>('all');
   const [showIntelDetails, setShowIntelDetails] = useState<boolean>(false);
 
@@ -220,8 +232,49 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [workspaceHydrated, setWorkspaceHydrated] = useState<boolean>(false);
   const [lastBackendSavedAt, setLastBackendSavedAt] = useState<string>('');
 
-  // Campañas publicadas
+  // Campañas publicadas, interfaz privada por campaña y estado Cloudinary (cero imágenes en Supabase)
   const [publishedCampaigns, setPublishedCampaigns] = useState<PipeboardPublishedCampaignRecord[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [syncingLiveCampaigns, setSyncingLiveCampaigns] = useState<boolean>(false);
+  const [campaignPendingDrafts, setCampaignPendingDrafts] = useState<Record<string, GeneratedAdCreativeAsset>>({});
+  const [campaignRegenAdKey, setCampaignRegenAdKey] = useState<string | null>(null);
+  const [campaignReplaceAdKey, setCampaignReplaceAdKey] = useState<string | null>(null);
+  const [campaignReplacedInfo, setCampaignReplacedInfo] = useState<Record<string, CampaignAdReplaceResultInfo>>({});
+  const [creatorPendingReplaceMap, setCreatorPendingReplaceMap] = useState<Record<number, boolean>>({});
+  const [creatorReplacingIdx, setCreatorReplacingIdx] = useState<number | null>(null);
+  const [cloudinaryStatus, setCloudinaryStatus] = useState<CloudinaryStatusClient | null>(null);
+  const [cloudinaryResources, setCloudinaryResources] = useState<CloudinaryMediaClient[]>([]);
+  const [loadingCloudinaryResources, setLoadingCloudinaryResources] = useState<boolean>(false);
+
+  const refreshCloudinaryData = async (productSlug?: string) => {
+    setLoadingCloudinaryResources(true);
+    try {
+      const [stRes, resListRes] = await Promise.all([
+        fetch('/api/cloudinary/status'),
+        fetch(`/api/cloudinary/resources${productSlug ? `?productSlug=${encodeURIComponent(productSlug)}` : ''}`)
+      ]);
+      const stJson = await stRes.json().catch(() => null);
+      if (stJson && typeof stJson.configured === 'boolean') {
+        setCloudinaryStatus({
+          configured: Boolean(stJson.configured),
+          cloudName: String(stJson.cloudName || ''),
+          folder: String(stJson.folder || 'noelux/autoads'),
+          apiKeyPreview: String(stJson.apiKeyPreview || ''),
+          missingVars: Array.isArray(stJson.missingVars) ? stJson.missingVars : [],
+          requiredEnvVars: Array.isArray(stJson.requiredEnvVars) ? stJson.requiredEnvVars : [],
+          mode: stJson.mode === 'signed_api' ? 'signed_api' : 'not_configured'
+        });
+      }
+      const listJson = await resListRes.json().catch(() => null);
+      if (Array.isArray(listJson?.resources)) {
+        setCloudinaryResources(listJson.resources);
+      }
+    } catch {
+      // Silencioso si no hay conexión momentánea
+    } finally {
+      setLoadingCloudinaryResources(false);
+    }
+  };
 
   const computeWorkspaceKey = (
     mode: 'catalog' | 'external_url',
@@ -516,6 +569,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         if (Array.isArray(data?.publishedCampaigns)) {
           setPublishedCampaigns(data.publishedCampaigns);
         }
+        if (data?.cloudinaryStatus && typeof data.cloudinaryStatus.configured === 'boolean') {
+          setCloudinaryStatus(data.cloudinaryStatus);
+        }
 
         // Si el contenedor se reinició pero el navegador tiene la API Key guardada en la bóveda local, restaurarla automáticamente al Backend
         const vaultKey = getVaultOpenRouterKey();
@@ -543,6 +599,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       .catch(() => { });
 
     refreshMetaConnectionStatus();
+    refreshCloudinaryData();
 
     // Restaurar automáticamente desde el Backend todo el trabajo previo (Investigación + Imágenes + Videos + Paso exacto)
     fetch('/api/autoads/workspace')
@@ -1309,10 +1366,20 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               : null;
 
             if (match?.imageUrl) {
+              const isCld =
+                match.storageProvider === 'cloudinary' ||
+                String(match.imageUrl || '').includes('res.cloudinary.com');
               workingAssets[cardIdx] = {
                 ...workingAssets[cardIdx],
                 aiGeneratedImageUrl: match.imageUrl,
-                aiGeneratedImageDataUrl: match.imageDataUrl || workingAssets[cardIdx]?.aiGeneratedImageDataUrl,
+                cloudinaryPublicId:
+                  match.cloudinaryPublicId || workingAssets[cardIdx]?.cloudinaryPublicId,
+                storageProvider:
+                  match.storageProvider ||
+                  (isCld ? 'cloudinary' : workingAssets[cardIdx]?.storageProvider),
+                aiGeneratedImageDataUrl: isCld
+                  ? undefined
+                  : match.imageDataUrl || workingAssets[cardIdx]?.aiGeneratedImageDataUrl,
                 aiImagePrompt: match.prompt || workingAssets[cardIdx]?.aiImagePrompt
               };
               completedCardsCount += 1;
@@ -1322,12 +1389,20 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     ? {
                       ...item,
                       aiGeneratedImageUrl: match.imageUrl,
-                      aiGeneratedImageDataUrl: match.imageDataUrl || item.aiGeneratedImageDataUrl,
+                      cloudinaryPublicId: match.cloudinaryPublicId || item.cloudinaryPublicId,
+                      storageProvider:
+                        match.storageProvider || (isCld ? 'cloudinary' : item.storageProvider),
+                      aiGeneratedImageDataUrl: isCld
+                        ? undefined
+                        : match.imageDataUrl || item.aiGeneratedImageDataUrl,
                       aiImagePrompt: match.prompt || item.aiImagePrompt
                     }
                     : item
                 )
               );
+              if (isCld) {
+                refreshCloudinaryData(activeProduct?.slug);
+              }
               setGenerationProgressText(
                 `✅ Turno completado (${completedCardsCount}/6 listos): Imagen del Anuncio #${cardIdx + 1} guardada. Pasando al siguiente turno...`
               );
@@ -1565,21 +1640,41 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         return;
       }
 
+      const isCldRegen =
+        data.storageProvider === 'cloudinary' ||
+        data.customBrief?.storageProvider === 'cloudinary' ||
+        String(data.customBrief?.aiGeneratedImageUrl || '').includes('res.cloudinary.com');
+      const resolvedCldId =
+        data.cloudinaryPublicId || data.customBrief?.cloudinaryPublicId || undefined;
+
       setCreatives(prev =>
         prev.map((item, idx) =>
           idx === adIndex
             ? {
               ...item,
               aiGeneratedImageUrl: data.customBrief.aiGeneratedImageUrl,
-              aiGeneratedImageDataUrl:
-                data.aiGeneratedImageDataUrl ||
-                data.customBrief.aiGeneratedImageDataUrl ||
-                item.aiGeneratedImageDataUrl,
-              aiImagePrompt: data.customBrief.imagePrompt || item.aiImagePrompt
+              cloudinaryPublicId: resolvedCldId || item.cloudinaryPublicId,
+              storageProvider: isCldRegen
+                ? 'cloudinary'
+                : data.storageProvider || item.storageProvider,
+              aiGeneratedImageDataUrl: isCldRegen
+                ? undefined
+                : data.aiGeneratedImageDataUrl ||
+                  data.customBrief.aiGeneratedImageDataUrl ||
+                  item.aiGeneratedImageDataUrl,
+              aiImagePrompt:
+                data.customBrief.aiImagePrompt ||
+                data.aiImagePrompt ||
+                data.customBrief.imagePrompt ||
+                item.aiImagePrompt
             }
             : item
         )
       );
+      setCreatorPendingReplaceMap(prev => ({ ...prev, [adIndex]: true }));
+      if (isCldRegen) {
+        refreshCloudinaryData(activeProduct?.slug);
+      }
       setRegeneratingAdIdx(null);
       showToast(`🎨 Imagen IA del Anuncio #${adIndex + 1} generada con éxito en OpenRouter (${selectedImageModel}).`);
     } catch (err: any) {
@@ -1655,7 +1750,18 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       nextSeed,
       customBrief || undefined
     );
-    if (customBrief?.aiGeneratedImageDataUrl) {
+    const isCldAsset =
+      customBrief?.storageProvider === 'cloudinary' ||
+      String(freshAsset.aiGeneratedImageUrl || '').includes('res.cloudinary.com');
+    if (customBrief?.cloudinaryPublicId) {
+      freshAsset.cloudinaryPublicId = customBrief.cloudinaryPublicId;
+    }
+    if (customBrief?.storageProvider || isCldAsset) {
+      freshAsset.storageProvider = (customBrief?.storageProvider || 'cloudinary') as any;
+    }
+    if (isCldAsset) {
+      freshAsset.aiGeneratedImageDataUrl = undefined;
+    } else if (customBrief?.aiGeneratedImageDataUrl) {
       freshAsset.aiGeneratedImageDataUrl = customBrief.aiGeneratedImageDataUrl;
     }
     if (onlyImagesMode && adIndex >= 4) {
@@ -1670,6 +1776,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     });
 
     setCreatives(prev => prev.map((item, idx) => (idx === adIndex ? freshAsset : item)));
+    setCreatorPendingReplaceMap(prev => ({ ...prev, [adIndex]: true }));
+    if (isCldAsset) {
+      refreshCloudinaryData(activeProduct?.slug);
+    }
     setRegeneratingAdIdx(null);
     showToast(
       adIndex >= 4 && !onlyImagesMode
@@ -1784,6 +1894,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
       if (pubRes.ok && pubData?.success !== false && pubData?.campaign) {
         setPublishedCampaigns(prev => [pubData.campaign, ...prev]);
+        setCreatorPendingReplaceMap({});
+        refreshCloudinaryData(activeProduct.slug);
         setWorkflowStep('published');
         const preflightWarn = Array.isArray(pubData?.preflight?.checks)
           ? pubData.preflight.checks.find((c: any) => c.code === 'PIXEL_LEAD_HISTORY_LOW')?.message
@@ -1873,67 +1985,297 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
   };
 
-  const renderCampaignCard = (camp: PipeboardPublishedCampaignRecord, compact = false) => {
-    const primaryStatus = camp.publishedAds?.[0]?.status || 'ACTIVE';
-    const isActiveStatus = primaryStatus === 'ACTIVE';
-    const actNum = String(camp.adAccountId || '1048211497774834').replace(/^act_/, '');
-    const adsCount = camp.publishedAds?.length || 6;
-    const dateLabel = camp.createdAt
-      ? new Date(camp.createdAt).toLocaleDateString('es-PY', { day: '2-digit', month: 'short' })
-      : 'En vivo';
-
+  const activePublishedCampaignForProduct = useMemo(() => {
+    if (!activeProduct || publishedCampaigns.length === 0) return null;
     return (
-      <div
-        key={camp.id}
-        className="rounded-xl border border-zinc-800/90 hover:border-emerald-700/70 bg-[#0f0f11] p-3 flex flex-col justify-between gap-2 transition-colors"
-      >
-        <div className="space-y-1">
-          <div className="flex items-start justify-between gap-2">
-            <span className="text-xs font-bold text-zinc-100 leading-snug line-clamp-1" title={camp.campaignName}>
-              {camp.campaignName}
-            </span>
-            <span
-              className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold shrink-0 border ${
-                isActiveStatus
-                  ? 'bg-emerald-950/80 border-emerald-700/70 text-emerald-300'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-300'
-              }`}
-            >
-              {isActiveStatus ? '● ACTIVA' : primaryStatus}
-            </span>
-          </div>
-          <div className="text-[11px] text-zinc-400 truncate">
-            {camp.productName} · <span className="font-mono text-zinc-500">{adsCount} ads</span> ·{' '}
-            <span className="font-mono text-zinc-500">{dateLabel}</span>
-          </div>
-          {!compact && (
-            <div className="text-[10px] font-mono text-zinc-500 truncate">
-              Campaña {camp.campaignId} · Cuenta ...{actNum.slice(-3)} · {camp.executionMode}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800/80">
-          <button
-            type="button"
-            onClick={() => handleOpenCampaignWorkspace(camp)}
-            className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1 cursor-pointer"
-          >
-            <Layers className="w-3 h-3" />
-            <span>Ver Creativos</span>
-          </button>
-          <a
-            href={`https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${actNum}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[11px] font-medium text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1"
-          >
-            <span>Ads Manager</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
-      </div>
+      publishedCampaigns.find(
+        c =>
+          (c.productId && activeProduct.id && c.productId === activeProduct.id) ||
+          (c.productSlug && activeProduct.slug && c.productSlug === activeProduct.slug)
+      ) || null
     );
+  }, [activeProduct, publishedCampaigns]);
+
+  const selectedCampaignForPanel = useMemo(() => {
+    if (!selectedCampaignId) return null;
+    return (
+      publishedCampaigns.find(
+        c => c.id === selectedCampaignId || c.campaignId === selectedCampaignId
+      ) || null
+    );
+  }, [publishedCampaigns, selectedCampaignId]);
+
+  const resolveProductForPublishedCampaign = (camp: PipeboardPublishedCampaignRecord): ProductPage => {
+    const matched = productPages.find(
+      p => p.id === camp.productId || (camp.productSlug && p.slug === camp.productSlug)
+    );
+    if (matched) return matched;
+    const extWs =
+      workspacesCache[camp.productId] ||
+      workspacesCache[`ext_${camp.landingUrl}`] ||
+      Object.values(workspacesCache || {}).find(
+        (w: any) =>
+          (camp.productId && w?.productId === camp.productId) ||
+          (camp.productSlug && w?.scrapedExternalProduct?.slug === camp.productSlug)
+      );
+    if (extWs?.scrapedExternalProduct) return extWs.scrapedExternalProduct;
+    if (scrapedExternalProduct && scrapedExternalProduct.slug === camp.productSlug) {
+      return scrapedExternalProduct;
+    }
+    return {
+      id: camp.productId || `camp_prod_${camp.campaignId}`,
+      slug: camp.productSlug || 'producto-autoads',
+      nombre: camp.productName || camp.campaignName || 'Producto Meta Ads',
+      descripcion: `Oferta Paraguay con entrega a domicilio y pago contra entrega para ${camp.productName || 'este producto'}.`,
+      precios: { 1: 189000, 2: 349000 },
+      precioNormal: 260000,
+      freeShipping: true,
+      imagenPrincipal: '',
+      galeria: [],
+      caracteristicas: [],
+      testimonios: [],
+      faq: []
+    } as unknown as ProductPage;
+  };
+
+  const handleSyncLiveMetaCampaigns = async () => {
+    setSyncingLiveCampaigns(true);
+    try {
+      const res = await fetch('/api/meta/campaigns-live');
+      const data = await res.json().catch(() => null);
+      if (data?.cloudinaryStatus && typeof data.cloudinaryStatus.configured === 'boolean') {
+        setCloudinaryStatus(data.cloudinaryStatus);
+      }
+      if (Array.isArray(data?.campaigns)) {
+        setPublishedCampaigns(data.campaigns);
+      }
+      await refreshCloudinaryData();
+      showToast(
+        data?.syncedWithMeta
+          ? `✅ Campañas sincronizadas en vivo desde Meta Ads (${Array.isArray(data?.campaigns) ? data.campaigns.length : 0}).`
+          : `📂 Mostrando ${Array.isArray(data?.campaigns) ? data.campaigns.length : publishedCampaigns.length} campañas locales (${data?.error || 'conecta Meta Ads para refrescar desde Meta'}).`
+      );
+    } catch {
+      showToast('⚠️ No se pudo sincronizar con Meta Graph API ahora.');
+    } finally {
+      setSyncingLiveCampaigns(false);
+    }
+  };
+
+  const handleRegeneratePublishedCampaignAd = async (
+    camp: PipeboardPublishedCampaignRecord,
+    adIdx: number,
+    existingAd: any
+  ) => {
+    const adKey = buildCampaignAdKey(camp.campaignId, adIdx, existingAd?.adId);
+    const targetProd = resolveProductForPublishedCampaign(camp);
+    const nextSeed = (adVariationCounters[adIdx] || 0) + 1;
+    setAdVariationCounters(prev => ({ ...prev, [adIdx]: nextSeed }));
+    setCampaignRegenAdKey(adKey);
+    try {
+      const wsBrain =
+        workspacesCache[targetProd.id]?.brainProfile ||
+        (activeProduct?.id === targetProd.id ? brainProfile : null) ||
+        createDefaultBrainProfile(targetProd);
+
+      const res = await fetch('/api/autoads/regenerate-ad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product: targetProd,
+          adIndex: adIdx,
+          variationSeed: nextSeed,
+          currentHeadline: existingAd?.headline || '',
+          imageModel: selectedImageModel,
+          videoModel: selectedVideoModel,
+          onlyImagesMode: true,
+          openRouterApiKey: getVaultOpenRouterKey()
+        }),
+        signal: AbortSignal.timeout(180000)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success === false) {
+        setApiErrorModal({
+          isOpen: true,
+          title: `⚠️ Error al Regenerar Anuncio #${adIdx + 1}`,
+          errorMessage: data?.error || `Error ${res.status} al generar el reemplazo del Anuncio #${adIdx + 1}.`,
+          sourceEndpoint: '/api/autoads/regenerate-ad'
+        });
+        return;
+      }
+
+      const customBrief = data?.customBrief || {
+        aiGeneratedImageUrl: data?.aiGeneratedImageUrl,
+        aiGeneratedImageDataUrl: data?.aiGeneratedImageDataUrl,
+        cloudinaryPublicId: data?.cloudinaryPublicId,
+        storageProvider: data?.storageProvider,
+        aiImagePrompt: data?.aiImagePrompt
+      };
+
+      const freshAsset = regenerateSingleCreativeAssetFromBrain(
+        targetProd,
+        wsBrain,
+        adIdx,
+        nextSeed,
+        customBrief
+      );
+      const isCld =
+        customBrief?.storageProvider === 'cloudinary' ||
+        String(freshAsset.aiGeneratedImageUrl || '').includes('res.cloudinary.com');
+      if (customBrief?.cloudinaryPublicId) {
+        freshAsset.cloudinaryPublicId = customBrief.cloudinaryPublicId;
+      }
+      if (customBrief?.storageProvider || isCld) {
+        freshAsset.storageProvider = (customBrief?.storageProvider || 'cloudinary') as any;
+      }
+      if (isCld) {
+        freshAsset.aiGeneratedImageDataUrl = undefined;
+      }
+
+      setCampaignPendingDrafts(prev => ({ ...prev, [adKey]: freshAsset }));
+      if (activeProduct?.id === targetProd.id) {
+        setCreatives(prev => prev.map((item, idx) => (idx === adIdx ? freshAsset : item)));
+      }
+      if (isCld) {
+        refreshCloudinaryData(targetProd.slug);
+      }
+      showToast(
+        `✨ Nuevo borrador generado para Anuncio #${adIdx + 1}. Presioná "Lanzar y Reemplazar en Meta Ads" para borrar el anterior y publicar este.`
+      );
+    } catch (err: any) {
+      setApiErrorModal({
+        isOpen: true,
+        title: `⚠️ Error al Regenerar Anuncio #${adIdx + 1}`,
+        errorMessage: err?.message || 'Error de conexión al regenerar el anuncio.',
+        sourceEndpoint: '/api/autoads/regenerate-ad'
+      });
+    } finally {
+      setCampaignRegenAdKey(null);
+    }
+  };
+
+  const handleLaunchReplacePublishedAd = async (
+    camp: PipeboardPublishedCampaignRecord,
+    adIdx: number,
+    existingAd: any,
+    draftCreative: GeneratedAdCreativeAsset
+  ) => {
+    const adKey = buildCampaignAdKey(camp.campaignId, adIdx, existingAd?.adId);
+    const targetProd = resolveProductForPublishedCampaign(camp);
+    const backupAccessToken = String(metaOAuthBackupState?.accessToken || '').trim();
+    setCampaignReplaceAdKey(adKey);
+    try {
+      const res = await fetch('/api/autoads/replace-published-ad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignRecordId: camp.id,
+          campaignRecord: camp,
+          campaignId: camp.campaignId,
+          adSetId: camp.adSetId,
+          oldAdId: existingAd?.adId,
+          adIndex: adIdx,
+          product: targetProd,
+          creative: draftCreative,
+          landingUrl: camp.landingUrl,
+          publishStatus: pbConfig.defaultPublishStatus || 'ACTIVE',
+          accessToken: backupAccessToken || undefined
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401 || res.status === 403 || data?.requiresReauth) {
+        setShowFacebookOAuthModal(true);
+        setMetaAuthErrorBanner(data?.error || 'Autorizá tu cuenta de Meta Ads antes de reemplazar anuncios.');
+        showToast('🔐 Necesitás conectar tu cuenta de Facebook / Meta Ads para reemplazar el anuncio en vivo.');
+        return;
+      }
+      if (!res.ok || data?.success === false) {
+        setApiErrorModal({
+          isOpen: true,
+          title: `⚠️ No se pudo reemplazar Anuncio #${adIdx + 1} en Meta Ads`,
+          errorMessage: data?.error || `Error ${res.status} al reemplazar el anuncio en Meta.`,
+          sourceEndpoint: '/api/autoads/replace-published-ad'
+        });
+        return;
+      }
+
+      if (data?.campaign) {
+        setPublishedCampaigns(prev => {
+          const exists = prev.some(c => c.id === camp.id || c.campaignId === camp.campaignId);
+          return exists
+            ? prev.map(c =>
+                c.id === camp.id || c.campaignId === camp.campaignId ? data.campaign : c
+              )
+            : [data.campaign, ...prev];
+        });
+      }
+
+      const replaceInfo: CampaignAdReplaceResultInfo = {
+        oldAdId: data?.deletedAdId || existingAd?.adId,
+        deletedFromMeta: Boolean(data?.deletedFromMeta),
+        newAdId: String(data?.newAdId || ''),
+        newCreativeId: String(data?.newCreativeId || ''),
+        replacedAt: new Date().toLocaleTimeString('es-PY')
+      };
+      const nextKey = buildCampaignAdKey(camp.campaignId, adIdx, replaceInfo.newAdId);
+      setCampaignReplacedInfo(prev => ({
+        ...prev,
+        [adKey]: replaceInfo,
+        [nextKey]: replaceInfo
+      }));
+      setCampaignPendingDrafts(prev => {
+        const next = { ...prev };
+        delete next[adKey];
+        return next;
+      });
+
+      if (activeProduct?.id === targetProd.id && data?.imageUrl) {
+        setCreatives(prev =>
+          prev.map((item, i) =>
+            i === adIdx
+              ? {
+                ...item,
+                aiGeneratedImageUrl: data.imageUrl,
+                cloudinaryPublicId: data.cloudinaryPublicId || item.cloudinaryPublicId,
+                storageProvider: data.cloudinaryPublicId ? 'cloudinary' : item.storageProvider,
+                aiGeneratedImageDataUrl: data.cloudinaryPublicId ? undefined : item.aiGeneratedImageDataUrl
+              }
+              : item
+          )
+        );
+      }
+      refreshCloudinaryData(targetProd.slug);
+      showToast(
+        `🚀 Anuncio #${adIdx + 1} reemplazado en Meta Ads (${replaceInfo.oldAdId ? `eliminado ${replaceInfo.oldAdId} -> ` : ''}nuevo ID ${replaceInfo.newAdId}).`
+      );
+    } catch (err: any) {
+      setApiErrorModal({
+        isOpen: true,
+        title: `⚠️ Error de Red al Reemplazar Anuncio #${adIdx + 1}`,
+        errorMessage: err?.message || 'Error de red conectando con /api/autoads/replace-published-ad.',
+        sourceEndpoint: '/api/autoads/replace-published-ad'
+      });
+    } finally {
+      setCampaignReplaceAdKey(null);
+    }
+  };
+
+  const handleLaunchCreatorAdReplacement = async (adIndex: number) => {
+    if (!activeProduct || !activePublishedCampaignForProduct || !creatives[adIndex]) return;
+    const camp = activePublishedCampaignForProduct;
+    const existingAd =
+      camp.publishedAds?.find(a => a.adIndex === adIndex) || camp.publishedAds?.[adIndex] || {};
+    setCreatorReplacingIdx(adIndex);
+    try {
+      await handleLaunchReplacePublishedAd(camp, adIndex, existingAd, creatives[adIndex]);
+      setCreatorPendingReplaceMap(prev => {
+        const next = { ...prev };
+        delete next[adIndex];
+        return next;
+      });
+    } finally {
+      setCreatorReplacingIdx(null);
+    }
   };
 
   return (
@@ -1992,6 +2334,25 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               )}
               <span>CAPI · EMQ {capiAudit.emqScoreEstimated}</span>
             </button>
+
+            <button
+              type="button"
+              data-testid="cloudinary-header-status-pill"
+              onClick={() => setActiveWorkspaceTab('conexion')}
+              title="Almacenamiento de imágenes de AutoAds en Cloudinary (Railway ENV)"
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                cloudinaryStatus?.configured
+                  ? 'border-sky-700/70 bg-sky-950/60 hover:bg-sky-900/60 text-sky-300'
+                  : 'border-amber-700/70 bg-amber-950/50 hover:bg-amber-900/50 text-amber-300'
+              }`}
+            >
+              <Cloud className="w-3 h-3" />
+              <span>
+                {cloudinaryStatus?.configured
+                  ? `Cloudinary: ${cloudinaryStatus.cloudName}`
+                  : 'Cloudinary: Pendiente ENV'}
+              </span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -2020,32 +2381,30 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           </div>
         </div>
 
-        {/* Barra de Pestañas Horizontales (estilo limpio y sin sidebar interno) */}
+        {/* Botones Principales Lado a Lado (Interfaces Privadas sin Amontonamiento) */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-zinc-800/80">
           <div className="bg-zinc-950 p-1 rounded-xl border border-zinc-800 inline-flex flex-wrap items-center gap-1">
             <button
               type="button"
-              data-testid="autoads-tab-crear"
-              onClick={() => setActiveWorkspaceTab('crear')}
+              data-testid="autoads-tab-inicio"
+              onClick={() => setActiveWorkspaceTab('inicio')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
-                activeWorkspaceTab === 'crear'
+                activeWorkspaceTab === 'inicio'
                   ? 'bg-zinc-800 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Crear Campaña &amp; Creativos</span>
-              {creatives.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-700/70 text-emerald-300 font-mono text-[10px]">
-                  {creatives.length}
-                </span>
-              )}
+              <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Inicio</span>
             </button>
 
             <button
               type="button"
               data-testid="autoads-tab-campanas"
-              onClick={() => setActiveWorkspaceTab('campanas')}
+              onClick={() => {
+                setSelectedCampaignId(null);
+                setActiveWorkspaceTab('campanas');
+              }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
                 activeWorkspaceTab === 'campanas'
                   ? 'bg-zinc-800 text-white shadow-sm'
@@ -2058,6 +2417,25 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
             <button
               type="button"
+              data-testid="autoads-tab-crear"
+              onClick={() => setActiveWorkspaceTab('crear')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
+                activeWorkspaceTab === 'crear'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Crear Campaña</span>
+              {creatives.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-700/70 text-emerald-300 font-mono text-[10px]">
+                  {creatives.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
               data-testid="autoads-tab-conexion"
               onClick={() => setActiveWorkspaceTab('conexion')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
@@ -2066,8 +2444,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Cuenta Meta &amp; CAPI (12)</span>
+              <Cloud className="w-3.5 h-3.5 text-sky-400" />
+              <span>Cuenta Meta &amp; Cloudinary</span>
             </button>
           </div>
 
@@ -2082,28 +2460,111 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       </div>
 
       {/* ===================================================================== */}
-      {/* 1.B CABECERA DE CAMPAÑAS PUBLICADAS (TARJETAS COMPACTAS EN TOPE)       */}
+      {/* HUB DE INICIO: TARJETAS PRINCIPALES LADO A LADO (CERO AMONTONAMIENTO) */}
       {/* ===================================================================== */}
-      {activeWorkspaceTab === 'crear' && publishedCampaigns.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 inline-flex items-center gap-1.5">
-              <Megaphone className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Campañas en Meta Ads ({publishedCampaigns.length})</span>
-            </span>
-            {publishedCampaigns.length > 3 && (
-              <button
-                type="button"
-                onClick={() => setActiveWorkspaceTab('campanas')}
-                className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 cursor-pointer"
-              >
-                Ver todas ({publishedCampaigns.length}) →
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {publishedCampaigns.slice(0, 3).map(camp => renderCampaignCard(camp, true))}
-          </div>
+      {activeWorkspaceTab === 'inicio' && (
+        <div
+          data-testid="autoads-inicio-hub"
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1"
+        >
+          {/* Tarjeta 1: Campañas Privadas */}
+          <button
+            type="button"
+            data-testid="hub-card-campanas"
+            onClick={() => {
+              setSelectedCampaignId(null);
+              setActiveWorkspaceTab('campanas');
+            }}
+            className="text-left p-5 rounded-xl bg-[#0f0f11] border border-zinc-800 hover:border-emerald-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-700/70 text-emerald-300 font-mono text-xs font-bold">
+                  {publishedCampaigns.length} {publishedCampaigns.length === 1 ? 'campaña' : 'campañas'}
+                </span>
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-zinc-100 group-hover:text-emerald-300 transition-colors">
+                  Campañas en Meta Ads
+                </h2>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Abrí el panel exclusivo de campañas. Al tocar una campaña, se despliega su vista privada: <strong className="text-zinc-300">Campaña → Grupo de Anuncios → Anuncios</strong>, para regenerar y reemplazar anuncios directo en Meta.
+                </p>
+              </div>
+            </div>
+            <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs font-bold text-emerald-400">
+              <span>Abrir panel de Campañas →</span>
+            </div>
+          </button>
+
+          {/* Tarjeta 2: Crear Nueva Campaña */}
+          <button
+            type="button"
+            data-testid="hub-card-crear"
+            onClick={() => setActiveWorkspaceTab('crear')}
+            className="text-left p-5 rounded-xl bg-[#0f0f11] border border-zinc-800 hover:border-emerald-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-700 text-zinc-300 font-mono text-[11px] font-bold">
+                  {creatives.length > 0 ? `${creatives.length} creativos listos` : 'Nuevo Estudio'}
+                </span>
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-zinc-100 group-hover:text-emerald-300 transition-colors">
+                  Crear Campaña &amp; Anuncios IA
+                </h2>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Investigación competitiva, generación de imágenes en Cloudinary ({selectedImageModel}), precios reales en Guaraníes y publicación en 1 clic hacia Paraguay (PY).
+                </p>
+              </div>
+            </div>
+            <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs font-bold text-emerald-400">
+              <span>Abrir Creador de Campañas →</span>
+            </div>
+          </button>
+
+          {/* Tarjeta 3: Cloudinary & Cuenta Meta */}
+          <button
+            type="button"
+            data-testid="hub-card-conexion"
+            onClick={() => setActiveWorkspaceTab('conexion')}
+            className="text-left p-5 rounded-xl bg-[#0f0f11] border border-zinc-800 hover:border-sky-500/70 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/35 flex items-center justify-center text-sky-400">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold border ${
+                    cloudinaryStatus?.configured
+                      ? 'bg-emerald-950/80 border-emerald-700/70 text-emerald-300'
+                      : 'bg-amber-950/80 border-amber-700/70 text-amber-300'
+                  }`}
+                >
+                  {cloudinaryStatus?.configured ? '● CLOUDINARY ACTIVO' : 'CONFIGURAR ENV'}
+                </span>
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-zinc-100 group-hover:text-sky-300 transition-colors">
+                  Cloudinary &amp; Cuenta Meta / CAPI
+                </h2>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Imágenes servidas directo desde Cloudinary (cero Supabase), estado de Facebook OAuth, Portafolio Landingcod, Cuenta 834, Píxel 377 y 12 Eventos CAPI.
+                </p>
+              </div>
+            </div>
+            <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs font-bold text-sky-400">
+              <span>Ver Cloudinary, Variables Railway y Meta →</span>
+            </div>
+          </button>
         </div>
       )}
 
@@ -2283,6 +2744,15 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               ))}
             </div>
           </div>
+
+          <AutoAdsCloudinaryPanel
+            status={cloudinaryStatus}
+            resources={cloudinaryResources}
+            loadingResources={loadingCloudinaryResources}
+            onRefreshResources={() => refreshCloudinaryData()}
+            onCopyText={handleCopyMetaRef}
+            copiedKey={copiedRefKey}
+          />
         </div>
       )}
 
@@ -2319,45 +2789,33 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       )}
 
       {/* ===================================================================== */}
-      {/* TAB: TODAS LAS CAMPAÑAS PUBLICADAS EN META ADS                        */}
+      {/* TAB DEDICADA: CAMPAÑAS Y VISTA PRIVADA POR CAMPAÑA                    */}
       {/* ===================================================================== */}
       {activeWorkspaceTab === 'campanas' && (
-        <div className="p-4 sm:p-5 rounded-xl bg-[#0f0f11] border border-zinc-800 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-bold text-zinc-100">
-                Campañas Publicadas en Meta Ads ({publishedCampaigns.length})
-              </h2>
-              <p className="text-xs text-zinc-400">
-                Tocá &ldquo;Ver Creativos&rdquo; en cualquier campaña para editar o generar nuevos anuncios del producto.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveWorkspaceTab('crear')}
-              className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Crear Nueva Campaña</span>
-            </button>
-          </div>
-
-          {publishedCampaigns.length === 0 ? (
-            <div className="p-8 rounded-xl border border-dashed border-zinc-800 text-center space-y-2">
-              <Megaphone className="w-6 h-6 text-zinc-500 mx-auto" />
-              <div className="text-xs font-semibold text-zinc-300">
-                Todavía no hay campañas publicadas desde AutoAds
-              </div>
-              <p className="text-[11px] text-zinc-500">
-                Generá tus 6 anuncios en la pestaña &ldquo;Crear Campaña&rdquo; y publicalos en 1 clic.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {publishedCampaigns.map(camp => renderCampaignCard(camp, false))}
-            </div>
-          )}
-        </div>
+        <AutoAdsCampaignsPanel
+          campaigns={publishedCampaigns}
+          selectedCampaign={selectedCampaignForPanel}
+          onSelectCampaign={camp => setSelectedCampaignId(camp ? camp.id || camp.campaignId : null)}
+          onGoToCreateCampaign={() => setActiveWorkspaceTab('crear')}
+          onSyncLiveCampaigns={handleSyncLiveMetaCampaigns}
+          syncingCampaigns={syncingLiveCampaigns}
+          cloudinaryResources={cloudinaryResources}
+          workspacesCache={workspacesCache}
+          pendingDraftsByKey={campaignPendingDrafts}
+          regeneratingAdKey={campaignRegenAdKey}
+          replacingAdKey={campaignReplaceAdKey}
+          replacedInfoByKey={campaignReplacedInfo}
+          onRegenerateCampaignAd={handleRegeneratePublishedCampaignAd}
+          onDiscardDraft={adKey =>
+            setCampaignPendingDrafts(prev => {
+              const next = { ...prev };
+              delete next[adKey];
+              return next;
+            })
+          }
+          onLaunchReplaceAd={handleLaunchReplacePublishedAd}
+          onLoadCampaignInCreator={handleOpenCampaignWorkspace}
+        />
       )}
 
       {/* ===================================================================== */}
@@ -2987,6 +3445,33 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {/* Banner de Reemplazo Automático en Meta Ads cuando se regeneró un anuncio ya publicado */}
+                  {activePublishedCampaignForProduct && creatorPendingReplaceMap[idx] && (
+                    <div className="px-3 py-2 bg-amber-950/70 border-b border-amber-500/40 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold text-amber-200">
+                        Borrador nuevo listo · Reemplazará el Ad #{idx + 1} en Meta Ads (borra el anterior)
+                      </span>
+                      <button
+                        type="button"
+                        data-testid={`launch-replace-creator-ad-${idx}`}
+                        onClick={() => handleLaunchCreatorAdReplacement(idx)}
+                        disabled={creatorReplacingIdx === idx}
+                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-60"
+                      >
+                        {creatorReplacingIdx === idx ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Send className="w-3 h-3" />
+                        )}
+                        <span>
+                          {creatorReplacingIdx === idx
+                            ? 'Reemplazando en Meta...'
+                            : `Lanzar Ad #${idx + 1} en Meta`}
+                        </span>
+                      </button>
+                    </div>
+                  )}
 
                   {/* Cuerpo del Anuncio Idéntico a Facebook Mobile Feed */}
                   <div className="flex-1 flex flex-col justify-between">

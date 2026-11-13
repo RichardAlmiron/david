@@ -43,8 +43,10 @@ export interface GeneratedAdCreativeAsset {
   ctaLabel: string;
   visualThemeIndex: number;
   imageDataUrl: string; // High-impact rendered SVG/Canvas Data URL for instant preview & upload_ad_image
-  aiGeneratedImageUrl?: string; // Real AI-generated advertising photograph URL / Data URL
-  aiGeneratedImageDataUrl?: string; // Persistent Base64 Data URL backup to survive container restarts/redeploys
+  aiGeneratedImageUrl?: string; // Real AI-generated advertising photograph URL / Cloudinary HTTPS URL
+  aiGeneratedImageDataUrl?: string; // Ephemeral preview Data URL (never persisted to Supabase)
+  cloudinaryPublicId?: string;
+  storageProvider?: 'cloudinary' | 'local';
   aiGeneratedVideoUrl?: string; // Real AI-generated playable Reel video (.mp4) derived from the AI image
   aiImagePrompt?: string; // Exact prompt used by the AI Image Generator to create this ad visual
   hypothesisId?: string;
@@ -78,9 +80,24 @@ export interface PipeboardPublishedCampaignRecord {
     adId: string;
     creativeId: string;
     imageHash: string;
+    adIndex?: number;
+    imageUrl?: string;
+    cloudinaryPublicId?: string;
+    videoUrl?: string;
+    headline?: string;
+    primaryText?: string;
+    descriptionText?: string;
+    ctaType?: 'SHOP_NOW' | 'ORDER_NOW' | 'LEARN_MORE' | string;
+    ctaLabel?: string;
+    aspectRatio?: '1:1' | '9:16';
+    aaCid?: string;
+    hypothesisId?: string;
+    angleId?: string;
+    replacedFromAdId?: string;
+    updatedAt?: string;
     name: string;
     formatLabel: string;
-    status: 'ACTIVE' | 'PAUSED';
+    status: 'ACTIVE' | 'PAUSED' | 'ERROR';
   }>;
   executionMode: 'pipeboard_remote_mcp' | 'meta_graph_direct' | 'pipeboard_sandbox_preview';
   mcpStepLogs: Array<{

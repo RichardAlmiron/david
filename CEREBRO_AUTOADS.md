@@ -173,9 +173,11 @@ Para no mezclar la contabilidad del negocio con el aprendizaje de formularios de
 ## 7. Referencia Rápida de Archivos, Tablas, Endpoints y Flags
 
 ### Archivos Clave del Sistema
-- **Frontend:** [`src/types.ts`](./src/types.ts), [`src/utils/autoAdsBrainEngine.ts`](./src/utils/autoAdsBrainEngine.ts), [`src/utils/pipeboardEngine.ts`](./src/utils/pipeboardEngine.ts), [`src/utils/metaPixelEngine.ts`](./src/utils/metaPixelEngine.ts), [`src/components/OrderForm.tsx`](./src/components/OrderForm.tsx), [`src/context/StoreContext.tsx`](./src/context/StoreContext.tsx), [`src/components/AutoAdsView.tsx`](./src/components/AutoAdsView.tsx) (UI 3 pasos preservada).
+- **Frontend:** [`src/types.ts`](./src/types.ts), [`src/utils/autoAdsBrainEngine.ts`](./src/utils/autoAdsBrainEngine.ts), [`src/utils/pipeboardEngine.ts`](./src/utils/pipeboardEngine.ts), [`src/utils/metaPixelEngine.ts`](./src/utils/metaPixelEngine.ts), [`src/components/OrderForm.tsx`](./src/components/OrderForm.tsx), [`src/context/StoreContext.tsx`](./src/context/StoreContext.tsx), [`src/components/AutoAdsView.tsx`](./src/components/AutoAdsView.tsx) (hub dedicado: `Inicio`, `Campañas`, `Crear Campaña`, `Cuenta Meta & Cloudinary`), [`src/components/AutoAdsCampaignsPanel.tsx`](./src/components/AutoAdsCampaignsPanel.tsx) (jerarquía `Campaña -> Grupo de Anuncios -> Anuncios` y reemplazo puntual), [`src/components/AutoAdsCloudinaryPanel.tsx`](./src/components/AutoAdsCloudinaryPanel.tsx).
 - **Backend (`server/` & `vite.config.ts`):**
   - [`server/autoadsStore.ts`](./server/autoadsStore.ts) (lectura y escritura autoritativa en Supabase vía `hydrateAutoadsFromSupabase`/`postgrestUpsert`, caché local no autoritativa y proyección aislada `getCircuitAReadView`)
+  - [`server/cloudinaryStore.ts`](./server/cloudinaryStore.ts) (almacenamiento exclusivo de imágenes AutoAds en Cloudinary vía firma SHA-1, API `/resources/image/upload` y `sanitizeConfigPayloadForSupabase()` para mantener cero imágenes en Supabase)
+  - [`server/metaCampaignOps.ts`](./server/metaCampaignOps.ts) (sincronización en vivo `Campaña -> AdSet -> Ads` y reemplazo puntual `replacePublishedAdInMeta` con `DELETE` automático del `adId` anterior)
   - [`server/autoAdsIntelligence.ts`](./server/autoAdsIntelligence.ts) (competencia 3 niveles, perfil psicológico, 6 hipótesis)
   - [`server/attributionAndOrders.ts`](./server/attributionAndOrders.ts) (atribución 30d, tokens WA, `createOrIdempotentPedidoWithAttribution`, cola de reintentos y 3 ejes)
   - [`server/metaInsightsAndAdsLearning.ts`](./server/metaInsightsAndAdsLearning.ts) (sync insights Meta, normalización USD/PYG, CVR/CPF y veredictos estadísticos)
@@ -185,7 +187,14 @@ Para no mezclar la contabilidad del negocio con el aprendizaje de formularios de
 - **Base de datos, Protección de Moneda y Pruebas:**
   - [`database/autoads_v2_additive_migration.sql`](./database/autoads_v2_additive_migration.sql) (migración SQL idempotente no destructiva; **ejecutada y verificada en Supabase**)
   - [`server/autoAdsIntelligence.ts`](./server/autoAdsIntelligence.ts) + [`vite.config.ts`](./vite.config.ts): `resolveProductGuaraniPricing()`, `sanitizePromptUsdToGuaranies()` y `buildFullOpenAiAdImagePrompt()` garantizan precios 100% en **Paraguayan Guaraníes (`Gs.`)** (cero dólares / USD en copy y creatividades) más margen inferior limpio.
-  - [`server/__tests__/autoadsArchitecture.test.ts`](./server/__tests__/autoadsArchitecture.test.ts) (`10/10` pruebas automatizadas: `ISO-01` a `ISO-09`, mappers Supabase/`buildPedidoSupabaseRow` y blindaje Guaraníes).
+  - [`server/__tests__/autoadsArchitecture.test.ts`](./server/__tests__/autoadsArchitecture.test.ts) (`10/10` pruebas) y [`server/__tests__/cloudinaryAndCampaignOps.test.ts`](./server/__tests__/cloudinaryAndCampaignOps.test.ts) (`8/8` pruebas).
+
+### Variables de Entorno Cloudinary en Railway (Cero Imágenes en Supabase)
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+- `CLOUDINARY_UPLOAD_FOLDER` (default: `noelux/autoads`)
+- Opcional alternativa unificada: `CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>`
 
 ### Persistencia Autoritativa en Supabase e Hidratación Sin JSON Local (`server/autoadsStore.ts`)
 - **Fuente autoritativa en producción:** Aunque el contenedor de Railway inicie con un sistema de archivos limpio (sin archivos `.json` locales en `/data/autoads_v2` ni `pedidos.json`), `hydrateAutoadsFromSupabase()` consulta en paralelo mediante `postgrestSelect()` las **11 tablas nuevas de AutoAds v2**, `public.pedidos` y la clave `AAFLAGS-v2-*` en `codigos`.
@@ -208,5 +217,6 @@ Para no mezclar la contabilidad del negocio con el aprendizaje de formularios de
 
 ### Rutas HTTP Nuevas / Actualizadas en `vite.config.ts`
 - Pedidos & Atribución: `POST /api/pedidos`, `POST /api/pedidos/estado`, `POST /api/meta-capi/track`, `POST /api/attribution/wa-token`, `POST /api/sync/retry-queues`.
-- AutoAds & Aprendizaje (Circuito A): `POST /api/autoads/brain-train`, `POST /api/autoads/generate-ad-images`, `POST /api/autoads/regenerate-ad`, `POST /api/autoads/preflight`, `POST /api/meta/publish-direct`, `POST /api/pipeboard/publish-campaign`, `POST /api/autoads/insights/sync`, `GET /api/autoads/learning-dashboard`, `GET|POST /api/autoads/feature-flags`.
+- AutoAds & Aprendizaje (Circuito A): `POST /api/autoads/brain-train`, `POST /api/autoads/generate-ad-images`, `POST /api/autoads/regenerate-ad`, `POST /api/autoads/replace-published-ad`, `POST /api/autoads/preflight`, `GET /api/meta/campaigns-live`, `POST /api/meta/publish-direct`, `POST /api/pipeboard/publish-campaign`, `POST /api/autoads/insights/sync`, `GET /api/autoads/learning-dashboard`, `GET|POST /api/autoads/feature-flags`.
+- Cloudinary Media API: `GET /api/cloudinary/status`, `GET /api/cloudinary/resources`, `POST /api/cloudinary/upload`.
 - ERP & Finanzas (Circuito B, protegidas con sesión admin): `GET|POST /api/erp/costs`, `POST /api/erp/fx-rates`, `POST /api/erp/settlements`, `POST /api/erp/settlements/import-csv`, `GET /api/erp/profitability`.

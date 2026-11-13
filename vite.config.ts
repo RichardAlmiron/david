@@ -117,6 +117,17 @@ import {
   saveMetaVaultToSupabase,
   verifyMetaAppCredentialsLive
 } from './server/metaAuthSession.ts';
+import {
+  getCloudinaryConfigStatus,
+  listCloudinaryAutoAdsImages,
+  sanitizeConfigPayloadForSupabase,
+  stripBase64FromAutoAdsWorkspaces,
+  uploadImageToCloudinary
+} from './server/cloudinaryStore.ts';
+import {
+  fetchLiveMetaCampaignHierarchy,
+  replacePublishedAdInMeta
+} from './server/metaCampaignOps.ts';
 
 const RUNTIME_PERSISTENT_PATHS = getPersistentDataPaths();
 function getPedidosFilePath() {
@@ -2593,6 +2604,7 @@ function registerApiServerMiddlewares(server: any) {
                   : isValidOpenRouterKey(existing.openRouterApiKey)
                     ? String(existing.openRouterApiKey).trim()
                     : '';
+                delete merged.autoAdsWorkspaces;
                 fs.writeFileSync(file, JSON.stringify(merged, null, 2), 'utf-8');
                 setImmediate(() => {
                   ensureAllProductsWaCommercialsReady().catch(() => {});
@@ -4278,12 +4290,48 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
             return defaultState;
           };
 
+          const persistAdImageToCloudinaryOrDisk = async (opts: {
+            source: Buffer | string;
+            mimeType?: string;
+            localUrlFallback?: string;
+            productSlug?: string;
+            adIndex?: number;
+            campaignId?: string;
+          }): Promise<{
+            imageUrl: string;
+            cloudinaryPublicId?: string;
+            storageProvider: 'cloudinary' | 'local';
+          }> => {
+            const cldStatus = getCloudinaryConfigStatus(readKeyFromEnvFile);
+            if (cldStatus.configured) {
+              const up = await uploadImageToCloudinary({
+                source: opts.source,
+                mimeType: opts.mimeType,
+                productSlug: opts.productSlug,
+                adIndex: opts.adIndex,
+                campaignId: opts.campaignId,
+                envReader: readKeyFromEnvFile
+              });
+              if (up.ok && up.secureUrl) {
+                return {
+                  imageUrl: up.secureUrl,
+                  cloudinaryPublicId: up.publicId,
+                  storageProvider: 'cloudinary'
+                };
+              }
+              console.warn(`[Cloudinary] Fallback local para ad #${Number(opts.adIndex || 0) + 1}:`, up.error);
+            }
+            return {
+              imageUrl: String(opts.localUrlFallback || ''),
+              storageProvider: 'local'
+            };
+          };
+
           const writeAutoAdsWorkspacesToDisk = (nextState: {
             lastActive: any;
             workspaces: Record<string, any>;
           }) => {
             try {
-              // Auto-reconstruir archivos físicos en public/assets/ai-ads/ si el contenedor se reinició pero el workspace trae aiGeneratedImageDataUrl
               const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
               if (!fs.existsSync(aiAdsDir)) fs.mkdirSync(aiAdsDir, { recursive: true });
               const workspaces = nextState?.workspaces || {};
@@ -4307,26 +4355,34 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                 }
               }
             } catch {}
+            const sanitizedWorkspaces = stripBase64FromAutoAdsWorkspaces(nextState);
             try {
-              fs.writeFileSync(autoAdsWorkspacesFile, JSON.stringify(nextState, null, 2), 'utf-8');
+              fs.writeFileSync(autoAdsWorkspacesFile, JSON.stringify(sanitizedWorkspaces, null, 2), 'utf-8');
             } catch {}
+            // Nunca guardar imágenes ni workspaces AutoAds en store_config.json / Supabase (solo Cloudinary y Railway)
             try {
               const cfgFile = getStoreConfigFilePath();
-              let cfg: any = {};
               if (fs.existsSync(cfgFile)) {
-                try {
-                  cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
-                } catch {}
+                const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf-8') || '{}');
+                if ('autoAdsWorkspaces' in cfg) {
+                  delete cfg.autoAdsWorkspaces;
+                  fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                }
               }
-              cfg.autoAdsWorkspaces = nextState;
-              fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
             } catch {}
           };
 
           const patchAutoAdsWorkspaceMedia = (
             productObj: any,
             adIndex: number,
-            patch: { imageUrl?: string; imageDataUrl?: string; videoUrl?: string; prompt?: string }
+            patch: {
+              imageUrl?: string;
+              imageDataUrl?: string;
+              cloudinaryPublicId?: string;
+              storageProvider?: 'cloudinary' | 'local';
+              videoUrl?: string;
+              prompt?: string;
+            }
           ) => {
             try {
               const prodId = String(productObj?.id || productObj?.slug || '').trim();
@@ -4340,13 +4396,21 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
 
               const updatedCreatives = ws.creatives.map((item: any, idx: number) => {
                 if (idx !== adIndex) return item;
-                return {
+                const nextItem: any = {
                   ...item,
                   ...(patch.imageUrl ? { aiGeneratedImageUrl: patch.imageUrl } : {}),
-                  ...(patch.imageDataUrl ? { aiGeneratedImageDataUrl: patch.imageDataUrl } : {}),
+                  ...(patch.cloudinaryPublicId ? { cloudinaryPublicId: patch.cloudinaryPublicId } : {}),
+                  ...(patch.storageProvider ? { storageProvider: patch.storageProvider } : {}),
+                  ...(patch.imageDataUrl && patch.storageProvider !== 'cloudinary'
+                    ? { aiGeneratedImageDataUrl: patch.imageDataUrl }
+                    : {}),
                   ...(patch.videoUrl ? { aiGeneratedVideoUrl: patch.videoUrl, aiGeneratedImageUrl: '' } : {}),
                   ...(patch.prompt ? { aiImagePrompt: patch.prompt } : {})
                 };
+                if (patch.storageProvider === 'cloudinary') {
+                  delete nextItem.aiGeneratedImageDataUrl;
+                }
+                return nextItem;
               });
 
               current.workspaces[wsKey] = {
@@ -5300,22 +5364,41 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     );
                     if (savedUrl) {
                       let b64DataUrl = '';
+                      let mimeDetected = 'image/png';
+                      let imgBufferForCld: Buffer | null = null;
                       try {
                         if (savedUrl.startsWith('/assets/ai-ads/')) {
                           const fPath = path.join(aiAdsDir, path.basename(savedUrl));
                           if (fs.existsSync(fPath)) {
                             const ext = path.extname(fPath).toLowerCase();
-                            const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-                            b64DataUrl = `data:${mime};base64,${fs.readFileSync(fPath).toString('base64')}`;
+                            mimeDetected = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+                            imgBufferForCld = fs.readFileSync(fPath);
+                            b64DataUrl = `data:${mimeDetected};base64,${imgBufferForCld.toString('base64')}`;
                           }
                         } else if (savedUrl.startsWith('data:image/')) {
                           b64DataUrl = savedUrl;
+                          const b64Part = savedUrl.split(',')[1] || '';
+                          if (b64Part) imgBufferForCld = Buffer.from(b64Part, 'base64');
                         }
                       } catch {}
+
+                      const persistedMedia = await persistAdImageToCloudinaryOrDisk({
+                        source: imgBufferForCld || savedUrl,
+                        mimeType: mimeDetected,
+                        localUrlFallback: savedUrl,
+                        productSlug: String(product.slug || 'producto'),
+                        adIndex: idx
+                      });
+
                       return {
                         adIndex: idx,
-                        imageUrl: savedUrl,
-                        imageDataUrl: b64DataUrl || undefined,
+                        imageUrl: persistedMedia.imageUrl || savedUrl,
+                        cloudinaryPublicId: persistedMedia.cloudinaryPublicId || undefined,
+                        storageProvider: persistedMedia.storageProvider,
+                        imageDataUrl:
+                          persistedMedia.storageProvider === 'cloudinary'
+                            ? undefined
+                            : b64DataUrl || undefined,
                         prompt: finalPrompt,
                         imageModel: imgModel
                       };
@@ -5354,6 +5437,8 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   if (oneResult.imageUrl || oneResult.videoUrl) {
                     patchAutoAdsWorkspaceMedia(product, idx, {
                       imageUrl: oneResult.imageUrl || undefined,
+                      cloudinaryPublicId: oneResult.cloudinaryPublicId || undefined,
+                      storageProvider: oneResult.storageProvider || undefined,
                       imageDataUrl: oneResult.imageDataUrl || undefined,
                       videoUrl: oneResult.videoUrl || undefined,
                       prompt: oneResult.prompt
@@ -5948,18 +6033,59 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   delete (customBrief as any).__savedDataUrl;
                 }
 
+                let finalRegenImageUrl = newGeneratedImageUrl;
+                let finalCloudinaryPublicId = '';
+                let finalStorageProvider: 'cloudinary' | 'local' = 'local';
+                let finalRegenDataUrl: string | undefined = savedDataUrl;
+
+                if (newGeneratedImageUrl) {
+                  let sourceForCld: Buffer | string = newGeneratedImageUrl;
+                  let mimeForCld = 'image/png';
+                  try {
+                    if (newGeneratedImageUrl.startsWith('/assets/ai-ads/')) {
+                      const fPath = path.join(aiAdsDir, path.basename(newGeneratedImageUrl));
+                      if (fs.existsSync(fPath)) {
+                        const ext = path.extname(fPath).toLowerCase();
+                        mimeForCld = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+                        sourceForCld = fs.readFileSync(fPath);
+                      }
+                    } else if (savedDataUrl && savedDataUrl.startsWith('data:image/')) {
+                      const b64 = savedDataUrl.split(',')[1] || '';
+                      if (b64) sourceForCld = Buffer.from(b64, 'base64');
+                    }
+                  } catch {}
+
+                  const cldPersisted = await persistAdImageToCloudinaryOrDisk({
+                    source: sourceForCld,
+                    mimeType: mimeForCld,
+                    localUrlFallback: newGeneratedImageUrl,
+                    productSlug: String(product.slug || 'producto'),
+                    adIndex
+                  });
+                  finalRegenImageUrl = cldPersisted.imageUrl || newGeneratedImageUrl;
+                  finalCloudinaryPublicId = cldPersisted.cloudinaryPublicId || '';
+                  finalStorageProvider = cldPersisted.storageProvider;
+                  if (cldPersisted.storageProvider === 'cloudinary') {
+                    finalRegenDataUrl = undefined;
+                  }
+                }
+
                 customBrief = {
                   ...(customBrief || {}),
                   aiImagePrompt: finalImagePrompt,
-                  aiGeneratedImageUrl: newGeneratedImageUrl || undefined,
-                  aiGeneratedImageDataUrl: savedDataUrl || undefined,
+                  aiGeneratedImageUrl: finalRegenImageUrl || undefined,
+                  cloudinaryPublicId: finalCloudinaryPublicId || undefined,
+                  storageProvider: finalStorageProvider,
+                  aiGeneratedImageDataUrl: finalRegenDataUrl || undefined,
                   aiGeneratedVideoUrl: newGeneratedVideoUrl || undefined
                 };
 
-                if (newGeneratedImageUrl || newGeneratedVideoUrl) {
+                if (finalRegenImageUrl || newGeneratedVideoUrl) {
                   patchAutoAdsWorkspaceMedia(product, adIndex, {
-                    imageUrl: newGeneratedImageUrl || undefined,
-                    imageDataUrl: savedDataUrl || undefined,
+                    imageUrl: finalRegenImageUrl || undefined,
+                    cloudinaryPublicId: finalCloudinaryPublicId || undefined,
+                    storageProvider: finalStorageProvider,
+                    imageDataUrl: finalRegenDataUrl || undefined,
                     videoUrl: newGeneratedVideoUrl || undefined,
                     prompt: finalImagePrompt
                   });
@@ -5972,9 +6098,11 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     variationSeed,
                     imageModel: isReel ? undefined : validEnvImgModel,
                     videoModel: isReel ? validEnvVidModel : undefined,
+                    storageProvider: finalStorageProvider,
+                    cloudinaryPublicId: finalCloudinaryPublicId || undefined,
                     customBrief,
-                    aiGeneratedImageUrl: newGeneratedImageUrl || undefined,
-                    aiGeneratedImageDataUrl: savedDataUrl || undefined,
+                    aiGeneratedImageUrl: finalRegenImageUrl || undefined,
+                    aiGeneratedImageDataUrl: finalRegenDataUrl || undefined,
                     aiGeneratedVideoUrl: newGeneratedVideoUrl || undefined,
                     aiImagePrompt: finalImagePrompt
                   })
@@ -6067,6 +6195,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     openRouterKeyPreview: orKeyPreview,
                     hasMetaAppCredentials: Boolean(metaAppId && metaAppSecret),
                     metaAppIdPreview: metaAppId ? `${metaAppId.slice(0, 6)}••••` : '',
+                    cloudinaryStatus: getCloudinaryConfigStatus(readKeyFromEnvFile),
                     publishedCampaigns: Array.isArray(cfg.pipeboardPublishedCampaigns)
                       ? cfg.pipeboardPublishedCampaigns
                       : []
@@ -7516,9 +7645,27 @@ setTimeout(()=>window.close(),5000);
                     }
                   }
 
-                  // Subir también imagen (o thumbnail si subió video)
+                  // Subir imagen a Cloudinary (si aún no está ahí y Cloudinary está configurado) + subir a Meta /adimages
+                  let finalCreativeImgUrl = String(cr?.aiGeneratedImageUrl || cr?.imageUrl || '').trim();
+                  let finalCreativeCldId = String(cr?.cloudinaryPublicId || '').trim();
                   try {
                     const imgPayload = await resolveCreativeImagePayload(cr);
+                    if (
+                      !finalCreativeImgUrl.includes('res.cloudinary.com') &&
+                      (imgPayload.bytes || imgPayload.url)
+                    ) {
+                      const upCld = await persistAdImageToCloudinaryOrDisk({
+                        source: imgPayload.bytes ? Buffer.from(imgPayload.bytes, 'base64') : imgPayload.url,
+                        localUrlFallback: finalCreativeImgUrl,
+                        productSlug: String(product.slug || 'producto'),
+                        adIndex: i,
+                        campaignId
+                      });
+                      if (upCld.imageUrl) {
+                        finalCreativeImgUrl = upCld.imageUrl;
+                        finalCreativeCldId = upCld.cloudinaryPublicId || finalCreativeCldId;
+                      }
+                    }
                     const imgBody: any = {
                       name: `${product.slug || 'prod'}-${cr.type || 'creative'}-${i + 1}.png`
                     };
@@ -7683,9 +7830,23 @@ setTimeout(()=>window.close(),5000);
                     adId: adId || `pending-${i}`,
                     creativeId: creativeId || `pending-${i}`,
                     imageHash: imageHash || '',
+                    adIndex: i,
+                    imageUrl:
+                      finalCreativeImgUrl && !finalCreativeImgUrl.startsWith('data:')
+                        ? finalCreativeImgUrl
+                        : '',
+                    cloudinaryPublicId: finalCreativeCldId || undefined,
+                    videoUrl: cr.aiGeneratedVideoUrl || undefined,
+                    headline: cr.headline || '',
+                    primaryText: cr.primaryText || '',
+                    descriptionText: cr.descriptionText || '',
+                    ctaType: cr.ctaType || 'ORDER_NOW',
+                    ctaLabel: cr.ctaLabel || 'Pedir ahora',
+                    aspectRatio: cr.aspectRatio || (i >= 4 ? '9:16' : '1:1'),
                     aaCid,
                     hypothesisId: cr.hypothesisId,
                     angleId: cr.angleId,
+                    updatedAt: nowIso,
                     name: `Anuncio #${i + 1} · ${cr.formatLabel || 'Anuncio'}`,
                     formatLabel: cr.formatLabel || '',
                     status: adId ? publishStatus : 'ERROR'
@@ -7749,6 +7910,238 @@ setTimeout(()=>window.close(),5000);
               } catch (err: any) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          // =====================================================================
+          // CLOUDINARY MEDIA API (IMÁGENES EN CLOUDINARY / RAILWAY — CERO SUPABASE)
+          // =====================================================================
+          if (req.method === 'GET' && url === '/api/cloudinary/status') {
+            res.setHeader('Content-Type', 'application/json');
+            res.end(
+              JSON.stringify({
+                success: true,
+                ...getCloudinaryConfigStatus(readKeyFromEnvFile)
+              })
+            );
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/api/cloudinary/resources') {
+            (async () => {
+              try {
+                const parsedUrl = new URL(req.url || '', 'http://localhost');
+                const productSlug = String(parsedUrl.searchParams.get('productSlug') || '').trim() || undefined;
+                const result = await listCloudinaryAutoAdsImages(readKeyFromEnvFile, productSlug);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: result.ok || !result.configured, ...result }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, resources: [], error: err?.message }));
+              }
+            })();
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/api/cloudinary/upload') {
+            let body = '';
+            req.on('data', (chunk: any) => (body += chunk));
+            req.on('end', async () => {
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                const parsed = JSON.parse(body || '{}');
+                let source = String(parsed.source || '').trim();
+                if (source.startsWith('/assets/')) {
+                  source = path.resolve(__dirname, 'public', source.replace(/^\/+/, ''));
+                }
+                const upRes = await uploadImageToCloudinary({
+                  source,
+                  productSlug: String(parsed.productSlug || 'producto'),
+                  campaignId: parsed.campaignId ? String(parsed.campaignId) : undefined,
+                  adIndex: typeof parsed.adIndex === 'number' ? parsed.adIndex : undefined,
+                  envReader: readKeyFromEnvFile
+                });
+                res.statusCode = upRes.ok ? 200 : 400;
+                res.end(JSON.stringify({ success: upRes.ok, ...upRes }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          // =====================================================================
+          // SINCRONIZACIÓN DE JERARQUÍA EN VIVO DE META ADS & REEMPLAZO DE ANUNCIOS
+          // =====================================================================
+          if (req.method === 'GET' && url === '/api/meta/campaigns-live') {
+            (async () => {
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                const cfgFile = getStoreConfigFilePath();
+                const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+                  cfgFile,
+                  envReader: readKeyFromEnvFile,
+                  envWriter: saveKeyToEnvFile
+                });
+                const localCampaigns = Array.isArray(cfg.pipeboardPublishedCampaigns)
+                  ? cfg.pipeboardPublishedCampaigns
+                  : [];
+                const accessToken = String(
+                  (cfg.metaDirectConfig?.tokenStatus !== 'invalid' ? cfg.metaDirectConfig?.accessToken : '') ||
+                    readKeyFromEnvFile('META_ACCESS_TOKEN') ||
+                    ''
+                ).trim();
+                if (!isValidMetaAccessToken(accessToken)) {
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      syncedWithMeta: false,
+                      campaigns: localCampaigns,
+                      cloudinaryStatus: getCloudinaryConfigStatus(readKeyFromEnvFile)
+                    })
+                  );
+                  return;
+                }
+                const live = await fetchLiveMetaCampaignHierarchy({
+                  accessToken,
+                  adAccountId: 'act_1048211497774834',
+                  localCampaigns
+                });
+                if (live.ok && Array.isArray(live.campaigns)) {
+                  cfg.pipeboardPublishedCampaigns = live.campaigns.slice(0, 30);
+                  try {
+                    fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                  } catch {}
+                }
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    syncedWithMeta: live.ok,
+                    error: live.error,
+                    campaigns: live.campaigns,
+                    cloudinaryStatus: getCloudinaryConfigStatus(readKeyFromEnvFile)
+                  })
+                );
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, campaigns: [], error: err?.message }));
+              }
+            })();
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/api/autoads/replace-published-ad') {
+            let body = '';
+            req.on('data', (chunk: any) => (body += chunk));
+            req.on('end', async () => {
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const cfgFile = getStoreConfigFilePath();
+                const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+                  cfgFile,
+                  envReader: readKeyFromEnvFile,
+                  envWriter: saveKeyToEnvFile
+                });
+                const explicitToken = String(parsed.accessToken || '').trim();
+                const pbTok = String(
+                  cfg.pipeboardConfig?.pipeboardApiToken || readKeyFromEnvFile('PIPEBOARD_API_TOKEN') || ''
+                ).trim();
+                const storedTok = String(
+                  (cfg.metaDirectConfig?.tokenStatus !== 'invalid' ? cfg.metaDirectConfig?.accessToken : '') ||
+                    readKeyFromEnvFile('META_ACCESS_TOKEN') ||
+                    ''
+                ).trim();
+                const accessToken = String(
+                  (isValidMetaAccessToken(storedTok) ? storedTok : '') ||
+                    (isValidMetaAccessToken(explicitToken) ? explicitToken : '') ||
+                    (pbTok.startsWith('EAA') && isValidMetaAccessToken(pbTok) ? pbTok : '') ||
+                    ''
+                ).trim();
+
+                if (!accessToken) {
+                  res.statusCode = 401;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      requiresReauth: true,
+                      error: 'Conectá Meta Ads (Facebook OAuth) antes de reemplazar el anuncio en vivo.'
+                    })
+                  );
+                  return;
+                }
+
+                const prevList: any[] = Array.isArray(cfg.pipeboardPublishedCampaigns)
+                  ? cfg.pipeboardPublishedCampaigns
+                  : [];
+                const targetCampIdx = prevList.findIndex(
+                  c =>
+                    (parsed.campaignRecordId && c.id === parsed.campaignRecordId) ||
+                    (parsed.campaignId && c.campaignId === parsed.campaignId)
+                );
+                const campaignRecord = targetCampIdx >= 0 ? prevList[targetCampIdx] : parsed.campaignRecord || null;
+                const adSetId = String(parsed.adSetId || campaignRecord?.adSetId || '').trim();
+                const adIndex = Number(parsed.adIndex || 0);
+
+                const result = await replacePublishedAdInMeta({
+                  campaignRecord,
+                  campaignId: parsed.campaignId || campaignRecord?.campaignId,
+                  adSetId,
+                  oldAdId: parsed.oldAdId,
+                  adIndex,
+                  product: parsed.product || {},
+                  creative: parsed.creative || {},
+                  landingUrl: parsed.landingUrl || campaignRecord?.landingUrl || '',
+                  publishStatus: parsed.publishStatus === 'PAUSED' ? 'PAUSED' : 'ACTIVE',
+                  accessToken,
+                  envReader: readKeyFromEnvFile,
+                  aiAdsPublicDir: path.resolve(__dirname, 'public/assets/ai-ads')
+                });
+
+                if (!result.ok) {
+                  res.statusCode = result.statusCode || 400;
+                  res.end(JSON.stringify({ success: false, ...result }));
+                  return;
+                }
+
+                if (result.updatedCampaignRecord && targetCampIdx >= 0) {
+                  const nextList = [...prevList];
+                  nextList[targetCampIdx] = result.updatedCampaignRecord;
+                  cfg.pipeboardPublishedCampaigns = nextList;
+                  try {
+                    fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
+                  } catch {}
+                }
+
+                if (parsed.product && result.imageUrl) {
+                  patchAutoAdsWorkspaceMedia(parsed.product, adIndex, {
+                    imageUrl: result.imageUrl,
+                    cloudinaryPublicId: result.cloudinaryPublicId,
+                    storageProvider: result.cloudinaryPublicId ? 'cloudinary' : 'local'
+                  });
+                }
+
+                await flushPendingSupabaseSyncs(3000);
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    campaign: result.updatedCampaignRecord || campaignRecord,
+                    deletedAdId: result.deletedAdId,
+                    deletedFromMeta: result.deletedFromMeta,
+                    newAdId: result.newAdId,
+                    newCreativeId: result.newCreativeId,
+                    imageUrl: result.imageUrl,
+                    cloudinaryPublicId: result.cloudinaryPublicId,
+                    updatedAdEntry: result.updatedAdEntry
+                  })
+                );
+              } catch (err: any) {
+                res.statusCode = 500;
                 res.end(JSON.stringify({ success: false, error: err?.message }));
               }
             });
@@ -8309,9 +8702,19 @@ setTimeout(()=>window.close(),5000);
                     adId: adId || `pending-${i + 1}`,
                     creativeId: creativeId || `pending-${i + 1}`,
                     imageHash,
+                    adIndex: i,
+                    imageUrl: realImageUrl && !realImageUrl.startsWith('data:') ? realImageUrl : '',
+                    cloudinaryPublicId: cr.cloudinaryPublicId || undefined,
+                    headline: cr.headline || '',
+                    primaryText: cr.primaryText || '',
+                    descriptionText: cr.descriptionText || '',
+                    ctaType: cr.ctaType || 'ORDER_NOW',
+                    ctaLabel: cr.ctaLabel || 'Pedir ahora',
+                    aspectRatio: cr.aspectRatio || (i >= 4 ? '9:16' : '1:1'),
                     aaCid,
                     hypothesisId: cr.hypothesisId,
                     angleId: cr.angleId,
+                    updatedAt: nowIso,
                     name: `Anuncio #${i + 1} · ${cr.formatLabel}`,
                     formatLabel: cr.formatLabel,
                     status: adId ? publishStatus : 'ERROR'
