@@ -487,6 +487,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     setDeleteConfirmModal(prev => ({ ...prev, isDeleting: true }));
     try {
       await deleteOrdersBatch(idsToDelete);
+      try {
+        for (const delId of idsToDelete) {
+          localStorage.removeItem(`noelux_chat_imgs_${delId}`);
+        }
+      } catch {}
       if (activeAiOrder && idsToDelete.includes(activeAiOrder.reservaid)) {
         setActiveAiOrder(null);
       }
@@ -1361,6 +1366,41 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     setLoadingSessionMap(prev => ({ ...prev, [sessionId]: false }));
   };
 
+  // Guardar imágenes de chat en el localStorage del navegador (por pedido) y usarlas como respaldo local sin saturar la BD
+  const getCachedOrderChatImages = (orderId?: string): Record<string, string> => {
+    if (!orderId) return {};
+    try {
+      const raw = localStorage.getItem(`noelux_chat_imgs_${orderId}`);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const cacheOrderChatImageInBrowser = async (orderId: string, msgId: string, imageUrl: string) => {
+    if (!orderId || !msgId || !imageUrl) return;
+    try {
+      const current = getCachedOrderChatImages(orderId);
+      if (current[msgId]) return;
+      let dataUrl = imageUrl;
+      if (!imageUrl.startsWith('data:')) {
+        const resp = await fetch(imageUrl);
+        if (!resp.ok) return;
+        const blob = await resp.blob();
+        if (blob.size > 450 * 1024) return;
+        dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('read_err'));
+          reader.readAsDataURL(blob);
+        });
+      }
+      if (!dataUrl) return;
+      current[msgId] = dataUrl;
+      localStorage.setItem(`noelux_chat_imgs_${orderId}`, JSON.stringify(current));
+    } catch {}
+  };
+
   // Poll live WhatsApp chat messages for the currently open customer order (solo lectura, sin autodisparo)
   const fetchLiveOrderChat = async (phone: string) => {
     if (!phone) return;
@@ -1378,7 +1418,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         const data = await res.json();
         fetchedOk = true;
         if (Array.isArray(data.messages)) {
-          loadedMessages = data.messages;
+          const orderIdForCache = activeAiOrder?.reservaid || '';
+          const cachedImgs = getCachedOrderChatImages(orderIdForCache);
+          loadedMessages = data.messages.map((m: any) => {
+            if (m.imageUrl && orderIdForCache && m.id && String(m.imageUrl).includes('client_')) {
+              cacheOrderChatImageInBrowser(orderIdForCache, m.id, m.imageUrl);
+            }
+            if (!m.imageUrl && m.id && cachedImgs[m.id]) {
+              return { ...m, imageUrl: cachedImgs[m.id] };
+            }
+            return m;
+          });
         }
         if (data.mode === 'automatico' || data.mode === 'manual') {
           detectedMode = data.mode;
@@ -3867,8 +3917,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                             <MessageCircle className="w-3 h-3 text-black" />
                                             <span className="hidden sm:inline">Mensaje</span>
                                             {msgCount > 0 && (
-                                              <span className="px-1 rounded-full bg-[#0b3d2e] text-[#25D366] text-[10px] font-bold tabular-nums">
-                                                {msgCount}
+                                              <span
+                                                className="px-1.5 rounded-full bg-[#0b3d2e] text-[#25D366] text-[10px] font-bold tabular-nums"
+                                                title={`${msgCount} mensajes en este chat`}
+                                              >
+                                                {msgCount} msg
                                               </span>
                                             )}
                                           </button>
