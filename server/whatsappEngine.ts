@@ -4727,8 +4727,8 @@ export function formatBuildingDetailsServer(order: any): string {
 }
 
 // CONFIRMACIÓN EXPRESS EN 1 PASO:
-// 1) Imagen #1 generada dinámicamente con TODOS los datos del cliente (nombre, celular, ciudad, barrio/dirección, monto, SIN GPS)
-// 2) Audio #1 inmediatamente después pidiendo al cliente que mire esa imagen acá arriba y confirme con "CORRECTO" o "ESTÁ BIEN"
+// 1) Audio #1 enviado PRIMERO pidiendo al cliente que mire la imagen de acá abajo que se le acabó de enviar y confirme con "CORRECTO" o "ESTÁ BIEN"
+// 2) Imagen #1 generada dinámicamente con TODOS los datos del cliente (nombre, celular, ciudad, barrio/dirección, monto, SIN GPS), enviada 1s DESPUÉS del Audio #1 (queda abajo del audio)
 export async function buildInitialOrderAiMessage(
   order: any
 ): Promise<{ text: string; locationTextConfirmation: string; error?: string }> {
@@ -4758,8 +4758,8 @@ export async function buildInitialOrderAiMessage(
     ? `del ${shortProduct.replace(/^el\s+/i, '')}`
     : `de ${shortProduct}`;
 
-  // Audio Paso 1: Saludo personalizado conciso y cálido guiando al cliente a revisar la imagen 1:1 enviada justo arriba y responder con la palabra CORRECTO
-  const expressGreetingAudio = `¡Hola ${displayFirstName}, qué tal! Te hablo del área de envíos de Noelux para confirmar ${packPhrase} ${productDePhrase} a nombre de ${fullDisplayName}, por ${montoSpeech} con envío gratis al recibir. Mirá un segundito la imagen de acá arriba con tu celular ${phone433}, tu ciudad, tu barrio y tu dirección, y para confirmar que tus datos son correctos, respondeme con la palabra CORRECTO para confirmar tu envío.`;
+  // Audio Paso 1: Saludo personalizado conciso y cálido (sale primero que la imagen 1:1) guiando al cliente a revisar la imagen de acá abajo y responder con la palabra CORRECTO
+  const expressGreetingAudio = `¡Hola ${displayFirstName}, qué tal! Te hablo del área de envíos de Noelux para confirmar ${packPhrase} ${productDePhrase} a nombre de ${fullDisplayName}, por ${montoSpeech} con envío gratis al recibir. Mirá la imagen de acá abajo que te acabé de enviar con tu celular ${phone433}, tu ciudad, tu barrio y tu dirección, y para confirmar que tus datos son correctos, respondeme con la palabra CORRECTO para confirmar tu envío.`;
 
   return {
     text: normalizeParaguayanPhonesInText(expressGreetingAudio),
@@ -7618,7 +7618,7 @@ Tu respuesta en "reply" se convierte directamente a VOZ (Nota de Audio TTS), por
 REGLA DE MONEDA: Siempre escribí los montos en letras seguidos de la palabra "guaraníes" (ej. "${formatGuaraniesSpeech(matchedOrder?.monto || 189000)}").
 
 CONTEXTO DE CONFIRMACIÓN EXPRESS CON IMAGEN DINÁMICA PERSONALIZADA:
-- Ya le enviamos al cliente su Imagen #1 VIP generada dinámicamente con TODOS sus datos de entrega (${packSpeech} de ${shortProduct}, nombre ${rawCustomerName}, teléfono ${formatPhoneForSpeech(matchedOrder?.celular || cleanPhone)}, ciudad ${matchedOrder?.ciudad || ''}, barrio/dirección ${cleanStreetAddressText(matchedOrder?.direccion || '')}) SIN enlaces GPS, y nuestro Audio #1 pidiendo que mire la imagen de arriba.
+- Ya le enviamos al cliente nuestro Audio #1 pidiendo que mire la imagen de abajo que le acabamos de enviar, seguido 1 segundo después por su Imagen #1 VIP generada dinámicamente con TODOS sus datos de entrega (${packSpeech} de ${shortProduct}, nombre ${rawCustomerName}, teléfono ${formatPhoneForSpeech(matchedOrder?.celular || cleanPhone)}, ciudad ${matchedOrder?.ciudad || ''}, barrio/dirección ${cleanStreetAddressText(matchedOrder?.direccion || '')}) SIN enlaces GPS.
 - NUNCA le pidas GPS al cliente ni le envíes enlaces de mapas o Google Maps; la confirmación se basa en los datos mostrados en su imagen (nombre, ciudad, barrio y dirección).
 - Solo necesitamos que el cliente confirme si esos datos están bien diciendo o escribiendo la palabra "correcto".
 - Si el cliente ya está confirmando con otras palabras claras (ej. "todo impecable mandame nomás", "esos mismos son mis datos", "sí señor todo bien"), marcá "speechAct": "STEP_CONFIRMATION_COMPLETE" y "orderConfirmed": true.

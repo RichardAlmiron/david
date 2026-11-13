@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { buildInitialOrderAiMessage } from '../whatsappEngine';
+
+test('buildInitialOrderAiMessage directs customer to look at the image BELOW (acá abajo) because audio is sent before the image', async () => {
+  const res = await buildInitialOrderAiMessage({
+    reservaid: 'NX-TEST-001',
+    nombre: 'María González',
+    celular: '0981123456',
+    producto: 'Noelux™ Proyector Navideño 12 Diseños',
+    cantidad: 1,
+    monto: 189000,
+    ciudad: 'Asunción',
+    direccion: 'Barrio Villa Morra'
+  });
+
+  assert.match(res.text, /Mirá la imagen de acá abajo que te acabé de enviar/i);
+  assert.equal(/arriba/i.test(res.text), false, 'Initial audio greeting must NOT refer to the image as arriba');
+  assert.match(res.text, /CORRECTO/);
+});
