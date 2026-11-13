@@ -196,6 +196,7 @@ export interface Order {
   attributedHypothesisId?: string;
   attributedAngleId?: string;
   attributionSourceKind?: string;
+  metaCommentOrigin?: MetaCommentOrderOrigin;
   // Circuito B (Logística 3 ejes, costos reales, courier & CAPI Purchase independiente)
   deliveryStatus?: DeliveryStatus;
   customerPaymentStatus?: CustomerPaymentStatus;
@@ -210,6 +211,130 @@ export interface Order {
   packagingCostPyg?: number;
   returnCostPyg?: number;
   purchaseCapiStatus?: string;
+}
+
+export type MetaCommentChannel =
+  | 'facebook_comment'
+  | 'messenger_dm'
+  | 'instagram_comment'
+  | 'instagram_dm'
+  | 'express_form';
+
+export interface MetaCommentOrderOrigin {
+  source: 'meta_comment_ai';
+  channel: MetaCommentChannel;
+  adId?: string;
+  adName?: string;
+  adIndex?: number;
+  campaignId?: string;
+  campaignName?: string;
+  postId?: string;
+  commentId?: string;
+  threadId?: string;
+  commentText?: string;
+  authorName?: string;
+  capturedAt?: string;
+}
+
+export interface MetaCommentChatMessage {
+  id: string;
+  direction: 'inbound' | 'outbound';
+  channel: MetaCommentChannel;
+  text: string;
+  createdAt: string;
+  by?: 'customer' | 'ai_public' | 'ai_dm' | 'admin' | 'whatsapp';
+  sentToMeta?: boolean;
+  metaMessageId?: string;
+  expressUrl?: string;
+}
+
+export interface MetaCommentThreadRecord {
+  id: string;
+  postId: string;
+  commentId: string;
+  parentCommentId?: string;
+  platform: 'facebook' | 'instagram';
+  pageId: string;
+  adId?: string;
+  adName?: string;
+  adIndex?: number;
+  campaignId?: string;
+  campaignName?: string;
+  productId?: string;
+  productSlug?: string;
+  productName?: string;
+  authorId?: string;
+  authorName: string;
+  psid?: string;
+  commentText: string;
+  detectedPhones: string[];
+  hiddenFromPublic: boolean;
+  publicReplyText?: string;
+  publicReplyId?: string;
+  publicRepliedAt?: string;
+  dmSentAt?: string;
+  expressFormUrl?: string;
+  whatsappNotifiedAt?: string;
+  status: 'new' | 'public_replied' | 'dm_active' | 'form_sent' | 'order_closed' | 'ignored';
+  intent?: 'price_inquiry' | 'buy_now' | 'phone_drop' | 'shipping_question' | 'objection' | 'other';
+  messages: MetaCommentChatMessage[];
+  orderId?: string;
+  orderTotalPyg?: number;
+  isSimulation?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MetaCommentAdStats {
+  adKey: string;
+  adId: string;
+  adName: string;
+  adIndex?: number;
+  campaignId?: string;
+  campaignName?: string;
+  postId?: string;
+  productId?: string;
+  productSlug?: string;
+  productName?: string;
+  commentsCount: number;
+  publicRepliesCount: number;
+  dmSentCount: number;
+  activeChatsCount: number;
+  phonesCapturedCount: number;
+  closedOrdersCount: number;
+  revenuePyg: number;
+  conversionRatePct: number;
+  lastActivityAt: string;
+  isWinner?: boolean;
+}
+
+export interface MetaCommentAutomationConfig {
+  enabled: boolean;
+  autoPublicReply: boolean;
+  autoPrivateDm: boolean;
+  autoHidePhoneComments: boolean;
+  autoWhatsappOnPhone: boolean;
+  defaultProductId: string;
+  defaultProductSlug: string;
+  publicBaseUrl: string;
+  campaignProductMap: Record<string, { productId: string; productSlug: string; productName: string }>;
+  adProductMap: Record<string, { productId: string; productSlug: string; productName: string }>;
+  postAdMap: Record<
+    string,
+    {
+      postId: string;
+      adId: string;
+      adName: string;
+      adIndex?: number;
+      campaignId?: string;
+      campaignName?: string;
+      productId?: string;
+      productSlug?: string;
+      productName?: string;
+    }
+  >;
+  webhookVerifyToken: string;
+  lastSyncAt?: string;
 }
 
 export interface AppConfig {

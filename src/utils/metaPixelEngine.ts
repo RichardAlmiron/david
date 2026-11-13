@@ -565,6 +565,41 @@ export function captureUrlAttributionTouch(productSlug?: string): PaidTouchSnaps
     const hypothesis_id = params.get('hypothesis_id') || undefined;
     const angle_id = params.get('angle_id') || undefined;
     const aa_cid = params.get('aa_cid') || undefined;
+    const comment_id = params.get('comment_id') || undefined;
+    const thread_id = params.get('thread_id') || undefined;
+    const ad_name = params.get('ad_name') || undefined;
+    const campaign_name = params.get('campaign_name') || undefined;
+    const ad_index_raw = params.get('ad_index');
+    const post_id = params.get('post_id') || undefined;
+    const comment_text = params.get('comment_text') || undefined;
+    const author_name = params.get('author_name') || undefined;
+    const src_param = params.get('src') || undefined;
+    const express_param = params.get('express') || undefined;
+
+    if (src_param === 'comment_ai' || express_param || comment_id || thread_id) {
+      const originPayload = {
+        source: 'meta_comment_ai' as const,
+        channel: (src_param === 'messenger' ? 'messenger_dm' : express_param ? 'express_form' : 'facebook_comment') as
+          | 'facebook_comment'
+          | 'messenger_dm'
+          | 'express_form',
+        adId: ad_id,
+        adName: ad_name,
+        adIndex: ad_index_raw ? Number(ad_index_raw) || undefined : undefined,
+        campaignId: campaign_id,
+        campaignName: campaign_name,
+        postId: post_id,
+        commentId: comment_id,
+        threadId: thread_id,
+        commentText: comment_text,
+        authorName: author_name,
+        capturedAt: new Date().toISOString()
+      };
+      try {
+        window.sessionStorage.setItem('noelux_meta_comment_origin', JSON.stringify(originPayload));
+        window.localStorage.setItem('noelux_meta_comment_origin', JSON.stringify(originPayload));
+      } catch {}
+    }
 
     const hasPaidSignal = Boolean(
       fbclid ||
@@ -573,6 +608,8 @@ export function captureUrlAttributionTouch(productSlug?: string): PaidTouchSnaps
         adset_id ||
         campaign_id ||
         aa_cid ||
+        comment_id ||
+        thread_id ||
         utm_campaign ||
         (utm_source && !/^(direct|none)$/i.test(utm_source))
     );
@@ -581,9 +618,15 @@ export function captureUrlAttributionTouch(productSlug?: string): PaidTouchSnaps
       return readTouchStorage(ATTR_LAST_PAID_KEY);
     }
 
+    const resolvedSlug =
+      productSlug ||
+      (params.get('express') && params.get('express') !== '1' ? params.get('express') : null) ||
+      params.get('p') ||
+      undefined;
+
     const snapshot: PaidTouchSnapshot = {
       capturedAt: new Date().toISOString(),
-      productSlug: productSlug || params.get('p') || undefined,
+      productSlug: resolvedSlug,
       landingPath: `${window.location.pathname}${window.location.search}`,
       referrer: document.referrer || undefined,
       fbclid,
@@ -612,6 +655,85 @@ export function captureUrlAttributionTouch(productSlug?: string): PaidTouchSnaps
   } catch {
     return null;
   }
+}
+
+export function readMetaCommentOriginFromUrlOrStorage(): {
+  source: 'meta_comment_ai';
+  channel: 'facebook_comment' | 'messenger_dm' | 'instagram_comment' | 'instagram_dm' | 'express_form';
+  adId?: string;
+  adName?: string;
+  adIndex?: number;
+  campaignId?: string;
+  campaignName?: string;
+  postId?: string;
+  commentId?: string;
+  threadId?: string;
+  commentText?: string;
+  authorName?: string;
+  capturedAt?: string;
+} | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const src = params.get('src') || '';
+    const express = params.get('express') || '';
+    const adId = params.get('ad_id') || undefined;
+    const adName = params.get('ad_name') || undefined;
+    const adIndexRaw = params.get('ad_index');
+    const campaignId = params.get('campaign_id') || undefined;
+    const campaignName = params.get('campaign_name') || undefined;
+    const postId = params.get('post_id') || undefined;
+    const commentId = params.get('comment_id') || undefined;
+    const threadId = params.get('thread_id') || undefined;
+    const commentText = params.get('comment_text') || undefined;
+    const authorName = params.get('author_name') || undefined;
+
+    if (src === 'comment_ai' || express || commentId || threadId || adId) {
+      if (src === 'comment_ai' || commentId || threadId || express) {
+        const direct = {
+          source: 'meta_comment_ai' as const,
+          channel: (src === 'messenger' ? 'messenger_dm' : express ? 'express_form' : 'facebook_comment') as
+            | 'facebook_comment'
+            | 'messenger_dm'
+            | 'express_form',
+          adId,
+          adName,
+          adIndex: adIndexRaw ? Number(adIndexRaw) || undefined : undefined,
+          campaignId,
+          campaignName,
+          postId,
+          commentId,
+          threadId,
+          commentText,
+          authorName,
+          capturedAt: new Date().toISOString()
+        };
+        try {
+          window.sessionStorage.setItem('noelux_meta_comment_origin', JSON.stringify(direct));
+          window.localStorage.setItem('noelux_meta_comment_origin', JSON.stringify(direct));
+        } catch {}
+        return direct;
+      }
+    }
+
+    const raw =
+      window.sessionStorage.getItem('noelux_meta_comment_origin') ||
+      window.localStorage.getItem('noelux_meta_comment_origin');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.source === 'meta_comment_ai') return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearMetaCommentOriginStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem('noelux_meta_comment_origin');
+    window.localStorage.removeItem('noelux_meta_comment_origin');
+  } catch {}
 }
 
 export function getOrderAttributionSnapshot(productSlug?: string): OrderAttributionPayload {

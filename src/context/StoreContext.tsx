@@ -20,7 +20,9 @@ import {
 } from '../config';
 import {
   captureUrlAttributionTouch,
-  getOrderAttributionSnapshot
+  clearMetaCommentOriginStorage,
+  getOrderAttributionSnapshot,
+  readMetaCommentOriginFromUrlOrStorage
 } from '../utils/metaPixelEngine';
 import {
   inferParaguayDepartmentFromCity,
@@ -1146,11 +1148,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {}
   }, [currentView]);
 
-  // Sincronizar ?p=slug con activeProductId sin alterar currentView
+  // Sincronizar ?p=slug o ?express=slug con activeProductId sin alterar currentView
   useEffect(() => {
     const path = window.location.pathname.toLowerCase();
     const params = new URLSearchParams(window.location.search);
-    const slugParam = (params.get('p') || params.get('producto') || '').trim().toLowerCase();
+    const expressRaw = (params.get('express') || '').trim().toLowerCase();
+    const expressSlug = expressRaw && expressRaw !== '1' && expressRaw !== 'true' ? expressRaw : '';
+    const slugParam = (expressSlug || params.get('p') || params.get('producto') || '').trim().toLowerCase();
     const cleanPathSlug = path.replace(/^\/+|\/+$/g, '').toLowerCase();
     const candidateSlug =
       slugParam ||
@@ -1666,6 +1670,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       );
 
       const attrPayload = getOrderAttributionSnapshot(currentProductPage?.slug || targetProdId);
+      const commentOrigin = orderData.metaCommentOrigin || readMetaCommentOriginFromUrlOrStorage() || undefined;
       const clientRequestKey =
         orderData.clientRequestKey ||
         `ck_${reservaid}_${Date.now().toString(36)}`;
@@ -1683,7 +1688,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         acredita: true,
         visitorId: attrPayload.visitorId,
         clientRequestKey,
-        attributionSnapshot: attrPayload
+        attributionSnapshot: attrPayload,
+        ...(commentOrigin ? { metaCommentOrigin: commentOrigin } : {}),
+        ...(orderData.attributedAdId || commentOrigin?.adId
+          ? { attributedAdId: orderData.attributedAdId || commentOrigin?.adId }
+          : {}),
+        ...(orderData.attributedCampaignId || commentOrigin?.campaignId
+          ? { attributedCampaignId: orderData.attributedCampaignId || commentOrigin?.campaignId }
+          : {}),
+        ...(orderData.attributionSourceKind || (commentOrigin ? 'meta_comment_ai' : '')
+          ? { attributionSourceKind: orderData.attributionSourceKind || 'meta_comment_ai' }
+          : {})
       };
 
       // Optimistic UI update usando actualización funcional para no pisar pedidos concurrentes
@@ -1758,6 +1773,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       setLastOrder(newOrder);
+
+      if (newOrder.metaCommentOrigin?.source === 'meta_comment_ai') {
+        clearMetaCommentOriginStorage();
+        if (!serverOk) {
+          fetch('/api/meta/comments/attribute-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: newOrder })
+          }).catch(() => {});
+        }
+      }
 
       // Trigger local public event
       const newEvent: PublicEvent = {

@@ -251,6 +251,7 @@ export const AndroidAppView: React.FC = () => {
     productos: 'Productos y Ventas',
     creador: 'Creador IA',
     pipeboard: 'AutoAds',
+    comentarios: 'Comentarios Ads',
     whatsapp: 'WhatsApp',
     deepgram: 'Deepgram Voz',
     openrouter: 'Cerebro LLM'

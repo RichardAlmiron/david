@@ -106,6 +106,8 @@ import {
   uploadMetaDirectAdVideo
 } from './server/metaPublishPreflight.ts';
 import {
+  OFFICIAL_META_AD_ACCOUNT_ID,
+  OFFICIAL_META_PAGE_ID,
   auditMetaTokenAndPermissions,
   classifyMetaGraphError,
   hydrateMetaVaultIntoStoreConfig,
@@ -127,6 +129,25 @@ import {
   fetchLiveMetaCampaignHierarchy,
   replacePublishedAdInMeta
 } from './server/metaCampaignOps.ts';
+import {
+  buildExpressCheckoutUrl,
+  computeMetaAdCommentStats,
+  detectParaguayPhonesInText,
+  generateCommentAndDmAiResponses,
+  generateMessengerChatReply,
+  hydrateMetaCommentsStateFromSupabase,
+  linkOrderToMetaCommentThread,
+  loadMetaCommentsState,
+  postMetaCommentReply,
+  processInboundMessengerDm,
+  processInboundMetaComment,
+  resolveMetaPageAccessToken,
+  resolveProductForCommentContext,
+  saveMetaCommentsState,
+  sendMetaMessengerMessage,
+  setMetaCommentHidden,
+  syncMetaAdPostsAndComments
+} from './server/metaCommentsEngine.ts';
 
 const RUNTIME_PERSISTENT_PATHS = getPersistentDataPaths();
 function getPedidosFilePath() {
@@ -1037,6 +1058,14 @@ function registerApiServerMiddlewares(server: any) {
                     : [];
                   list.unshift(finalPedido);
                   savePedidos(list);
+
+                  try {
+                    const latestCfg = loadStoreConfig();
+                    linkOrderToMetaCommentThread({
+                      order: finalPedido,
+                      products: Array.isArray(latestCfg?.productPages) ? latestCfg.productPages : []
+                    });
+                  } catch {}
 
                   // Automatización WhatsApp conservada tal cual
                   handleNewOrderAutomation(finalPedido).catch((autoErr: any) => {
@@ -6498,8 +6527,9 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   await saveMetaVaultToSupabase(cfg).catch(() => {});
                 }
 
-                // Permisos requeridos para Meta Ads
-                const scopes = 'ads_management,ads_read,pages_show_list,pages_read_engagement,business_management';
+                // Permisos requeridos para Meta Ads + Comentarios y Messenger Closer
+                const scopes =
+                  'ads_management,ads_read,pages_show_list,pages_read_engagement,pages_manage_engagement,pages_messaging,business_management';
 
                 const authUrl =
                   `https://www.facebook.com/v21.0/dialog/oauth?` +
@@ -9025,6 +9055,918 @@ setTimeout(()=>window.close(),5000);
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ success: true, summary }));
               })();
+              return;
+            }
+          }
+
+          // =========================================================================
+          // 11. COMENTARIOS META ADS IA CLOSER + MESSENGER + EXPRESS CHECKOUT
+          // =========================================================================
+          const resolveRequestOrigin = () => {
+            if (process.env.PUBLIC_APP_URL) {
+              return String(process.env.PUBLIC_APP_URL).trim().replace(/\/+$/, '');
+            }
+            const fwdHost = req.headers['x-forwarded-host'] || req.headers.host || `localhost:${serverPort}`;
+            const hostStr = (Array.isArray(fwdHost) ? fwdHost[0] : String(fwdHost)).split(',')[0].trim();
+            const fwdProto = req.headers['x-forwarded-proto'];
+            const protoStr = Array.isArray(fwdProto) ? fwdProto[0] : String(fwdProto || '');
+            const proto =
+              hostStr.includes('localhost') || hostStr.startsWith('127.0.0.1')
+                ? 'http'
+                : protoStr.includes('https') || hostStr.includes('.')
+                ? 'https'
+                : 'http';
+            return `${proto}://${hostStr}`;
+          };
+
+          const resolveActiveMetaUserToken = async () => {
+            const cfgFile = getStoreConfigFilePath();
+            const { cfg } = await hydrateMetaVaultIntoStoreConfig({
+              cfgFile,
+              envReader: readKeyFromEnvFile,
+              envWriter: saveKeyToEnvFile
+            });
+            const token = String(
+              (cfg?.metaDirectConfig?.tokenStatus !== 'invalid' ? cfg?.metaDirectConfig?.accessToken : '') ||
+                readKeyFromEnvFile('META_ACCESS_TOKEN') ||
+                ''
+            ).trim();
+            return { cfg, cfgFile, token: isValidMetaAccessToken(token) ? token : '' };
+          };
+
+          // Webhook público oficial de Meta (Verificación GET hub.challenge + Recepción POST feed/messaging)
+          if (url === '/api/meta/comments-webhook') {
+            if (req.method === 'GET') {
+              const q = new URLSearchParams(req.url?.split('?')[1] || '');
+              const mode = q.get('hub.mode');
+              const token = q.get('hub.verify_token');
+              const challenge = q.get('hub.challenge') || '';
+              const cfg = loadStoreConfig();
+              const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+              const commentsState = loadMetaCommentsState(products);
+              const expectedToken =
+                String(process.env.META_WEBHOOK_VERIFY_TOKEN || commentsState.config.webhookVerifyToken || '').trim();
+              if (mode === 'subscribe' && token && token === expectedToken) {
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.end(challenge);
+                return;
+              }
+              res.statusCode = 403;
+              res.end('Forbidden');
+              return;
+            }
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', () => {
+                // Meta exige HTTP 200 inmediato (<5s); procesamos IA y envíos en segundo plano
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ received: true }));
+
+                (async () => {
+                  try {
+                    const payload = JSON.parse(body || '{}');
+                    const cfg = loadStoreConfig();
+                    const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                    await hydrateMetaCommentsStateFromSupabase(products).catch(() => {});
+                    const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+                    const { token: userToken } = await resolveActiveMetaUserToken();
+                    const pageId = String(cfg?.pipeboardConfig?.selectedFacebookPageId || OFFICIAL_META_PAGE_ID);
+                    const pageToken = userToken
+                      ? await resolveMetaPageAccessToken({ userAccessToken: userToken, pageId })
+                      : null;
+                    const publicBaseUrl = resolveRequestOrigin();
+
+                    const entries: any[] = Array.isArray(payload?.entry) ? payload.entry : [];
+                    for (const entry of entries) {
+                      const entryPageId = String(entry?.id || pageId);
+                      const effectivePageToken =
+                        entryPageId === pageId || !userToken
+                          ? pageToken
+                          : await resolveMetaPageAccessToken({ userAccessToken: userToken, pageId: entryPageId });
+
+                      // 1. Comentarios en feed / dark posts de anuncios
+                      const changes: any[] = Array.isArray(entry?.changes) ? entry.changes : [];
+                      for (const ch of changes) {
+                        if (ch?.field !== 'feed') continue;
+                        const val = ch?.value || {};
+                        if (val?.item !== 'comment' || val?.verb !== 'add') continue;
+                        const commentId = String(val?.comment_id || '').trim();
+                        const postId = String(val?.post_id || '').trim();
+                        const message = String(val?.message || '').trim();
+                        const authorId = String(val?.from?.id || '').trim();
+                        const authorName = String(val?.from?.name || 'Cliente Facebook').trim();
+                        if (!commentId || !message) continue;
+                        // Ignorar comentarios publicados por la misma Página para evitar bucles
+                        if (authorId && authorId === entryPageId) continue;
+                        if (val?.parent_id && val.parent_id !== postId) continue;
+                        if (!openRouterApiKey) continue;
+
+                        await processInboundMetaComment({
+                          commentId,
+                          postId: postId || entryPageId,
+                          pageId: entryPageId,
+                          authorId: authorId || undefined,
+                          authorName,
+                          commentText: message,
+                          platform: payload?.object === 'instagram' ? 'instagram' : 'facebook',
+                          products,
+                          openRouterApiKey,
+                          pageAccessToken: effectivePageToken,
+                          publicBaseUrl,
+                          executeMetaActions: true,
+                          isSimulation: false
+                        }).catch((e) => console.error('[MetaWebhook comment error]:', e));
+                      }
+
+                      // 2. Mensajes entrantes de Messenger DM (clientes respondiendo el Private Reply o escribiendo directo desde Ad)
+                      const messagingList: any[] = Array.isArray(entry?.messaging) ? entry.messaging : [];
+                      for (const mEvt of messagingList) {
+                        if (mEvt?.message?.is_echo) continue;
+                        const senderPsid = String(mEvt?.sender?.id || '').trim();
+                        const text = String(mEvt?.message?.text || '').trim();
+                        const referralAdId = String(
+                          mEvt?.referral?.ad_id || mEvt?.postback?.referral?.ad_id || ''
+                        ).trim();
+                        if (!senderPsid || senderPsid === entryPageId || !text || !openRouterApiKey) continue;
+
+                        await processInboundMessengerDm({
+                          senderPsid,
+                          recipientPageId: entryPageId,
+                          messageText: text,
+                          referralAdId: referralAdId || undefined,
+                          products,
+                          openRouterApiKey,
+                          pageAccessToken: effectivePageToken,
+                          publicBaseUrl,
+                          executeMetaActions: true,
+                          isSimulation: false
+                        }).catch((e) => console.error('[MetaWebhook dm error]:', e));
+                      }
+                    }
+                  } catch (err) {
+                    console.error('[POST /api/meta/comments-webhook Error]:', err);
+                  }
+                })();
+              });
+              return;
+            }
+          }
+
+          // Endpoint público para registrar atribución directa si el cliente confirmó pedido desde ?express=
+          if (req.method === 'POST' && url === '/api/meta/comments/attribute-order') {
+            let body = '';
+            req.on('data', (c: any) => (body += c));
+            req.on('end', () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const cfg = loadStoreConfig();
+                const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                const linked = linkOrderToMetaCommentThread({
+                  order: parsed?.order,
+                  products
+                });
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, ...linked }));
+              } catch (err: any) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          if (url.startsWith('/api/meta/comments/')) {
+            const auth = verifyAdminToken(req.headers['authorization'], req.headers['cookie']);
+            if (!auth.valid) {
+              res.statusCode = 401;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: 'Autenticación admin requerida.' }));
+              return;
+            }
+
+            if (req.method === 'GET' && url === '/api/meta/comments/state') {
+              (async () => {
+                res.setHeader('Content-Type', 'application/json');
+                try {
+                  const cfg = loadStoreConfig();
+                  const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const state = await hydrateMetaCommentsStateFromSupabase(products);
+                  const pedidos = loadPedidos();
+                  const adStats = computeMetaAdCommentStats(state, pedidos);
+                  const { token } = await resolveActiveMetaUserToken();
+                  let permissionsAudit: any = null;
+                  if (token) {
+                    permissionsAudit = await auditMetaTokenAndPermissions({
+                      accessToken: token,
+                      adAccountId: String(cfg?.metaDirectConfig?.adAccountId || OFFICIAL_META_AD_ACCOUNT_ID),
+                      pageId: String(cfg?.pipeboardConfig?.selectedFacebookPageId || OFFICIAL_META_PAGE_ID)
+                    }).catch(() => null);
+                  }
+                  const hasOpenRouterKey = Boolean(String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim());
+                  const campaigns = Array.isArray(cfg?.pipeboardPublishedCampaigns)
+                    ? cfg.pipeboardPublishedCampaigns
+                    : [];
+
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      config: {
+                        ...state.config,
+                        publicBaseUrl: state.config.publicBaseUrl || resolveRequestOrigin()
+                      },
+                      threads: state.threads,
+                      adStats,
+                      campaigns,
+                      hasOpenRouterKey,
+                      hasMetaToken: Boolean(token),
+                      commentsPermissionsReady: permissionsAudit ? Boolean(permissionsAudit.commentsPermissionsReady) : false,
+                      missingCommentPermissions: permissionsAudit?.missingCommentPermissions || [],
+                      webhookUrl: `${resolveRequestOrigin()}/api/meta/comments-webhook`
+                    })
+                  );
+                } catch (err: any) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ success: false, error: err?.message || 'Error leyendo Comentarios Ads' }));
+                }
+              })();
+              return;
+            }
+
+            if (req.method === 'POST' && url === '/api/meta/comments/config') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', () => {
+                try {
+                  const incoming = JSON.parse(body || '{}');
+                  const cfg = loadStoreConfig();
+                  const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const state = loadMetaCommentsState(products);
+                  state.config = {
+                    ...state.config,
+                    ...(typeof incoming.enabled === 'boolean' ? { enabled: incoming.enabled } : {}),
+                    ...(typeof incoming.autoPublicReply === 'boolean'
+                      ? { autoPublicReply: incoming.autoPublicReply }
+                      : {}),
+                    ...(typeof incoming.autoPrivateDm === 'boolean' ? { autoPrivateDm: incoming.autoPrivateDm } : {}),
+                    ...(typeof incoming.autoHidePhoneComments === 'boolean'
+                      ? { autoHidePhoneComments: incoming.autoHidePhoneComments }
+                      : {}),
+                    ...(typeof incoming.autoWhatsappOnPhone === 'boolean'
+                      ? { autoWhatsappOnPhone: incoming.autoWhatsappOnPhone }
+                      : {}),
+                    ...(incoming.defaultProductId !== undefined
+                      ? { defaultProductId: String(incoming.defaultProductId || '') }
+                      : {}),
+                    ...(incoming.defaultProductSlug !== undefined
+                      ? { defaultProductSlug: String(incoming.defaultProductSlug || '') }
+                      : {}),
+                    ...(incoming.publicBaseUrl !== undefined
+                      ? { publicBaseUrl: String(incoming.publicBaseUrl || '').trim() }
+                      : {}),
+                    ...(incoming.campaignProductMap && typeof incoming.campaignProductMap === 'object'
+                      ? { campaignProductMap: incoming.campaignProductMap }
+                      : {}),
+                    ...(incoming.adProductMap && typeof incoming.adProductMap === 'object'
+                      ? { adProductMap: incoming.adProductMap }
+                      : {})
+                  };
+                  saveMetaCommentsState(state);
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ success: true, config: state.config }));
+                } catch (err: any) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+
+            if (req.method === 'POST' && url === '/api/meta/comments/map-product') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', () => {
+                try {
+                  const incoming = JSON.parse(body || '{}');
+                  const cfg = loadStoreConfig();
+                  const products: ProductPage[] = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const prod =
+                    products.find((p) => p.id === incoming.productId) ||
+                    products.find((p) => p.slug === incoming.productSlug);
+                  if (!prod) {
+                    res.statusCode = 404;
+                    res.end(JSON.stringify({ success: false, error: 'Producto no encontrado.' }));
+                    return;
+                  }
+                  const state = loadMetaCommentsState(products);
+                  const mapEntry = { productId: prod.id, productSlug: prod.slug, productName: prod.nombre };
+
+                  if (incoming.campaignId) {
+                    state.config.campaignProductMap[String(incoming.campaignId)] = mapEntry;
+                  }
+                  if (incoming.adId) {
+                    state.config.adProductMap[String(incoming.adId)] = mapEntry;
+                  }
+                  if (incoming.postId && state.config.postAdMap[String(incoming.postId)]) {
+                    state.config.postAdMap[String(incoming.postId)] = {
+                      ...state.config.postAdMap[String(incoming.postId)],
+                      ...mapEntry
+                    };
+                  }
+                  if (incoming.threadId) {
+                    const th = state.threads.find((t) => t.id === incoming.threadId);
+                    if (th) {
+                      th.productId = prod.id;
+                      th.productSlug = prod.slug;
+                      th.productName = prod.nombre;
+                      th.expressFormUrl = buildExpressCheckoutUrl({
+                        baseUrl: state.config.publicBaseUrl || resolveRequestOrigin(),
+                        productSlug: prod.slug,
+                        productId: prod.id,
+                        adId: th.adId,
+                        adName: th.adName,
+                        adIndex: th.adIndex,
+                        campaignId: th.campaignId,
+                        campaignName: th.campaignName,
+                        postId: th.postId,
+                        commentId: th.commentId,
+                        threadId: th.id,
+                        authorName: th.authorName
+                      });
+                      th.updatedAt = new Date().toISOString();
+                    }
+                  }
+                  saveMetaCommentsState(state);
+                  const pedidos = loadPedidos();
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      config: state.config,
+                      threads: state.threads,
+                      adStats: computeMetaAdCommentStats(state, pedidos)
+                    })
+                  );
+                } catch (err: any) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+
+            if (req.method === 'POST' && url === '/api/meta/comments/sync') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                res.setHeader('Content-Type', 'application/json');
+                try {
+                  const incoming = JSON.parse(body || '{}');
+                  const cfg = loadStoreConfig();
+                  const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const { token } = await resolveActiveMetaUserToken();
+                  if (!token) {
+                    res.statusCode = 400;
+                    res.end(
+                      JSON.stringify({
+                        success: false,
+                        error: 'Conectá primero tu sesión de Facebook en Meta Directo.'
+                      })
+                    );
+                    return;
+                  }
+                  const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+                  const syncRes = await syncMetaAdPostsAndComments({
+                    userAccessToken: token,
+                    adAccountId: String(cfg?.metaDirectConfig?.adAccountId || OFFICIAL_META_AD_ACCOUNT_ID),
+                    pageId: String(cfg?.pipeboardConfig?.selectedFacebookPageId || OFFICIAL_META_PAGE_ID),
+                    products,
+                    openRouterApiKey,
+                    publicBaseUrl: resolveRequestOrigin(),
+                    processWithAi: incoming?.processWithAi !== false
+                  });
+                  const state = loadMetaCommentsState(products);
+                  const pedidos = loadPedidos();
+                  res.end(
+                    JSON.stringify({
+                      success: syncRes.ok,
+                      ...syncRes,
+                      threads: state.threads,
+                      adStats: computeMetaAdCommentStats(state, pedidos),
+                      config: state.config
+                    })
+                  );
+                } catch (err: any) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+
+            if (req.method === 'POST' && url === '/api/meta/comments/simulate') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                res.setHeader('Content-Type', 'application/json');
+                try {
+                  const incoming = JSON.parse(body || '{}');
+                  const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+                  if (!openRouterApiKey) {
+                    res.statusCode = 400;
+                    res.end(
+                      JSON.stringify({
+                        success: false,
+                        error: 'Falta OPENROUTER_API_KEY. Configurala para probar la IA pura de OpenRouter.'
+                      })
+                    );
+                    return;
+                  }
+                  const cfg = loadStoreConfig();
+                  const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const mode = String(incoming.mode || 'comment');
+
+                  if (mode === 'customer_dm' && incoming.threadId) {
+                    const state = loadMetaCommentsState(products);
+                    const target = state.threads.find((t) => t.id === incoming.threadId);
+                    if (!target) {
+                      res.statusCode = 404;
+                      res.end(JSON.stringify({ success: false, error: 'Hilo no encontrado.' }));
+                      return;
+                    }
+                    if (!target.psid) target.psid = `sim_psid_${target.id}`;
+                    const dmRes = await processInboundMessengerDm({
+                      senderPsid: target.psid,
+                      recipientPageId: target.pageId,
+                      messageText: String(incoming.messageText || 'Quiero 2 unidades para Asunción'),
+                      products,
+                      openRouterApiKey,
+                      publicBaseUrl: resolveRequestOrigin(),
+                      executeMetaActions: false,
+                      isSimulation: true
+                    });
+                    const pedidos = loadPedidos();
+                    res.end(
+                      JSON.stringify({
+                        success: true,
+                        thread: dmRes.thread,
+                        extractedOrder: dmRes.extractedOrder,
+                        threads: loadMetaCommentsState(products).threads,
+                        adStats: computeMetaAdCommentStats(loadMetaCommentsState(products), pedidos)
+                      })
+                    );
+                    return;
+                  }
+
+                  const simCommentId = `sim_comment_${Date.now()}`;
+                  const simPostId = String(incoming.postId || `${OFFICIAL_META_PAGE_ID}_sim_post`);
+                  const result = await processInboundMetaComment({
+                    commentId: simCommentId,
+                    postId: simPostId,
+                    pageId: OFFICIAL_META_PAGE_ID,
+                    authorName: String(incoming.authorName || 'María González'),
+                    commentText: String(incoming.commentText || '¿Precio y envío a San Lorenzo?'),
+                    platform: 'facebook',
+                    adId: incoming.adId ? String(incoming.adId) : undefined,
+                    adName: incoming.adName ? String(incoming.adName) : undefined,
+                    adIndex: incoming.adIndex ? Number(incoming.adIndex) : undefined,
+                    campaignId: incoming.campaignId ? String(incoming.campaignId) : undefined,
+                    campaignName: incoming.campaignName ? String(incoming.campaignName) : undefined,
+                    explicitProductId: incoming.productId ? String(incoming.productId) : undefined,
+                    explicitProductSlug: incoming.productSlug ? String(incoming.productSlug) : undefined,
+                    products,
+                    openRouterApiKey,
+                    publicBaseUrl: resolveRequestOrigin(),
+                    executeMetaActions: false,
+                    isSimulation: true
+                  });
+                  const state = loadMetaCommentsState(products);
+                  const pedidos = loadPedidos();
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      ...result,
+                      threads: state.threads,
+                      adStats: computeMetaAdCommentStats(state, pedidos)
+                    })
+                  );
+                } catch (err: any) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+
+            if (req.method === 'POST' && url === '/api/meta/comments/reply') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                res.setHeader('Content-Type', 'application/json');
+                try {
+                  const incoming = JSON.parse(body || '{}');
+                  const cfg = loadStoreConfig();
+                  const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const state = loadMetaCommentsState(products);
+                  const thread = state.threads.find((t) => t.id === incoming.threadId);
+                  if (!thread) {
+                    res.statusCode = 404;
+                    res.end(JSON.stringify({ success: false, error: 'Hilo no encontrado.' }));
+                    return;
+                  }
+
+                  let replyText = String(incoming.message || '').trim();
+                  if (incoming.generateWithAi) {
+                    const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+                    const prod =
+                      resolveProductForCommentContext({
+                        products,
+                        config: state.config,
+                        explicitProductId: thread.productId,
+                        explicitProductSlug: thread.productSlug
+                      }) || products[0];
+                    const aiDraft = await generateCommentAndDmAiResponses({
+                      openRouterApiKey,
+                      product: prod,
+                      authorName: thread.authorName,
+                      commentText: thread.commentText,
+                      detectedPhones: thread.detectedPhones,
+                      adName: thread.adName,
+                      campaignName: thread.campaignName,
+                      expressFormUrl: thread.expressFormUrl || resolveRequestOrigin()
+                    });
+                    replyText = aiDraft.publicReply;
+                    if (!incoming.sendNow) {
+                      res.end(JSON.stringify({ success: true, draft: replyText }));
+                      return;
+                    }
+                  }
+
+                  if (!replyText) {
+                    res.statusCode = 400;
+                    res.end(JSON.stringify({ success: false, error: 'Mensaje de respuesta vacío.' }));
+                    return;
+                  }
+
+                  let sentLive = false;
+                  let metaReplyId: string | undefined;
+                  let liveError: string | undefined;
+                  if (!thread.isSimulation) {
+                    const { token } = await resolveActiveMetaUserToken();
+                    const pageToken = token
+                      ? await resolveMetaPageAccessToken({ userAccessToken: token, pageId: thread.pageId })
+                      : null;
+                    if (pageToken) {
+                      const pubRes = await postMetaCommentReply({
+                        commentId: thread.commentId,
+                        message: replyText,
+                        pageAccessToken: pageToken
+                      });
+                      sentLive = pubRes.ok;
+                      metaReplyId = pubRes.replyId;
+                      liveError = pubRes.error;
+                    } else {
+                      liveError = 'Sin Page Access Token activo (se registró respuesta en historial local).';
+                    }
+                  }
+
+                  const now = new Date().toISOString();
+                  thread.publicReplyText = replyText;
+                  if (metaReplyId) thread.publicReplyId = metaReplyId;
+                  thread.publicRepliedAt = now;
+                  if (thread.status === 'new') thread.status = 'public_replied';
+                  thread.updatedAt = now;
+                  thread.messages.push({
+                    id: `msg_${Date.now()}_pub_man`,
+                    direction: 'outbound',
+                    channel: 'facebook_comment',
+                    text: replyText,
+                    createdAt: now,
+                    by: 'admin',
+                    sentToMeta: sentLive,
+                    metaMessageId: metaReplyId
+                  });
+                  saveMetaCommentsState(state);
+
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      sentLive,
+                      warning: liveError,
+                      thread,
+                      threads: state.threads
+                    })
+                  );
+                } catch (err: any) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+
+            if (req.method === 'POST' && url === '/api/meta/comments/dm') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                res.setHeader('Content-Type', 'application/json');
+                try {
+                  const incoming = JSON.parse(body || '{}');
+                  const cfg = loadStoreConfig();
+                  const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const state = loadMetaCommentsState(products);
+                  const thread = state.threads.find((t) => t.id === incoming.threadId);
+                  if (!thread) {
+                    res.statusCode = 404;
+                    res.end(JSON.stringify({ success: false, error: 'Hilo no encontrado.' }));
+                    return;
+                  }
+                  const prod =
+                    resolveProductForCommentContext({
+                      products,
+                      config: state.config,
+                      explicitProductId: thread.productId,
+                      explicitProductSlug: thread.productSlug
+                    }) || products[0];
+                  const expressUrl =
+                    thread.expressFormUrl ||
+                    buildExpressCheckoutUrl({
+                      baseUrl: state.config.publicBaseUrl || resolveRequestOrigin(),
+                      productSlug: prod?.slug,
+                      productId: prod?.id,
+                      adId: thread.adId,
+                      adName: thread.adName,
+                      adIndex: thread.adIndex,
+                      campaignId: thread.campaignId,
+                      campaignName: thread.campaignName,
+                      postId: thread.postId,
+                      commentId: thread.commentId,
+                      threadId: thread.id,
+                      authorName: thread.authorName,
+                      channel: 'messenger_dm'
+                    });
+                  thread.expressFormUrl = expressUrl;
+
+                  let dmText = String(incoming.message || '').trim();
+                  if (incoming.generateWithAi) {
+                    const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+                    const lastInbound =
+                      [...thread.messages].reverse().find((m) => m.direction === 'inbound')?.text ||
+                      thread.commentText;
+                    const aiRes = await generateMessengerChatReply({
+                      openRouterApiKey,
+                      product: prod,
+                      thread,
+                      incomingText: lastInbound,
+                      expressFormUrl: expressUrl
+                    });
+                    dmText = aiRes.replyText;
+                    if (!incoming.sendNow) {
+                      res.end(
+                        JSON.stringify({
+                          success: true,
+                          draft: dmText,
+                          extractedOrder: aiRes.extractedOrder
+                        })
+                      );
+                      return;
+                    }
+                  }
+
+                  if (!dmText) {
+                    res.statusCode = 400;
+                    res.end(JSON.stringify({ success: false, error: 'Mensaje Messenger vacío.' }));
+                    return;
+                  }
+
+                  const attachExpress = incoming.includeExpressForm !== false;
+                  let sentLive = false;
+                  let metaMsgId: string | undefined;
+                  let warning: string | undefined;
+
+                  if (!thread.isSimulation) {
+                    const { token } = await resolveActiveMetaUserToken();
+                    const pageToken = token
+                      ? await resolveMetaPageAccessToken({ userAccessToken: token, pageId: thread.pageId })
+                      : null;
+                    if (pageToken) {
+                      const sendRes = await sendMetaMessengerMessage({
+                        pageId: thread.pageId,
+                        pageAccessToken: pageToken,
+                        text: dmText,
+                        expressUrl: attachExpress ? expressUrl : undefined,
+                        psid: thread.psid,
+                        commentId: thread.psid ? undefined : thread.commentId
+                      });
+                      sentLive = sendRes.ok;
+                      metaMsgId = sendRes.messageId;
+                      if (sendRes.recipientId && !thread.psid) thread.psid = sendRes.recipientId;
+                      if (!sendRes.ok) warning = sendRes.error;
+                    } else {
+                      warning = 'Sin Page Access Token activo.';
+                    }
+                  }
+
+                  const now = new Date().toISOString();
+                  thread.dmSentAt = now;
+                  if (attachExpress && thread.status !== 'order_closed') thread.status = 'form_sent';
+                  else if (thread.status !== 'order_closed') thread.status = 'dm_active';
+                  thread.updatedAt = now;
+                  thread.messages.push({
+                    id: `msg_${Date.now()}_dm_man`,
+                    direction: 'outbound',
+                    channel: 'messenger_dm',
+                    text: dmText,
+                    createdAt: now,
+                    by: 'admin',
+                    sentToMeta: sentLive,
+                    metaMessageId: metaMsgId,
+                    expressUrl: attachExpress ? expressUrl : undefined
+                  });
+                  saveMetaCommentsState(state);
+
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      sentLive,
+                      warning,
+                      thread,
+                      threads: state.threads
+                    })
+                  );
+                } catch (err: any) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+
+            if (req.method === 'POST' && url === '/api/meta/comments/hide') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                res.setHeader('Content-Type', 'application/json');
+                try {
+                  const incoming = JSON.parse(body || '{}');
+                  const cfg = loadStoreConfig();
+                  const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const state = loadMetaCommentsState(products);
+                  const thread = state.threads.find((t) => t.id === incoming.threadId);
+                  if (!thread) {
+                    res.statusCode = 404;
+                    res.end(JSON.stringify({ success: false, error: 'Hilo no encontrado.' }));
+                    return;
+                  }
+                  const targetHidden = typeof incoming.isHidden === 'boolean' ? incoming.isHidden : !thread.hiddenFromPublic;
+                  let hiddenLive = false;
+                  if (!thread.isSimulation) {
+                    const { token } = await resolveActiveMetaUserToken();
+                    const pageToken = token
+                      ? await resolveMetaPageAccessToken({ userAccessToken: token, pageId: thread.pageId })
+                      : null;
+                    if (pageToken) {
+                      const hRes = await setMetaCommentHidden({
+                        commentId: thread.commentId,
+                        isHidden: targetHidden,
+                        pageAccessToken: pageToken
+                      });
+                      hiddenLive = hRes.ok;
+                    }
+                  }
+                  thread.hiddenFromPublic = targetHidden;
+                  thread.updatedAt = new Date().toISOString();
+                  saveMetaCommentsState(state);
+                  res.end(JSON.stringify({ success: true, hiddenLive, thread, threads: state.threads }));
+                } catch (err: any) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
+              return;
+            }
+
+            if (req.method === 'POST' && url === '/api/meta/comments/create-order') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                res.setHeader('Content-Type', 'application/json');
+                try {
+                  const incoming = JSON.parse(body || '{}');
+                  const cfg = loadStoreConfig();
+                  const products: ProductPage[] = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const state = loadMetaCommentsState(products);
+                  const thread = state.threads.find((t) => t.id === incoming.threadId);
+                  const prod =
+                    products.find((p) => p.id === (incoming.productId || thread?.productId)) ||
+                    products.find((p) => p.slug === (incoming.productSlug || thread?.productSlug)) ||
+                    products[0];
+
+                  if (!prod) {
+                    res.statusCode = 400;
+                    res.end(JSON.stringify({ success: false, error: 'No hay producto válido para registrar pedido.' }));
+                    return;
+                  }
+
+                  const qty = Number(incoming.cantidad) || 1;
+                  const unitPrice = Number(prod.precios?.[1] || prod.precioNormal || 0);
+                  const totalPrice =
+                    Number(incoming.monto || incoming.precioTotal) || Number(prod.precios?.[qty] || unitPrice * qty);
+                  const cleanPhone = normalizeWaPhone(
+                    String(incoming.celular || incoming.whatsapp || thread?.detectedPhones?.[0] || '')
+                  );
+                  const reservaid = `MC-${Date.now().toString(36).toUpperCase()}`;
+                  const nowIso = new Date().toISOString();
+
+                  const orderPayload: any = {
+                    reservaid,
+                    producto: prod.nombre,
+                    productoId: prod.id,
+                    cantidad: qty,
+                    monto: totalPrice,
+                    detalle: 'Efectivo al recibir',
+                    ref_code: null,
+                    nombre: String(incoming.nombre || thread?.authorName || 'Cliente Meta').trim(),
+                    celular: cleanPhone || String(incoming.celular || incoming.whatsapp || '595981000000'),
+                    ciudad: String(incoming.ciudad || 'Asunción').trim(),
+                    departamento: String(incoming.departamento || 'Central').trim(),
+                    direccion: String(incoming.direccion || 'A confirmar por chat').trim(),
+                    referenciaCasa: String(incoming.referencia || '').trim() || undefined,
+                    gpsLat: incoming.lat ? Number(incoming.lat) : undefined,
+                    gpsLng: incoming.lng ? Number(incoming.lng) : undefined,
+                    gpsLink: incoming.mapsUrl ? String(incoming.mapsUrl) : undefined,
+                    gpsConfirmado: Boolean(incoming.lat && incoming.lng),
+                    waVendedor: normalizeWaPhone(prod.wa || cfg?.wa || ''),
+                    estado: 'reservado',
+                    acredita: true,
+                    fecha: nowIso,
+                    actualizado_en: nowIso,
+                    modoIA: 'manual',
+                    convStep: 1,
+                    atendidoPorIA: true,
+                    attributedAdId: thread?.adId || incoming.adId,
+                    attributedCampaignId: thread?.campaignId || incoming.campaignId,
+                    attributionSourceKind: 'meta_comment_ai',
+                    metaCommentOrigin: {
+                      source: 'meta_comment_ai',
+                      channel: 'messenger_dm',
+                      adId: thread?.adId || incoming.adId,
+                      adName: thread?.adName || incoming.adName,
+                      adIndex: thread?.adIndex,
+                      campaignId: thread?.campaignId || incoming.campaignId,
+                      campaignName: thread?.campaignName || incoming.campaignName,
+                      postId: thread?.postId,
+                      commentId: thread?.commentId,
+                      threadId: thread?.id,
+                      commentText: thread?.commentText,
+                      authorName: thread?.authorName,
+                      capturedAt: nowIso
+                    }
+                  };
+
+                  await hydrateAutoadsFromSupabase().catch(() => {});
+                  const jointRes = await createOrIdempotentPedidoWithAttribution({
+                    orderInput: orderPayload,
+                    clientIp: String(req.headers['x-forwarded-for'] || '127.0.0.1').split(',')[0].trim(),
+                    clientUserAgent: String(req.headers['user-agent'] || ''),
+                    cloudSyncFn: async (savedOrd) => {
+                      const ok = await Promise.race([
+                        syncOrderUpdateToCloud(savedOrd).catch(() => false),
+                        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1800))
+                      ]);
+                      if (!ok) queueOrderCloudSync(savedOrd);
+                      return ok;
+                    }
+                  });
+
+                  const finalPedido = jointRes.order;
+                  const rawList = loadPedidos();
+                  const list = Array.isArray(rawList)
+                    ? rawList.filter((p: any) => p?.reservaid !== finalPedido.reservaid)
+                    : [];
+                  list.unshift(finalPedido);
+                  savePedidos(list);
+
+                  linkOrderToMetaCommentThread({ order: finalPedido, products });
+                  handleNewOrderAutomation(finalPedido).catch(() => {});
+                  await flushPendingSupabaseSyncs(2000);
+
+                  const updatedState = loadMetaCommentsState(products);
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      order: finalPedido,
+                      threads: updatedState.threads,
+                      adStats: computeMetaAdCommentStats(updatedState, list)
+                    })
+                  );
+                } catch (err: any) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
               return;
             }
           }

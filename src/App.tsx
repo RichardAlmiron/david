@@ -12,6 +12,7 @@ import { PoliciesModal } from './components/PoliciesModal';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { MapCorrectionModal } from './components/MapCorrectionModal';
 import { Footer } from './components/Footer';
+import { formatGs } from './config';
 import { trackMetaFullFunnelEvent } from './utils/metaPixelEngine';
 
 const AdminView = lazy(() => import('./views/AdminView').then(m => ({ default: m.AdminView })));
@@ -147,6 +148,69 @@ export const AppContent: React.FC = () => {
   }
 
   const showAdminPreviewBar = isAdminAuthenticated;
+  const isExpressCheckout =
+    typeof window !== 'undefined' &&
+    Boolean(new URLSearchParams(window.location.search).get('express'));
+
+  if (isExpressCheckout) {
+    const unitGs = Number(currentProductPage?.precios?.[1] || currentProductPage?.precioNormal || 0);
+    return (
+      <div
+        data-testid="express-checkout-shell"
+        className="min-h-screen bg-gradient-to-b from-[#041a12] via-[#062319] to-stone-100 flex flex-col font-sans"
+      >
+        <header className="bg-[#041a12] border-b border-emerald-500/30 px-4 py-3 text-white">
+          <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {currentProductPage?.imagen && (
+                <img
+                  src={currentProductPage.imagen}
+                  alt={currentProductPage.nombre}
+                  className="w-12 h-12 rounded-xl object-cover border border-emerald-400/50 shrink-0"
+                />
+              )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="bg-emerald-500 text-black text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
+                    ⚡ Express Chat
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-300 truncate">
+                    Envío Gratis · Pago Contra Entrega
+                  </span>
+                </div>
+                <h1 className="text-sm sm:text-base font-black text-white truncate mt-0.5">
+                  {currentProductPage?.nombre || config.marca}
+                </h1>
+                {unitGs > 0 && (
+                  <p className="text-xs font-extrabold text-[#ffd778]">
+                    Desde {formatGs(unitGs)} · Confirmación inmediata con GPS
+                  </p>
+                )}
+              </div>
+            </div>
+            {showAdminPreviewBar && (
+              <button
+                type="button"
+                onClick={() => {
+                  window.history.pushState({}, '', '/#admin');
+                  setCurrentView('admin');
+                }}
+                className="bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+              >
+                Admin
+              </button>
+            )}
+          </div>
+        </header>
+
+        <main className="flex-1 w-full">
+          <OrderForm expressDirectMode />
+        </main>
+
+        <MapCorrectionModal />
+      </div>
+    );
+  }
 
   // Public product page: 100% open for customers with zero barrier/authentication
   return (

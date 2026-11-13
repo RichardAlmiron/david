@@ -410,7 +410,7 @@ export async function fetchLiveMetaCampaignHierarchy(params: {
   }
 
   const fields = encodeURIComponent(
-    'id,name,status,objective,created_time,adsets{id,name,status,daily_budget,optimization_goal,targeting},ads{id,name,status,adset_id,creative{id,name,title,body,image_url,thumbnail_url,object_story_spec}}'
+    'id,name,status,objective,created_time,adsets{id,name,status,daily_budget,optimization_goal,targeting},ads{id,name,status,adset_id,creative{id,name,title,body,image_url,thumbnail_url,effective_object_story_id,effective_instagram_media_id,object_story_spec}}'
   );
   const url = `https://graph.facebook.com/v21.0/${encodeURIComponent(
     adAccountId
@@ -456,6 +456,10 @@ export async function fetchLiveMetaCampaignHierarchy(params: {
           ...(localAdMatch || {}),
           adId: String(ma.id),
           creativeId: String(ma?.creative?.id || localAdMatch?.creativeId || ''),
+          postId: String(ma?.creative?.effective_object_story_id || localAdMatch?.postId || ''),
+          instagramMediaId: String(
+            ma?.creative?.effective_instagram_media_id || localAdMatch?.instagramMediaId || ''
+          ),
           adSetId: String(ma.adset_id || primaryAdSet?.id || localMatch?.adSetId || ''),
           adIndex: localAdMatch?.adIndex ?? idx,
           imageHash: localAdMatch?.imageHash || '',

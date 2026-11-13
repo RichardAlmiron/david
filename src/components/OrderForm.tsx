@@ -95,7 +95,9 @@ function tileFloatToLatLng(xFloat: number, yFloat: number, zoom: number) {
   return { lat, lng };
 }
 
-export const OrderForm: React.FC = () => {
+export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
+  expressDirectMode = false
+}) => {
   const {
     config,
     selectedPack,
@@ -109,11 +111,32 @@ export const OrderForm: React.FC = () => {
   // "Casa" preselected by default so 90%+ of customers never have to answer an extra gate
   const [tipoVivienda, setTipoVivienda] = useState<'casa' | 'edificio'>('casa');
   const [mapLocked, setMapLocked] = useState<boolean>(true);
-  const [nombre, setNombre] = useState('');
-  const [celular, setCelular] = useState('');
+  const [nombre, setNombre] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('author_name') || p.get('nombre') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [celular, setCelular] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('phone') || p.get('whatsapp') || '';
+    } catch {
+      return '';
+    }
+  });
   const [departamento, setDepartamento] = useState('');
   // Campos precisos escritos por el cliente (jamás pisados por el mapa GPS): Ciudad, Barrio y Nombre de Calle
-  const [ciudadTexto, setCiudadTexto] = useState('');
+  const [ciudadTexto, setCiudadTexto] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('ciudad') || '';
+    } catch {
+      return '';
+    }
+  });
   const [barrioTexto, setBarrioTexto] = useState('');
   const [calleTexto, setCalleTexto] = useState('');
   const [ubicacionTexto, setUbicacionTexto] = useState('');
@@ -989,10 +1012,10 @@ export const OrderForm: React.FC = () => {
             <span className="w-3.5 h-3.5 rounded-full bg-[#25D366] animate-pulse shrink-0" />
             <div className="min-w-0">
               <span className="text-sm sm:text-base font-black uppercase tracking-wide text-[#ffd778] block truncate">
-                Pedido Fácil · Pago al Recibir
+                {expressDirectMode ? '⚡ Pedido Express Directo · Pago al Recibir' : 'Pedido Fácil · Pago al Recibir'}
               </span>
               <span className="text-xs sm:text-sm text-emerald-200 font-extrabold block truncate">
-                Letra Grande · Guía Paso a Paso
+                {expressDirectMode ? 'Captura GPS Automática · Confirmación en 30 seg' : 'Letra Grande · Guía Paso a Paso'}
               </span>
             </div>
           </div>
@@ -1967,7 +1990,14 @@ export const OrderForm: React.FC = () => {
         </div>
       )}
 
-      <section id="pedido" className="py-8 sm:py-12 max-w-2xl mx-auto app-container">
+      <section
+        id="pedido"
+        className={
+          expressDirectMode
+            ? 'py-3 sm:py-5 max-w-xl mx-auto px-3 sm:px-4'
+            : 'py-8 sm:py-12 max-w-2xl mx-auto app-container'
+        }
+      >
         {renderFormCardContent(false)}
       </section>
     </>

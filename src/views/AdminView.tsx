@@ -59,6 +59,7 @@ import { ProductSellerAgentPanel } from '../components/ProductSellerAgentPanel';
 import { ProductTemplateBuilderModal } from '../components/ProductTemplateBuilderModal';
 import { ProductTemplateBuilderStudio } from '../components/ProductTemplateBuilderStudio';
 import { AutoAdsView } from '../components/AutoAdsView';
+import { MetaCommentsView } from '../components/MetaCommentsView';
 import { AdminSectionGuide } from '../components/AdminSectionGuide';
 import { DownloadAppsModal } from '../components/DownloadAppsModal';
 import { SUBNICHE_TEMPLATES, buildAutoTrainedAgentBrain } from '../data/productTemplatesCatalog';
@@ -146,7 +147,7 @@ const DEFAULT_MING_VOICES = DEFAULT_DEEPGRAM_CATALOG;
 
 const ITEMS_PER_PAGE = 10;
 
-export type AdminMenuKey = 'productos' | 'creador' | 'pipeboard' | 'whatsapp' | 'deepgram' | 'openrouter';
+export type AdminMenuKey = 'productos' | 'creador' | 'pipeboard' | 'comentarios' | 'whatsapp' | 'deepgram' | 'openrouter';
 
 export interface AdminViewProps {
   androidShell?: {
@@ -2380,6 +2381,32 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   {connectedSessionsCount}/{waSessions.length}
                 </span>
               </button>
+
+              {/* Menu 4b: Comentarios Ads & Cierre Messenger IA */}
+              <button
+                data-testid="sidebar-menu-comentarios"
+                onClick={() => {
+                  setActiveMenu('comentarios');
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                  activeMenu === 'comentarios'
+                    ? 'bg-zinc-800/60 text-white border-l-2 border-cyan-400'
+                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <MessageSquare
+                    className={`w-4 h-4 shrink-0 ${
+                      activeMenu === 'comentarios' ? 'text-cyan-400' : 'text-zinc-500'
+                    }`}
+                  />
+                  <span className="truncate">Comentarios Ads</span>
+                </div>
+                <span className="text-[10px] font-mono bg-cyan-950/60 border border-cyan-800/70 text-cyan-300 px-2 py-0.5 rounded-full">
+                  IA
+                </span>
+              </button>
             </div>
           </div>
 
@@ -2500,6 +2527,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 {activeMenu === 'productos' && 'Páginas & Ventas'}
                 {activeMenu === 'creador' && 'Creador IA'}
                 {activeMenu === 'pipeboard' && 'AutoAds'}
+                {activeMenu === 'comentarios' && 'Comentarios Ads IA'}
                 {activeMenu === 'whatsapp' && 'WhatsApp Multi-Línea'}
                 {activeMenu === 'deepgram' && 'Deepgram Aura-2'}
                 {activeMenu === 'openrouter' && 'Cerebro LLM'}
@@ -2650,6 +2678,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   setCurrentView('store');
                 }}
                 showToast={showToast}
+              />
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* INTERFAZ COMENTARIOS ADS: IA OPENROUTER + MESSENGER      */}
+          {/* ======================================================== */}
+          {activeMenu === 'comentarios' && (
+            <div className="max-w-7xl mx-auto">
+              <MetaCommentsView
+                productPages={productPages}
+                showToast={showToast}
+                onJumpToProductOrder={(prodId, ordId) => {
+                  setSelectedProductId(prodId);
+                  setExpandedProductId(prodId);
+                  if (ordId) setExpandedBottomSummaryOrderId(ordId);
+                  setActiveMenu('productos');
+                }}
               />
             </div>
           )}
@@ -3702,6 +3748,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   const chatInfo = chatsSummary[cleanOrdPhone];
                                   const msgCount = chatInfo?.totalMessages || 0;
                                   const isConfirmedByAgent = isOrderConfirmedByAgent(ord);
+                                  const isFromMetaComment = Boolean(
+                                    ord.metaCommentOrigin?.source === 'meta_comment_ai' ||
+                                      ord.attributionSourceKind === 'meta_comment_ai'
+                                  );
                                   const comparison = isConfirmedByAgent
                                     ? buildOrderComparisonSummary(ord)
                                     : null;
@@ -3740,7 +3790,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                           }
                                         }}
                                         className={`w-full h-10 min-h-[40px] max-h-[40px] px-2 rounded-lg border flex items-center justify-between gap-2 transition-all cursor-pointer select-none overflow-hidden ${
-                                          isConfirmedByAgent
+                                          isFromMetaComment
+                                            ? 'bg-gradient-to-r from-[#081b26] via-[#0d1926] to-[#0f0f14] hover:from-[#0b2330] border-cyan-500/80 text-cyan-50 shadow-[0_0_12px_rgba(6,182,212,0.12)]'
+                                            : isConfirmedByAgent
                                             ? 'bg-[#0f0f11] hover:bg-zinc-900/90 border-emerald-800/80 text-zinc-100'
                                             : 'bg-[#0f0f11] hover:bg-zinc-900/90 border-zinc-800 text-zinc-200'
                                         } ${isRowSelected ? 'ring-1 ring-emerald-500/50' : ''}`}
@@ -3779,6 +3831,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                           ) : (
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-950/70 border border-amber-800/70 text-amber-400 text-[10px] font-bold uppercase tracking-tight shrink-0">
                                               Pendiente
+                                            </span>
+                                          )}
+
+                                          {isFromMetaComment && (
+                                            <span
+                                              data-testid={`meta-comment-order-badge-${ord.reservaid}`}
+                                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/90 border border-cyan-500/70 text-cyan-300 text-[10px] font-bold uppercase tracking-tight shrink-0"
+                                              title={`Origen Comentario Anuncio: ${ord.metaCommentOrigin?.adName || ord.metaCommentOrigin?.adId || 'Meta Ads'}`}
+                                            >
+                                              💬 {ord.metaCommentOrigin?.adIndex ? `Ad #${ord.metaCommentOrigin.adIndex}` : 'Chat Ads'}
                                             </span>
                                           )}
 
@@ -3915,11 +3977,36 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                         <div
                                           data-testid={`admin-order-detail-panel-${ord.reservaid}`}
                                           className={`mt-1 p-3.5 sm:p-4 rounded-xl border space-y-3 ${
-                                            isConfirmedByAgent
+                                            isFromMetaComment
+                                              ? 'bg-[#08131a] border-cyan-600/70'
+                                              : isConfirmedByAgent
                                               ? 'bg-[#09090b] border-emerald-800/80'
                                               : 'bg-[#09090b] border-zinc-800'
                                           }`}
                                         >
+                                          {isFromMetaComment && ord.metaCommentOrigin && (
+                                            <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-500/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                              <div className="space-y-0.5">
+                                                <div className="font-bold text-cyan-300 flex items-center gap-1.5">
+                                                  <span>💬 Capturado desde Comentario / Messenger Ads</span>
+                                                  {ord.metaCommentOrigin.adIndex && (
+                                                    <span className="px-1.5 py-0.5 rounded bg-cyan-500 text-zinc-950 text-[10px] font-black">
+                                                      Anuncio #{ord.metaCommentOrigin.adIndex}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <div className="text-[11px] text-zinc-300">
+                                                  Anuncio: <strong>{ord.metaCommentOrigin.adName || ord.metaCommentOrigin.adId || 'Meta Ad'}</strong>
+                                                  {ord.metaCommentOrigin.campaignName && ` · Campaña: ${ord.metaCommentOrigin.campaignName}`}
+                                                </div>
+                                                {ord.metaCommentOrigin.commentText && (
+                                                  <div className="text-[11px] italic text-cyan-100/80">
+                                                    Comentario original: “{ord.metaCommentOrigin.commentText}”
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
 
                                           {/* Fila Superior del Detalle: Cabecera + Controles de Unidades, Estado y Acciones */}
                                           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
@@ -4973,6 +5060,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
           >
             <Bot className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] font-medium">AutoAds</span>
+          </button>
+          <button
+            type="button"
+            data-testid="bottom-nav-comentarios"
+            onClick={() => setActiveMenu('comentarios')}
+            className={`flex flex-col items-center justify-center flex-1 py-1.5 rounded-lg transition-colors duration-150 cursor-pointer ${
+              activeMenu === 'comentarios' ? 'text-cyan-400' : 'text-zinc-500'
+            }`}
+          >
+            <MessageSquare className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px] font-medium">Chat Ads</span>
           </button>
           <button
             type="button"

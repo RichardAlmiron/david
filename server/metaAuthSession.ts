@@ -16,6 +16,16 @@ export const REQUIRED_META_ADS_SCOPES = [
   'business_management'
 ] as const;
 
+export const COMMENT_MESSAGING_META_SCOPES = [
+  'pages_manage_engagement',
+  'pages_messaging'
+] as const;
+
+export const FULL_META_SUITE_SCOPES = [
+  ...REQUIRED_META_ADS_SCOPES,
+  ...COMMENT_MESSAGING_META_SCOPES
+] as const;
+
 export const META_AUTH_VAULT_CODE = 'METAAUTH-v1';
 
 export interface MetaVaultPayload {
@@ -63,6 +73,8 @@ export interface MetaPermissionAuditResult {
   grantedPermissions: string[];
   declinedPermissions: string[];
   missingPermissions: string[];
+  missingCommentPermissions?: string[];
+  commentsPermissionsReady?: boolean;
   hasAdsManagement: boolean;
   adAccountAccessible: boolean;
   adAccountError?: string;
@@ -337,6 +349,12 @@ export async function auditMetaTokenAndPermissions(params: {
     grantedPermissions.length > 0 || declinedPermissions.length > 0
       ? REQUIRED_META_ADS_SCOPES.filter((s) => !grantedPermissions.includes(s))
       : [];
+  const missingCommentPermissions =
+    grantedPermissions.length > 0 || declinedPermissions.length > 0
+      ? COMMENT_MESSAGING_META_SCOPES.filter((s) => !grantedPermissions.includes(s))
+      : [];
+  const commentsPermissionsReady =
+    grantedPermissions.length === 0 ? true : missingCommentPermissions.length === 0;
   const hasAdsManagement =
     grantedPermissions.length === 0 ? true : grantedPermissions.includes('ads_management');
 
@@ -368,6 +386,8 @@ export async function auditMetaTokenAndPermissions(params: {
     grantedPermissions,
     declinedPermissions,
     missingPermissions,
+    missingCommentPermissions,
+    commentsPermissionsReady,
     hasAdsManagement,
     adAccountAccessible,
     adAccountError,
