@@ -3045,16 +3045,16 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       {activeWorkspaceTab === 'crear' && (
         <div
           data-testid="autoads-crear-workspace"
-          className="rounded-2xl bg-[#090a0c] border border-emerald-500/25 shadow-2xl overflow-hidden"
+          className="rounded-2xl bg-[#0b0d11] border border-zinc-800/90 shadow-2xl overflow-hidden"
         >
           {/* Cabecera Única Dedicada a Crear Campaña */}
-          <div className="px-4 py-3 bg-[#0f1115] border-b border-zinc-800/90 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="px-5 py-3.5 bg-[#11141a] border-b border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
                 data-testid="autoads-crear-back-inicio"
                 onClick={() => setActiveWorkspaceTab('inicio')}
-                className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/90 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Inicio</span>
@@ -3063,13 +3063,16 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-emerald-400" />
                 <h2 className="text-sm font-bold text-zinc-100">
-                  {freshDraftMode || workflowStep === 'idle'
-                    ? 'Nueva Campaña (Desde Cero)'
-                    : 'Crear Campaña'}
+                  {freshDraftMode || workflowStep === 'idle' ? 'Nueva Campaña' : 'Crear Campaña'}
                 </h2>
+                {(freshDraftMode || workflowStep === 'idle') && (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-950/70 border border-emerald-700/60 text-[10px] font-semibold text-emerald-300">
+                    Desde Cero
+                  </span>
+                )}
               </div>
 
-              <div className="flex items-center gap-1 bg-zinc-950 p-0.5 rounded-xl border border-zinc-800">
+              <div className="flex items-center gap-1 bg-zinc-950 p-0.5 rounded-lg border border-zinc-800">
                 <button
                   type="button"
                   onClick={() => {
@@ -3080,7 +3083,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                       externalUrlInput
                     );
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
                     sourceMode === 'catalog'
                       ? 'bg-zinc-800 text-white'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -3098,7 +3101,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                       externalUrlInput
                     );
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 ${
                     sourceMode === 'external_url'
                       ? 'bg-zinc-800 text-white'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -3152,194 +3155,379 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               </div>
 
               <span
-                className="px-2 py-1 rounded-lg bg-emerald-950/70 border border-emerald-800/70 text-[11px] font-mono text-emerald-300 inline-flex items-center gap-1"
+                className="px-2.5 py-1 rounded-lg bg-zinc-900/90 border border-zinc-800 text-[11px] text-zinc-400 inline-flex items-center gap-1.5"
                 title="Progreso guardado automáticamente en el backend"
               >
-                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
                 <span>Guardado{lastBackendSavedAt ? ` · ${lastBackendSavedAt}` : ''}</span>
               </span>
             </div>
           </div>
 
-          <div className="p-4 sm:p-5 space-y-4">
-          <div className="bg-[#0f1115] rounded-xl border border-zinc-800/90 p-3.5 space-y-3">
-            {/* Selector de Producto o URL Externa */}
-            {sourceMode === 'catalog' ? (
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div className="flex-1">
-                  <select
-                    data-testid="autoads-product-select"
-                    value={selectedCatalogProduct?.id || ''}
-                    onChange={e => {
-                      const newId = e.target.value;
-                      setSelectedProductId(newId);
-                      syncWorkspaceOnSelectorChange('catalog', newId, externalUrlInput);
-                    }}
-                    className="w-full px-3.5 py-2 rounded-lg border border-zinc-800 bg-zinc-900 text-xs sm:text-sm font-semibold text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
-                  >
-                    {productPages.map(prod => (
-                      <option key={prod.id} value={prod.id} className="bg-zinc-900 text-zinc-100">
-                        {prod.nombre} — 1x {formatGs(prod.precios?.[1] || 189000)} · 2x {formatGs(prod.precios?.[2] || 358000)} (/?p={prod.slug})
-                      </option>
-                    ))}
-                  </select>
+          <div className="p-5 sm:p-6 space-y-5">
+            {/* Bloque 1: Producto o URL de Destino con Ficha Visual */}
+            <div className="bg-[#11141a] rounded-xl border border-zinc-800/80 p-4 sm:p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                  {sourceMode === 'catalog' ? 'Producto seleccionado' : 'URL externa de producto'}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] font-medium text-zinc-300">
+                  Paraguay (PY) · 18–65 años · Precios en Guaraníes (Gs.)
+                </span>
+              </div>
+
+              {sourceMode === 'catalog' ? (
+                <>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                    <div className="flex-1">
+                      <select
+                        data-testid="autoads-product-select"
+                        value={selectedCatalogProduct?.id || ''}
+                        onChange={e => {
+                          const newId = e.target.value;
+                          setSelectedProductId(newId);
+                          syncWorkspaceOnSelectorChange('catalog', newId, externalUrlInput);
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-700/80 bg-zinc-950 text-xs sm:text-sm font-semibold text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
+                      >
+                        {productPages.map(prod => (
+                          <option key={prod.id} value={prod.id} className="bg-zinc-900 text-zinc-100">
+                            {prod.nombre} — 1x {formatGs(prod.precios?.[1] || 189000)} · 2x {formatGs(prod.precios?.[2] || 358000)} (/?p={prod.slug})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {selectedCatalogProduct && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenLiveProductPage(selectedCatalogProduct)}
+                        className="px-3.5 py-2.5 rounded-xl border border-zinc-700/80 bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-200 inline-flex items-center justify-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+                      >
+                        <span>Ver Página</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedCatalogProduct && (
+                    <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-14 h-14 rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900 shrink-0 flex items-center justify-center">
+                          {(allProductPhotos[0] || selectedCatalogProduct.imagen) ? (
+                            <img
+                              src={allProductPhotos[0] || selectedCatalogProduct.imagen}
+                              alt={selectedCatalogProduct.nombre}
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <ImageIcon className="w-5 h-5 text-zinc-600" />
+                          )}
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <div className="text-sm font-bold text-white truncate">
+                            {selectedCatalogProduct.nombre}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
+                            <span className="font-mono text-zinc-400">/?p={selectedCatalogProduct.slug}</span>
+                            <span>·</span>
+                            <span>{allProductPhotos.length} fotos de producto</span>
+                            <span>·</span>
+                            <span className="text-emerald-400 font-medium">
+                              {selectedCatalogProduct.freeShipping !== false ? 'Envío gratis PY' : 'Pago al recibir'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <div className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                          <span className="text-[10px] text-zinc-400 block">Oferta 1x</span>
+                          <span className="text-xs font-bold text-white">
+                            {formatGs(selectedCatalogProduct.precios?.[1] || 189000)}
+                          </span>
+                        </div>
+                        <div className="px-3 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50">
+                          <span className="text-[10px] text-emerald-300/80 block">Pack 2x</span>
+                          <span className="text-xs font-bold text-emerald-300">
+                            {formatGs(selectedCatalogProduct.precios?.[2] || 358000)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Globe className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="url"
+                      value={externalUrlInput}
+                      onChange={e => {
+                        const nextUrl = e.target.value;
+                        setExternalUrlInput(nextUrl);
+                        syncWorkspaceOnSelectorChange('external_url', selectedProductId, nextUrl);
+                      }}
+                      placeholder="https://... Pegá la URL de cualquier página de producto para extraer fotos y precios"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-zinc-700/80 bg-zinc-950 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 font-mono outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Extraemos automáticamente fotografías, beneficios y precios convertidos al contexto de venta contra entrega en Paraguay.
+                  </p>
                 </div>
-                {selectedCatalogProduct && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenLiveProductPage(selectedCatalogProduct)}
-                    className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-300 inline-flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                  >
-                    <span>Ver Página</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <input
-                  type="url"
-                  value={externalUrlInput}
-                  onChange={e => {
-                    const nextUrl = e.target.value;
-                    setExternalUrlInput(nextUrl);
-                    syncWorkspaceOnSelectorChange('external_url', selectedProductId, nextUrl);
-                  }}
-                  placeholder="https://... Pegá la URL de cualquier página de producto para extraer fotos y precios"
-                  className="flex-1 px-3.5 py-2 rounded-lg border border-zinc-800 bg-zinc-900 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 font-mono outline-none focus:border-emerald-500"
-                />
-              </div>
-            )}
-
-            {/* Flujo Secuencial en 3 Pasos */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-              <button
-                type="button"
-                data-testid="autoads-step1-btn"
-                onClick={handleStep1Research}
-                disabled={workflowStep === 'researching' || workflowStep === 'generating' || workflowStep === 'publishing'}
-                className={`py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
-                  workflowStep === 'idle' || workflowStep === 'researching'
-                    ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-400 shadow-sm'
-                    : 'bg-zinc-900 hover:bg-zinc-800 text-emerald-300 border-emerald-800/70'
-                }`}
-              >
-                {workflowStep === 'researching' ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                    <span>Investigando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-3.5 h-3.5 shrink-0" />
-                    <span>
-                      {workflowStep === 'idle'
-                        ? '1. Investigar Producto'
-                        : '✓ 1. Re-Investigar'}
-                    </span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                data-testid="autoads-step2-btn"
-                onClick={handleStep2GenerateAds}
-                disabled={
-                  workflowStep === 'idle' ||
-                  workflowStep === 'researching' ||
-                  workflowStep === 'generating' ||
-                  workflowStep === 'publishing'
-                }
-                className={`py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border ${
-                  workflowStep === 'researched'
-                    ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-400 shadow-sm cursor-pointer'
-                    : workflowStep === 'generated' || workflowStep === 'published'
-                      ? 'bg-zinc-900 hover:bg-zinc-800 text-emerald-300 border-emerald-800/70 cursor-pointer'
-                      : 'bg-zinc-900/50 text-zinc-500 border-zinc-800/60 cursor-not-allowed'
-                }`}
-              >
-                {workflowStep === 'generating' ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                    <span>
-                      {onlyImagesMode ? 'Generando 6 Imágenes...' : 'Generando Anuncios...'}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    <span>
-                      {creatives.length > 0 &&
-                        creatives.slice(0, onlyImagesMode ? 6 : 4).some(c => !c.aiGeneratedImageUrl)
-                        ? '⚡ 2. Completar Faltantes'
-                        : !onlyImagesMode && creatives.length > 0 && creatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl)
-                          ? '🎬 2. Crear Reels #5 y #6'
-                          : creatives.length > 0
-                            ? `✓ 2. Regenerar (${creatives.length})`
-                            : onlyImagesMode
-                              ? '2. Crear 6 Imágenes IA'
-                              : '2. Crear 6 Anuncios IA'}
-                    </span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                data-testid="autoads-step3-btn"
-                onClick={handleStep3PublishNow}
-                disabled={creatives.length === 0 || workflowStep === 'publishing'}
-                className={`py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border ${
-                  creatives.length > 0 && workflowStep !== 'publishing'
-                    ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-400 shadow-sm cursor-pointer'
-                    : 'bg-zinc-900/50 text-zinc-500 border-zinc-800/60 cursor-not-allowed'
-                }`}
-              >
-                {workflowStep === 'publishing' ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                    <span>Publicando en Meta Ads...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5 shrink-0" />
-                    <span>
-                      {workflowStep === 'published'
-                        ? '✅ 3. Publicado · Republicar'
-                        : '3. Publicar en Meta Ads'}
-                    </span>
-                  </>
-                )}
-              </button>
+              )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-zinc-400 pt-0.5">
-              <span>
-                🇵🇾 Segmentación fijada: <strong className="text-zinc-200">Paraguay (PY) · 18–65 años</strong> · Precios 100% en Guaraníes (Gs.)
-              </span>
-              <span className="text-emerald-400/90">
-                100% OpenRouter Oficial · Cero fallbacks ficticios
-              </span>
+            {/* Bloque 2: Pipeline Visual en 3 Pasos */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {/* Paso 1 */}
+              <div
+                className={`rounded-xl p-4 border flex flex-col justify-between gap-3.5 transition-all ${
+                  workflowStep === 'idle' || workflowStep === 'researching'
+                    ? 'bg-emerald-950/15 border-emerald-500/40'
+                    : 'bg-[#11141a] border-zinc-800/80'
+                }`}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`w-6 h-6 rounded-full text-[11px] font-bold inline-flex items-center justify-center ${
+                        workflowStep === 'idle' || workflowStep === 'researching'
+                          ? 'bg-emerald-500 text-black'
+                          : 'bg-emerald-950 text-emerald-300 border border-emerald-700/70'
+                      }`}
+                    >
+                      01
+                    </span>
+                    <span className="text-[11px] font-medium text-zinc-400">
+                      {workflowStep === 'researching'
+                        ? 'Analizando...'
+                        : workflowStep === 'idle'
+                          ? 'Siguiente paso'
+                          : 'Completado'}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-zinc-100">Investigar Producto</div>
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
+                      Analiza ángulos ganadores, oferta en Guaraníes y eventos CAPI.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  data-testid="autoads-step1-btn"
+                  onClick={handleStep1Research}
+                  disabled={workflowStep === 'researching' || workflowStep === 'generating' || workflowStep === 'publishing'}
+                  className={`w-full py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                    workflowStep === 'idle' || workflowStep === 'researching'
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-400 shadow-sm'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-emerald-300 border-emerald-800/70'
+                  }`}
+                >
+                  {workflowStep === 'researching' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      <span>Investigando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {workflowStep === 'idle'
+                          ? '1. Investigar Producto'
+                          : '✓ 1. Re-Investigar'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Paso 2 */}
+              <div
+                className={`rounded-xl p-4 border flex flex-col justify-between gap-3.5 transition-all ${
+                  workflowStep === 'researched' || workflowStep === 'generating'
+                    ? 'bg-emerald-950/15 border-emerald-500/40'
+                    : creatives.length > 0
+                      ? 'bg-[#11141a] border-zinc-800/80'
+                      : 'bg-[#0e1015] border-zinc-800/60'
+                }`}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`w-6 h-6 rounded-full text-[11px] font-bold inline-flex items-center justify-center ${
+                        workflowStep === 'researched' || workflowStep === 'generating'
+                          ? 'bg-emerald-500 text-black'
+                          : creatives.length > 0
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/70'
+                            : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                      }`}
+                    >
+                      02
+                    </span>
+                    <span className="text-[11px] font-medium text-zinc-400">
+                      {workflowStep === 'generating'
+                        ? 'Creando...'
+                        : creatives.length > 0
+                          ? `${creatives.length} listos`
+                          : workflowStep === 'researched'
+                            ? 'Listo para crear'
+                            : 'Requiere Paso 1'}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-zinc-100">
+                      {onlyImagesMode ? 'Generar 6 Imágenes IA' : 'Generar 4 Img + 2 Reels'}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
+                      Diseña los creativos finales en Cloudinary listos para Meta Feed.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  data-testid="autoads-step2-btn"
+                  onClick={handleStep2GenerateAds}
+                  disabled={
+                    workflowStep === 'idle' ||
+                    workflowStep === 'researching' ||
+                    workflowStep === 'generating' ||
+                    workflowStep === 'publishing'
+                  }
+                  className={`w-full py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border ${
+                    workflowStep === 'researched'
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-400 shadow-sm cursor-pointer'
+                      : workflowStep === 'generated' || workflowStep === 'published'
+                        ? 'bg-zinc-900 hover:bg-zinc-800 text-emerald-300 border-emerald-800/70 cursor-pointer'
+                        : 'bg-zinc-900/60 text-zinc-500 border-zinc-800/70 cursor-not-allowed'
+                  }`}
+                >
+                  {workflowStep === 'generating' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      <span>
+                        {onlyImagesMode ? 'Generando 6 Imágenes...' : 'Generando Anuncios...'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {creatives.length > 0 &&
+                          creatives.slice(0, onlyImagesMode ? 6 : 4).some(c => !c.aiGeneratedImageUrl)
+                          ? '⚡ 2. Completar Faltantes'
+                          : !onlyImagesMode && creatives.length > 0 && creatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl)
+                            ? '🎬 2. Crear Reels #5 y #6'
+                            : creatives.length > 0
+                              ? `✓ 2. Regenerar (${creatives.length})`
+                              : onlyImagesMode
+                                ? '2. Crear 6 Imágenes IA'
+                                : '2. Crear 6 Anuncios IA'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Paso 3 */}
+              <div
+                className={`rounded-xl p-4 border flex flex-col justify-between gap-3.5 transition-all ${
+                  creatives.length > 0
+                    ? 'bg-[#11141a] border-blue-500/35'
+                    : 'bg-[#0e1015] border-zinc-800/60'
+                }`}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`w-6 h-6 rounded-full text-[11px] font-bold inline-flex items-center justify-center ${
+                        workflowStep === 'published'
+                          ? 'bg-emerald-500 text-black'
+                          : creatives.length > 0
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                      }`}
+                    >
+                      03
+                    </span>
+                    <span className="text-[11px] font-medium text-zinc-400">
+                      {workflowStep === 'publishing'
+                        ? 'Publicando...'
+                        : workflowStep === 'published'
+                          ? 'Publicada'
+                          : 'Píxel 377 · Leads'}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-zinc-100">Publicar en Meta Ads</div>
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
+                      Lanza Campaña, Grupo de Anuncios y 6 anuncios en Paraguay.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  data-testid="autoads-step3-btn"
+                  onClick={handleStep3PublishNow}
+                  disabled={creatives.length === 0 || workflowStep === 'publishing'}
+                  className={`w-full py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border ${
+                    creatives.length > 0 && workflowStep !== 'publishing'
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-400 shadow-sm cursor-pointer'
+                      : 'bg-zinc-900/60 text-zinc-500 border-zinc-800/70 cursor-not-allowed'
+                  }`}
+                >
+                  {workflowStep === 'publishing' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      <span>Publicando en Meta Ads...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {workflowStep === 'published'
+                          ? '✅ 3. Publicado · Republicar'
+                          : '3. Publicar en Meta Ads'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {workflowStep === 'idle' && !brainProfile && creatives.length === 0 && (
               <div
                 data-testid="autoads-fresh-start-notice"
-                className="p-3 rounded-xl bg-zinc-900/60 border border-dashed border-zinc-700/80 text-xs text-zinc-300 flex items-center justify-between gap-2 flex-wrap"
+                className="px-4 py-3 rounded-xl bg-[#11141a] border border-zinc-800/80 text-xs text-zinc-400 flex flex-wrap items-center justify-between gap-2"
               >
-                <span>
-                  Nueva campaña lista desde cero. Elegí un producto o URL externa y presioná <strong className="text-emerald-400">1. Investigar Producto</strong>.
-                </span>
-                <span className="text-[11px] text-zinc-500">
-                  Las campañas ya creadas están en «Campañas».
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                  <span>
+                    Motor listo con <strong className="text-zinc-200">OpenRouter</strong> y almacenamiento directo en <strong className="text-zinc-200">Cloudinary</strong>.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCampaignId(null);
+                    setActiveWorkspaceTab('campanas');
+                  }}
+                  className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                >
+                  Ver campañas publicadas ({publishedCampaigns.length}) →
+                </button>
               </div>
             )}
 
             {/* Barra de progreso en vivo */}
             {(workflowStep === 'researching' || workflowStep === 'generating') && (
-              <div className="p-3 rounded-lg bg-zinc-900 border border-emerald-800/60 flex items-center gap-2.5 text-xs text-emerald-300">
+              <div className="p-3.5 rounded-xl bg-[#11141a] border border-emerald-500/40 flex items-center gap-2.5 text-xs text-emerald-300">
                 <Loader2 className="w-4 h-4 animate-spin shrink-0 text-emerald-400" />
                 <span className="font-mono">
                   {workflowStep === 'researching' ? researchProgressText : generationProgressText}
@@ -3402,7 +3590,6 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 )}
               </div>
             )}
-          </div>
 
           {/* ===================================================================== */}
           {/* PREVISUALIZACIÓN EXACTA DE ANUNCIOS CON PESTAÑAS DE FILTRO            */}
