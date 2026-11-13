@@ -122,6 +122,8 @@ export interface WaChatMessage {
   sessionId?: string;
   isVoiceCall?: boolean;
   isAudioNote?: boolean;
+  isFollowUpReminder?: boolean;
+  followUpAttemptNumber?: number;
   agentChannel?: AgentChannel;
   callLink?: string;
   convStep?: number;
@@ -131,6 +133,14 @@ export interface WaChatMessage {
   commercialStage?: WaCommercialStageId;
   commercialPackQty?: number;
   commercialFramedPriceGs?: number;
+}
+
+export interface CustomerFollowUpStatus {
+  hasActiveTimer: boolean;
+  attemptNumber: number | null;
+  scheduledAtMs: number | null;
+  nextFireAtMs: number | null;
+  delayMs: number | null;
 }
 
 export interface WaSessionSummary {
@@ -1392,6 +1402,11 @@ g.__noeluxWaSessionsMap = sessionsMap;
 
 const customerInactivityTimers = new Map<string, NodeJS.Timeout>();
 g.__noeluxInactivityTimers = customerInactivityTimers;
+const customerInactivityMeta = new Map<
+  string,
+  { attemptNumber: number; scheduledAtMs: number; nextFireAtMs: number; delayMs: number }
+>();
+g.__noeluxInactivityMeta = customerInactivityMeta;
 const inactivityFollowUpCount = new Map<string, number>();
 const unclearReplyCounter = new Map<string, number>();
 
@@ -3454,12 +3469,35 @@ export function appendChatMessage(
   };
 }
 
+export function getCustomerFollowUpStatus(phone: string): CustomerFollowUpStatus {
+  const cleanPhone = normalizeWaPhone(phone);
+  const meta = cleanPhone ? customerInactivityMeta.get(cleanPhone) : undefined;
+  const hasHandle = cleanPhone ? customerInactivityTimers.has(cleanPhone) : false;
+  if (!meta || !hasHandle) {
+    return {
+      hasActiveTimer: false,
+      attemptNumber: null,
+      scheduledAtMs: null,
+      nextFireAtMs: null,
+      delayMs: null
+    };
+  }
+  return {
+    hasActiveTimer: true,
+    attemptNumber: meta.attemptNumber,
+    scheduledAtMs: meta.scheduledAtMs,
+    nextFireAtMs: meta.nextFireAtMs,
+    delayMs: meta.delayMs
+  };
+}
+
 export function getChatHistory(phone: string): {
   messages: WaChatMessage[];
   mode: 'automatico' | 'manual';
   callMode: 'automatico' | 'manual';
   channel: AgentChannel;
   convStep: number;
+  followUpStatus: CustomerFollowUpStatus;
 } {
   const cleanPhone = normalizeWaPhone(phone);
   const storage = loadChatsStorage();
@@ -3471,7 +3509,8 @@ export function getChatHistory(phone: string): {
     mode: storage.chatModes[cleanPhone] || (storage.autoChatOnOrder ? 'automatico' : 'manual'),
     callMode: storage.callModes[cleanPhone] || (storage.autoCallOnOrder ? 'automatico' : 'manual'),
     channel: storage.customerChannels[cleanPhone] || storage.preferredChannel || 'audio',
-    convStep: storage.convSteps[cleanPhone] || 1
+    convStep: storage.convSteps[cleanPhone] || 1,
+    followUpStatus: getCustomerFollowUpStatus(cleanPhone)
   };
 }
 
@@ -4956,6 +4995,7 @@ export function cancelCustomerInactivityFollowUp(rawPhone: string) {
     clearTimeout(existing);
     customerInactivityTimers.delete(cleanPhone);
   }
+  customerInactivityMeta.delete(cleanPhone);
   // Reset the consecutive follow-up counter whenever the customer replies or the order finishes
   inactivityFollowUpCount.delete(cleanPhone);
 }
@@ -4980,6 +5020,7 @@ export function scheduleCustomerInactivityFollowUp(
     clearTimeout(existing);
     customerInactivityTimers.delete(cleanPhone);
   }
+  customerInactivityMeta.delete(cleanPhone);
   if (attemptNumber <= 1) {
     inactivityFollowUpCount.set(cleanPhone, 0);
   }
@@ -4988,9 +5029,11 @@ export function scheduleCustomerInactivityFollowUp(
   if (attemptNumber > 25) return;
 
   const delayMs = getInactivityFollowUpDelayMs(attemptNumber);
+  const scheduledAtMs = Date.now();
 
   const timer = setTimeout(async () => {
     customerInactivityTimers.delete(cleanPhone);
+    customerInactivityMeta.delete(cleanPhone);
     try {
       if ((globalThis as any).__noeluxEngineGen !== myEngineGen) return;
       if (isYieldingToNewerDeploy()) return;
@@ -5101,7 +5144,7 @@ ${previousAiFollowUps.map((t, idx) => `  [${idx + 1}] "${t}"`).join('\n')}
 
       followUpText = normalizeParaguayanPhonesInText(followUpText);
 
-      // En seguimiento por inactividad (3 minutos y luego cada 1 hora): 100% Audio, CERO imágenes adicionales
+      // En seguimiento por inactividad (5 minutos y luego cada 1 hora): 100% Audio, CERO imágenes adicionales
       await sendWhatsAppVoiceCallTurn(
         cleanPhone,
         followUpText,
@@ -5111,7 +5154,11 @@ ${previousAiFollowUps.map((t, idx) => `  [${idx + 1}] "${t}"`).join('\n')}
         'audio',
         undefined,
         undefined,
-        true // isFollowUpTurn: we schedule the next hourly attempt explicitly below
+        true, // isFollowUpTurn: we schedule the next hourly attempt explicitly below
+        undefined,
+        undefined,
+        false,
+        attemptNumber
       );
 
       // Schedule the next consecutive 1-hour follow-up until the customer responds
@@ -5127,6 +5174,12 @@ ${previousAiFollowUps.map((t, idx) => `  [${idx + 1}] "${t}"`).join('\n')}
   }, delayMs);
 
   customerInactivityTimers.set(cleanPhone, timer);
+  customerInactivityMeta.set(cleanPhone, {
+    attemptNumber,
+    scheduledAtMs,
+    nextFireAtMs: scheduledAtMs + delayMs,
+    delayMs
+  });
 }
 
 // Evaluar de forma pura y determinística si la conversación de un pedido YA comenzó (impide reinicios al Paso #1)
@@ -5315,7 +5368,8 @@ export async function sendWhatsAppVoiceCallTurn(
   isFollowUpTurn = false,
   secondaryAudioText?: string,
   companionCommercialStage?: WaCommercialStageId,
-  forceRegenerateCommercial = false
+  forceRegenerateCommercial = false,
+  followUpAttemptNumber?: number
 ): Promise<{
   sentViaSocket: boolean;
   message: WaChatMessage;
@@ -5561,6 +5615,12 @@ export async function sendWhatsAppVoiceCallTurn(
           sessionId: activeSession.id,
           isVoiceCall: false,
           isAudioNote: channel === 'audio',
+          ...(isFollowUpTurn
+            ? {
+                isFollowUpReminder: true,
+                followUpAttemptNumber: typeof followUpAttemptNumber === 'number' ? followUpAttemptNumber : 1
+              }
+            : {}),
           agentChannel: channel,
           convStep,
           voiceEngine: tts.engine,
@@ -5676,6 +5736,12 @@ export async function sendWhatsAppVoiceCallTurn(
     orderId,
     isVoiceCall: false,
     isAudioNote: channel === 'audio',
+    ...(isFollowUpTurn
+      ? {
+          isFollowUpReminder: true,
+          followUpAttemptNumber: typeof followUpAttemptNumber === 'number' ? followUpAttemptNumber : 1
+        }
+      : {}),
     agentChannel: channel,
     convStep,
     voiceEngine: tts.engine,
@@ -8277,6 +8343,7 @@ async function yieldToNewerDeployLeader(reason: string, newerEpoch?: number): Pr
       for (const [phone, timer] of customerInactivityTimers) {
         clearTimeout(timer);
         customerInactivityTimers.delete(phone);
+        customerInactivityMeta.delete(phone);
       }
       for (const [id, timer] of authBackupTimers) {
         clearTimeout(timer);

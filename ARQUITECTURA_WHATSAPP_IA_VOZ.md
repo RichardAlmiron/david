@@ -165,3 +165,5 @@ Una vez que el pedido está confirmado (`datosConfirmados === true`) y fuera de 
 3. **Conciliación de Cola Offline (`WACHAT-*`) y Caché Local de Imágenes:**
    - Al reconectar WhatsApp, `flushPendingMessages()` y `reconcileLocalAndCloudChatMessages()` sincronizan `WACHAT-*` y descartan recordatorios `pending_connection` antiguos ya colapsados y enviados.
    - Las imágenes entrantes enviadas por clientes (`client_*`) se cachean en el **`localStorage` del navegador** (`noelux_chat_imgs_<orderId>`) sin almacenarse en la base de datos, y se purgan automáticamente al eliminar el pedido.
+4. **Tarjeta Horizontal Fija de Etapa 1/2, Último Mensaje y Temporizador en Vivo:**
+   - `getCustomerFollowUpStatus()` y `GET /api/whatsapp/messages` exponen el estado real del temporizador de seguimiento (`5 min` primer recordatorio, `1 hora` sucesivos), renderizado en una tarjeta horizontal fija en `AdminView.tsx` junto a **Último Mensaje Enviado** y una barra descriptiva dinámica con cuenta regresiva en vivo (`src/utils/whatsappChatStatus.ts`).

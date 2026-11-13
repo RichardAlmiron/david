@@ -1288,4 +1288,16 @@ Al auditar las conversaciones reales en producción (incluyendo el caso de la cl
 - **Reestructuración limpia de [`src/components/AutoAdsView.tsx`](./src/components/AutoAdsView.tsx) (sin sidebar interno y conservando el 100% de la lógica):**
   - Cabecera compacta con pestañas horizontales (`Crear Campaña & Creativos`, `Campañas`, `Cuenta Meta & CAPI`), tarjetas de campañas publicadas visibles al tope con acceso directo a creativos/Ads Manager, selector e interruptor `Solo Imágenes` horizontales compactos, filtros de vista previa (`Todos`, `#1-#3`, `#4-#6`), estrategia colapsable y zócalo inferior limpio sobre imagen/video.
 
+---
+
+## 44. Fase 83 — Tarjeta Horizontal Fija de Etapa 1/2, Último Mensaje Enviado y Temporizador Dinámico de Seguimiento en Chat de Pedidos
+
+- **Telemetría Real de Seguimiento en Tiempo Real ([`server/whatsappEngine.ts`](./server/whatsappEngine.ts) y [`vite.config.ts`](./vite.config.ts)):**
+  - `WaChatMessage` incorpora `isFollowUpReminder` y `followUpAttemptNumber`, mientras `scheduleCustomerInactivityFollowUp` registra metadatos vivos en `customerInactivityMeta` (`attemptNumber`, `scheduledAtMs`, `nextFireAtMs`, `delayMs`: **5 min** en intento #1 y **1 hora** en sucesivos #2..#25) expuestos mediante `getCustomerFollowUpStatus()`, `getChatHistory()` y `GET /api/whatsapp/messages`.
+- **Helper Puro Verificado ([`src/utils/whatsappChatStatus.ts`](./src/utils/whatsappChatStatus.ts) y [`server/__tests__/whatsappChatStatus.test.ts`](./server/__tests__/whatsappChatStatus.test.ts)):**
+  - `buildWhatsAppChatStageAndTimerSnapshot()` construye el estado unificado de Etapa (`stage_0_unstarted`, `stage_1_waiting_correcto`, `stage_2_confirmed`), resumen natural del último mensaje enviado y texto descriptivo dinámico en tiempo real del temporizador (`Hace X ... recordándole ... Faltan Y ... para volver a enviarle un audio más`), diferenciando con honestidad pausas manuales (`👤 Yo Escribo`), colas offline (`pending_connection`) o reinicios de servidor sin timer en memoria.
+- **Tarjeta Horizontal Visible en Cabecera Fija del Modal ([`src/views/AdminView.tsx`](./src/views/AdminView.tsx)):**
+  - Fijada (`shrink-0`) sobre el área desplazable del chat para que jamás se pierda al hacer scroll hacia abajo: muestra a la izquierda la tarjeta horizontal de **Etapa 1/2** (*Audio de saludo e imagen enviados · Esperando CORRECTO*) / **Etapa 2/2** con botón **`🔄 Re-disparar etapa`**, a la derecha la tarjeta **Último Mensaje Enviado**, y debajo la barra de **Temporizador Descriptivo Dinámico** actualizada segundo a segundo.
+
+
 

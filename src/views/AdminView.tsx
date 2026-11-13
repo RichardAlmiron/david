@@ -40,11 +40,17 @@ import {
   Lightbulb,
   Download,
   Filter,
-  Copy
+  Copy,
+  Clock
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { DEFAULT_CONFIG, sanitizeSupabaseCredentials, formatGs, formatWaPhone } from '../config';
 import { Order, ProductPage, OrderStatus, WaCommercialStageId } from '../types';
+import {
+  buildWhatsAppChatStageAndTimerSnapshot,
+  ChatFollowUpStatusLike,
+  ChatStatusMessageLike
+} from '../utils/whatsappChatStatus';
 import {
   ProductConfirmedOrdersPanel,
   PrepaymentVerificationSection,
@@ -727,6 +733,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       status?: string;
       isVoiceCall?: boolean;
       isAudioNote?: boolean;
+      isFollowUpReminder?: boolean;
+      followUpAttemptNumber?: number;
       agentChannel?: 'audio' | 'texto';
       callLink?: string;
       convStep?: number;
@@ -738,6 +746,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       commercialFramedPriceGs?: number;
     }>
   >([]);
+  const [liveFollowUpStatus, setLiveFollowUpStatus] = useState<ChatFollowUpStatusLike | null>(null);
+  const [liveChatConvStep, setLiveChatConvStep] = useState<number | null>(null);
+  const [chatClockNowMs, setChatClockNowMs] = useState<number>(() => Date.now());
   const [embeddedWaInput, setEmbeddedWaInput] = useState<string>('');
   const [sendingWaMsg, setSendingWaMsg] = useState<boolean>(false);
   const chatScrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1409,6 +1420,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     let fetchedOk = false;
     let detectedMode = modalAiMode;
     let detectedChannel = modalAiChannel;
+    let detectedFollowUpStatus: ChatFollowUpStatusLike | null = null;
+    let detectedConvStep: number | null = null;
 
     // 1. Consultar endpoint del servidor (/api/whatsapp/messages)
     try {
@@ -1436,6 +1449,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         if (data.channel === 'audio' || data.channel === 'texto') {
           detectedChannel = data.channel;
         }
+        if (typeof data.convStep === 'number' && Number.isFinite(data.convStep)) {
+          detectedConvStep = data.convStep;
+        }
+        if (data.followUpStatus && typeof data.followUpStatus === 'object') {
+          detectedFollowUpStatus = data.followUpStatus as ChatFollowUpStatusLike;
+        }
       }
     } catch (e) { }
 
@@ -1443,6 +1462,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       setLiveChatMessages(loadedMessages);
       setModalAiMode(detectedMode);
       setModalAiChannel(detectedChannel);
+      if (detectedFollowUpStatus !== null) {
+        setLiveFollowUpStatus(detectedFollowUpStatus);
+      }
+      if (detectedConvStep !== null) {
+        setLiveChatConvStep(detectedConvStep);
+      }
     }
   };
 
@@ -1455,6 +1480,36 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     }, 1500);
     return () => clearInterval(timer);
   }, [activeAiOrder?.reservaid]);
+
+  useEffect(() => {
+    if (!activeAiOrder) return;
+    setChatClockNowMs(Date.now());
+    const secTimer = setInterval(() => {
+      setChatClockNowMs(Date.now());
+    }, 1000);
+    return () => clearInterval(secTimer);
+  }, [activeAiOrder?.reservaid]);
+
+  const activeChatStageSnapshot = useMemo(() => {
+    if (!activeAiOrder) return null;
+    return buildWhatsAppChatStageAndTimerSnapshot({
+      order: activeAiOrder,
+      messages: liveChatMessages as ChatStatusMessageLike[],
+      mode: modalAiMode,
+      channel: modalAiChannel,
+      convStep: liveChatConvStep ?? activeAiOrder.convStep,
+      followUpStatus: liveFollowUpStatus,
+      nowMs: chatClockNowMs
+    });
+  }, [
+    activeAiOrder,
+    liveChatMessages,
+    modalAiMode,
+    modalAiChannel,
+    liveChatConvStep,
+    liveFollowUpStatus,
+    chatClockNowMs
+  ]);
 
   // Reproduce audio humano sintetizado por Deepgram Aura-2 con la voz seleccionada (o override para probar una voz de la lista)
   const playSpokenAudio = async (
@@ -1708,6 +1763,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         if (Array.isArray(data.messages)) {
           setLiveChatMessages(data.messages);
         }
+        fetchLiveOrderChat(order.celular);
         if (data.sentViaSocket) {
           showToast(
             channelOverride === 'audio'
@@ -2066,6 +2122,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     initialChannel: 'audio' | 'texto' = 'audio'
   ) => {
     setLiveChatMessages([]);
+    setLiveFollowUpStatus(null);
+    setLiveChatConvStep(order.convStep || 1);
+    setChatClockNowMs(Date.now());
     setActiveAiOrder(order);
     setModalAiMode(order.modoIA === 'automatico' ? 'automatico' : 'manual');
     setModalAiChannel(order.canalIA || initialChannel);
@@ -2104,6 +2163,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         if (Array.isArray(data.messages)) {
           setLiveChatMessages(data.messages);
         }
+        fetchLiveOrderChat(order.celular);
       }
     } catch (e) { }
 
@@ -5113,84 +5173,212 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               </div>
             )}
 
+            {/* TARJETA HORIZONTAL DE ETAPA + ÚLTIMO MENSAJE ENVIADO + TEMPORIZADOR DINÁMICO */}
+            {activeChatStageSnapshot && (
+              <div className="px-3 sm:px-5 py-2.5 bg-zinc-950 border-b border-zinc-800/90 shrink-0 max-h-[38vh] overflow-y-auto md:max-h-none md:overflow-visible">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
+                  {/* LADO IZQUIERDO: TARJETA ELEGANTE DE ETAPA 1/2 Y 2/2 */}
+                  <div
+                    className={`md:col-span-7 rounded-xl border px-3.5 py-2.5 flex flex-col justify-between gap-2 ${
+                      activeChatStageSnapshot.stage === 'stage_2_confirmed'
+                        ? 'bg-emerald-950/35 border-emerald-500/35'
+                        : activeChatStageSnapshot.stage === 'stage_1_waiting_correcto'
+                          ? 'bg-amber-950/30 border-amber-500/35'
+                          : 'bg-zinc-900/90 border-zinc-700/75'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="inline-flex items-center gap-1 bg-zinc-950/85 p-0.5 rounded-lg border border-zinc-800 text-[11px] font-bold">
+                        <span
+                          className={`px-2 py-1 rounded-md transition-colors ${
+                            activeChatStageSnapshot.stage !== 'stage_2_confirmed'
+                              ? 'bg-amber-400 text-black'
+                              : 'text-zinc-400'
+                          }`}
+                        >
+                          Etapa 1/2 · Saludo + Imagen
+                        </span>
+                        <span
+                          className={`px-2 py-1 rounded-md transition-colors ${
+                            activeChatStageSnapshot.stage === 'stage_2_confirmed'
+                              ? 'bg-emerald-500 text-black'
+                              : 'text-zinc-400'
+                          }`}
+                        >
+                          Etapa 2/2 · Confirmado
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                            modalAiMode === 'automatico'
+                              ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
+                              : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                          }`}
+                        >
+                          {modalAiMode === 'automatico'
+                            ? modalAiChannel === 'audio'
+                              ? '🎤 Audio IA Activo'
+                              : '💬 Texto IA Activo'
+                            : '👤 Yo Escribo (Manual)'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const isEtapa2 = Boolean(
+                              activeAiOrder.datosConfirmados ||
+                                (liveChatConvStep ?? activeAiOrder.convStep ?? 1) >= 5
+                            );
+                            if (isEtapa2) {
+                              handleSendOrderAudioNote(
+                                activeAiOrder,
+                                `Excelente ${activeAiOrder.nombre?.split(' ')[0] || ''}, tu pedido ya está 100% confirmado para entrega. ¡Muchas gracias por tu compra!`,
+                                modalAiChannel
+                              );
+                            } else {
+                              fetch('/api/whatsapp/call/start', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  phone: formatWaPhone(activeAiOrder.celular),
+                                  orderId: activeAiOrder.reservaid,
+                                  resetCall: true,
+                                  channel: modalAiChannel
+                                })
+                              })
+                                .then(r => r.json())
+                                .then(d => {
+                                  if (Array.isArray(d.messages)) setLiveChatMessages(d.messages);
+                                  fetchLiveOrderChat(activeAiOrder.celular);
+                                  showToast(`🔄 Etapa 1/2 re-disparada manualmente para ${activeAiOrder.nombre}.`);
+                                })
+                                .catch(() => {});
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-600 text-[11px] font-semibold cursor-pointer transition-colors"
+                          title="Re-enviar manualmente el mensaje de la etapa actual"
+                        >
+                          🔄 Re-disparar etapa
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <p
+                        className={`text-xs sm:text-[13px] font-bold flex items-center gap-1.5 ${
+                          activeChatStageSnapshot.stage === 'stage_2_confirmed'
+                            ? 'text-emerald-300'
+                            : activeChatStageSnapshot.stage === 'stage_1_waiting_correcto'
+                              ? 'text-amber-300'
+                              : 'text-zinc-200'
+                        }`}
+                      >
+                        {activeChatStageSnapshot.stage === 'stage_2_confirmed' ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : activeChatStageSnapshot.stage === 'stage_1_waiting_correcto' ? (
+                          <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                        ) : (
+                          <Info className="w-4 h-4 text-zinc-400 shrink-0" />
+                        )}
+                        <span>{activeChatStageSnapshot.stageTitle}</span>
+                      </p>
+                      <p className="text-[11px] text-zinc-300/90 leading-snug">
+                        {activeChatStageSnapshot.stageSubtitle}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* LADO DERECHO (AL LADO DENTRO DE LA TARJETA): ÚLTIMO MENSAJE ENVIADO */}
+                  <div className="md:col-span-5 rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 flex flex-col justify-between gap-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+                        <Send className="w-3 h-3 text-emerald-400" />
+                        Último Mensaje Enviado
+                      </span>
+                      {activeChatStageSnapshot.lastOutgoingMsg && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200 border border-zinc-700">
+                          {activeChatStageSnapshot.lastOutgoingMsg.channelBadge}
+                        </span>
+                      )}
+                    </div>
+
+                    {activeChatStageSnapshot.lastOutgoingMsg ? (
+                      <>
+                        <p className="text-[11px] text-zinc-200 leading-snug line-clamp-2">
+                          «{activeChatStageSnapshot.lastOutgoingMsg.previewText}»
+                        </p>
+                        <div className="flex items-center justify-between gap-2 text-[10px] pt-0.5 flex-wrap">
+                          <span
+                            className={`font-semibold px-1.5 py-0.5 rounded ${
+                              activeChatStageSnapshot.lastOutgoingMsg.isReminder
+                                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                : 'bg-zinc-800 text-zinc-300'
+                            }`}
+                          >
+                            {activeChatStageSnapshot.lastOutgoingMsg.kindBadge}
+                          </span>
+                          <span className="text-zinc-400 font-medium">
+                            Hace {activeChatStageSnapshot.lastOutgoingMsg.elapsedLabel}
+                            {activeChatStageSnapshot.lastOutgoingMsg.clockText
+                              ? ` · ${activeChatStageSnapshot.lastOutgoingMsg.clockText}`
+                              : ''}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-zinc-500 italic my-auto">
+                        Todavía no se registró ningún mensaje saliente para este cliente.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* TEMPORIZADOR DESCRIPTIVO Y DINÁMICO (DEBAJO DE LA TARJETA) */}
+                <div
+                  className={`mt-2 rounded-xl border px-3.5 py-2 flex flex-col sm:flex-row sm:items-center gap-2 ${
+                    activeChatStageSnapshot.timerBanner.status === 'counting' ||
+                    activeChatStageSnapshot.timerBanner.status === 'due_now'
+                      ? 'bg-amber-500/10 border-amber-500/35 text-amber-100'
+                      : activeChatStageSnapshot.timerBanner.status === 'confirmed'
+                        ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-100'
+                        : activeChatStageSnapshot.timerBanner.status === 'pending_connection'
+                          ? 'bg-sky-500/10 border-sky-500/30 text-sky-100'
+                          : 'bg-zinc-900/90 border-zinc-700/80 text-zinc-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    <Clock
+                      className={`w-4 h-4 shrink-0 ${
+                        activeChatStageSnapshot.timerBanner.status === 'counting' ||
+                        activeChatStageSnapshot.timerBanner.status === 'due_now'
+                          ? 'text-amber-400 animate-pulse'
+                          : activeChatStageSnapshot.timerBanner.status === 'confirmed'
+                            ? 'text-emerald-400'
+                            : 'text-zinc-400'
+                      }`}
+                    />
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-black/35 border border-white/10">
+                      {activeChatStageSnapshot.timerBanner.badgeText}
+                    </span>
+                    {activeChatStageSnapshot.timerBanner.countdownBadge && (
+                      <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-black/50 border border-white/15 text-amber-300">
+                        {activeChatStageSnapshot.timerBanner.countdownBadge}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] sm:text-xs leading-relaxed text-zinc-100 font-medium">
+                    {activeChatStageSnapshot.timerBanner.descriptiveText}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* VENTANA CENTRAL DE CHAT DE WHATSAPP EN TIEMPO REAL */}
             <div
               ref={chatScrollContainerRef}
               className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#09090b]"
             >
-              <div className="text-center flex flex-col items-center gap-2">
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span className="inline-block px-3.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/25">
-                    {modalAiMode === 'automatico'
-                      ? modalAiChannel === 'audio'
-                        ? '🎤 Modo Audio IA Activo: Responde en contexto según la etapa actual.'
-                        : '💬 Modo Texto IA Activo: Responde en contexto según la etapa actual.'
-                      : '👤 Modo "Yo Escribo" Activo: Vista de lectura/escritura manual (la IA no autodispara).'}
-                  </span>
-                  <div className="inline-flex items-center gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-700 text-[11px] font-bold">
-                    <span
-                      className={`px-2.5 py-1 rounded-lg ${
-                        !activeAiOrder.datosConfirmados && (activeAiOrder.convStep || 1) < 5
-                          ? 'bg-amber-400 text-black'
-                          : 'text-zinc-400'
-                      }`}
-                    >
-                      Etapa 1/2 · Saludo + Imagen
-                    </span>
-                    <span
-                      className={`px-2.5 py-1 rounded-lg ${
-                        activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5
-                          ? 'bg-emerald-500 text-black'
-                          : 'text-zinc-400'
-                      }`}
-                    >
-                      Etapa 2/2 · Confirmado
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const isEtapa2 = Boolean(activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5);
-                        if (isEtapa2) {
-                          handleSendOrderAudioNote(
-                            activeAiOrder,
-                            `Excelente ${activeAiOrder.nombre?.split(' ')[0] || ''}, tu pedido ya está 100% confirmado para entrega. ¡Muchas gracias por tu compra!`,
-                            modalAiChannel
-                          );
-                        } else {
-                          fetch('/api/whatsapp/call/start', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              phone: formatWaPhone(activeAiOrder.celular),
-                              orderId: activeAiOrder.reservaid,
-                              resetCall: true,
-                              channel: modalAiChannel
-                            })
-                          })
-                            .then(r => r.json())
-                            .then(d => {
-                              if (Array.isArray(d.messages)) setLiveChatMessages(d.messages);
-                              showToast(`🔄 Etapa 1/2 re-disparada manualmente para ${activeAiOrder.nombre}.`);
-                            })
-                            .catch(() => {});
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 cursor-pointer ml-1"
-                      title="Re-enviar manualmente el mensaje de la etapa actual"
-                    >
-                      🔄 Re-disparar etapa
-                    </button>
-                  </div>
-                </div>
-                <p className="text-[11px] text-zinc-400">
-                  {activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5
-                    ? '✅ Etapa 2/2: El cliente ya confirmó su pedido y recibió el agradecimiento final.'
-                    : (activeAiOrder.convStep || 1) >= 2 || activeAiOrder.ultimoMensajeIA
-                      ? '⏳ Etapa 1/2: Audio de saludo e imagen enviados; esperando que el cliente responda CORRECTO.'
-                      : '🆕 Sin iniciar: Todavía no se envió la Etapa 1/2 a este cliente.'}
-                </p>
-              </div>
-
               {liveChatMessages.length === 0 ? (
                 activeAiOrder.ultimoMensajeIA || activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 2 ? (
                   <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800 max-w-xl mx-auto space-y-2 mt-4 text-center">

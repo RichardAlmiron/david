@@ -1528,6 +1528,7 @@ function registerApiServerMiddlewares(server: any) {
                   callMode: history.callMode,
                   channel: finalChannel,
                   convStep: finalConvStep,
+                  followUpStatus: history.followUpStatus,
                   engineState: getWhatsAppEngineState()
                 }));
               } catch (err: any) {
