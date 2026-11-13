@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ShoppingBag,
   Rocket,
@@ -28,6 +28,51 @@ export const AndroidAppView: React.FC = () => {
   const [activeMenu, setActiveMenu] = useState<AdminMenuKey>('productos');
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const [showQuickPairingSheet, setShowQuickPairingSheet] = useState(false);
+  const [installSheetOpen, setInstallSheetOpen] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.location.search.includes('instalar=1')
+  );
+  const [waitingInstallPrompt, setWaitingInstallPrompt] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.location.search.includes('instalar=1')
+  );
+
+  // Clean ?instalar=1 once installed or dismissed, and try automatic native prompt when ready
+  useEffect(() => {
+    if (!installSheetOpen) return;
+    if (isInstalled) {
+      setInstallSheetOpen(false);
+      setWaitingInstallPrompt(false);
+      if (typeof window !== 'undefined' && window.location.search.includes('instalar=1')) {
+        window.history.replaceState({}, '', '/app-android');
+      }
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setWaitingInstallPrompt(false);
+    }, 1800);
+
+    if (isInstallable) {
+      setWaitingInstallPrompt(false);
+      void install().then(accepted => {
+        if (accepted) {
+          setInstallSheetOpen(false);
+          if (typeof window !== 'undefined') {
+            window.history.replaceState({}, '', '/app-android');
+          }
+        }
+      });
+    }
+
+    return () => window.clearTimeout(timer);
+  }, [installSheetOpen, isInstallable, isInstalled]);
+
+  const dismissInstallSheet = () => {
+    setInstallSheetOpen(false);
+    setWaitingInstallPrompt(false);
+    if (typeof window !== 'undefined' && window.location.search.includes('instalar=1')) {
+      window.history.replaceState({}, '', '/app-android');
+    }
+  };
 
   // Android Login state (Mismo usuario y contraseña, SIN código PIN)
   const [email, setEmail] = useState('');
@@ -153,6 +198,48 @@ export const AndroidAppView: React.FC = () => {
             </button>
           )}
         </div>
+
+        {installSheetOpen && !isInstalled && (
+          <div className="fixed inset-x-0 bottom-0 z-50 p-4 bg-[#17191f] border-t border-zinc-800 rounded-t-3xl shadow-2xl space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <img src="/assets/app-android-192.png" alt="Noelux Admin" className="w-11 h-11 rounded-2xl" />
+                <div>
+                  <div className="text-sm font-bold text-white">Instalar App Android</div>
+                  <div className="text-xs text-zinc-400">Se guarda directo en tu pantalla de inicio</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={dismissInstallSheet}
+                className="min-h-[36px] min-w-[36px] rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center cursor-pointer"
+                aria-label="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {isInstallable ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await install();
+                  if (ok) dismissInstallSheet();
+                }}
+                className="w-full min-h-[48px] rounded-full bg-emerald-400 text-[#042317] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Download className="w-4 h-4" /> Confirmar e Instalar en tu Android
+              </button>
+            ) : waitingInstallPrompt ? (
+              <div className="min-h-[44px] rounded-full bg-zinc-800 text-zinc-300 text-xs font-medium flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" /> Preparando descarga en tu celular...
+              </div>
+            ) : (
+              <div className="p-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
+                Tocá los <strong>3 puntitos (⋮)</strong> arriba en Chrome y elegí <strong>Instalar aplicación</strong>.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -259,6 +346,49 @@ export const AndroidAppView: React.FC = () => {
             </div>
             <MobileWhatsAppSyncPanel platform="android" defaultLabel="WhatsApp Android" />
           </div>
+        </div>
+      )}
+
+      {/* Direct Install Sheet when launched from Descargar App while already logged in */}
+      {installSheetOpen && !isInstalled && (
+        <div className="fixed inset-x-0 bottom-16 z-50 p-4 bg-[#17191f] border-t border-emerald-500/40 rounded-t-3xl shadow-2xl space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <img src="/assets/app-android-192.png" alt="Noelux Admin" className="w-11 h-11 rounded-2xl" />
+              <div>
+                <div className="text-sm font-bold text-white">Instalar App Android</div>
+                <div className="text-xs text-zinc-400">Confirmá para descargarla en tu pantalla de inicio</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={dismissInstallSheet}
+              className="min-h-[36px] min-w-[36px] rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center cursor-pointer"
+              aria-label="Cerrar"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {isInstallable ? (
+            <button
+              type="button"
+              onClick={async () => {
+                const ok = await install();
+                if (ok) dismissInstallSheet();
+              }}
+              className="w-full min-h-[48px] rounded-full bg-emerald-400 text-[#042317] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Download className="w-4 h-4" /> Confirmar e Instalar en tu Android
+            </button>
+          ) : waitingInstallPrompt ? (
+            <div className="min-h-[44px] rounded-full bg-zinc-800 text-zinc-300 text-xs font-medium flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" /> Preparando descarga en tu celular...
+            </div>
+          ) : (
+            <div className="p-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
+              Si ya la instalaste o tu navegador no mostró el botón directo, tocá los <strong>3 puntitos (⋮)</strong> arriba y elegí <strong>Instalar aplicación</strong>.
+            </div>
+          )}
         </div>
       )}
 
