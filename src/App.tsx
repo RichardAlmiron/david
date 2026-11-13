@@ -18,6 +18,8 @@ const AdminView = lazy(() => import('./views/AdminView').then(m => ({ default: m
 const AdminLoginView = lazy(() => import('./views/AdminLoginView').then(m => ({ default: m.AdminLoginView })));
 const RepartoView = lazy(() => import('./views/RepartoView').then(m => ({ default: m.RepartoView })));
 const PromoterView = lazy(() => import('./views/PromoterView').then(m => ({ default: m.PromoterView })));
+const AndroidAppView = lazy(() => import('./views/AndroidAppView').then(m => ({ default: m.AndroidAppView })));
+const IphoneAppView = lazy(() => import('./views/IphoneAppView').then(m => ({ default: m.IphoneAppView })));
 
 export const AppContent: React.FC = () => {
   const {
@@ -124,6 +126,22 @@ export const AppContent: React.FC = () => {
     return (
       <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white text-sm">Cargando promotor...</div>}>
         <PromoterView />
+      </Suspense>
+    );
+  }
+
+  if (currentView === 'app-android') {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#111318] flex items-center justify-center text-white text-sm">Cargando App Android...</div>}>
+        <AndroidAppView />
+      </Suspense>
+    );
+  }
+
+  if (currentView === 'app-iphone') {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#f2f2f7] flex items-center justify-center text-[#1c1c1e] text-sm">Cargando App iPhone...</div>}>
+        <IphoneAppView />
       </Suspense>
     );
   }

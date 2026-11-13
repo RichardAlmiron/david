@@ -845,6 +845,32 @@ function registerApiServerMiddlewares(server: any) {
             return;
           }
 
+          // POST /api/admin/verify-iphone-pin
+          if (req.method === 'POST' && url === '/api/admin/verify-iphone-pin') {
+            let body = '';
+            req.on('data', chunk => (body += chunk));
+            req.on('end', () => {
+              try {
+                const { pin } = JSON.parse(body || '{}');
+                const expectedPin = String(process.env.IPHONE_APP_PIN || '1982').trim();
+                const providedPin = String(pin || '').trim();
+                const a = Buffer.from(providedPin);
+                const b = Buffer.from(expectedPin);
+                const valid = a.length === b.length && crypto.timingSafeEqual(a, b);
+                if (!valid) {
+                  res.statusCode = 403;
+                  res.end(JSON.stringify({ valid: false, error: 'Código PIN incorrecto.' }));
+                  return;
+                }
+                res.end(JSON.stringify({ valid: true }));
+              } catch (err: any) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ valid: false, error: err?.message || 'Solicitud inválida' }));
+              }
+            });
+            return;
+          }
+
           // -------------------------------------------------------------
           // 2. PEDIDOS API (PÚBLICO PARA CREAR / PROTEGIDO PARA ADMIN)
           // -------------------------------------------------------------
@@ -8668,11 +8694,67 @@ export default defineConfig({
     tailwindcss(),
     {
       name: 'api-server-middleware',
+      transformIndexHtml(html, ctx) {
+        const reqUrl = String(ctx?.originalUrl || '').toLowerCase();
+        if (reqUrl.includes('/app-android') || reqUrl.includes('app=android')) {
+          return html
+            .replace(/<title>.*?<\/title>/i, '<title>Noelux Admin Android</title>')
+            .replace(/href=["']\.?\/manifest\.json["']/i, 'href="/manifest-android.webmanifest"')
+            .replace(/href=["']\.?\/apple-touch-icon\.png["']/i, 'href="/assets/app-android-192.png"')
+            .replace(/content=["']Noelux["'] id=["']app-apple-title["']/i, 'content="Noelux Admin" id="app-apple-title"')
+            .replace(/content=["']#062319["'] id=["']app-theme-color["']/i, 'content="#09090b" id="app-theme-color"');
+        }
+        if (reqUrl.includes('/app-iphone') || reqUrl.includes('app=iphone') || reqUrl.includes('app=ios')) {
+          return html
+            .replace(/<title>.*?<\/title>/i, '<title>Noelux Pedidos · iPhone</title>')
+            .replace(/href=["']\.?\/manifest\.json["']/i, 'href="/manifest-iphone.webmanifest"')
+            .replace(/href=["']\.?\/apple-touch-icon\.png["']/i, 'href="/assets/apple-touch-icon-iphone.png"')
+            .replace(/content=["']Noelux["'] id=["']app-apple-title["']/i, 'content="Noelux Pedidos" id="app-apple-title"')
+            .replace(/content=["']#062319["'] id=["']app-theme-color["']/i, 'content="#f2f2f7" id="app-theme-color"');
+        }
+        return html;
+      },
       configureServer(server) {
         registerApiServerMiddlewares(server);
       },
       configurePreviewServer(server) {
         registerApiServerMiddlewares(server);
+        server.middlewares.use((req: any, res: any, next: any) => {
+          const rawUrl = String(req.url || '').toLowerCase();
+          const pathname = rawUrl.split('?')[0];
+          if (
+            req.method === 'GET' &&
+            (pathname === '/app-android' ||
+              pathname === '/app-android/' ||
+              pathname === '/app-iphone' ||
+              pathname === '/app-iphone/')
+          ) {
+            const distIndex = path.resolve(process.cwd(), 'dist', 'index.html');
+            if (fs.existsSync(distIndex)) {
+              let html = fs.readFileSync(distIndex, 'utf-8');
+              if (pathname.startsWith('/app-android')) {
+                html = html
+                  .replace(/<title>.*?<\/title>/i, '<title>Noelux Admin Android</title>')
+                  .replace(/href=["']\.?\/manifest\.json["']/i, 'href="/manifest-android.webmanifest"')
+                  .replace(/href=["']\.?\/apple-touch-icon\.png["']/i, 'href="/assets/app-android-192.png"')
+                  .replace(/content=["']Noelux["'] id=["']app-apple-title["']/i, 'content="Noelux Admin" id="app-apple-title"')
+                  .replace(/content=["']#062319["'] id=["']app-theme-color["']/i, 'content="#09090b" id="app-theme-color"');
+              } else {
+                html = html
+                  .replace(/<title>.*?<\/title>/i, '<title>Noelux Pedidos · iPhone</title>')
+                  .replace(/href=["']\.?\/manifest\.json["']/i, 'href="/manifest-iphone.webmanifest"')
+                  .replace(/href=["']\.?\/apple-touch-icon\.png["']/i, 'href="/assets/apple-touch-icon-iphone.png"')
+                  .replace(/content=["']Noelux["'] id=["']app-apple-title["']/i, 'content="Noelux Pedidos" id="app-apple-title"')
+                  .replace(/content=["']#062319["'] id=["']app-theme-color["']/i, 'content="#f2f2f7" id="app-theme-color"');
+              }
+              res.setHeader('Content-Type', 'text/html; charset=utf-8');
+              res.statusCode = 200;
+              res.end(html);
+              return;
+            }
+          }
+          next();
+        });
       }
     }
   ],

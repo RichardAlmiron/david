@@ -264,7 +264,7 @@ export interface PublicEvent {
   descripcion: string;
 }
 
-export type ViewType = 'store' | 'admin' | 'reparto' | 'promoter';
+export type ViewType = 'store' | 'admin' | 'reparto' | 'promoter' | 'app-android' | 'app-iphone';
 
 export type PolicyType = 'envio' | 'privacidad' | 'reembolsos' | 'terminos';
 

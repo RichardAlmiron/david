@@ -1059,8 +1059,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setReferralCode(ref);
       }
 
-      // Check strictly against hash or exact path to prevent false matches with directory names
+      // Check strictly against hash, query param, or exact path to prevent false matches with directory names
+      const appParam = (params.get('app') || '').toLowerCase();
       if (
+        appParam === 'android' ||
+        hash === '#app-android' ||
+        path === '/app-android' ||
+        path === '/app-android/' ||
+        path.endsWith('/app-android')
+      ) {
+        setCurrentView('app-android');
+      } else if (
+        appParam === 'iphone' ||
+        appParam === 'ios' ||
+        hash === '#app-iphone' ||
+        path === '/app-iphone' ||
+        path === '/app-iphone/' ||
+        path.endsWith('/app-iphone')
+      ) {
+        setCurrentView('app-iphone');
+      } else if (
         hash === '#admin' ||
         path === '/admin' ||
         path === '/admin/' ||
@@ -1099,6 +1117,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []);
 
+  // Sincronizar manifest, apple-touch-icon y título según la app activa (Android vs iPhone vs Tienda)
+  useEffect(() => {
+    try {
+      const manifestEl = document.getElementById('app-manifest') as HTMLLinkElement | null;
+      const appleIconEl = document.getElementById('app-apple-icon') as HTMLLinkElement | null;
+      const appleTitleEl = document.getElementById('app-apple-title') as HTMLMetaElement | null;
+      const themeColorEl = document.getElementById('app-theme-color') as HTMLMetaElement | null;
+
+      if (currentView === 'app-android') {
+        if (manifestEl) manifestEl.href = '/manifest-android.webmanifest';
+        if (appleIconEl) appleIconEl.href = '/assets/app-android-192.png';
+        if (appleTitleEl) appleTitleEl.content = 'Noelux Admin';
+        if (themeColorEl) themeColorEl.content = '#09090b';
+        document.title = 'Noelux Admin Android';
+      } else if (currentView === 'app-iphone') {
+        if (manifestEl) manifestEl.href = '/manifest-iphone.webmanifest';
+        if (appleIconEl) appleIconEl.href = '/assets/apple-touch-icon-iphone.png';
+        if (appleTitleEl) appleTitleEl.content = 'Noelux Pedidos';
+        if (themeColorEl) themeColorEl.content = '#f2f2f7';
+        document.title = 'Noelux Pedidos · iPhone';
+      } else {
+        if (manifestEl) manifestEl.href = '/manifest.json';
+        if (appleIconEl) appleIconEl.href = '/apple-touch-icon.png';
+        if (appleTitleEl) appleTitleEl.content = 'Noelux';
+      }
+    } catch {}
+  }, [currentView]);
+
   // Sincronizar ?p=slug con activeProductId sin alterar currentView
   useEffect(() => {
     const path = window.location.pathname.toLowerCase();
@@ -1107,7 +1153,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const cleanPathSlug = path.replace(/^\/+|\/+$/g, '').toLowerCase();
     const candidateSlug =
       slugParam ||
-      (cleanPathSlug && !['admin', 'reparto', 'app', 'promoter'].includes(cleanPathSlug)
+      (cleanPathSlug && !['admin', 'reparto', 'app', 'promoter', 'app-android', 'app-iphone'].includes(cleanPathSlug)
         ? cleanPathSlug
         : '');
     if (candidateSlug) {

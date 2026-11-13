@@ -1,3 +1,138 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "id": "1",
+      "eventId": "ord_NX-538268_Lead",
+      "eventName": "Lead",
+      "pedidoId": 202,
+      "reservaId": "NX-538268",
+      "pixelId": "1276031534651377",
+      "circuit": "circuit_a_conversion",
+      "status": "sent",
+      "attempts": 1,
+      "maxAttempts": 5,
+      "eventTimeUnix": 1794528013,
+      "payloadJson": {
+        "data": [
+          {
+            "event_id": "ord_NX-538268_Lead",
+            "user_data": {
+              "ct": [
+                "c7599438a0a9d9ad61f530e381f51391292e3dcec6e16bee54118ff0486bb3d2"
+              ],
+              "fn": [
+                "61bffea9215f65164ad18b45aff1436c0c165d0d5dd2087ef61b4232ba6d2c1a"
+              ],
+              "ln": [
+                "62fa953c4af4ce49f1d06aa6c5e2058ef491b06437d696928913044bc9c08c96"
+              ],
+              "ph": [
+                "2e351cf71f48679af71a57360141c905219676ac2daa533e18fe2fb83c34f39c"
+              ],
+              "fbp": "fb.1.1794311060239.6595410957",
+              "country": [
+                "6e491c02882ac36e3bcaaac4d151d4b2793135d4482adf227b1b730cdd90b46d"
+              ],
+              "external_id": [
+                "79a1dca50aa949a53ff29d660d967c225b85f7eb9ad1da29b6b2a7fa616cce1f"
+              ],
+              "client_ip_address": "45.235.120.168",
+              "client_user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Mobile Safari/537.36"
+            },
+            "event_name": "Lead",
+            "event_time": 1794528013,
+            "custom_data": {
+              "value": 189000,
+              "currency": "PYG",
+              "order_id": "NX-538268",
+              "lead_type": "confirmed_order_form",
+              "num_items": 1,
+              "content_ids": [
+                "prod-noelux-01"
+              ],
+              "content_name": "Noelux™ Proyector Navideño 12 Diseños",
+              "content_type": "product"
+            },
+            "action_source": "website",
+            "event_source_url": "https://tienda.local/pedido"
+          }
+        ]
+      },
+      "responseJson": {
+        "messages": [],
+        "fbtrace_id": "AA7GvdzyPAPVPmh5Mttksm0",
+        "events_received": 1
+      },
+      "nextRetryAt": null,
+      "sentAt": "2026-11-13T00:00:12.769+00:00",
+      "createdAt": "2026-11-13T00:00:12.769+00:00"
+    },
+    {
+      "id": "2",
+      "eventId": "ord_NX-538268_OrderReservedCOD",
+      "eventName": "OrderReservedCOD",
+      "pedidoId": 202,
+      "reservaId": "NX-538268",
+      "pixelId": "1276031534651377",
+      "circuit": "circuit_a_conversion",
+      "status": "sent",
+      "attempts": 1,
+      "maxAttempts": 5,
+      "eventTimeUnix": 1794528013,
+      "payloadJson": {
+        "data": [
+          {
+            "event_id": "ord_NX-538268_OrderReservedCOD",
+            "user_data": {
+              "ct": [
+                "c7599438a0a9d9ad61f530e381f51391292e3dcec6e16bee54118ff0486bb3d2"
+              ],
+              "fn": [
+                "61bffea9215f65164ad18b45aff1436c0c165d0d5dd2087ef61b4232ba6d2c1a"
+              ],
+              "ln": [
+                "62fa953c4af4ce49f1d06aa6c5e2058ef491b06437d696928913044bc9c08c96"
+              ],
+              "ph": [
+                "2e351cf71f48679af71a57360141c905219676ac2daa533e18fe2fb83c34f39c"
+              ],
+              "fbp": "fb.1.1794311060239.6595410957",
+              "country": [
+                "6e491c02882ac36e3bcaaac4d151d4b2793135d4482adf227b1b730cdd90b46d"
+              ],
+              "external_id": [
+                "79a1dca50aa949a53ff29d660d967c225b85f7eb9ad1da29b6b2a7fa616cce1f"
+              ],
+              "client_ip_address": "45.235.120.168",
+              "client_user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Mobile Safari/537.36"
+            },
+            "event_name": "OrderReservedCOD",
+            "event_time": 1794528013,
+            "custom_data": {
+              "value": 189000,
+              "currency": "PYG",
+              "order_id": "NX-538268",
+              "lead_type": "cod_telemetry_secondary",
+              "num_items": 1,
+              "content_ids": [
+                "prod-noelux-01"
+              ],
+              "content_name": "Noelux™ Proyector Navideño 12 Diseños",
+              "content_type": "product"
+            },
+            "action_source": "website",
+            "event_source_url": "https://tienda.local/pedido"
+          }
+        ]
+      },
+      "responseJson": {
+        "messages": [],
+        "fbtrace_id": "Ad-bh6WuSd9SickDyfgZbR1",
+        "events_received": 1
+      },
+      "nextRetryAt": null,
+      "sentAt": "2026-11-13T00:00:12.769+00:00",
+      "createdAt": "2026-11-13T00:00:12.769+00:00"
+    }
+  ]
 }
