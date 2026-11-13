@@ -110,7 +110,7 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
         await fetchStatus();
         setFeedback({
           type: 'ok',
-          text: 'Código listo. Copialo e ingresalo en WhatsApp en este mismo teléfono.'
+          text: 'Código listo. Copialo y pegalo en tu WhatsApp normal (seguí el Paso 2 de abajo).'
         });
       } else {
         setFeedback({
@@ -168,10 +168,10 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
           </div>
           <div className="min-w-0 flex-1">
             <h3 className={`text-base font-semibold leading-tight ${primaryText}`}>
-              Vincular WhatsApp sin escanear QR
+              Conectar tu WhatsApp (sin QR)
             </h3>
             <p className={`text-xs mt-1 leading-relaxed ${mutedText}`}>
-              Como estás usando la app desde este mismo teléfono, vinculá tu WhatsApp ingresando un código numérico de 8 dígitos directamente en tu WhatsApp.
+              Generás un código acá y lo pegás dentro de tu WhatsApp normal.
             </p>
           </div>
         </div>
@@ -264,14 +264,17 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
             {activeSession.connectedPhone || activeSession.connectedName || activeSession.label}
           </p>
           <p className={`text-xs ${mutedText}`}>
-            Esta línea está conectada y sincronizada en tiempo real. Si querés vincular otro celular aparte, tocá "Nueva Línea" arriba.
+            Esta línea está conectada. Para conectar otro celular aparte, tocá "Nueva Línea".
           </p>
         </div>
       ) : (
         <div className={cardClass}>
           <form onSubmit={handleRequestPairingCode} className="space-y-3">
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-500">
+              <span>Paso 1 · Acá en esta App</span>
+            </div>
             <label className={`block text-xs font-semibold ${primaryText}`}>
-              1. Ingresá el número de WhatsApp de este teléfono
+              Escribí tu número de celular y pedí el código:
             </label>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
@@ -296,7 +299,7 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
                 }`}
               >
                 {loading && <RefreshCw className="w-4 h-4 animate-spin" />}
-                <span>Obtener Código</span>
+                <span>Dame el Código</span>
               </button>
             </div>
           </form>
@@ -327,7 +330,7 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
               }`}
             >
               <div className={`text-xs font-medium ${mutedText}`}>
-                Tu código de vinculación de 8 dígitos:
+                Copiá este código para pegar en tu WhatsApp:
               </div>
               <div
                 className={`text-2xl sm:text-3xl font-mono font-bold tracking-[0.2em] ${
@@ -358,16 +361,32 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
             </div>
           )}
 
-          {/* Step-by-step phone instructions */}
-          <div className={`pt-2 border-t text-xs space-y-1.5 ${isIos ? 'border-black/5' : 'border-zinc-800'} ${mutedText}`}>
-            <div className={`font-semibold ${primaryText}`}>Cómo conectarlo en este mismo teléfono:</div>
-            <p>1. Copiá el código de 8 dígitos de arriba.</p>
-            <p>
-              2. Abrí <strong>WhatsApp</strong> → {isIos ? 'Configuración' : 'Menú ⋮'} →{' '}
-              <strong>Dispositivos vinculados</strong> → <strong>Vincular un dispositivo</strong>.
+          {/* Crystal-clear step-by-step inside WhatsApp */}
+          <div
+            className={`pt-3 border-t text-xs space-y-2 ${isIos ? 'border-black/5' : 'border-zinc-800'} ${mutedText}`}
+          >
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-sky-500/15 text-sky-500">
+              <span>Paso 2 · Abrí tu app de WhatsApp</span>
+            </div>
+            <p className={primaryText}>
+              {isIos ? (
+                <>
+                  1. Abrí tu <strong>WhatsApp normal</strong> → <strong>Configuración</strong> →{' '}
+                  <strong>Dispositivos vinculados</strong>.
+                </>
+              ) : (
+                <>
+                  1. Abrí tu <strong>WhatsApp normal</strong> → tocá los <strong>3 puntitos (⋮)</strong> →{' '}
+                  <strong>Dispositivos vinculados</strong>.
+                </>
+              )}
             </p>
-            <p>
-              3. Tocá abajo <strong>“Vincular con el número de teléfono”</strong> y pegá el código.
+            <p className={primaryText}>
+              2. Tocá <strong>Vincular dispositivo</strong> → abajo tocá{' '}
+              <strong>“Vincular con el número de teléfono”</strong>.
+            </p>
+            <p className={primaryText}>
+              3. Pegá ahí el código de 8 letras/números de arriba. <strong>¡Listo!</strong>
             </p>
           </div>
 

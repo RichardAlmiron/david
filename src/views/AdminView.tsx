@@ -698,6 +698,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
   const [addingSession, setAddingSession] = useState<boolean>(false);
   const [pairingInputs, setPairingInputs] = useState<Record<string, string>>({});
   const [loadingSessionMap, setLoadingSessionMap] = useState<Record<string, boolean>>({});
+  const [pairingErrorMap, setPairingErrorMap] = useState<Record<string, string | null>>({});
 
   const [chatsSummary, setChatsSummary] = useState<
     Record<
@@ -1258,8 +1259,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
   // Request 8-digit Pairing Code for a specific WhatsApp session
   const handleRequestSessionPairingCode = async (sessionId: string) => {
     const rawPhone = (pairingInputs[sessionId] || '').trim();
-    if (!rawPhone) return;
+    if (!rawPhone) {
+      setPairingErrorMap(prev => ({
+        ...prev,
+        [sessionId]: 'Escribí primero tu número de celular (ej: 0973532550).'
+      }));
+      return;
+    }
     setLoadingSessionMap(prev => ({ ...prev, [sessionId]: true }));
+    setPairingErrorMap(prev => ({ ...prev, [sessionId]: null }));
 
     let handledLocal = false;
     try {
@@ -1269,16 +1277,27 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         body: JSON.stringify({ phone: rawPhone, sessionId })
       });
       const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      if (contentType.includes('application/json')) {
         handledLocal = true;
         const data = await res.json();
         if (Array.isArray(data.sessions)) {
-          setWaSessions(data.sessions);
+          setWaSessions(
+            data.sessions.map((s: any) =>
+              s.id === sessionId && data.pairingCode ? { ...s, pairingCode: data.pairingCode } : s
+            )
+          );
+        } else if (data.pairingCode) {
+          setWaSessions(prev =>
+            prev.map(s => (s.id === sessionId ? { ...s, pairingCode: data.pairingCode } : s))
+          );
         }
         if (data.pairingCode) {
-          showToast(`Código generado: ${data.pairingCode}. Ingresalo en tu celular.`);
-        } else if (data.error) {
-          showToast(data.error);
+          setPairingErrorMap(prev => ({ ...prev, [sessionId]: null }));
+          showToast(`Código generado: ${data.pairingCode}. Pegalo en tu WhatsApp normal.`);
+        } else if (data.error || !data.success) {
+          const msg = data.error || 'No se pudo generar el código. Intentá de nuevo.';
+          setPairingErrorMap(prev => ({ ...prev, [sessionId]: msg }));
+          showToast(msg);
         }
       }
     } catch (e) { }
@@ -2100,7 +2119,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     <div className={androidShell ? 'flex flex-col min-h-full bg-[#111318] text-zinc-100 font-sans' : 'flex h-screen bg-[#000000] text-zinc-100 overflow-hidden font-sans'}>
       {/* Toast Alert */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-zinc-900 text-white px-4 py-3 rounded-lg shadow-lg border border-zinc-700 flex items-center gap-2.5">
+        <div
+          className={`fixed z-50 bg-zinc-900 text-white px-4 py-3 rounded-lg shadow-lg border border-zinc-700 flex items-center gap-2.5 ${
+            androidShell ? 'bottom-20 left-4 right-4 sm:left-auto sm:right-6' : 'bottom-6 right-6'
+          }`}
+        >
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span className="text-sm font-medium">{toast}</span>
         </div>
@@ -4441,14 +4464,96 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           </div>
                         ) : (
                           <div className="space-y-4">
-                            {/* QR Box */}
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col items-center justify-center min-h-[230px] text-center">
+                            {/* 8-Digit Pairing Code Option (Sin escanear QR — ideal desde el celular) */}
+                            <div className="bg-zinc-900 border border-emerald-700/40 rounded-xl p-3.5 text-left space-y-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-emerald-300">
+                                  Conectar con Código (sin QR)
+                                </span>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
+                                  Paso 1 · Acá
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-zinc-400 leading-snug">
+                                Poné tu número de celular y tocá <strong>Dame el Código</strong>. Después pegás ese código dentro de tu WhatsApp normal.
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="tel"
+                                  inputMode="tel"
+                                  value={phoneInputVal}
+                                  onChange={e =>
+                                    setPairingInputs(prev => ({
+                                      ...prev,
+                                      [session.id]: e.target.value
+                                    }))
+                                  }
+                                  placeholder="Ej: 0973532550"
+                                  className="flex-1 min-h-[42px] px-3 py-2 rounded-xl border border-zinc-700 bg-black text-xs font-mono text-zinc-100 outline-none placeholder-zinc-500 focus:border-emerald-500"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isLoading || !phoneInputVal.trim()}
+                                  onClick={() => handleRequestSessionPairingCode(session.id)}
+                                  className="min-h-[42px] px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-xs font-bold cursor-pointer shrink-0 inline-flex items-center gap-1.5"
+                                >
+                                  {isLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                                  <span>{isLoading ? 'Generando...' : 'Dame el Código'}</span>
+                                </button>
+                              </div>
+
+                              {pairingErrorMap[session.id] && (
+                                <div className="p-2.5 rounded-lg bg-red-950/70 border border-red-700/60 text-xs text-red-200">
+                                  {pairingErrorMap[session.id]}
+                                </div>
+                              )}
+
+                              {session.pairingCode && (
+                                <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/60 space-y-3">
+                                  <div className="text-center space-y-2">
+                                    <span className="text-[11px] font-semibold text-emerald-200 block">
+                                      Tu código de 8 dígitos:
+                                    </span>
+                                    <div className="flex items-center justify-center gap-2.5 flex-wrap">
+                                      <strong className="text-xl sm:text-2xl font-mono font-bold tracking-widest text-emerald-300">
+                                        {session.pairingCode}
+                                      </strong>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          navigator.clipboard?.writeText(String(session.pairingCode).replace(/-/g, ''));
+                                          showToast('Código copiado. Ahora abrilo en tu WhatsApp normal.');
+                                        }}
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-500 text-black text-xs font-bold cursor-pointer hover:bg-emerald-400"
+                                      >
+                                        Copiar Código
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-2 border-t border-emerald-700/50 text-[11px] text-emerald-100 space-y-1">
+                                    <div className="font-bold text-emerald-300 uppercase tracking-wider text-[10px]">
+                                      Paso 2 · Pegalo en tu app de WhatsApp normal:
+                                    </div>
+                                    <p>1. Salí de acá y abrí tu <strong>WhatsApp normal</strong> (el ícono verde).</p>
+                                    <p>2. Tocá <strong>3 puntitos (⋮)</strong> o <strong>Configuración</strong> → <strong>Dispositivos vinculados</strong> → <strong>Vincular dispositivo</strong>.</p>
+                                    <p>3. Abajo tocá <strong>“Vincular con el número de teléfono”</strong> y pegá este código.</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* QR Box (Opción B: escanear desde otro celular) */}
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col items-center justify-center text-center">
+                              <div className="text-[11px] font-semibold text-zinc-400 mb-2">
+                                Opción B · Escanear QR con otro teléfono
+                              </div>
                               {session.qrDataUrl ? (
                                 <div className="space-y-2 flex flex-col items-center">
                                   <img
                                     src={session.qrDataUrl}
                                     alt={`QR ${session.label}`}
-                                    className="w-52 h-52 rounded-lg border-4 border-[#0b3d2e] shadow-sm bg-white p-1"
+                                    className="w-44 h-44 rounded-lg border-4 border-[#0b3d2e] shadow-sm bg-white p-1"
                                   />
                                   <div className="flex items-center gap-2 pt-1">
                                     <span className="text-[11px] font-medium text-[#0a7a4a]">
@@ -4465,70 +4570,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   </div>
                                 </div>
                               ) : (
-                                <div className="space-y-3 py-6">
-                                  <RefreshCw className="w-8 h-8 text-[#0a7a4a] animate-spin mx-auto" />
-                                  <p className="text-xs font-bold text-zinc-400">
-                                    Generando código QR para {session.label}...
+                                <div className="space-y-2.5 py-3">
+                                  <RefreshCw className="w-6 h-6 text-[#0a7a4a] animate-spin mx-auto" />
+                                  <p className="text-xs font-medium text-zinc-400">
+                                    Preparando QR de respaldo para {session.label}...
                                   </p>
                                   <button
                                     type="button"
                                     disabled={isLoading}
                                     onClick={() => handleConnectSession(session.id, true)}
-                                    className="px-4 py-2 rounded-lg bg-[#0b3d2e] text-white text-xs font-semibold cursor-pointer"
+                                    className="px-3.5 py-1.5 rounded-lg bg-[#0b3d2e] text-white text-xs font-semibold cursor-pointer"
                                   >
                                     Generar Nuevo QR
                                   </button>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* 8-Digit Pairing Code Option */}
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-left space-y-2">
-                              <div className="text-[11px] font-semibold text-zinc-300">
-                                📲 ¿Preferís vincular con código numérico de 8 dígitos?
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  value={phoneInputVal}
-                                  onChange={e =>
-                                    setPairingInputs(prev => ({
-                                      ...prev,
-                                      [session.id]: e.target.value
-                                    }))
-                                  }
-                                  placeholder="Ej: 0981123456"
-                                  className="flex-1 px-3 py-2 rounded-xl border border-zinc-800 bg-black text-xs font-mono text-zinc-100 outline-none placeholder-zinc-500 focus:border-emerald-500"
-                                />
-                                <button
-                                  type="button"
-                                  disabled={isLoading || !phoneInputVal.trim()}
-                                  onClick={() => handleRequestSessionPairingCode(session.id)}
-                                  className="px-3 py-1.5 rounded-lg bg-[#0b3d2e] hover:bg-[#135944] disabled:opacity-50 text-white text-[11px] font-medium cursor-pointer shrink-0"
-                                >
-                                  Pedir Código
-                                </button>
-                              </div>
-                              {session.pairingCode && (
-                                <div className="p-3 rounded-lg bg-emerald-950/80 border border-emerald-600/60 text-center space-y-2">
-                                  <span className="text-[11px] font-semibold text-emerald-200 block">
-                                    Ingresá este código en WhatsApp en tu mismo celular:
-                                  </span>
-                                  <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                                    <strong className="text-lg font-mono font-bold tracking-widest text-emerald-300">
-                                      {session.pairingCode}
-                                    </strong>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        navigator.clipboard?.writeText(String(session.pairingCode).replace(/-/g, ''));
-                                        showToast('Código copiado para pegar en WhatsApp.');
-                                      }}
-                                      className="px-2.5 py-1 rounded-md bg-emerald-500 text-black text-xs font-semibold cursor-pointer hover:bg-emerald-400"
-                                    >
-                                      Copiar
-                                    </button>
-                                  </div>
                                 </div>
                               )}
                             </div>

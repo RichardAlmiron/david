@@ -1444,7 +1444,7 @@ function registerApiServerMiddlewares(server: any) {
               try {
                 const { phone, sessionId } = JSON.parse(body || '{}');
                 const result = await requestWhatsAppPairingCode(String(phone || ''), sessionId);
-                res.end(JSON.stringify({ ...result, ...getWhatsAppEngineState() }));
+                res.end(JSON.stringify({ ...getWhatsAppEngineState(), ...result, sessionId }));
               } catch (err: any) {
                 res.statusCode = 500;
                 res.end(JSON.stringify({ success: false, error: err?.message }));

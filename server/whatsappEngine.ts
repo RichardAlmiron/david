@@ -10373,18 +10373,65 @@ export async function requestWhatsAppPairingCode(
       return { success: false, error: 'Ingresá un número de WhatsApp válido (ej: 0981123456)' };
     }
 
-    if (!session.sock || session.status === 'disconnected') {
+    if (session.status === 'connected') {
+      return {
+        success: false,
+        error: `Esta línea ya está conectada (+${session.connectedPhone || 'activa'}). Para conectar otro celular, tocá "Agregar Nuevo WhatsApp".`
+      };
+    }
+
+    const waitUntilHandshakeReady = async (timeoutMs = 15000): Promise<boolean> => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (session.status === 'connected') return true;
+        const wsOpen = Boolean((session.sock as any)?.ws?.isOpen);
+        if (session.sock && (session.status === 'qr_ready' || Boolean(session.qrDataUrl) || wsOpen)) {
+          return true;
+        }
+        await new Promise(r => setTimeout(r, 250));
+      }
+      return Boolean(session.sock && (session.status === 'qr_ready' || (session.sock as any)?.ws?.isOpen));
+    };
+
+    if (
+      !session.sock ||
+      session.status === 'disconnected' ||
+      (session.status === 'connecting' && !session.isConnecting)
+    ) {
       await connectWhatsAppEngine(true, session.id);
-      await new Promise(r => setTimeout(r, 1500));
     }
 
-    if (!session.sock) {
-      return { success: false, error: 'El motor de WhatsApp está iniciando, intentá en 2 segundos.' };
+    let ready = await waitUntilHandshakeReady(15000);
+    if (!ready || !session.sock) {
+      await connectWhatsAppEngine(true, session.id);
+      ready = await waitUntilHandshakeReady(12000);
     }
 
-    const code = await session.sock.requestPairingCode(cleanPhone);
+    if (!session.sock || !ready) {
+      return {
+        success: false,
+        error: 'El servidor de WhatsApp tardó en responder. Tocá "Dame el Código" de nuevo.'
+      };
+    }
+
+    let code: string;
+    try {
+      code = await session.sock.requestPairingCode(cleanPhone);
+    } catch (firstErr: any) {
+      const msg = String(firstErr?.message || '');
+      if (/closed|timeout|not open|connect/i.test(msg)) {
+        await connectWhatsAppEngine(true, session.id);
+        const retryReady = await waitUntilHandshakeReady(12000);
+        if (!session.sock || !retryReady) throw firstErr;
+        code = await session.sock.requestPairingCode(cleanPhone);
+      } else {
+        throw firstErr;
+      }
+    }
+
     const formattedCode = code?.match(/.{1,4}/g)?.join('-') || code;
     session.pairingCode = formattedCode;
+    session.lastError = null;
     scheduleCloudStateSync(true);
     return { success: true, pairingCode: formattedCode };
   } catch (err: any) {
