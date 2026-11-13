@@ -4993,6 +4993,7 @@ export function scheduleCustomerInactivityFollowUp(
     customerInactivityTimers.delete(cleanPhone);
     try {
       if ((globalThis as any).__noeluxEngineGen !== myEngineGen) return;
+      if (isYieldingToNewerDeploy()) return;
       if (isCustomerPostConfirmBlocked(cleanPhone)) return;
 
       const storage = loadChatsStorage();
@@ -5019,6 +5020,26 @@ export function scheduleCustomerInactivityFollowUp(
       // If the customer already replied or no AI message was sent yet, abort follow-up
       if (!lastMsg || (lastMsg.sender !== 'ai' && lastMsg.sender !== 'agent')) {
         inactivityFollowUpCount.delete(cleanPhone);
+        return;
+      }
+
+      // If WhatsApp is currently offline and this chat already has a pending AI audio queued,
+      // do not stack duplicate hourly pending_connection audios while disconnected.
+      if (
+        !pickConnectedSession(preferredSessionId) &&
+        history.some(
+          m =>
+            m.status === 'pending_connection' &&
+            m.sender === 'ai' &&
+            (m.isAudioNote || m.isVoiceCall)
+        )
+      ) {
+        scheduleCustomerInactivityFollowUp(
+          cleanPhone,
+          matchedOrder.reservaid,
+          preferredSessionId,
+          Math.max(2, attemptNumber)
+        );
         return;
       }
 
@@ -7887,13 +7908,54 @@ Y al final de tu audio recordále amablemente: "Si los datos de entrega que ves 
 }
 
 // Flush messages that were queued while WhatsApp was waiting for connection
+export function collapseStackedOfflineAiMessages(messages: WaChatMessage[]): {
+  nextMessages: WaChatMessage[];
+  changed: boolean;
+} {
+  const pendingAiAudioIndices: number[] = [];
+  let hasAnySentAiAudio = false;
+  messages.forEach((m, idx) => {
+    if (m.sender === 'ai' && (m.isAudioNote || m.isVoiceCall) && m.status === 'sent') {
+      hasAnySentAiAudio = true;
+    }
+    if (
+      m.status === 'pending_connection' &&
+      m.sender === 'ai' &&
+      (m.isAudioNote || m.isVoiceCall) &&
+      !m.imageUrl
+    ) {
+      pendingAiAudioIndices.push(idx);
+    }
+  });
+
+  if (pendingAiAudioIndices.length <= 1) {
+    return { nextMessages: messages, changed: false };
+  }
+
+  const keepIdx = hasAnySentAiAudio
+    ? pendingAiAudioIndices[pendingAiAudioIndices.length - 1]
+    : pendingAiAudioIndices[0];
+  const dropSet = new Set(pendingAiAudioIndices.filter(i => i !== keepIdx));
+  return {
+    nextMessages: messages.filter((_, i) => !dropSet.has(i)),
+    changed: true
+  };
+}
+
 async function flushPendingMessages(session: WaSessionRuntime) {
   if (!session.sock || session.status !== 'connected') return;
   try {
     const storage = loadChatsStorage();
     let changed = false;
     for (const [phone, messages] of Object.entries(storage.chats)) {
-      const hasPending = messages.some(
+      const collapsed = collapseStackedOfflineAiMessages(messages);
+      if (collapsed.changed) {
+        storage.chats[phone] = collapsed.nextMessages;
+        changed = true;
+      }
+
+      const activeMessages = storage.chats[phone];
+      const hasPending = activeMessages.some(
         msg => msg.status === 'pending_connection' && (msg.sender === 'admin' || msg.sender === 'ai')
       );
       if (!hasPending) continue;
@@ -7904,7 +7966,7 @@ async function flushPendingMessages(session: WaSessionRuntime) {
         if (jid) {
           await session.e2eeController?.ensureOutboundSessionReady(jid, cleanPhone);
         }
-        for (const msg of messages) {
+        for (const msg of activeMessages) {
           if (msg.status === 'pending_connection' && (msg.sender === 'admin' || msg.sender === 'ai')) {
             try {
               const sock = session.sock;
@@ -8039,10 +8101,21 @@ interface WaLeaderLockPayload {
   leaderId: string;
   bootEpoch: number;
   phase: 'claiming' | 'active' | 'yielding';
+  serviceScope?: string;
   yieldedBy?: string;
   yieldedForEpoch?: number;
   yieldedAt?: number;
   updatedAt: string;
+}
+
+export function isSameDeploymentServiceLock(
+  lock: Partial<WaLeaderLockPayload> | null | undefined,
+  myScope: string = getDeploymentServiceScope()
+): boolean {
+  if (!lock) return false;
+  if (!myScope) return true;
+  const lockScope = String(lock.serviceScope || '').trim();
+  return Boolean(lockScope) && lockScope === myScope;
 }
 
 async function readCloudLeaderLock(): Promise<WaLeaderLockPayload | null> {
@@ -8074,6 +8147,10 @@ async function yieldToNewerDeployLeader(reason: string, newerEpoch?: number): Pr
     try {
       // 1. Cancelar timers diferidos para ejecutar el flush definitivo ahora mismo
       flushSentProtoCacheNow();
+      for (const [phone, timer] of customerInactivityTimers) {
+        clearTimeout(timer);
+        customerInactivityTimers.delete(phone);
+      }
       for (const [id, timer] of authBackupTimers) {
         clearTimeout(timer);
         authBackupTimers.delete(id);
@@ -8133,6 +8210,7 @@ async function yieldToNewerDeployLeader(reason: string, newerEpoch?: number): Pr
           leaderId: targetLeader,
           bootEpoch: targetEpoch,
           phase: 'active',
+          serviceScope: currentLock?.serviceScope || getDeploymentServiceScope() || undefined,
           yieldedBy: MY_INSTANCE_ID,
           yieldedForEpoch: targetEpoch,
           yieldedAt: Date.now(),
@@ -8173,15 +8251,18 @@ async function claimLeaderLeaseAndAwaitOldContainerHandoff(): Promise<void> {
     const hadRecentOldContainer =
       (prevLock &&
         prevLock.leaderId !== MY_INSTANCE_ID &&
+        isSameDeploymentServiceLock(prevLock) &&
         Date.now() - (new Date(prevLock.updatedAt || 0).getTime() || 0) < 90_000) ||
       (prevHeartbeatMs > 0 && Date.now() - prevHeartbeatMs < 75_000);
 
+    const myScope = getDeploymentServiceScope();
     await insertOrUpdateSupabaseCodigo(
       'WALOCK-leader',
       JSON.stringify({
         leaderId: MY_INSTANCE_ID,
         bootEpoch: MY_BOOT_EPOCH,
         phase: hadRecentOldContainer ? 'claiming' : 'active',
+        ...(myScope ? { serviceScope: myScope } : {}),
         updatedAt: new Date().toISOString()
       } satisfies WaLeaderLockPayload)
     );
@@ -8196,7 +8277,12 @@ async function claimLeaderLeaseAndAwaitOldContainerHandoff(): Promise<void> {
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 450));
       const lockNow = await readCloudLeaderLock();
-      if (lockNow && lockNow.bootEpoch > MY_BOOT_EPOCH && lockNow.leaderId !== MY_INSTANCE_ID) {
+      if (
+        lockNow &&
+        lockNow.bootEpoch > MY_BOOT_EPOCH &&
+        lockNow.leaderId !== MY_INSTANCE_ID &&
+        isSameDeploymentServiceLock(lockNow)
+      ) {
         // Otro deploy aún más nuevo apareció mientras arrancábamos
         await yieldToNewerDeployLeader('superseded_during_boot', lockNow.bootEpoch);
         return;
@@ -8213,6 +8299,7 @@ async function claimLeaderLeaseAndAwaitOldContainerHandoff(): Promise<void> {
         leaderId: MY_INSTANCE_ID,
         bootEpoch: MY_BOOT_EPOCH,
         phase: 'active',
+        ...(myScope ? { serviceScope: myScope } : {}),
         updatedAt: new Date().toISOString()
       } satisfies WaLeaderLockPayload)
     );
@@ -8227,7 +8314,12 @@ function startNasaLeaderWatcher() {
     if (!isProductionRuntime() || isYieldingToNewerDeploy()) return;
     try {
       const lock = await readCloudLeaderLock();
-      if (lock && lock.leaderId !== MY_INSTANCE_ID && lock.bootEpoch > MY_BOOT_EPOCH) {
+      if (
+        lock &&
+        lock.leaderId !== MY_INSTANCE_ID &&
+        lock.bootEpoch > MY_BOOT_EPOCH &&
+        isSameDeploymentServiceLock(lock)
+      ) {
         await yieldToNewerDeployLeader(`newer_leader_${lock.leaderId}`, lock.bootEpoch);
       }
     } catch {}
@@ -8238,16 +8330,18 @@ function startNasaLeaderWatcher() {
 function startNasaHeartbeat() {
   if ((globalThis as any).__noeluxNasaHeartbeat) return;
   (globalThis as any).__noeluxNasaHeartbeat = setInterval(async () => {
-    if (isYieldingToNewerDeploy()) return;
+    if (!isProductionRuntime() || isYieldingToNewerDeploy()) return;
     try {
       const connectedSessions = Array.from(sessionsMap.values()).filter(s => s.status === 'connected');
-      if (connectedSessions.length === 0) return;
+      if (connectedSessions.length === 0 && sessionsMap.size === 0) return;
+      const myScope = getDeploymentServiceScope();
       const heartbeat = {
         alive: true,
         instanceId: MY_INSTANCE_ID,
         bootEpoch: MY_BOOT_EPOCH,
         pid: process.pid,
         persistentVolume: PERSISTENT_PATHS.isPersistentVolume,
+        ...(myScope ? { serviceScope: myScope } : {}),
         timestamp: new Date().toISOString(),
         sessions: connectedSessions.map(s => ({ id: s.id, phone: s.connectedPhone })),
         runtime: isProductionRuntime() ? 'production' : 'dev'
@@ -8286,8 +8380,65 @@ export function hasValidLinkedCredsOnDisk(authDir: string): boolean {
   }
 }
 
+export function getDeploymentServiceScope(env: NodeJS.ProcessEnv = process.env): string {
+  const railwayServiceId = String(env.RAILWAY_SERVICE_ID || '').trim();
+  const railwayDomain = String(env.RAILWAY_PUBLIC_DOMAIN || '').trim();
+  const railwayEnv = String(env.RAILWAY_ENVIRONMENT_NAME || env.RAILWAY_ENVIRONMENT || '').trim();
+  if (railwayServiceId || railwayDomain) {
+    return `${railwayServiceId}|${railwayDomain}|${railwayEnv}`;
+  }
+  return '';
+}
+
+export function evaluateProductionRuntime(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: string = process.platform,
+  hasOpenRouterKey: boolean = Boolean(getOpenRouterApiKey())
+): boolean {
+  if (env.DISABLE_WA_AUTOCONNECT === 'true') return false;
+  if (env.VITEST || env.NODE_TEST_CONTEXT || env.JEST_WORKER_ID) {
+    return false;
+  }
+
+  const railwayEnvName = String(
+    env.RAILWAY_ENVIRONMENT_NAME || env.RAILWAY_ENVIRONMENT || ''
+  )
+    .trim()
+    .toLowerCase();
+  // Jamás permitir que despliegues PR/preview/staging/dev secuestren WALOCK-leader de producción
+  if (
+    (/(^|[-_])(pr|preview|staging|dev|development|test|sandbox)([-_]|$)/i.test(railwayEnvName) &&
+      env.ALLOW_NON_PROD_WA !== 'true') ||
+    env.VERCEL_ENV === 'preview'
+  ) {
+    return false;
+  }
+
+  if (env.ALLOW_LOCAL_WA_PRODUCTION === 'true') {
+    return true;
+  }
+
+  const hasRailwayProdContext = Boolean(
+    env.RAILWAY_ENVIRONMENT ||
+      env.RAILWAY_ENVIRONMENT_NAME ||
+      env.RAILWAY_PROJECT_ID ||
+      env.RAILWAY_SERVICE_ID ||
+      env.RAILWAY_PUBLIC_DOMAIN
+  );
+  if (hasRailwayProdContext) {
+    return true;
+  }
+
+  // En PC locales (Windows/macOS) o contenedores sin contexto de producción, no usurpar producción
+  if (platform === 'win32' || env.NODE_ENV !== 'production') {
+    return false;
+  }
+
+  return Boolean(env.PORT === '8080' && hasOpenRouterKey);
+}
+
 function isProductionRuntime(): boolean {
-  return process.env.DISABLE_WA_AUTOCONNECT !== 'true';
+  return evaluateProductionRuntime();
 }
 
 // Escanea y limpia únicamente archivos corruptos de 0 bytes o JSON inválido.
@@ -9076,7 +9227,7 @@ export async function connectWhatsAppEngine(
     const mySeq = ++session.socketSeq;
 
     if (session.status !== 'syncing') {
-      session.status = 'connecting';
+      session.status = session.qrDataUrl && !forceNewQr ? 'qr_ready' : 'connecting';
     }
     session.lastError = null;
     scheduleCloudStateSync(false);
@@ -9091,11 +9242,17 @@ export async function connectWhatsAppEngine(
 
     let version: [number, number, number] = [2, 3000, 1052855845];
     try {
-      const waWeb = await fetchLatestWaWebVersion({});
+      const waWeb = await Promise.race([
+        fetchLatestWaWebVersion({}),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 4500))
+      ]);
       if (waWeb?.version && Array.isArray(waWeb.version)) {
         version = waWeb.version as [number, number, number];
       } else {
-        const latest = await fetchLatestBaileysVersion();
+        const latest = await Promise.race([
+          fetchLatestBaileysVersion(),
+          new Promise<null>(resolve => setTimeout(() => resolve(null), 4500))
+        ]);
         if (latest?.version) version = latest.version;
       }
     } catch (e) { }
@@ -9595,7 +9752,12 @@ export async function connectWhatsAppEngine(
         // Si otro contenedor más nuevo de Railway reclamó WALOCK-leader, este contenedor saliente JAMÁS debe reconectar ni borrar llaves.
         if (statusCode === 440 || statusCode === 401 || statusCode === DisconnectReason.loggedOut) {
           const cloudLock = await readCloudLeaderLock();
-          if (cloudLock && cloudLock.leaderId !== MY_INSTANCE_ID && cloudLock.bootEpoch > MY_BOOT_EPOCH) {
+          if (
+            cloudLock &&
+            cloudLock.leaderId !== MY_INSTANCE_ID &&
+            cloudLock.bootEpoch > MY_BOOT_EPOCH &&
+            isSameDeploymentServiceLock(cloudLock)
+          ) {
             console.log(
               `[NASA Handoff] 🛑 Desconexión ${statusCode} causada por nuevo deploy (${cloudLock.leaderId}). Cediendo sin reconectar.`
             );
@@ -9605,13 +9767,19 @@ export async function connectWhatsAppEngine(
         }
 
         if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
-          session.status = 'syncing';
-          session.qrDataUrl = null;
+          session.status = hasValidLinkedCredsOnDisk(session.authDir)
+            ? 'syncing'
+            : session.qrDataUrl
+              ? 'qr_ready'
+              : 'connecting';
+          if (hasValidLinkedCredsOnDisk(session.authDir)) {
+            session.qrDataUrl = null;
+          }
           scheduleCloudStateSync(true);
           setTimeout(() => {
             if ((globalThis as any).__noeluxEngineGen !== myEngineGen || isYieldingToNewerDeploy()) return;
             connectWhatsAppEngine(false, session.id).catch(() => { });
-          }, 150);
+          }, 250);
           return;
         }
 
@@ -9655,18 +9823,32 @@ export async function connectWhatsAppEngine(
           session.pairingCode = null;
           session.connectedPhone = null;
           session.connectedName = null;
+          session.connectedLid = null;
+          session.lastError =
+            'Sesión desvinculada desde WhatsApp. Escaneá el nuevo QR o vinculá con código para reconectar.';
+          recordIncomingDiagnostic({
+            remoteJid: session.id,
+            hasMessage: false,
+            status: `confirmed_logout_cleared:${statusCode}`
+          });
           scheduleCloudStateSync(true);
           setTimeout(() => {
             if ((globalThis as any).__noeluxEngineGen !== myEngineGen || isYieldingToNewerDeploy()) return;
             connectWhatsAppEngine(false, session.id).catch(() => { });
-          }, 500);
+          }, 900);
         } else {
           if (statusCode === 440 && !isProductionRuntime()) {
             skipDevAutoConnectBecauseProdActive = true;
             session.status = 'disconnected';
             return;
           }
-          session.status = state.creds?.me?.id ? 'syncing' : 'connecting';
+          // Evitar parpadeo spinner <-> QR: si no hay sesión vinculada pero ya existe un QR visible,
+          // conservar estado 'qr_ready' mientras Baileys refresca el socket en segundo plano.
+          session.status = state.creds?.me?.id
+            ? 'syncing'
+            : session.qrDataUrl
+              ? 'qr_ready'
+              : 'connecting';
           scheduleCloudStateSync(false);
           const delayMs = statusCode === 440 ? 5500 : isPotentialLogout ? 3000 : 1200;
           setTimeout(() => {

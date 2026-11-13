@@ -13,7 +13,7 @@ import {
 interface WaSessionSummary {
   id: string;
   label: string;
-  status: 'disconnected' | 'connecting' | 'qr_ready' | 'connected';
+  status: 'disconnected' | 'connecting' | 'qr_ready' | 'syncing' | 'connected';
   connectedPhone?: string | null;
   connectedName?: string | null;
   qrDataUrl?: string | null;
@@ -232,7 +232,11 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
                   >
                     {isConnected
                       ? `Conectado · ${sess.connectedPhone || 'Activo'}`
-                      : 'Sin vincular'}
+                      : sess.status === 'syncing'
+                        ? 'Sincronizando...'
+                        : sess.status === 'qr_ready'
+                          ? 'Listo para vincular'
+                          : 'Sin vincular'}
                   </div>
                 </button>
               );
