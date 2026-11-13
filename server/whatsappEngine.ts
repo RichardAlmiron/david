@@ -5246,7 +5246,7 @@ export async function triggerAiConfirmationForOrder(
   if (!forceRestart && hasStarted) {
     const currentStep = getOrderConvStep(cleanPhone, matchedOrder);
     console.log(
-      `[AI Context Guard] Conversación de ${cleanPhone} ya va por Paso ${currentStep}/5 (sin mensaje pendiente del cliente). Se evita autodisparo/reinicio al Paso #1.`
+      `[AI Context Guard] Conversación de ${cleanPhone} ya va por ${currentStep >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'} (sin mensaje pendiente del cliente). Se evita autodisparo/reinicio.`
     );
     return;
   }
@@ -5548,8 +5548,8 @@ export async function sendWhatsAppVoiceCallTurn(
       if (anySent) {
         const senderLabel =
           channel === 'audio' && tts.audioBuffer
-            ? `🎤 ${tts.voiceProfile.name} · Nota de Voz (Paso ${convStep}/5)`
-            : `🤖 Agente IA (Paso ${convStep}/5)`;
+            ? `🎤 ${tts.voiceProfile.name} · Nota de Voz (${convStep >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'})`
+            : `🤖 Agente IA (${convStep >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'})`;
 
         const savedMsg = appendChatMessage(cleanPhone, {
           id: msgId,
@@ -5665,8 +5665,8 @@ export async function sendWhatsAppVoiceCallTurn(
 
   const senderLabel =
     channel === 'audio'
-      ? `🎤 Agente IA · Nota de Voz (Paso ${convStep}/5)`
-      : `🤖 Agente IA (Paso ${convStep}/5)`;
+      ? `🎤 Agente IA · Nota de Voz (${convStep >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'})`
+      : `🤖 Agente IA (${convStep >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'})`;
 
   const savedMsg = appendChatMessage(cleanPhone, {
     sender: 'ai',
@@ -10613,6 +10613,24 @@ export async function connectWhatsAppEngine(
           // IMPORTANTE: Jamás convertir una imagen sin texto (isImageWithoutCaption) en un mensaje falso de cliente,
           // ya que las imágenes generadas por el Agente (stage1_welcome / stage3_confirmed) no llevan caption.
 
+          let incomingImageUrl: string | undefined;
+          if (isAnyImageMsg && !isFromAdmin) {
+            try {
+              const imgBuf = (await downloadMediaMessage(msg, 'buffer', {})) as Buffer;
+              if (imgBuf && imgBuf.length > 0) {
+                const comDir = path.resolve(process.cwd(), 'public', 'assets', 'wa-commercials');
+                fs.mkdirSync(comDir, { recursive: true });
+                const imgFile = `client_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
+                fs.writeFileSync(path.join(comDir, imgFile), imgBuf);
+                incomingImageUrl = `/assets/wa-commercials/${imgFile}`;
+              }
+            } catch {}
+            if (!text) {
+              const cap = String(innerMsg?.imageMessage?.caption || '').trim();
+              text = cap ? `📷 ${cap}` : '📷 [Imagen enviada por el cliente]';
+            }
+          }
+
           if (isAudioMsg) {
             if (!isFromAdmin) {
               if (isBlockedPostConfirm) {
@@ -10721,7 +10739,8 @@ export async function connectWhatsAppEngine(
               sessionId: session.id,
               isVoiceCall: false,
               isAudioNote: isAudioMsg,
-              audioDataUrl: customerAudioDataUrl || undefined
+              audioDataUrl: customerAudioDataUrl || undefined,
+              ...(incomingImageUrl ? { imageUrl: incomingImageUrl } : {})
             });
 
             // Si el cliente ya agotó sus 3 mensajes post-confirmación ("Jaque Mate"), cortar para siempre sin gastar LLM ni TTS

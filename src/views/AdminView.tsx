@@ -1635,7 +1635,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     showToast(
       customText
         ? `🎤 Generando y enviando respuesta IA (${channelOverride === 'audio' ? 'Nota de Voz' : 'Texto'}) a ${order.nombre}...`
-        : `🤖 Verificando contexto (Paso ${order.convStep || 1}/5) para ${order.nombre}...`
+        : `🤖 Verificando contexto (${(order.convStep || 1) >= 5 || order.datosConfirmados ? 'Etapa 2/2' : 'Etapa 1/2'}) para ${order.nombre}...`
     );
 
     let handledLocal = false;
@@ -1666,7 +1666,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
           );
         } else if (!data.callRung && !customText) {
           showToast(
-            `ℹ️ La conversación con ${order.nombre} ya va por el Paso ${data.convStep || order.convStep || 1}/5 (sin mensaje nuevo del cliente pendiente).`
+            `ℹ️ La conversación con ${order.nombre} ya está en ${(data.convStep || order.convStep || 1) >= 5 || order.datosConfirmados ? 'Etapa 2/2 (Confirmado)' : 'Etapa 1/2'} (sin mensaje nuevo del cliente pendiente).`
           );
         } else {
           showToast(`🎤 Nota de Voz IA lista para ${order.nombre}`);
@@ -2088,8 +2088,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     } else {
       showToast(
         nextChannel === 'audio'
-          ? `🎤 Modo AUDIO IA activado para ${order.nombre} (contextualizado al Paso ${order.convStep || 1}/5, sin autodisparo).`
-          : `💬 Modo TEXTO IA activado para ${order.nombre} (contextualizado al Paso ${order.convStep || 1}/5, sin autodisparo).`
+          ? `🎤 Modo AUDIO IA activado para ${order.nombre} (${(order.convStep || 1) >= 5 || order.datosConfirmados ? 'Etapa 2/2' : 'Etapa 1/2'}, sin autodisparo).`
+          : `💬 Modo TEXTO IA activado para ${order.nombre} (${(order.convStep || 1) >= 5 || order.datosConfirmados ? 'Etapa 2/2' : 'Etapa 1/2'}, sin autodisparo).`
       );
     }
   };
@@ -4879,7 +4879,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   <li><strong>STT (Voz a Texto):</strong> Deepgram Nova-3 Español transcribe al instante los audios que envía el cliente.</li>
                   <li><strong>LLM (Cerebro IA):</strong> Deepgram Voice Agent (`open_ai / gpt-4o-mini` gestionado por Deepgram) razona cada paso sin depender de OpenRouter.</li>
                   <li><strong>TTS (Texto a Voz):</strong> Deepgram Aura-2 Español sintetiza notas de voz OGG/Opus nativas para WhatsApp.</li>
-                  <li><strong>Flujo de 5 Pasos:</strong> Saludo y disponibilidad → Nombre y Teléfono → Ciudad/Barrio/Calle en texto → Referencia de fachada de casa → Cierre y empaquetado.</li>
+                  <li><strong>Flujo Express de 2 Etapas:</strong> Etapa 1 (Saludo + Imagen del pedido esperando confirmación "CORRECTO") → Etapa 2 (Pedido confirmado y agradecimiento final).</li>
                 </ul>
               </div>
             </div>
@@ -5065,26 +5065,84 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               ref={chatScrollContainerRef}
               className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#09090b]"
             >
-              <div className="text-center flex flex-wrap items-center justify-center gap-2">
-                <span className="inline-block px-3.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/25">
-                  {modalAiMode === 'automatico'
-                    ? modalAiChannel === 'audio'
-                      ? '🎤 Modo Audio IA Activo: Responde en contexto según la etapa actual.'
-                      : '💬 Modo Texto IA Activo: Responde en contexto según la etapa actual.'
-                    : '👤 Modo "Yo Escribo" Activo: Vista de lectura/escritura manual (la IA no autodispara).'}
-                </span>
-                <span className="inline-block px-3 py-1.5 rounded-xl bg-zinc-900 text-zinc-300 text-[11px] font-bold border border-zinc-700">
-                  {activeAiOrder.datosConfirmados
-                    ? `✅ Confirmado (Paso ${activeAiOrder.convStep || 5}/5)`
-                    : `📍 Etapa actual: Paso ${activeAiOrder.convStep || 1}/5${liveChatMessages.length > 0 ? ` · ${liveChatMessages.length} msg` : ' · Sin mensajes'}`}
-                </span>
+              <div className="text-center flex flex-col items-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <span className="inline-block px-3.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/25">
+                    {modalAiMode === 'automatico'
+                      ? modalAiChannel === 'audio'
+                        ? '🎤 Modo Audio IA Activo: Responde en contexto según la etapa actual.'
+                        : '💬 Modo Texto IA Activo: Responde en contexto según la etapa actual.'
+                      : '👤 Modo "Yo Escribo" Activo: Vista de lectura/escritura manual (la IA no autodispara).'}
+                  </span>
+                  <div className="inline-flex items-center gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-700 text-[11px] font-bold">
+                    <span
+                      className={`px-2.5 py-1 rounded-lg ${
+                        !activeAiOrder.datosConfirmados && (activeAiOrder.convStep || 1) < 5
+                          ? 'bg-amber-400 text-black'
+                          : 'text-zinc-400'
+                      }`}
+                    >
+                      Etapa 1/2 · Saludo + Imagen
+                    </span>
+                    <span
+                      className={`px-2.5 py-1 rounded-lg ${
+                        activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5
+                          ? 'bg-emerald-500 text-black'
+                          : 'text-zinc-400'
+                      }`}
+                    >
+                      Etapa 2/2 · Confirmado
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isEtapa2 = Boolean(activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5);
+                        if (isEtapa2) {
+                          handleSendOrderAudioNote(
+                            activeAiOrder,
+                            `Excelente ${activeAiOrder.nombre?.split(' ')[0] || ''}, tu pedido ya está 100% confirmado para entrega. ¡Muchas gracias por tu compra!`,
+                            modalAiChannel
+                          );
+                        } else {
+                          fetch('/api/whatsapp/call/start', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              phone: formatWaPhone(activeAiOrder.celular),
+                              orderId: activeAiOrder.reservaid,
+                              resetCall: true,
+                              channel: modalAiChannel
+                            })
+                          })
+                            .then(r => r.json())
+                            .then(d => {
+                              if (Array.isArray(d.messages)) setLiveChatMessages(d.messages);
+                              showToast(`🔄 Etapa 1/2 re-disparada manualmente para ${activeAiOrder.nombre}.`);
+                            })
+                            .catch(() => {});
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 cursor-pointer ml-1"
+                      title="Re-enviar manualmente el mensaje de la etapa actual"
+                    >
+                      🔄 Re-disparar etapa
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  {activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5
+                    ? '✅ Etapa 2/2: El cliente ya confirmó su pedido y recibió el agradecimiento final.'
+                    : (activeAiOrder.convStep || 1) >= 2 || activeAiOrder.ultimoMensajeIA
+                      ? '⏳ Etapa 1/2: Audio de saludo e imagen enviados; esperando que el cliente responda CORRECTO.'
+                      : '🆕 Sin iniciar: Todavía no se envió la Etapa 1/2 a este cliente.'}
+                </p>
               </div>
 
               {liveChatMessages.length === 0 ? (
                 activeAiOrder.ultimoMensajeIA || activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 2 ? (
                   <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800 max-w-xl mx-auto space-y-2 mt-4 text-center">
                     <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-                      Conversación ya iniciada con {activeAiOrder.nombre} (Paso {activeAiOrder.convStep || 2}/5)
+                      Conversación ya iniciada con {activeAiOrder.nombre} ({activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'})
                     </div>
                     <p className="text-xs text-zinc-400 leading-relaxed">
                       El agente ya registró avance en este pedido y no reiniciará desde el saludo #1. Podés escribir un mensaje manual abajo si necesitás contactarlo.
@@ -5211,7 +5269,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 !activeAiOrder.datosConfirmados && (
                   <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-xs">
                     <span className="text-emerald-200 font-medium">
-                      📩 El cliente respondió último (Paso {activeAiOrder.convStep || 3}/5). Podés responderle en contexto sin reiniciar desde cero:
+                      📩 El cliente respondió último ({activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'}). Podés responderle en contexto sin reiniciar desde cero:
                     </span>
                     <button
                       type="button"
