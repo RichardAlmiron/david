@@ -7,8 +7,6 @@ import type {
   ProductWaStageCommercialMap
 } from '../types';
 
-export const VIP_PREPAYMENT_DISCOUNT_GS = 30000;
-
 export interface WaCommercialStageDefinition {
   id: WaCommercialStageId;
   stepBadge: string;
@@ -68,9 +66,6 @@ export interface ResolvedCommercialPackAndPrice {
   normalStrikeFormatted: string;
   savingsGs: number;
   savingsFormatted: string;
-  vipDiscountGs: number;
-  vipPriceGs: number;
-  vipPriceFormatted: string;
   productDisplayName: string;
 }
 
@@ -179,8 +174,6 @@ export function resolveOrderCommercialPackAndPrice(
     catalog.normalUnit * unitCount
   );
   const savingsGs = Math.max(0, normalStrikePriceGs - officialPriceGs);
-  const vipDiscountGs = VIP_PREPAYMENT_DISCOUNT_GS;
-  const vipPriceGs = Math.max(50000, officialPriceGs - vipDiscountGs);
 
   return {
     unitCount,
@@ -196,9 +189,6 @@ export function resolveOrderCommercialPackAndPrice(
     normalStrikeFormatted: formatGuaraniesCompact(normalStrikePriceGs),
     savingsGs,
     savingsFormatted: formatGuaraniesCompact(savingsGs),
-    vipDiscountGs,
-    vipPriceGs,
-    vipPriceFormatted: formatGuaraniesCompact(vipPriceGs),
     productDisplayName: cleanProductName
   };
 }
@@ -216,9 +206,6 @@ export function isSavedCommercialAssetExactMatch(
   if (asset.stageId !== stageId) return false;
   if (Number(asset.packQty) !== resolved.unitCount) return false;
   if (Number(asset.framedPriceGs) !== resolved.officialPriceGs) return false;
-  if (stageId === 'stage4_vip_upsell' && Number(asset.vipPriceGs) !== resolved.vipPriceGs) {
-    return false;
-  }
   return true;
 }
 
@@ -248,7 +235,6 @@ export function buildStageCommercialCopyAndPrompt(
     packTitleUpper,
     officialPriceFormatted,
     normalStrikeFormatted,
-    vipPriceFormatted,
     productDisplayName
   } = resolved;
 
@@ -295,37 +281,20 @@ export function buildStageCommercialCopyAndPrompt(
     };
   }
 
-  if (stageId === 'stage3_confirmed') {
-    return {
-      stageId,
-      packKey,
-      packQty: unitCount,
-      topRibbon: `ORDEN CONFIRMADA · PASA A EMPAQUETADO`,
-      headline: `${productDisplayName} Confirmado`,
-      subheadline: `Preparando ${unitCount === 1 ? 'tu unidad reservada' : `tus ${unitCount} unidades reservadas`} para salida con courier`,
-      priceFrameLabel: `TOTAL CONFIRMADO · ${packTitleUpper}`,
-      framedPrimaryPriceText: officialPriceFormatted,
-      framedSecondaryPriceText: `Entrega 48 a 72 hs · Cobro en puerta`,
-      ctaBannerText: 'ORDEN SELLADA · PAGÁS AL RECIBIR EN TU DOMICILIO',
-      whatsappCaption: '',
-      openRouterPrompt: `Premium e-commerce fulfillment station close-up featuring ${visualUnitsPhraseEn} of "${productDisplayName}" (${cleanDesc}) undergoing final quality verification next to a neat parcel box on a sleek dark slate counter with subtle emerald ambient lighting, photorealistic 8k commercial photography, no text, no numbers, no watermarks.`
-    };
-  }
-
-  // stage4_vip_upsell
+  // stage3_confirmed
   return {
     stageId,
     packKey,
     packQty: unitCount,
-    topRibbon: `PROMO PAGO ADELANTADO · AHORRÁ Gs. 30.000 HOY`,
-    headline: `Descuento Directo en tu ${packTitleUpper}`,
-    subheadline: `Abonando ahora por transferencia bancaria`,
-    priceFrameLabel: `${packTitleUpper} CON DESCUENTO -Gs. 30.000`,
-    framedPrimaryPriceText: vipPriceFormatted,
-    framedSecondaryPriceText: `Contra entrega ${officialPriceFormatted} · Ahorrás Gs. 30.000`,
-    ctaBannerText: 'DECÍ "QUIERO PARTICIPAR" Y PAGÁ Gs. 30.000 MENOS',
+    topRibbon: `ORDEN CONFIRMADA · PASA A EMPAQUETADO`,
+    headline: `${productDisplayName} Confirmado`,
+    subheadline: `Preparando ${unitCount === 1 ? 'tu unidad reservada' : `tus ${unitCount} unidades reservadas`} para salida con courier`,
+    priceFrameLabel: `TOTAL CONFIRMADO · ${packTitleUpper}`,
+    framedPrimaryPriceText: officialPriceFormatted,
+    framedSecondaryPriceText: `Entrega 48 a 72 hs · Cobro en puerta`,
+    ctaBannerText: 'ORDEN SELLADA · PAGÁS AL RECIBIR EN TU DOMICILIO',
     whatsappCaption: '',
-    openRouterPrompt: `Luxury dark obsidian and brushed gold spotlight commercial product showcase featuring ${visualUnitsPhraseEn} of "${productDisplayName}" (${cleanDesc}) on a prestige stone pedestal with warm golden bokeh particles, high-converting VIP offer aesthetic, 8k commercial photography, no text, no numbers, no watermarks.`
+    openRouterPrompt: `Premium e-commerce fulfillment station close-up featuring ${visualUnitsPhraseEn} of "${productDisplayName}" (${cleanDesc}) undergoing final quality verification next to a neat parcel box on a sleek dark slate counter with subtle emerald ambient lighting, photorealistic 8k commercial photography, no text, no numbers, no watermarks.`
   };
 }
 
@@ -334,7 +303,6 @@ export function buildDynamicCommercialCardUrl(params: {
   stageId: WaCommercialStageId;
   packQty: number;
   priceGs: number;
-  vipPriceGs?: number;
   voiceGender?: 'Femenina' | 'Masculina';
   cacheBust?: string | number;
 }): string {
@@ -344,9 +312,6 @@ export function buildDynamicCommercialCardUrl(params: {
     pack: String(Math.max(1, Math.round(params.packQty || 1))),
     price: String(Math.max(0, Math.round(params.priceGs || 0)))
   });
-  if (params.vipPriceGs) {
-    qs.set('vip', String(Math.max(0, Math.round(params.vipPriceGs))));
-  }
   if (params.voiceGender) {
     qs.set('gender', params.voiceGender);
   }
@@ -396,8 +361,7 @@ export function buildFullProductCommercialMatrixSpecs(
               productId: product.id || 'default',
               stageId: stage.id,
               packQty: pack.packQty,
-              priceGs: resolved.officialPriceGs,
-              vipPriceGs: resolved.vipPriceGs
+              priceGs: resolved.officialPriceGs
             });
 
       items.push({

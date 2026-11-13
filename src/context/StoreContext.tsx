@@ -22,6 +22,11 @@ import {
   captureUrlAttributionTouch,
   getOrderAttributionSnapshot
 } from '../utils/metaPixelEngine';
+import {
+  inferParaguayDepartmentFromCity,
+  normalizeOrderGpsFields,
+  parseFiniteCoord
+} from '../utils/paraguayGeo';
 
 interface StoreContextType {
   config: AppConfig;
@@ -169,7 +174,6 @@ const DEFAULT_PRODUCTS: ProductPage[] = [
           packQty: 1,
           imageUrl: '/assets/wa-commercials/wacom_prod-noelux-01_stage1_welcome_p1_189000_640416dc7d87c5.jpg',
           framedPriceGs: 189000,
-          vipPriceGs: 159000,
           normalStrikePriceGs: 249000,
           headline: 'Noelux™ Proyector Navideño 12 Diseños',
           ctaText: 'DECÍ O ESCRIBÍ "CORRECTO" PARA CONFIRMAR',
@@ -183,13 +187,12 @@ const DEFAULT_PRODUCTS: ProductPage[] = [
           packQty: 2,
           imageUrl: '/assets/wa-commercials/wacom_prod-noelux-01_stage1_welcome_p2_358000_1019018c734eec.jpg',
           framedPriceGs: 358000,
-          vipPriceGs: 328000,
           normalStrikePriceGs: 498000,
           headline: 'Noelux™ Proyector Navideño 12 Diseños',
           ctaText: 'DECÍ O ESCRIBÍ "CORRECTO" PARA CONFIRMAR',
           whatsappCaption: '',
           sourceType: 'studio_framed',
-          generatedAt: '2026-11-11T01:20:00.000Z'
+          generatedAt: '2026-11-13T01:20:00.000Z'
         },
         pack3: {
           stageId: 'stage1_welcome',
@@ -197,7 +200,6 @@ const DEFAULT_PRODUCTS: ProductPage[] = [
           packQty: 3,
           imageUrl: '/assets/wa-commercials/wacom_prod-noelux-01_stage1_welcome_p3_507000_9e7fb0bf76223b.jpg',
           framedPriceGs: 507000,
-          vipPriceGs: 477000,
           normalStrikePriceGs: 747000,
           headline: 'Noelux™ Proyector Navideño 12 Diseños',
           ctaText: 'DECÍ O ESCRIBÍ "CORRECTO" PARA CONFIRMAR',
@@ -226,9 +228,8 @@ function normalizeSingleStageCommercials(
     return seedMatrix;
   }
   const anyRaw = rawMatrix as Record<string, any>;
-  const hasLegacyStages = Boolean(anyRaw.stage2_warning || anyRaw.stage3_confirmed || anyRaw.stage4_vip_upsell);
-  const hasLegacy50kDiscount = rawMatrix.stage1_welcome?.pack1?.vipPriceGs === 139000;
-  if ((hasLegacyStages || hasLegacy50kDiscount) && seedMatrix?.stage1_welcome) {
+  const hasLegacyStages = Boolean(anyRaw.stage2_warning || anyRaw.stage3_confirmed || anyRaw['stage4_vip_upsell']);
+  if (hasLegacyStages && seedMatrix?.stage1_welcome) {
     return seedMatrix;
   }
   return {
@@ -1185,7 +1186,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       wa_vendedor: orderObj.waVendedor || null,
       nombre: orderObj.nombre,
       celular: orderObj.celular,
-      departamento: orderObj.departamento || '',
+      departamento: inferParaguayDepartmentFromCity(orderObj.ciudad || '', orderObj.departamento || ''),
       ciudad: orderObj.ciudad || '',
       direccion: orderObj.direccion || '',
       detalle: orderObj.detalle || 'Efectivo al recibir',
@@ -1194,8 +1195,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ref_code: orderObj.ref_code || null,
       estado: orderObj.estado || 'reservado',
       tipo_vivienda: orderObj.tipoVivienda || 'casa',
-      gps_lat: typeof orderObj.gpsLat === 'number' ? orderObj.gpsLat : null,
-      gps_lng: typeof orderObj.gpsLng === 'number' ? orderObj.gpsLng : null,
+      gps_lat: parseFiniteCoord(orderObj.gpsLat),
+      gps_lng: parseFiniteCoord(orderObj.gpsLng),
       gps_link: orderObj.gpsLink || null,
       gps_confirmado: Boolean(orderObj.gpsConfirmado),
       referencia_casa: orderObj.referenciaCasa || null,
@@ -1467,7 +1468,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             waVendedor: row.wa_vendedor || snap?.waVendedor || '',
             nombre: row.nombre || snap?.nombre || 'Cliente',
             celular: row.celular || snap?.celular || '',
-            departamento: row.departamento || snap?.departamento || '',
+            departamento: inferParaguayDepartmentFromCity(
+              row.ciudad || snap?.ciudad || '',
+              row.departamento || snap?.departamento || ''
+            ),
             ciudad: row.ciudad || snap?.ciudad || '',
             direccion: row.direccion || snap?.direccion || '',
             detalle: row.detalle || snap?.detalle || 'Efectivo al recibir',
@@ -1477,10 +1481,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             estado: (row.estado || snap?.estado || 'reservado') as OrderStatus,
             acredita: row.acredita !== false,
             tipoVivienda: (row.tipo_vivienda || snap?.tipoVivienda || 'casa') as any,
-            ...(typeof row.gps_lat === 'number' ? { gpsLat: row.gps_lat } : {}),
-            ...(typeof row.gps_lng === 'number' ? { gpsLng: row.gps_lng } : {}),
-            ...(row.gps_link ? { gpsLink: row.gps_link } : {}),
-            gpsConfirmado: Boolean(row.gps_confirmado ?? snap?.gpsConfirmado),
+            ...normalizeOrderGpsFields(
+              row,
+              row.dispositivo && typeof row.dispositivo === 'object' ? row.dispositivo : null,
+              snap,
+              snap?.comparativaDatos
+            ),
             referenciaCasa: row.referencia_casa || snap?.referenciaCasa || '',
             modoIA: (row.modo_ia || snap?.modoIA || 'automatico') as any,
             convStep: Number(row.conv_step || snap?.convStep || 1),

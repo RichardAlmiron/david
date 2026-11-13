@@ -51,7 +51,6 @@ import {
   restoreWaSessionsFromVaultBundle,
   querySupabaseCodigos,
   dispatchStageCommercialForOrderIfNeeded,
-  approveOrderPrepaymentAndNotifyCustomer,
   ensureBootCloudRestoreCompleted,
   pollCloudCommandsAndOrders,
   getPersistentDataPaths,
@@ -634,7 +633,7 @@ function registerApiServerMiddlewares(server: any) {
 
         // Auto-reparación si el disco efímero se reinició: wacom_<prodSlug>_<stage>_p<pack>_<price>_<hash>.jpg
         const parsedMatch = cleanFileName.match(
-          /^wacom_(.+)_(stage1_welcome|stage2_warning|stage3_confirmed|stage4_vip_upsell)_p([123])_(\d+)_[a-f0-9]+\.jpg$/i
+          /^wacom_(.+)_(stage1_welcome|stage2_warning|stage3_confirmed)_p([123])_(\d+)_[a-f0-9]+\.jpg$/i
         );
         if (parsedMatch) {
           const [, prodSlug, stageIdRaw, packDigits, priceDigits] = parsedMatch;
@@ -663,8 +662,7 @@ function registerApiServerMiddlewares(server: any) {
           const stageId = stageIdRaw as
             | 'stage1_welcome'
             | 'stage2_warning'
-            | 'stage3_confirmed'
-            | 'stage4_vip_upsell';
+            | 'stage3_confirmed';
           const prevAiSceneUrl =
             matchedProd?.waStageCommercials?.[stageId]?.[packQtyToKey(packQty)]?.aiSceneUrl;
 
@@ -1663,43 +1661,6 @@ function registerApiServerMiddlewares(server: any) {
             return;
           }
 
-          // POST /api/whatsapp/approve-prepayment (Botón 1-Clic "Aprobar Pago Adelantado" en Tarjeta de Pedido -> Audio -Gs. 30.000)
-          if (req.method === 'POST' && url === '/api/whatsapp/approve-prepayment') {
-            let body = '';
-            req.on('data', chunk => body += chunk);
-            req.on('end', async () => {
-              try {
-                const { orderId, phone, orderSnapshot } = JSON.parse(body || '{}');
-                if (!orderId && !phone) {
-                  res.statusCode = 400;
-                  res.end(JSON.stringify({ success: false, error: 'Falta orderId o teléfono' }));
-                  return;
-                }
-                const result = await approveOrderPrepaymentAndNotifyCustomer(
-                  String(orderId || ''),
-                  phone ? String(phone) : undefined,
-                  orderSnapshot
-                );
-                if (!result.success) {
-                  res.statusCode = 404;
-                  res.end(JSON.stringify(result));
-                  return;
-                }
-                const cleanPhone = normalizeWaPhone(
-                  phone || result.order?.celular || result.order?.telefono || ''
-                );
-                res.end(JSON.stringify({
-                  ...result,
-                  messages: cleanPhone ? getChatHistory(cleanPhone).messages : []
-                }));
-              } catch (err: any) {
-                res.statusCode = 500;
-                res.end(JSON.stringify({ success: false, error: err?.message }));
-              }
-            });
-            return;
-          }
-
           // POST /api/whatsapp/automation-settings (Interruptores y Selección de Canal: Audio o Texto + Voz)
           if (req.method === 'POST' && url === '/api/whatsapp/automation-settings') {
             let body = '';
@@ -1772,15 +1733,13 @@ function registerApiServerMiddlewares(server: any) {
                 const validStages: WaCommercialStageId[] = [
                   'stage1_welcome',
                   'stage2_warning',
-                  'stage3_confirmed',
-                  'stage4_vip_upsell'
+                  'stage3_confirmed'
                 ];
                 const stageId: WaCommercialStageId = validStages.includes(rawStage as WaCommercialStageId)
                   ? (rawStage as WaCommercialStageId)
                   : 'stage1_welcome';
                 const packQty = Math.max(1, Math.round(Number(params.get('pack') || '1') || 1));
                 const overridePriceGs = Number(params.get('price') || '0') || undefined;
-                const overrideVipPriceGs = Number(params.get('vip') || '0') || undefined;
                 const genderParam = params.get('gender');
                 const voiceGender: 'Femenina' | 'Masculina' | undefined =
                   genderParam === 'Masculina' || genderParam === 'Femenina'
@@ -1811,8 +1770,7 @@ function registerApiServerMiddlewares(server: any) {
                   orderOrPackQty: packQty,
                   aiSceneUrl: savedAsset?.aiSceneUrl,
                   voiceGender,
-                  overridePriceGs,
-                  overrideVipPriceGs
+                  overridePriceGs
                 });
 
                 res.statusCode = 200;
@@ -2001,7 +1959,6 @@ function registerApiServerMiddlewares(server: any) {
                   imageUrl: rendered.publicUrl,
                   aiSceneUrl,
                   framedPriceGs: rendered.resolved.officialPriceGs,
-                  vipPriceGs: rendered.resolved.vipPriceGs,
                   normalStrikePriceGs: rendered.resolved.normalStrikePriceGs,
                   headline: rendered.headline,
                   ctaText: rendered.ctaText,

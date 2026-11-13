@@ -1,3 +1,6 @@
+import type { OrderGpsFuente } from './utils/paraguayGeo';
+export type { OrderGpsFuente };
+
 export type OrderStatus = 'reservado' | 'en_camino' | 'entregado_pagado' | 'cancelado';
 
 export type DeliveryStatus =
@@ -58,8 +61,7 @@ export type AIMode = 'manual' | 'automatico';
 export type WaCommercialStageId =
   | 'stage1_welcome'
   | 'stage2_warning'
-  | 'stage3_confirmed'
-  | 'stage4_vip_upsell';
+  | 'stage3_confirmed';
 export type WaCommercialPackKey = 'pack1' | 'pack2' | 'pack3';
 
 export interface WaStageCommercialAsset {
@@ -69,7 +71,6 @@ export interface WaStageCommercialAsset {
   imageUrl: string;
   aiSceneUrl?: string;
   framedPriceGs: number;
-  vipPriceGs?: number;
   normalStrikePriceGs?: number;
   headline: string;
   ctaText: string;
@@ -179,22 +180,7 @@ export interface Order {
   archivado?: boolean;
   fechaArchivado?: string | null;
   actualizado_en?: string;
-  promoPagoAdelantadoStage?: string;
-  promoExplanationCount?: number;
-  pagoAdelantadoComprobanteRecibido?: boolean;
-  pagoAdelantadoVerificadoAdmin?: boolean;
-  pagoAdelantadoEstado?: 'pago_enviado_por_verificar' | 'pagado_adelantado_confirmado' | string;
-  pagoAdelantadoFecha?: string;
-  pagoAdelantadoFechaVerificado?: string;
-  pagoAdelantadoBanco?: string;
-  pagoAdelantadoAlias?: string;
-  pagoAdelantadoTitular?: string;
-  modalidadPagoElegida?: string;
-  montoOriginalSinDescuento?: number;
-  montoConDescuentoAdelantado?: number;
-  comprobantePagoDataUrl?: string;
-  comprobantePagoMimeType?: string;
-  comprobantePagoNombreArchivo?: string;
+  gpsFuente?: OrderGpsFuente;
   waCommercialSentStages?: Partial<Record<WaCommercialStageId, boolean>>;
   // Circuito A (Atribución e idempotencia — inmutable post-confirmación del formulario)
   visitorId?: string;

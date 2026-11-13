@@ -11,7 +11,6 @@ import type {
 import {
   resolveOrderCommercialPackAndPrice,
   buildStageCommercialCopyAndPrompt,
-  VIP_PREPAYMENT_DISCOUNT_GS,
   WA_COMMERCIAL_STAGES,
   WA_COMMERCIAL_PACKS,
   type MinimalProductPricingInput
@@ -24,7 +23,6 @@ const STUDIO_ASSETS = {
   advisorFemale: '/src/assets/images/wa_advisor_warning_female_1794350101678.jpg',
   advisorMale: '/src/assets/images/wa_advisor_warning_male_1794350102657.jpg',
   dispatchConfirmedBg: '/src/assets/images/wa_dispatch_confirmed_bg_1794350103800.jpg',
-  vipGoldPodiumBg: '/src/assets/images/wa_vip_gold_podium_bg_1794350104559.jpg',
   defaultProductFallback: '/assets/real/galeria-1.jpg'
 };
 
@@ -201,24 +199,6 @@ function getStageTheme(stageId: WaCommercialStageId): StageVisualTheme {
     };
   }
 
-  if (stageId === 'stage4_vip_upsell') {
-    return {
-      bgDark1: '#181305',
-      bgDark2: '#071711',
-      frameStroke: '#eab308',
-      ribbonBg: '#eab308',
-      ribbonText: '#09090b',
-      plaqueBorder: '#fde047',
-      priceBoxBg: '#eab308',
-      priceBoxText: '#09090b',
-      ctaBg1: '#16a34a',
-      ctaBg2: '#15803d',
-      ctaText: '#ffffff',
-      badgeFill: '#fde047',
-      badgeText: '#09090b'
-    };
-  }
-
   // stage1_welcome
   return {
     bgDark1: '#072a1e',
@@ -244,7 +224,6 @@ export interface RenderWaStageCommercialOptions {
   aiSceneUrl?: string;
   voiceGender?: 'Femenina' | 'Masculina';
   overridePriceGs?: number;
-  overrideVipPriceGs?: number;
 }
 
 export async function renderWaStageCommercialImage(
@@ -270,17 +249,11 @@ export async function renderWaStageCommercialImage(
     typeof options.overridePriceGs === 'number' && options.overridePriceGs > 0
       ? Math.round(options.overridePriceGs)
       : baseResolved.officialPriceGs;
-  const finalVipPriceGs =
-    typeof options.overrideVipPriceGs === 'number' && options.overrideVipPriceGs > 0
-      ? Math.round(options.overrideVipPriceGs)
-      : Math.max(50000, finalOfficialPriceGs - VIP_PREPAYMENT_DISCOUNT_GS);
 
   const resolved = {
     ...baseResolved,
     officialPriceGs: finalOfficialPriceGs,
-    officialPriceFormatted: `Gs. ${finalOfficialPriceGs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`,
-    vipPriceGs: finalVipPriceGs,
-    vipPriceFormatted: `Gs. ${finalVipPriceGs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
+    officialPriceFormatted: `Gs. ${finalOfficialPriceGs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
   };
 
   const copy = buildStageCommercialCopyAndPrompt(
@@ -306,7 +279,6 @@ export async function renderWaStageCommercialImage(
     stage: options.stageId,
     qty: resolved.unitCount,
     price: resolved.officialPriceGs,
-    vip: resolved.vipPriceGs,
     gender: effectiveGender
   });
   const hash = crypto.createHash('sha1').update(sigInput).digest('hex').slice(0, 14);
@@ -380,8 +352,6 @@ export async function renderWaStageCommercialImage(
     let backdropBuf: Buffer | null = null;
     if (options.stageId === 'stage3_confirmed') {
       backdropBuf = await loadImageBufferSafe(STUDIO_ASSETS.dispatchConfirmedBg);
-    } else if (options.stageId === 'stage4_vip_upsell') {
-      backdropBuf = await loadImageBufferSafe(STUDIO_ASSETS.vipGoldPodiumBg);
     }
 
     if (backdropBuf) {
@@ -646,17 +616,13 @@ export async function renderWaStageCommercialImage(
         <!-- Columna Derecha: Caja Enmarcada del Precio Oficial en Guaraníes -->
         <rect x="606" y="726" width="404" height="168" rx="20" fill="${theme.priceBoxBg}" stroke="#ffffff" stroke-width="3"/>
         <text x="808" y="766" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="20" font-weight="800" letter-spacing="1" fill="${theme.priceBoxText}">
-          ${options.stageId === 'stage4_vip_upsell' ? 'PRECIO VIP CON DESCUENTO' : 'PRECIO TOTAL ENMARCADO'}
+          PRECIO TOTAL ENMARCADO
         </text>
         <text x="808" y="832" text-anchor="middle" font-family="JetBrains Mono, DejaVu Sans Mono, monospace" font-size="${primaryPriceFontSize}" font-weight="800" fill="${theme.priceBoxText}">
           ${escapeXml(copy.framedPrimaryPriceText)}
         </text>
         <text x="808" y="874" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="20" font-weight="800" fill="${theme.priceBoxText}">
-          ${escapeXml(
-            options.stageId === 'stage4_vip_upsell'
-              ? `AHORRÁS Gs. 30.000 HOY`
-              : `${resolved.packTitleUpper} · ENVÍO GRATIS`
-          )}
+          ${escapeXml(`${resolved.packTitleUpper} · ENVÍO GRATIS`)}
         </text>
       </g>
 
@@ -719,7 +685,6 @@ export async function renderFullProductCommercialMatrixOnServer(
         imageUrl: rendered.publicUrl,
         aiSceneUrl: prevAsset?.aiSceneUrl,
         framedPriceGs: rendered.resolved.officialPriceGs,
-        vipPriceGs: rendered.resolved.vipPriceGs,
         normalStrikePriceGs: rendered.resolved.normalStrikePriceGs,
         headline: rendered.headline,
         ctaText: rendered.ctaText,

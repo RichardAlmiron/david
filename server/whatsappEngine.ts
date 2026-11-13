@@ -28,7 +28,6 @@ import crypto from 'crypto';
 import zlib from 'zlib';
 import type { WaCommercialStageId } from '../src/types';
 import {
-  VIP_PREPAYMENT_DISCOUNT_GS,
   resolvePostTurnCommercialStage,
   resolveOrderCommercialPackAndPrice,
   getCatalogPackPrices
@@ -37,9 +36,14 @@ import {
   formatGuaraniesSpeech,
   normalizeGuaraniesCurrencyForSpeech,
   buildExpressInitialAddressTextCard,
-  evaluateExpressOrderConfirmationInput,
-  evaluateExpressPromoDecisionInput
+  evaluateExpressOrderConfirmationInput
 } from '../src/utils/orderConfirmation';
+import {
+  inferParaguayDepartmentFromCity,
+  formatFullCityDepartment,
+  normalizeOrderGpsFields,
+  parseFiniteCoord
+} from '../src/utils/paraguayGeo';
 import {
   sanitizeConfigPayloadForSupabase
 } from './cloudinaryStore';
@@ -2666,7 +2670,7 @@ export async function syncOrderUpdateToCloud(order: any): Promise<boolean> {
       wa_vendedor: order.waVendedor || null,
       nombre: order.nombre || 'Cliente',
       celular: order.celular || '',
-      departamento: order.departamento || '',
+      departamento: inferParaguayDepartmentFromCity(order.ciudad || '', order.departamento || ''),
       ciudad: order.ciudad || '',
       direccion: order.direccion || '',
       detalle: order.detalle || 'Efectivo al recibir',
@@ -2675,8 +2679,8 @@ export async function syncOrderUpdateToCloud(order: any): Promise<boolean> {
       ref_code: order.ref_code || null,
       estado: order.estado || 'reservado',
       tipo_vivienda: order.tipoVivienda || 'casa',
-      gps_lat: typeof order.gpsLat === 'number' ? order.gpsLat : null,
-      gps_lng: typeof order.gpsLng === 'number' ? order.gpsLng : null,
+      gps_lat: parseFiniteCoord(order.gpsLat),
+      gps_lng: parseFiniteCoord(order.gpsLng),
       gps_link: order.gpsLink || null,
       gps_confirmado: Boolean(order.gpsConfirmado),
       referencia_casa: order.referenciaCasa || null,
@@ -2956,12 +2960,6 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
                 );
               }
             }
-          } else if (cmd.type === 'approve_prepayment' && cmd.orderId) {
-            await approveOrderPrepaymentAndNotifyCustomer(
-              String(cmd.orderId),
-              cmd.phone ? String(cmd.phone) : undefined,
-              cmd.orderSnapshot
-            );
           } else if (cmd.type === 'add_session') {
             await addWhatsAppSession(cmd.label, cmd.sessionId);
           } else if (cmd.type === 'remove_session' && cmd.sessionId) {
@@ -3187,7 +3185,10 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
                 waVendedor: pr.wa_vendedor || snap?.waVendedor || '',
                 nombre: pr.nombre || snap?.nombre || 'Cliente',
                 celular: pr.celular || snap?.celular || '',
-                departamento: pr.departamento || snap?.departamento || '',
+                departamento: inferParaguayDepartmentFromCity(
+                  pr.ciudad || snap?.ciudad || '',
+                  pr.departamento || snap?.departamento || ''
+                ),
                 ciudad: pr.ciudad || snap?.ciudad || '',
                 direccion: pr.direccion || snap?.direccion || '',
                 detalle: pr.detalle || snap?.detalle || 'Efectivo al recibir',
@@ -3197,10 +3198,7 @@ export async function pollCloudCommandsAndOrders(forceHeavySync = false) {
                 estado: pr.estado || snap?.estado || 'reservado',
                 acredita: pr.acredita !== false,
                 tipoVivienda: pr.tipo_vivienda || snap?.tipoVivienda || 'casa',
-                ...(typeof pr.gps_lat === 'number' ? { gpsLat: pr.gps_lat } : {}),
-                ...(typeof pr.gps_lng === 'number' ? { gpsLng: pr.gps_lng } : {}),
-                ...(pr.gps_link ? { gpsLink: pr.gps_link } : {}),
-                gpsConfirmado: Boolean(pr.gps_confirmado ?? snap?.gpsConfirmado),
+                ...normalizeOrderGpsFields(pr, snap, snap?.comparativaDatos),
                 referenciaCasa: pr.referencia_casa || snap?.referenciaCasa || '',
                 modoIA: pr.modo_ia || snap?.modoIA || 'automatico',
                 convStep: Number(pr.conv_step || snap?.convStep || 1),
@@ -6031,9 +6029,6 @@ async function executeStartOrAdvanceVoiceCallSerial(
         matchedOrder.postConfirmStrikes = 0;
         matchedOrder.postConfirmBlocked = false;
         matchedOrder.systemLocationConfirmedSent = false;
-        matchedOrder.promoPagoAdelantadoStage = '';
-        matchedOrder.pagoAdelantadoComprobanteRecibido = false;
-        matchedOrder.pagoAdelantadoEstado = '';
         matchedOrder.waCommercialSentStages = {};
       }
       savePedidos(pedidos);
@@ -6334,6 +6329,7 @@ export function applyNewMapUrlAndCoordinatesToOrder(
   // Overwrite old wrong map URL and coordinates on the order
   order.gpsLink = finalMapUrl;
   order.gpsConfirmado = true;
+  order.gpsFuente = 'whatsapp_pin';
   order.mapaCorregidoPorCliente = true;
   order.awaitingMapCorrection = false;
 
@@ -6349,6 +6345,7 @@ export function applyNewMapUrlAndCoordinatesToOrder(
   if (order.comparativaDatos && typeof order.comparativaDatos === 'object') {
     order.comparativaDatos.gpsLink = finalMapUrl;
     order.comparativaDatos.gpsConfirmado = true;
+    order.comparativaDatos.gpsFuente = 'whatsapp_pin';
     if (extractedLat !== null && extractedLng !== null) {
       order.comparativaDatos.gpsLat = extractedLat;
       order.comparativaDatos.gpsLng = extractedLng;
@@ -6516,7 +6513,7 @@ export function evaluateSurfaceSyntacticIntegrity(
     /\[El cliente envi[oó] un audio que no se escuch[oó]|\[Nota de voz del cliente\]/i.test(trimmed);
 
   const isProtocolMediaPayload =
-    /https?:\/\/\S+|maps\.google|google\.com\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|Ubicaci[oó]n GPS|COMPROBANTE_PAGO_ADELANTADO|📷 \[El cliente envi[oó] una foto/i.test(
+    /https?:\/\/\S+|maps\.google|google\.com\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|Ubicaci[oó]n GPS|📷 \[El cliente envi[oó] una foto/i.test(
       trimmed
     );
 
@@ -6723,9 +6720,7 @@ function buildLLMSystemPrompt(
   const targetNextStep = Math.min(5, currentStep + 1);
 
   const rawMontoNum = Number(String(order?.monto || '189000').replace(/\D/g, '')) || 189000;
-  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
   const montoOriginalFormatted = formatGuaraniesSpeech(rawMontoNum);
-  const montoDescuentoFormatted = formatGuaraniesSpeech(discountedMontoNum);
 
   const prevAgentBlock =
     narrativeMemory && narrativeMemory.previousAgentMessages.length > 0
@@ -6734,10 +6729,9 @@ function buildLLMSystemPrompt(
           .join('\n')
       : '  - (Sin intervenciones previas)';
 
-  const step3To5Instructions = `CONFIRMACIÓN EXPRESS (FLUJO SIMPLIFICADO):
-  PASO 1 (Ya realizado): Se envió Imagen #1 personalizada generada dinámicamente con el nombre completo, celular, ciudad, barrio/dirección, pack y monto total (SIN GPS) + Audio #1 pidiendo revisar la imagen.
-  PASO 2 (Cuando confirme): El sistema envía automáticamente la imagen estática universal de la promo (-30.000 Gs) + Audio de la oferta de pago anticipado.
-  PASO 3 (Cierre): El cliente elige pagar adelantado o contra entrega.
+  const step3To5Instructions = `CONFIRMACIÓN EXPRESS (FLUJO SIMPLIFICADO CONTRA ENTREGA - ${montoOriginalFormatted}):
+  PASO 1 (Ya realizado): Se envió Imagen #1 personalizada generada dinámicamente con el nombre completo, celular, ciudad, barrio/dirección, pack y monto total + Audio #1 pidiendo revisar la imagen.
+  PASO 2 (Cierre): Al confirmar el cliente con "correcto", "está bien", "sí" o similar, el pedido queda sellado como pago contra entrega en efectivo al recibir.
   
   REGLA ABSOLUTA SOBRE DIRECCIÓN Y DATOS DE ENTREGA:
   - En "reply" (AUDIO) ESTÁ PROHIBIDO pronunciar calle, barrio, ciudad o enlaces web. Esos datos ya figuran visibles en su Imagen #1 personalizada.
@@ -7154,16 +7148,6 @@ function generateEmergencyFallbackStepReply(
   };
 }
 
-// =========================================================================
-// NEGOCIACIÓN VIP DE PAGO POR ADELANTADO (-30.000 GS. · DESCUENTO DIRECTO)
-// BANCO FAMILIAR · ALIAS PARAGUAY (SIPAP / CÉDULA): 3856033 (3.856.033)
-// TITULAR: RICHARD ALMIRÓN
-// =========================================================================
-const VIP_BANK_NAME = 'Banco Familiar';
-const VIP_BANK_ALIAS_RAW = '3856033';
-const VIP_BANK_ALIAS_DOTTED = '3.856.033';
-const VIP_BANK_HOLDER = 'Richard Almirón';
-
 // Per-phone burst message debounce & serialization locks so rapid customer messages never trigger duplicate parallel confirmations
 const pendingCustomerBurstState = new Map<
   string,
@@ -7171,311 +7155,8 @@ const pendingCustomerBurstState = new Map<
 >();
 const inFlightCustomerReplyLocks = new Map<string, Promise<void>>();
 
-export function buildVipPrepaymentAliasCard(order: any): string {
-  const rawMontoNum =
-    Number(String(order?.montoOriginalSinDescuento || order?.monto || '189000').replace(/\D/g, '')) || 189000;
-  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
-  const montoOriginalStr = formatGsServer(rawMontoNum);
-  const montoDescuentoStr = formatGsServer(discountedMontoNum);
 
-  return [
-    `🏦 *DATOS OFICIALES PARA TRANSFERENCIA BANCARIA (PROMO EXCLUSIVA -30.000 Gs.)*`,
-    `━━━━━━━━━━━━━━━━━━━━━━`,
-    `🏛️ *Banco:* ${VIP_BANK_NAME}`,
-    `🔑 *Alias (Cédula / SIPAP):* ${VIP_BANK_ALIAS_RAW}`,
-    `*(También figura como: ${VIP_BANK_ALIAS_DOTTED})*`,
-    `👤 *Titular de la cuenta:* ${VIP_BANK_HOLDER}`,
-    `━━━━━━━━━━━━━━━━━━━━━━`,
-    `💵 *Precio normal contra entrega:* ~${montoOriginalStr}~`,
-    `🎁 *Descuento exclusivo aplicado:* -Gs. 30.000`,
-    `✅ *MONTO EXACTO A TRANSFERIR AHORA:* *${montoDescuentoStr}*`,
-    `━━━━━━━━━━━━━━━━━━━━━━`,
-    `📋 *Alias directo para copiar con un toque:*`,
-    `${VIP_BANK_ALIAS_RAW}`,
-    `━━━━━━━━━━━━━━━━━━━━━━`,
-    `📸 *PASO FINAL:* Apenas realices la transferencia de *${montoDescuentoStr}*, enviá por este chat la *captura de pantalla o comprobante del pago* para verificarlo en el banco y aprobar tu descuento.`
-  ].join('\n');
-}
-
-function buildPolitePromoClarificationReply(
-  matchedOrder: any,
-  stage: string,
-  rawCustomerWords: string,
-  variationIndex = 0,
-  isFromAudio = false
-): string {
-  const rawName = String(matchedOrder?.nombre || '').trim();
-  const firstName = getNaturalFirstName(rawName);
-  const displayFirstName = firstName && firstName !== 'qué tal' ? firstName : 'cliente';
-  const rawMontoNum =
-    Number(String(matchedOrder?.montoOriginalSinDescuento || matchedOrder?.monto || '189000').replace(/\D/g, '')) || 189000;
-  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
-  const montoOriginalSpeech = formatGuaraniesSpeech(rawMontoNum);
-  const montoDescuentoSpeech = formatGuaraniesSpeech(discountedMontoNum);
-
-  const cleanQuoted = String(rawCustomerWords || '')
-    .replace(/^🎤\s*/, '')
-    .trim()
-    .replace(/["'\r\n]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .slice(0, 50);
-  const hasQuoted = cleanQuoted.length > 0 && !cleanQuoted.startsWith('[') && /[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]/.test(cleanQuoted);
-  const audioHint =
-    !isFromAudio && variationIndex >= 1
-      ? ' Si te queda más práctico, también podés enviarme un audio cortito.'
-      : '';
-
-  let contextQuestion = `si querés aprovechar el descuento de treinta mil guaraníes diciendo las palabras quiero participar para abonar ${montoDescuentoSpeech} por transferencia, o si preferís abonar normalmente ${montoOriginalSpeech} al recibir`;
-  if (stage === 'alias_sent_awaiting_receipt') {
-    contextQuestion = `si pudiste realizar la transferencia de ${montoDescuentoSpeech} para enviarme la foto de tu comprobante por acá, o si necesitás que te aclare algún dato de la cuenta`;
-  }
-
-  if (hasQuoted) {
-    return variationIndex % 2 === 0
-      ? `Disculpame ${displayFirstName}, recién vi tu mensaje y para no malinterpretarlo te consulto con cariño: ¿me comentás por favor ${contextQuestion}?${audioHint}`
-      : `Perdoname la consulta, ${displayFirstName}, ¿me decís por favor ${contextQuestion}?${audioHint}`;
-  }
-
-  return `Disculpame ${displayFirstName}, recién no se escuchó con claridad tu mensaje. ¿Me comentás por favor ${contextQuestion}?${audioHint}`;
-}
-
-function buildPromoNegotiationLLMSystemPrompt(
-  order: any,
-  stage: string,
-  cleanInput: string,
-  explanationCount: number,
-  channelDiagnosticPrompt = ''
-): string {
-  const rawName = String(order?.nombre || '').trim();
-  const firstName = getNaturalFirstName(rawName);
-  const displayFirstName = firstName && firstName !== 'qué tal' ? firstName : 'cliente';
-  const genderInfo = detectCustomerGender(rawName);
-  const shortProduct = getNaturalProductName(order?.producto);
-
-  const rawMontoNum =
-    Number(String(order?.montoOriginalSinDescuento || order?.monto || '189000').replace(/\D/g, '')) || 189000;
-  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
-  const montoOriginalSpeech = formatGuaraniesSpeech(rawMontoNum);
-  const montoDescuentoSpeech = formatGuaraniesSpeech(discountedMontoNum);
-
-  return `Sos un ejecutivo humano real, inteligente, empático, educado y muy profesional de Noelux en Paraguay. Hablás español paraguayo natural (usás "vos", "tenés", "podés").
-Tu respuesta en "reply" se convierte directamente a VOZ (Nota de Audio TTS), por lo que NO debés usar emojis, ni asteriscos, ni markdown, ni caracteres especiales.
-REGLA OBLIGATORIA DE MONEDA EN AUDIO: SIEMPRE escribí los montos en letras seguidos de la palabra "guaraníes" (por ejemplo: "treinta mil guaraníes", "${montoDescuentoSpeech}", "${montoOriginalSpeech}"). JAMÁS digas "treinta" a secas ni números sueltos sin decir "guaraníes".
-
-================================================================================
-INTELIGENCIA HUMANA Y CONGRUENCIA CONTEXTUAL EN LA PROMOCIÓN (-30.000 GUARANÍES)
-================================================================================
-- Comprendé con naturalidad respuestas cortas cuando sean congruentes con la etapa "${stage}".
-${channelDiagnosticPrompt}
-- Si el cliente pide explicación o hace una pregunta sobre cómo funciona:
-  * Clasificá "intent": "ASKING_EXPLANATION_OR_DOUBTING", "isGrammaticallyAndLogicallyCoherent": true, "hasDoubtOrCondition": true.
-  * Explicále con transparencia cómo funciona el descuento de treinta mil guaraníes y decile que si desea aprovecharlo escriba o diga "quiero participar" para enviarle al instante los datos bancarios.
-
-DATOS DE LA PROMOCIÓN Y DEL PEDIDO:
-- Cliente: ${rawName || 'Cliente'} (Primer nombre: ${displayFirstName}, Género: ${genderInfo.gender}, Trato: ${genderInfo.instruccionGenero})
-- Producto: ${shortProduct}
-- Etapa actual sobre la promo: ${stage} (Explicación #${explanationCount + 1})
-- Precio normal contra entrega (al recibir): ${montoOriginalSpeech}
-- Descuento exclusivo por pago adelantado hoy: treinta mil guaraníes
-- Monto final con descuento si transfiere ahora: ${montoDescuentoSpeech}
-- Cuenta oficial de la empresa: Banco Familiar, alias tres ocho cinco seis cero tres tres a nombre de Richard Almirón.
-
-REGLAS DE CLASIFICACIÓN DE "intent" POR CONGRUENCIA REAL DE "${cleanInput}":
-1. "UNCLEAR_OR_SINGLE_WORD_NEEDS_CLARIFICATION": Únicamente si el mensaje carece totalmente de sentido.
-2. "ASKING_EXPLANATION_OR_DOUBTING": Pide explicación ("cómo es", "a qué banco", "explicame") o tiene dudas.
-3. "CONFIRMING_PARTICIPATION": Expresa que desea participar o aprovechar el descuento de treinta mil guaraníes ("quiero participar", "sí quiero", "me interesa", "pasame el alias").
-4. "READY_FOR_ALIAS": Pide los datos bancarios o el alias para transferir.
-5. "DECLINING_PROMO_COD": Expresa que prefiere abonar al recibir el paquete / contra entrega / efectivo.
-6. "RECEIPT_OR_PAYMENT_SENT": Informa que ya realizó la transferencia bancaria o envió el comprobante.
-7. "PRODUCT_OR_OTHER_QUESTION": Hace una consulta clara sobre el producto, garantía o horario de entrega ajena al pago.`;
-}
-
-function buildContextualPromoExplanationReply(
-  matchedOrder: any,
-  _cleanInput: string,
-  explicitlyNotApprovedYet: boolean,
-  explanationCount: number
-): string {
-  const rawName = String(matchedOrder?.nombre || '').trim();
-  const firstName = getNaturalFirstName(rawName);
-  const displayFirstName = firstName && firstName !== 'qué tal' ? firstName : 'cliente';
-  const shortProduct = getNaturalProductName(matchedOrder?.producto);
-
-  const rawMontoNum =
-    Number(String(matchedOrder?.montoOriginalSinDescuento || matchedOrder?.monto || '189000').replace(/\D/g, '')) || 189000;
-  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
-  const montoOriginalSpeech = formatGuaraniesSpeech(rawMontoNum);
-  const montoDescuentoSpeech = formatGuaraniesSpeech(discountedMontoNum);
-
-  if (explicitlyNotApprovedYet) {
-    return `Tenés toda la razón, ${displayFirstName}, te explico con total claridad: tu pedido de ${shortProduct} ya está confirmado para pagarse contra entrega por ${montoOriginalSpeech} al recibir, y esta promoción opcional consiste en que si decidís abonar hoy por adelantado mediante transferencia bancaria al Banco Familiar antes de que salga el móvil de reparto, te descontamos treinta mil guaraníes al instante, abonando únicamente ${montoDescuentoSpeech}. Si querés aprovechar este descuento decime quiero participar y te paso el alias, o si preferís abonar al recibir tu paquete queda así confirmado.`;
-  }
-
-  const variant = explanationCount % 2;
-  if (variant === 0) {
-    return `Con muchísimo gusto te explico cómo funciona, ${displayFirstName}. Normalmente tu pedido de ${shortProduct} se abona en efectivo al recibir por ${montoOriginalSpeech}, pero si elegís adelantar tu pago hoy por transferencia bancaria a nuestra cuenta oficial del Banco Familiar antes del despacho, te descontamos treinta mil guaraníes en el acto, por lo que transferís solamente ${montoDescuentoSpeech} y recibís tu paquete en mano sin pagar ni un guaraní más. Si te gustaría aprovechar esos treinta mil guaraníes de descuento, escribime o decime en audio quiero participar y te envío el alias enseguida.`;
-  }
-  return `Claro que sí, ${displayFirstName}, te comento en detalle: tu envío ya está garantizado y en empaquetado. Si optás por abonar ahora mediante transferencia bancaria te restamos treinta mil guaraníes de tu boleta, quedando en solamente ${montoDescuentoSpeech} en vez de ${montoOriginalSpeech}, y apenas nos enviás el comprobante nuestro equipo administrativo lo verifica en el banco y sella tu pedido como pagado. Decime quiero participar si querés que te pase los datos bancarios, o decime pago al recibir si preferís abonar en efectivo en tu puerta.`;
-}
-
-async function handleVipPrepaymentNegotiationTurn(
-  _cleanPhone: string,
-  _matchedOrder: any,
-  _cleanInput: string,
-  _pedidos: any[],
-  _conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [],
-  _isFromAudio = false
-): Promise<{
-  handled: boolean;
-  reply: string;
-  locationTextConfirmation?: string;
-  forceAudioReply?: boolean;
-}> {
-  // Promoción de Gs. 30.000 erradicada por decisión directiva: el flujo termina al confirmar el pedido
-  return { handled: false, reply: '' };
-}
-
-/**
- * Acción de 1 clic desde la Tarjeta del Pedido en el Panel Admin ("Aprobar Pago Adelantado"):
- * Marca el pago adelantado (-Gs. 30.000) como verificado y aprobado por administración, sella el pedido como
- * empaquetado/listo para despacho y envía automáticamente una Nota de Voz humana al WhatsApp del cliente.
- */
-export async function approveOrderPrepaymentAndNotifyCustomer(
-  orderId: string,
-  phoneOverride?: string,
-  orderSnapshot?: any
-): Promise<{
-  success: boolean;
-  order: any | null;
-  reply: string;
-  audioDataUrl: string | null;
-  sentViaSocket: boolean;
-  message?: WaChatMessage;
-  error?: string;
-}> {
-  const cleanOrderId = String(orderId || '').trim();
-  if (!cleanOrderId && !phoneOverride) {
-    return {
-      success: false,
-      order: null,
-      reply: '',
-      audioDataUrl: null,
-      sentViaSocket: false,
-      error: 'Falta identificador del pedido'
-    };
-  }
-
-  const pedidos = loadPedidos();
-  let targetOrder =
-    pedidos.find(
-      p =>
-        (cleanOrderId && (p.reservaid === cleanOrderId || p.id === cleanOrderId)) ||
-        (phoneOverride &&
-          normalizeWaPhone(p.celular || p.telefono || '') === normalizeWaPhone(phoneOverride))
-    ) || null;
-
-  if (!targetOrder && orderSnapshot && typeof orderSnapshot === 'object') {
-    targetOrder = {
-      ...orderSnapshot,
-      reservaid: orderSnapshot.reservaid || orderSnapshot.id || cleanOrderId
-    };
-    pedidos.unshift(targetOrder);
-  }
-
-  if (!targetOrder) {
-    return {
-      success: false,
-      order: null,
-      reply: '',
-      audioDataUrl: null,
-      sentViaSocket: false,
-      error: `No se encontró el pedido ${cleanOrderId}`
-    };
-  }
-
-  const cleanPhone = normalizeWaPhone(
-    phoneOverride || targetOrder.celular || targetOrder.telefono || ''
-  );
-  if (!cleanPhone) {
-    return {
-      success: false,
-      order: targetOrder,
-      reply: '',
-      audioDataUrl: null,
-      sentViaSocket: false,
-      error: 'El pedido no tiene un número de WhatsApp válido'
-    };
-  }
-
-  const rawMontoNum =
-    Number(
-      String(targetOrder.montoOriginalSinDescuento || targetOrder.monto || '189000').replace(/\D/g, '')
-    ) || 189000;
-  const discountedMontoNum = Math.max(50000, rawMontoNum - VIP_PREPAYMENT_DISCOUNT_GS);
-  const montoDescuentoSpeech = formatGuaraniesSpeech(discountedMontoNum);
-
-  const rawName = String(targetOrder.nombre || '').trim();
-  const firstName = getNaturalFirstName(rawName);
-  const displayFirstName = firstName && firstName !== 'qué tal' ? firstName : 'cliente';
-  const shortProduct = getNaturalProductName(targetOrder.producto);
-  const nowIso = new Date().toISOString();
-
-  cancelCustomerInactivityFollowUp(cleanPhone);
-
-  targetOrder.datosConfirmados = true;
-  targetOrder.agenteCompletado = true;
-  targetOrder.empaquetado = true;
-  if (targetOrder.estado !== 'entregado_pagado') {
-    targetOrder.estado = 'en_camino';
-  }
-  targetOrder.convStep = 5;
-  targetOrder.pagoAdelantadoComprobanteRecibido = true;
-  targetOrder.pagoAdelantadoVerificadoAdmin = true;
-  targetOrder.pagoAdelantadoEstado = 'pagado_adelantado_confirmado';
-  targetOrder.promoPagoAdelantadoStage = 'approved_by_admin';
-  targetOrder.modalidadPagoElegida = 'pago_adelantado_promo_30k';
-  targetOrder.pagoAdelantadoFecha = targetOrder.pagoAdelantadoFecha || nowIso;
-  targetOrder.pagoAdelantadoFechaAprobacion = nowIso;
-  targetOrder.pagoAdelantadoBanco = VIP_BANK_NAME;
-  targetOrder.pagoAdelantadoAlias = `${VIP_BANK_ALIAS_RAW} (${VIP_BANK_ALIAS_DOTTED})`;
-  targetOrder.pagoAdelantadoTitular = VIP_BANK_HOLDER;
-  targetOrder.montoOriginalSinDescuento = rawMontoNum;
-  targetOrder.montoConDescuentoAdelantado = discountedMontoNum;
-
-  const approvalAudioText = `Hola ${displayFirstName}, te hablo de administración central de Noelux para darte una excelente noticia. Acabamos de verificar y aprobar tu pago adelantado en nuestro banco con tu descuento exclusivo de treinta mil guaraníes, quedando tu boleta totalmente cancelada por ${montoDescuentoSpeech}. Tu pedido de ${shortProduct} ya está empaquetado, sellado y listo en el sector de despacho para salir directo hasta tus manos sin que tengas que abonar ni un guaraní más al recibir. Muchísimas gracias por tu confianza.`;
-
-  targetOrder.ultimoMensajeIA = approvalAudioText;
-  targetOrder.actualizado_en = nowIso;
-  setOrderConvStep(cleanPhone, targetOrder, 5);
-  savePedidos(pedidos);
-  syncOrderUpdateToCloud(targetOrder).catch(() => {});
-
-  // Permitir envío inmediato del audio de aprobación administrativa
-  recentAiSpokenTurnByPhone.delete(cleanPhone);
-
-  const turnRes = await sendWhatsAppVoiceCallTurn(
-    cleanPhone,
-    approvalAudioText,
-    5,
-    targetOrder.reservaid,
-    undefined,
-    'audio',
-    undefined,
-    undefined,
-    true
-  );
-
-  return {
-    success: true,
-    order: targetOrder,
-    reply: approvalAudioText,
-    audioDataUrl: turnRes.audioDataUrl,
-    sentViaSocket: turnRes.sentViaSocket,
-    message: turnRes.message
-  };
-}
-
-// Confirmación Express en 1 paso + Negociación VIP -Gs. 30.000 + Hospitalidad Post-Confirmación (99-100% Audio)
+// Confirmación Express en 1 paso + Hospitalidad Post-Confirmación (99-100% Audio)
 export async function generateContextualAiReply(
   phone: string,
   incomingText: string,
@@ -7567,6 +7248,7 @@ export async function generateContextualAiReply(
 
     matchedOrder.awaitingMapCorrection = false;
     matchedOrder.gpsConfirmado = true;
+    matchedOrder.gpsFuente = 'whatsapp_pin';
     matchedOrder.mapaCorregidoPorCliente = true;
     matchedOrder.actualizado_en = new Date().toISOString();
 
@@ -7613,27 +7295,9 @@ export async function generateContextualAiReply(
   }
 
   // =========================================================================
-  // FLUJO POST-CONFIRMACIÓN AMABLE Y DULCE + NEGOCIACIÓN VIP (-30.000 GS.)
+  // FLUJO POST-CONFIRMACIÓN AMABLE Y DULCE
   // =========================================================================
   if (isAlreadyConfirmed && (!isExplicitConfirmationKeywordNow || hasSentConfirmedImageAlready)) {
-    const vipNegotiationRes = await handleVipPrepaymentNegotiationTurn(
-      cleanPhone,
-      matchedOrder,
-      cleanInput,
-      pedidos,
-      conversationHistory,
-      effectiveIsFromAudio
-    );
-    if (vipNegotiationRes.handled) {
-      return {
-        reply: vipNegotiationRes.reply,
-        locationTextConfirmation: vipNegotiationRes.locationTextConfirmation,
-        matchedOrder,
-        convStep: 5,
-        forceAudioReply: true
-      };
-    }
-
     const storage = loadChatsStorage();
     if (!storage.postConfirmStrikes) storage.postConfirmStrikes = {};
     if (!storage.postConfirmBlocked) storage.postConfirmBlocked = {};
@@ -7775,7 +7439,6 @@ export async function generateContextualAiReply(
   // =========================================================================
   // FLUJO DE CONFIRMACIÓN EXPRESS EN 1 PASO ("CORRECTO" / "ESTÁ BIEN" / GPS)
   // Audio #1: Pedido Totalmente Confirmado y en Empaquetado
-  // Audio #2: Oferta Exclusiva -Gs. 30.000 Pago Adelantado ("QUIERO PARTICIPAR")
   // =========================================================================
   const isBuilding = isBuildingOrderServer(matchedOrder);
   const buildingDetails = formatBuildingDetailsServer(matchedOrder);
@@ -7796,6 +7459,7 @@ export async function generateContextualAiReply(
   if (matchedOrder && mapReplacementRes.updated) {
     matchedOrder.awaitingMapCorrection = false;
     matchedOrder.gpsConfirmado = true;
+    matchedOrder.gpsFuente = 'whatsapp_pin';
     matchedOrder.mapaCorregidoPorCliente = true;
   }
 
@@ -7807,7 +7471,7 @@ export async function generateContextualAiReply(
     matchedOrder.direccion = cleanStreetAddressText(matchedOrder.direccion);
   }
 
-  const finalizeExpressConfirmationAndPromoTurn = (extraHouseRef = '') => {
+  const finalizeExpressConfirmationTurn = (extraHouseRef = '') => {
     cancelCustomerInactivityFollowUp(cleanPhone);
     unclearReplyCounter.set(cleanPhone, 0);
 
@@ -7830,14 +7494,13 @@ export async function generateContextualAiReply(
     matchedOrder.estado = 'en_camino';
     matchedOrder.estadoEnvioProducto = matchedOrder.estadoEnvioProducto || 'no_enviado';
     matchedOrder.concretadoCobrado = Boolean(matchedOrder.concretadoCobrado);
-    matchedOrder.promoPagoAdelantadoStage = '';
-    matchedOrder.modalidadPagoElegida = 'contra_entrega';
 
     const finalGpsUrl = extractCanonicalMapUrlFromOrder(matchedOrder) || undefined;
     const cleanAddr = cleanStreetAddressText(matchedOrder.direccion || '');
     matchedOrder.direccion = cleanAddr;
+    matchedOrder.departamento = inferParaguayDepartmentFromCity(matchedOrder.ciudad, matchedOrder.departamento);
 
-    const ubicacionStr = `${matchedOrder.ciudad || ''}, ${matchedOrder.departamento || ''}`.replace(/^,\s*|,\s*$/g, '');
+    const ubicacionStr = formatFullCityDepartment(matchedOrder.ciudad, matchedOrder.departamento);
     const resumenTexto = `Confirmación Express completada con ${matchedOrder.nombre} (${cleanPhone}). Entrega confirmada en ${isBuilding ? 'EDIFICIO' : 'CASA'} en ${ubicacionStr}, barrio/dirección "${cleanAddr}"${buildingDetails ? ` (${buildingDetails})` : ''}${finalGpsUrl ? ` (GPS: ${finalGpsUrl})` : ''}.`;
     matchedOrder.resumenConfirmacionIA = resumenTexto;
     matchedOrder.comparativaDatos = {
@@ -7860,7 +7523,8 @@ export async function generateContextualAiReply(
       ...(matchedOrder.departamentoNumero ? { departamentoNumero: matchedOrder.departamentoNumero } : {}),
       ...(matchedOrder.tieneRecepcion ? { tieneRecepcion: matchedOrder.tieneRecepcion } : {}),
       ...(matchedOrder.detalleRecepcion ? { detalleRecepcion: matchedOrder.detalleRecepcion } : {}),
-      ...(finalGpsUrl ? { gpsLink: finalGpsUrl, gpsConfirmado: true } : {}),
+      ...(finalGpsUrl ? { gpsLink: finalGpsUrl, gpsConfirmado: Boolean(matchedOrder.gpsConfirmado) } : {}),
+      ...(matchedOrder.gpsFuente ? { gpsFuente: matchedOrder.gpsFuente } : {}),
       ...(typeof matchedOrder.gpsLat === 'number' ? { gpsLat: matchedOrder.gpsLat } : {}),
       ...(typeof matchedOrder.gpsLng === 'number' ? { gpsLng: matchedOrder.gpsLng } : {})
     };
@@ -7899,7 +7563,7 @@ export async function generateContextualAiReply(
   const expressEval = evaluateExpressOrderConfirmationInput(cleanInput, hasGpsNow);
 
   if (expressEval.decision === 'CONFIRMED' || expressEval.decision === 'GPS_PIN_RECEIVED_CONFIRMED') {
-    return finalizeExpressConfirmationAndPromoTurn();
+    return finalizeExpressConfirmationTurn();
   }
 
   // 2. Si el cliente hizo una consulta, reportó un cambio de barrio/ciudad/nombre/paquete o respondió con otra frase, analizar con Deepgram LLM en Audio
@@ -7966,14 +7630,17 @@ Y al final de tu audio recordále amablemente: "Si los datos de entrega que ves 
   }
 
   if (llmCoherent && (llmOrderConfirmed || llmSpeechAct === 'STEP_CONFIRMATION_COMPLETE')) {
-    return finalizeExpressConfirmationAndPromoTurn(extractedHouseRef);
+    return finalizeExpressConfirmationTurn(extractedHouseRef);
   }
 
   let updatedLocationCard: string | undefined = undefined;
   let regenerateWelcomeImage = false;
   if (llmCoherent) {
     if (correctedName) matchedOrder.nombre = correctedName;
-    if (correctedCity) matchedOrder.ciudad = correctedCity;
+    if (correctedCity) {
+      matchedOrder.ciudad = correctedCity;
+      matchedOrder.departamento = inferParaguayDepartmentFromCity(correctedCity, matchedOrder.departamento);
+    }
     if (correctedAddress) matchedOrder.direccion = cleanStreetAddressText(correctedAddress);
     if (extractedHouseRef) matchedOrder.referenciaCasa = extractedHouseRef;
     if (correctedPackQty >= 1 && correctedPackQty !== packQty) {
@@ -8128,11 +7795,6 @@ async function flushPendingMessages(session: WaSessionRuntime) {
               if (!msg.isAudioNote) {
                 if (msg.imageUrl && String(msg.imageUrl).trim()) {
                   const relImgPath = String(msg.imageUrl).replace(/^\/+/, '');
-                  if (relImgPath.includes('promo_prepayment')) {
-                    msg.status = 'sent';
-                    changed = true;
-                    continue;
-                  }
                   const candidateImgPath = path.resolve(process.cwd(), 'public', relImgPath);
                   const resolvedQueuedImgPath = fs.existsSync(candidateImgPath) ? candidateImgPath : '';
                   if (resolvedQueuedImgPath) {
@@ -10618,7 +10280,6 @@ export async function connectWhatsAppEngine(
             innerMsg?.documentMessage || innerMsg?.documentWithCaptionMessage
           );
           const isAnyImageMsg = Boolean(innerMsg?.imageMessage);
-          const isInPrepaymentPromoFlow = false;
 
           // If the customer sent a WhatsApp Location Pin (locationMessage / liveLocationMessage), extract exact GPS coordinates!
           if (isLocationMsg && locMsg) {
@@ -10660,6 +10321,7 @@ export async function connectWhatsAppEngine(
                   targetOrd.gpsLng = Number(lng.toFixed(6));
                   targetOrd.gpsLink = gpsUrl;
                   targetOrd.gpsConfirmado = true;
+                  targetOrd.gpsFuente = 'whatsapp_pin';
                   if (reverseSummary) {
                     targetOrd.gpsDireccionDetectada = reverseSummary;
                   }
@@ -10670,15 +10332,9 @@ export async function connectWhatsAppEngine(
                 matchedOrderForPhone.gpsLng = Number(lng.toFixed(6));
                 matchedOrderForPhone.gpsLink = gpsUrl;
                 matchedOrderForPhone.gpsConfirmado = true;
+                matchedOrderForPhone.gpsFuente = 'whatsapp_pin';
               }
             }
-          } else if ((isAnyImageMsg || isDocumentMsg) && !isFromAdmin && isInPrepaymentPromoFlow) {
-            const captionExtra =
-              innerMsg?.imageMessage?.caption ||
-              innerMsg?.documentMessage?.caption ||
-              innerMsg?.documentWithCaptionMessage?.message?.documentMessage?.caption ||
-              '';
-            text = `🧾 [COMPROBANTE_PAGO_ADELANTADO: El cliente envió el comprobante de transferencia bancaria${captionExtra ? ` (${captionExtra})` : ''}]`;
           }
           // IMPORTANTE: Jamás convertir una imagen sin texto (isImageWithoutCaption) en un mensaje falso de cliente,
           // ya que las imágenes generadas por el Agente (stage1_welcome / stage3_confirmed) no llevan caption.
@@ -10928,8 +10584,7 @@ export async function connectWhatsAppEngine(
                         status: matchedOrder?.datosConfirmados ? 'ai_confirmed_reply_sent' : 'ai_reply_sent'
                       });
                       // 99-100% AUDIO: El Agente responde SIEMPRE en Nota de Voz (Deepgram Aura-2),
-                      // enviando texto ÚNICAMENTE cuando locationTextConfirmation existe (Ciudad/Barrio/GPS o Alias 3856033),
-                      // y despachando secondaryAudioReply (ej. Audio #2 de la promo -Gs. 30.000) automáticamente después del Audio #1.
+                      // enviando texto ÚNICAMENTE cuando locationTextConfirmation existe (Ciudad/Barrio/GPS).
                       await sendWhatsAppVoiceCallTurn(
                         cleanPhone,
                         reply,

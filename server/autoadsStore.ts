@@ -10,6 +10,10 @@ import type {
   ProductCostProfile,
   PsychologicalProfileV2
 } from '../src/types.ts';
+import {
+  inferParaguayDepartmentFromCity,
+  normalizeOrderGpsFields
+} from '../src/utils/paraguayGeo.ts';
 
 export interface StoredWaToken {
   token: string;
@@ -567,6 +571,13 @@ export function mapSupabasePedidoRowToOrder(r: Record<string, any>): Order {
     r.dispositivo && typeof r.dispositivo === 'object' && !Array.isArray(r.dispositivo)
       ? (r.dispositivo as Record<string, any>)
       : {};
+  const resolvedCiudad = String(r.ciudad ?? legacyObj.ciudad ?? '').trim();
+  const resolvedDepartamento = inferParaguayDepartmentFromCity(
+    resolvedCiudad,
+    String(r.departamento ?? legacyObj.departamento ?? '')
+  );
+  const normalizedGps = normalizeOrderGpsFields(r, legacyObj, legacyObj?.comparativaDatos);
+
   return {
     ...legacyObj,
     id: r.id ?? legacyObj.id,
@@ -576,8 +587,8 @@ export function mapSupabasePedidoRowToOrder(r: Record<string, any>): Order {
     waVendedor: r.wa_vendedor ?? legacyObj.waVendedor,
     nombre: r.nombre || legacyObj.nombre || 'Cliente',
     celular: r.celular || legacyObj.celular || '',
-    departamento: r.departamento ?? legacyObj.departamento ?? '',
-    ciudad: r.ciudad ?? legacyObj.ciudad ?? '',
+    departamento: resolvedDepartamento,
+    ciudad: resolvedCiudad,
     direccion: r.direccion ?? legacyObj.direccion ?? '',
     detalle: r.detalle ?? legacyObj.detalle ?? '',
     cantidad: Number(r.cantidad ?? legacyObj.cantidad ?? 1),
@@ -585,10 +596,7 @@ export function mapSupabasePedidoRowToOrder(r: Record<string, any>): Order {
     ref_code: r.ref_code ?? legacyObj.ref_code,
     estado: r.estado || legacyObj.estado || 'reservado',
     tipoVivienda: r.tipo_vivienda ?? legacyObj.tipoVivienda,
-    gpsLat: r.gps_lat != null ? Number(r.gps_lat) : legacyObj.gpsLat,
-    gpsLng: r.gps_lng != null ? Number(r.gps_lng) : legacyObj.gpsLng,
-    gpsLink: r.gps_link ?? legacyObj.gpsLink,
-    gpsConfirmado: r.gps_confirmado != null ? Boolean(r.gps_confirmado) : legacyObj.gpsConfirmado,
+    ...normalizedGps,
     referenciaCasa: r.referencia_casa ?? legacyObj.referenciaCasa,
     modoIA: r.modo_ia ?? legacyObj.modoIA,
     convStep: r.conv_step != null ? Number(r.conv_step) : legacyObj.convStep,

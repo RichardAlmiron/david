@@ -1,5 +1,6 @@
 import { Order, OrderComparisonSummary } from '../types';
 import { formatGs, formatWaPhone } from '../config';
+import { formatFullCityDepartment, normalizeOrderGpsFields } from './paraguayGeo';
 
 const SPANISH_DIGIT_WORDS: Record<string, string> = {
   '0': 'cero',
@@ -422,7 +423,7 @@ export function isUnclearOrTooShortCustomerReply(cleanInput: string, currentStep
     return true;
   }
   if (
-    /https?:\/\/\S+|maps\.google|google\.com\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|Ubicaci[oó]n GPS|COMPROBANTE_PAGO_ADELANTADO/i.test(
+    /https?:\/\/\S+|maps\.google|google\.com\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|Ubicaci[oó]n GPS/i.test(
       trimmed
     )
   ) {
@@ -727,72 +728,6 @@ export function evaluateExpressOrderConfirmationInput(
   };
 }
 
-export type ExpressPromoDecision =
-  | 'ACCEPT_PROMO_SEND_ALIAS'
-  | 'DECLINE_COD'
-  | 'POLITE_ACK_KEEP_COD'
-  | 'RECEIPT_SENT'
-  | 'NEEDS_LLM';
-
-/**
- * Evaluador determinístico de la palabra clave "QUIERO PARTICIPAR" / "SÍ QUIERO" para enviar directo el alias bancario,
- * tolerando además errores de tipeo reales como "Yo pago sl recibir" para cobro contra entrega.
- */
-export function evaluateExpressPromoDecisionInput(rawInput: string): ExpressPromoDecision {
-  const cleanText = String(rawInput || '')
-    .replace(/^🎤\s*/, '')
-    .trim();
-
-  if (
-    /COMPROBANTE_PAGO_ADELANTADO/i.test(cleanText) ||
-    /\b(ya\s+transfer[ií]|ya\s+pagu[eé]|ya\s+hice\s+la\s+transferencia|ya\s+envi[eé]\s+el\s+comprobante|ah[ií]\s+te\s+mand[eé]\s+el\s+comprobante|te\s+paso\s+el\s+comprobante)\b/i.test(
-      cleanText
-    )
-  ) {
-    return 'RECEIPT_SENT';
-  }
-
-  const normalized = cleanText
-    .toLowerCase()
-    .replace(/[¡!¿?.,;:"'()[\]]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  // Reconocimiento tolerante a typos reales ("pago sl recibir", "pago al recibir", "contra entrega", "efectivo", "no gracias")
-  const isCodChoice =
-    /\b((pago|abono|pagar|abonar|prefiero|mejor|voy\s+a\s+pagar)\s*(al|sl|el|a|en|cuando)\s*(recibir|entregar|entrega|llegue|puerta|mano)|contra\s*entrega|contraentrega|en\s*efectivo|efectivo\s+al\s+recibir|\bal\s+recibir\b|\bsl\s+recibir\b|en\s+puerta|no\s+gracias|no\s+quiero\s+participar|no\s+participo|paso\s+por\s+ahora|sin\s+adelanto)\b/i.test(
-      normalized
-    );
-  if (isCodChoice) {
-    return 'DECLINE_COD';
-  }
-
-  // Cortesías genéricas ("ok", "dale gracias", "muchas gracias") JAMÁS deben disparar el alias bancario
-  if (
-    /^(ok|oka|okay|dale|bueno|listo|genial|excelente|perfecto|gracias|muchas\s+gracias|mil\s+gracias|dale\s+gracias|ok\s+gracias|bueno\s+gracias|est[aá]\s+bien\s+gracias|👍+|🙏+)$/i.test(
-      normalized
-    )
-  ) {
-    return 'POLITE_ACK_KEEP_COD';
-  }
-
-  const hasNegative = /\b(no\s+quiero|todav[ií]a\s+no|no\s+puedo|no\s+tengo\s+para\s+transferir)\b/i.test(
-    normalized
-  );
-
-  const matchesParticipateTrigger =
-    !hasNegative &&
-    /\b(quiero\s+participar|participar|s[ií]\s+quiero|quiero\s+la\s+promo|quiero\s+la\s+promoci[oó]n|quiero\s+el\s+descuento|quiero\s+aprovechar|me\s+interesa\s+la\s+promo|pasame\s+el\s+alias|p[aá]same\s+el\s+alias|enviame\s+el\s+alias|env[ií]ame\s+el\s+alias|mandame\s+el\s+alias|m[aá]ndame\s+el\s+alias|pasame\s+los\s+datos|datos\s+bancarios|quiero\s+transferir|voy\s+a\s+transferir)\b/i.test(
-      normalized
-    );
-
-  if (matchesParticipateTrigger) {
-    return 'ACCEPT_PROMO_SEND_ALIAS';
-  }
-
-  return 'NEEDS_LLM';
-}
-
 /**
  * Valida si una respuesta generada en etapa post-confirmación (después del cierre en Paso 5)
  * es demasiado corta (ej. 1, 2, 3 o menos de 22 palabras), lo cual está prohibido porque el agente
@@ -901,47 +836,13 @@ export function isOrderConfirmedByAgent(order?: Partial<Order> | null): boolean 
   return Boolean(
     order.datosConfirmados ||
     (order.convStep && order.convStep >= 5) ||
-    (order.empaquetado && order.referenciaCasa) ||
-    order.pagoAdelantadoVerificadoAdmin ||
-    order.pagoAdelantadoEstado === 'pagado_adelantado_confirmado'
-  );
-}
-
-/**
- * Devuelve true cuando el cliente YA ENVIÓ el comprobante / aviso de pago adelantado,
- * pero el vendedor todavía NO activó el interruptor de verificación ("Pago Enviado / Pago Adelantado por Verificar").
- */
-export function isOrderPrepaymentSentPendingVerification(order?: Partial<Order> | null): boolean {
-  if (!order) return false;
-  if (isOrderPrepaymentVerifiedAndPaid(order)) return false;
-  return Boolean(
-    order.pagoAdelantadoComprobanteRecibido ||
-    order.promoPagoAdelantadoStage === 'receipt_received_verifying' ||
-    order.pagoAdelantadoEstado === 'pago_enviado_por_verificar' ||
-    order.pagoAdelantadoEstado === 'comprobante_recibido'
-  );
-}
-
-/**
- * Devuelve true únicamente cuando el vendedor YA COMPROBÓ la transferencia en su cuenta
- * de Banco Familiar y activó el interruptor ("Confirmado Pago Adelantado").
- * Cuando esto es true, el pedido pasa automáticamente de la pestaña "✅ Confirmados"
- * a la pestaña exclusiva "💎 Pago Adelantado".
- */
-export function isOrderPrepaymentVerifiedAndPaid(order?: Partial<Order> | null): boolean {
-  if (!order) return false;
-  return Boolean(
-    order.pagoAdelantadoVerificadoAdmin ||
-    order.pagoAdelantadoEstado === 'pagado_adelantado_confirmado'
+    (order.empaquetado && order.referenciaCasa)
   );
 }
 
 export function buildOrderComparisonSummary(order: Order): OrderComparisonSummary {
-  const autoGpsLink =
-    order.gpsLink ||
-    (typeof order.gpsLat === 'number' && typeof order.gpsLng === 'number'
-      ? `https://www.google.com/maps?q=${order.gpsLat.toFixed(6)},${order.gpsLng.toFixed(6)}`
-      : undefined);
+  const normalizedGps = normalizeOrderGpsFields(order, order.comparativaDatos);
+  const autoGpsLink = normalizedGps.gpsLink;
 
   const autoStreetViewLink =
     order.gpsStreetViewLink ||
@@ -955,9 +856,9 @@ export function buildOrderComparisonSummary(order: Order): OrderComparisonSummar
       gpsLink: order.comparativaDatos.gpsLink || autoGpsLink,
       gpsStreetViewLink: order.comparativaDatos.gpsStreetViewLink || autoStreetViewLink,
       fachadaFotoUrl: order.comparativaDatos.fachadaFotoUrl || order.fachadaFotoUrl,
-      gpsLat: order.comparativaDatos.gpsLat ?? order.gpsLat,
-      gpsLng: order.comparativaDatos.gpsLng ?? order.gpsLng,
-      gpsConfirmado: Boolean(order.comparativaDatos.gpsConfirmado || order.gpsConfirmado || autoGpsLink),
+      gpsLat: order.comparativaDatos.gpsLat ?? normalizedGps.gpsLat ?? order.gpsLat,
+      gpsLng: order.comparativaDatos.gpsLng ?? normalizedGps.gpsLng ?? order.gpsLng,
+      gpsConfirmado: normalizedGps.gpsConfirmado || Boolean(order.comparativaDatos.gpsConfirmado),
       tipoVivienda: order.comparativaDatos.tipoVivienda || order.tipoVivienda,
       nombreEdificio: order.comparativaDatos.nombreEdificio || order.nombreEdificio,
       pisoEdificio: order.comparativaDatos.pisoEdificio || order.pisoEdificio,
@@ -969,7 +870,7 @@ export function buildOrderComparisonSummary(order: Order): OrderComparisonSummar
 
   const nombreWeb = (order.nombre || '').trim();
   const celularWeb = (order.celular || '').trim();
-  const ubicacionWeb = `${(order.ciudad || '').trim()}, ${(order.departamento || '').trim()}`.replace(/^,\s*|,\s*$/g, '');
+  const ubicacionWeb = formatFullCityDepartment(order.ciudad, order.departamento);
   const direccionWeb = cleanStreetAddressText((order.direccion || '').trim());
   const buildingSummary = formatBuildingDetailsSummary(order);
   const referenciaConfirmada = (
@@ -982,7 +883,7 @@ export function buildOrderComparisonSummary(order: Order): OrderComparisonSummar
   const resumenTexto =
     order.resumenConfirmacionIA ||
     `El Agente IA completó los 5 pasos de validación con ${nombreWeb} (${formatWaPhone(celularWeb)}). Modalidad: ${isBuildingOrder(order) ? `EDIFICIO (${buildingSummary || direccionWeb})` : 'CASA INDEPENDIENTE'
-    }. Se verificó que los datos dejados en el formulario web coinciden al 100% con los confirmados en la conversación: entrega en ${ubicacionWeb}, dirección "${direccionWeb}"${autoGpsLink ? ` (GPS exacto: ${autoGpsLink})` : ''} y referencia "${referenciaConfirmada}".`;
+    }. Se verificó que los datos dejados en el formulario web coinciden al 100% con los confirmados en la conversación: entrega en ${ubicacionWeb}, dirección "${direccionWeb}"${autoGpsLink ? ` (GPS: ${autoGpsLink})` : ''} y referencia "${referenciaConfirmada}".`;
 
   return {
     nombreWeb,
@@ -1001,9 +902,9 @@ export function buildOrderComparisonSummary(order: Order): OrderComparisonSummar
     gpsLink: autoGpsLink,
     gpsStreetViewLink: autoStreetViewLink,
     fachadaFotoUrl: order.fachadaFotoUrl,
-    gpsLat: order.gpsLat,
-    gpsLng: order.gpsLng,
-    gpsConfirmado: Boolean(order.gpsConfirmado || autoGpsLink),
+    gpsLat: normalizedGps.gpsLat ?? order.gpsLat,
+    gpsLng: normalizedGps.gpsLng ?? order.gpsLng,
+    gpsConfirmado: normalizedGps.gpsConfirmado,
     tipoVivienda: order.tipoVivienda || (isBuildingOrder(order) ? 'edificio' : 'casa'),
     nombreEdificio: order.nombreEdificio,
     pisoEdificio: order.pisoEdificio,
@@ -1064,11 +965,7 @@ export function buildSellerExecutiveWhatsAppReport(
           : ord.estadoEnvioProducto === 'enviado'
             ? '🚚 Enviado'
             : '📦 Listo p/ envío';
-      const ordGpsLink =
-        ord.gpsLink ||
-        (typeof ord.gpsLat === 'number' && typeof ord.gpsLng === 'number'
-          ? `https://www.google.com/maps?q=${ord.gpsLat.toFixed(6)},${ord.gpsLng.toFixed(6)}`
-          : '');
+      const ordGpsLink = normalizeOrderGpsFields(ord).gpsLink || '';
       const ordStreetViewLink =
         ord.gpsStreetViewLink ||
         (typeof ord.gpsLat === 'number' && typeof ord.gpsLng === 'number'
@@ -1076,11 +973,12 @@ export function buildSellerExecutiveWhatsAppReport(
           : '');
       const isBldg = isBuildingOrder(ord);
       const bldgDetails = formatBuildingDetailsSummary(ord);
+      const fullCity = formatFullCityDepartment(ord.ciudad, ord.departamento);
       lines.push('');
       lines.push(
         `*#${num} · ${ord.nombre || 'Cliente'}* (${ord.celular || 'S/N'}) · ${isBldg ? '🏢 *EDIFICIO*' : '🏠 *CASA*'}`
       );
-      lines.push(`📍 ${ord.ciudad || ''}, ${ord.departamento || ''} — ${ord.direccion || ''}`);
+      lines.push(`📍 ${fullCity} — ${ord.direccion || ''}`);
       if (isBldg && bldgDetails) {
         lines.push(`🏢 *Datos del Edificio:* ${bldgDetails}`);
       }
@@ -1186,26 +1084,18 @@ export function formatFullOrderTextForCourier(
     ? comp?.celularWeb || order.celular || ''
     : comp?.celularConfirmado || order.celular || '';
   const city = isWeb
-    ? comp?.ubicacionWeb || order.ciudad || ''
-    : comp?.ubicacionConfirmada || order.ciudad || '';
+    ? formatFullCityDepartment(order.ciudad || comp?.ubicacionWeb, order.departamento)
+    : formatFullCityDepartment(comp?.ubicacionConfirmada || order.ciudad, order.departamento);
   const address = isWeb
     ? comp?.direccionWeb || order.direccion || ''
     : comp?.direccionConfirmada || order.direccion || '';
   const ref = comp?.referenciaConfirmada || order.referenciaCasa || '';
-  const gps =
-    comp?.gpsLink ||
-    order.gpsLink ||
-    (typeof order.gpsLat === 'number' && typeof order.gpsLng === 'number'
-      ? `https://www.google.com/maps?q=${order.gpsLat.toFixed(6)},${order.gpsLng.toFixed(6)}`
-      : '');
-  const isPrepaid = isOrderPrepaymentVerifiedAndPaid(order as any);
-  const rawMonto = Number(order.monto) || 189000;
-  const amount = isPrepaid
-    ? Number(order.montoConDescuentoAdelantado) || Math.max(50000, rawMonto - 30000)
-    : rawMonto;
+  const normalizedGps = normalizeOrderGpsFields(order, comp);
+  const gps = normalizedGps.gpsLink || '';
+  const amount = Number(order.monto) || 189000;
 
   const lines = [
-    `📦 FICHA DE DESPACHO · Pedido #${order.reservaid || 'S/N'} (${isPrepaid ? '💎 PAGO ADELANTADO' : '✅ PAGO CONTRA ENTREGA'})`,
+    `📦 FICHA DE DESPACHO · Pedido #${order.reservaid || 'S/N'} (✅ PAGO CONTRA ENTREGA)`,
     `👤 Cliente: ${name}`,
     `📱 WhatsApp: ${phone}`,
     `📍 Ciudad: ${city}`,
@@ -1221,11 +1111,7 @@ export function formatFullOrderTextForCourier(
   if (order.cantidad) {
     lines.push(`📦 Pack: ${order.cantidad} un. · Total: ${formatGs(amount)}`);
   }
-  if (isPrepaid) {
-    lines.push(`💎 Estado de Pago: PAGADO POR ADELANTADO (${order.pagoAdelantadoBanco || 'Banco Familiar'} · Alias ${order.pagoAdelantadoAlias || '3856033'})`);
-  } else {
-    lines.push(`💵 Cobro al Entregar: Cobrar ${formatGs(amount)} en efectivo al cliente`);
-  }
+  lines.push(`💵 Cobro al Entregar: Cobrar ${formatGs(amount)} en efectivo al cliente`);
 
   return lines.join('\n');
 }

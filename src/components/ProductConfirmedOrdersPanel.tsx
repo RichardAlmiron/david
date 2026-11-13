@@ -29,12 +29,16 @@ import { Order, ProductPage } from '../types';
 import { formatGs } from '../config';
 import {
   isOrderConfirmedByAgent,
-  isOrderPrepaymentSentPendingVerification,
-  isOrderPrepaymentVerifiedAndPaid,
   buildOrderComparisonSummary,
   filterAdminOrders,
   formatFullOrderTextForCourier
 } from '../utils/orderConfirmation';
+import {
+  formatFullCityDepartment,
+  normalizeOrderGpsFields,
+  buildGoogleMapsSearchUrl,
+  inferParaguayDepartmentFromCity
+} from '../utils/paraguayGeo';
 
 export function downloadConfirmedOrdersExcelCsv(product: ProductPage, rawOrders: Order[]): number {
   const confirmed = rawOrders.filter(o => !o.archivado && isOrderConfirmedByAgent(o));
@@ -83,12 +87,9 @@ export function downloadConfirmedOrdersExcelCsv(product: ProductPage, rawOrders:
       ? new Date(ord.fecha).toLocaleString('es-PY', { hour12: false })
       : new Date().toLocaleString('es-PY', { hour12: false });
 
-    const gpsLink =
-      comp.gpsLink ||
-      ord.gpsLink ||
-      (typeof ord.gpsLat === 'number' && typeof ord.gpsLng === 'number'
-        ? `https://www.google.com/maps?q=${ord.gpsLat.toFixed(6)},${ord.gpsLng.toFixed(6)}`
-        : '');
+    const gpsNorm = normalizeOrderGpsFields(ord, ord.comparativaDatos);
+    const gpsLink = comp.gpsLink || gpsNorm.gpsLink || '';
+    const fullCityDept = comp.ubicacionConfirmada || formatFullCityDepartment(ord.ciudad, ord.departamento);
 
     return [
       idx + 1,
@@ -99,7 +100,7 @@ export function downloadConfirmedOrdersExcelCsv(product: ProductPage, rawOrders:
       Number(ord.monto) || 0,
       comp.nombreConfirmado || ord.nombre || '',
       comp.celularConfirmado || ord.celular || '',
-      comp.ubicacionConfirmada || ord.ciudad || '',
+      fullCityDept,
       (ord as any).barrio || '',
       comp.direccionConfirmada || ord.direccion || '',
       (ord as any).tipoDomicilio || 'Casa',
@@ -171,381 +172,10 @@ export const CopyFieldBtn: React.FC<{
   );
 };
 
-export async function approveOrderPrepaymentClientSide(
-  order: Order
-): Promise<{ ok: boolean; reply?: string }> {
-  try {
-    const res = await fetch('/api/whatsapp/approve-prepayment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        orderId: order.reservaid,
-        phone: order.celular,
-        orderSnapshot: order
-      })
-    });
-    const contentType = res.headers.get('content-type') || '';
-    if (res.ok && contentType.includes('application/json')) {
-      const json = await res.json();
-      return { ok: Boolean(json?.success), reply: json?.reply };
-    }
-  } catch {}
-  return { ok: false };
-}
-
-export interface PrepaymentVerificationSectionProps {
-  order: Order;
-  onUpdateOrder: (
-    orderId: string,
-    updates: Partial<Order>,
-    toastMessage?: string
-  ) => Promise<void>;
-  onMovedToPrepaidTab?: () => void;
-}
-
-export const PrepaymentVerificationSection: React.FC<PrepaymentVerificationSectionProps> = ({
-  order,
-  onUpdateOrder,
-  onMovedToPrepaidTab
-}) => {
-  const [togglingSwitch, setTogglingSwitch] = useState(false);
-  const [showFullReceiptModal, setShowFullReceiptModal] = useState(false);
-
-  const isSentPending = isOrderPrepaymentSentPendingVerification(order);
-  const isVerifiedPaid = isOrderPrepaymentVerifiedAndPaid(order);
-
-  const rawMontoNum =
-    Number(String(order.montoOriginalSinDescuento || order.monto || 189000).replace(/\D/g, '')) || 189000;
-  const discountedMontoNum =
-    Number(order.montoConDescuentoAdelantado) || Math.max(50000, rawMontoNum - 30000);
-  const bancoNombre = order.pagoAdelantadoBanco || 'Banco Familiar';
-  const aliasCuenta = order.pagoAdelantadoAlias || '3856033 (3.856.033)';
-  const titularCuenta = order.pagoAdelantadoTitular || 'Richard Almirón';
-
-  const handleToggleVerifiedSwitch = async () => {
-    setTogglingSwitch(true);
-    try {
-      const nextVerified = !isVerifiedPaid;
-      const nowIso = new Date().toISOString();
-      if (nextVerified) {
-        await approveOrderPrepaymentClientSide(order);
-      }
-      await onUpdateOrder(
-        order.reservaid,
-        {
-          datosConfirmados: true,
-          agenteCompletado: true,
-          empaquetado: true,
-          pagoAdelantadoComprobanteRecibido: true,
-          pagoAdelantadoVerificadoAdmin: nextVerified,
-          pagoAdelantadoEstado: nextVerified
-            ? 'pagado_adelantado_confirmado'
-            : 'pago_enviado_por_verificar',
-          pagoAdelantadoFecha: order.pagoAdelantadoFecha || nowIso,
-          pagoAdelantadoFechaVerificado: nextVerified ? nowIso : undefined,
-          pagoAdelantadoBanco: bancoNombre,
-          pagoAdelantadoAlias: aliasCuenta,
-          pagoAdelantadoTitular: titularCuenta,
-          montoOriginalSinDescuento: rawMontoNum,
-          montoConDescuentoAdelantado: discountedMontoNum
-        },
-        nextVerified
-          ? `💎 ¡Pago Adelantado de ${order.nombre} APROBADO (-Gs. 30.000)! Se envió el audio de confirmación a su WhatsApp.`
-          : `⏳ Pedido #${order.reservaid} devuelto a estado "Pago Enviado (Por Verificar)" en Confirmados.`
-      );
-      if (nextVerified && onMovedToPrepaidTab) {
-        onMovedToPrepaidTab();
-      }
-    } finally {
-      setTogglingSwitch(false);
-    }
-  };
-
-  const handleMarkPaymentSentPending = async () => {
-    setTogglingSwitch(true);
-    try {
-      const nowIso = new Date().toISOString();
-      await onUpdateOrder(
-        order.reservaid,
-        {
-          pagoAdelantadoComprobanteRecibido: true,
-          pagoAdelantadoVerificadoAdmin: false,
-          pagoAdelantadoEstado: 'pago_enviado_por_verificar',
-          pagoAdelantadoFecha: order.pagoAdelantadoFecha || nowIso,
-          pagoAdelantadoBanco: bancoNombre,
-          pagoAdelantadoAlias: aliasCuenta,
-          pagoAdelantadoTitular: titularCuenta,
-          montoOriginalSinDescuento: rawMontoNum,
-          montoConDescuentoAdelantado: discountedMontoNum
-        },
-        `⚡ Pedido #${order.reservaid} marcado con brillo "Pago Enviado (Por Verificar)".`
-      );
-    } finally {
-      setTogglingSwitch(false);
-    }
-  };
-
-  const handleUploadReceiptFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = String(reader.result || '');
-      if (!dataUrl) return;
-      const nowIso = new Date().toISOString();
-      await onUpdateOrder(
-        order.reservaid,
-        {
-          comprobantePagoDataUrl: dataUrl,
-          comprobantePagoMimeType: file.type || 'image/jpeg',
-          comprobantePagoNombreArchivo: file.name || 'comprobante.jpg',
-          pagoAdelantadoComprobanteRecibido: true,
-          pagoAdelantadoEstado: isVerifiedPaid
-            ? 'pagado_adelantado_confirmado'
-            : 'pago_enviado_por_verificar',
-          pagoAdelantadoFecha: order.pagoAdelantadoFecha || nowIso,
-          pagoAdelantadoBanco: bancoNombre,
-          pagoAdelantadoAlias: aliasCuenta,
-          pagoAdelantadoTitular: titularCuenta,
-          montoOriginalSinDescuento: rawMontoNum,
-          montoConDescuentoAdelantado: discountedMontoNum
-        },
-        `🧾 Comprobante de pago adjuntado al pedido de ${order.nombre}.`
-      );
-    };
-    reader.readAsDataURL(file);
-  };
-
-  return (
-    <div
-      data-testid={`prepayment-verification-box-${order.reservaid}`}
-      className={`p-2.5 sm:p-3 rounded-xl border transition-all space-y-2.5 ${
-        isVerifiedPaid
-          ? 'bg-cyan-950/70 border-cyan-400 '
-          : isSentPending
-            ? 'bg-amber-950/70 border-amber-400 '
-            : 'bg-zinc-900/90 border-amber-500/40'
-      }`}
-    >
-      {/* CABECERA COMPACTA: BADGE DE ESTADO + INTERRUPTOR SWITCH */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
-        <div className="flex items-center gap-2 flex-wrap">
-          {isVerifiedPaid ? (
-            <span className="px-2 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-800/60 text-[10px] font-medium uppercase tracking-wider ">
-              PAGO ADELANTADO CONFIRMADO
-            </span>
-          ) : isSentPending ? (
-            <span className="px-2 py-0.5 rounded-md bg-amber-950 text-amber-400 border border-amber-800/60 text-[10px] font-medium uppercase tracking-wider ">
-              PAGO ENVIADO · FALTA TU VERIFICACIÓN
-            </span>
-          ) : (
-            <span className="px-2 py-0.5 rounded-md bg-amber-950 text-amber-400 border border-amber-700 text-[10px] font-semibold uppercase tracking-wider">
-              🏦 Verificación Transferencia (-Gs. 30.000)
-            </span>
-          )}
-          <span className="text-[11px] font-bold text-zinc-200">
-            {isVerifiedPaid
-              ? 'Transferencia comprobada · Audio de aprobación enviado al cliente'
-              : isSentPending
-                ? '¡Cliente envió comprobante! Revisá tu Banco Familiar y aprobá con 1 clic:'
-                : 'Si el cliente transfirió con la promo (-30.000 Gs.), aprobá el pago aquí:'}
-          </span>
-        </div>
-
-        {/* SWITCH COMPACTO */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          {!isSentPending && !isVerifiedPaid && (
-            <button
-              type="button"
-              disabled={togglingSwitch}
-              onClick={handleMarkPaymentSentPending}
-              className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-200 text-[10px] font-medium cursor-pointer transition-all"
-              title="Marcar que el cliente avisó que envió pago adelantado"
-            >
-              Marcar &quot;Pago Enviado&quot;
-            </button>
-          )}
-
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isVerifiedPaid}
-            data-testid={`switch-verify-prepayment-${order.reservaid}`}
-            disabled={togglingSwitch}
-            onClick={handleToggleVerifiedSwitch}
-            className={`px-3 py-1.5 rounded-xl font-semibold text-xs inline-flex items-center gap-2 cursor-pointer transition-all border ${
-              isVerifiedPaid
-                ? 'bg-sky-950 text-sky-300 border border-sky-800/60 border-white '
-                : 'bg-zinc-950 hover:bg-zinc-900 text-amber-200 border-amber-400/80 '
-            }`}
-          >
-            {/* Switch Track & Thumb */}
-            <span
-              className={`w-8 h-4 rounded-full p-0.5 flex items-center transition-colors ${
-                isVerifiedPaid ? 'bg-slate-950 justify-end' : 'bg-zinc-700 justify-start'
-              }`}
-            >
-              <span
-                className={`w-3 h-3 rounded-full transition-transform ${
-                  isVerifiedPaid ? 'bg-cyan-400' : 'bg-amber-400'
-                }`}
-              />
-            </span>
-            <span className="text-[11px]">
-              {isVerifiedPaid
-                ? '💎 Pago Adelantado Confirmado (Activo)'
-                : 'Confirmar Pago Adelantado (Pasar a Pestaña)'}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* 3 MICRO-TARJETAS COMPACTAS (ADAPTABLES A PANTALLA DE 11 PULGADAS) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-        {/* Micro-Tarjeta 1: Cliente a verificar en tu banco */}
-        <div className="p-2.5 rounded-xl bg-black/50 border border-white/15 space-y-1">
-          <div className="flex items-center justify-between text-[10px] font-medium uppercase text-amber-400">
-            <span>👤 1. Cliente en tu Banco</span>
-            <CopyFieldBtn text={order.nombre} label="Copiar" tooltip="Copiar nombre para buscar en tu app bancaria" />
-          </div>
-          <div className="text-xs font-semibold text-white truncate" title={order.nombre}>
-            {order.nombre}
-          </div>
-          <div className="flex items-center justify-between gap-1 text-[11px] font-mono text-zinc-300">
-            <span>{order.celular}</span>
-            <CopyFieldBtn text={order.celular} label="Copiar" tooltip="Copiar WhatsApp" />
-          </div>
-          {order.pagoAdelantadoFecha && (
-            <div className="text-[10px] text-zinc-400">
-              🕒 {new Date(order.pagoAdelantadoFecha).toLocaleDateString('es-PY')} {new Date(order.pagoAdelantadoFecha).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit', hour12: false })}hs
-            </div>
-          )}
-        </div>
-
-        {/* Micro-Tarjeta 2: Cuenta y Monto Transferido */}
-        <div className="p-2.5 rounded-xl bg-black/50 border border-white/15 space-y-1">
-          <div className="flex items-center justify-between text-[10px] font-medium uppercase text-cyan-300">
-            <span>🏛️ 2. Cuenta Destino</span>
-            <CopyFieldBtn text={aliasCuenta} label="Copiar Alias" tooltip="Copiar Alias bancario" />
-          </div>
-          <div className="text-xs font-bold text-white truncate">
-            {bancoNombre} <span className="text-cyan-300 font-mono">({aliasCuenta})</span>
-          </div>
-          <div className="text-[11px] text-zinc-300 truncate">
-            Titular: <strong className="text-white">{titularCuenta}</strong>
-          </div>
-          <div className="flex items-center gap-1.5 pt-0.5">
-            <span className="text-[10px] line-through text-zinc-500 font-mono">
-              {formatGs(rawMontoNum)}
-            </span>
-            <span className="px-1.5 py-0.2 rounded bg-amber-400/20 border border-amber-400/50 text-amber-400 font-mono text-[11px] font-medium">
-              Transferido: {formatGs(discountedMontoNum)}
-            </span>
-          </div>
-        </div>
-
-        {/* Micro-Tarjeta 3: Comprobante Recibido */}
-        <div className="p-2.5 rounded-xl bg-black/50 border border-white/15 flex flex-col justify-between gap-1.5">
-          <div className="flex items-center justify-between text-[10px] font-medium uppercase text-amber-400">
-            <span>🧾 3. Comprobante</span>
-            {order.comprobantePagoDataUrl && (
-              <button
-                type="button"
-                onClick={() => setShowFullReceiptModal(true)}
-                className="px-1.5 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 text-[10px] font-semibold cursor-pointer"
-              >Ampliar
-              </button>
-            )}
-          </div>
-
-          {order.comprobantePagoDataUrl ? (
-            <div className="flex items-center gap-2">
-              <img
-                src={order.comprobantePagoDataUrl}
-                alt={`Comprobante de ${order.nombre}`}
-                onClick={() => setShowFullReceiptModal(true)}
-                className="w-11 h-11 rounded-lg object-cover border-2 border-amber-400 cursor-pointer hover:opacity-90 shrink-0 shadow-sm"
-              />
-              <div className="min-w-0 flex-1">
-                <span className="text-[10px] font-bold text-emerald-300 block truncate">
-                  ✓ Captura adjuntada
-                </span>
-                <label className="text-[10px] text-zinc-400 hover:text-white underline cursor-pointer mt-0.5 block">
-                  Cambiar foto
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleUploadReceiptFile}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="text-[10px] text-zinc-400 leading-tight">
-                {isSentPending ? 'Cliente avisó por chat' : 'Sin captura'}
-              </span>
-              <label className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 text-[10px] font-bold cursor-pointer inline-flex items-center gap-1 shrink-0">
-                <span>📷 Subir</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleUploadReceiptFile}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* MODAL PARA VER EL COMPROBANTE EN PANTALLA COMPLETA */}
-      {showFullReceiptModal && order.comprobantePagoDataUrl && (
-        <div
-          onClick={() => setShowFullReceiptModal(false)}
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            className="max-w-lg w-full bg-zinc-950 border border-amber-400/80 rounded-lg p-4 space-y-3 shadow-lg"
-          >
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-              <div>
-                <h4 className="text-sm font-semibold text-white">
-                  🧾 Comprobante de Pago — {order.nombre}
-                </h4>
-                <p className="text-[11px] text-amber-400 font-mono">
-                  {bancoNombre} · Alias {aliasCuenta} · Titular: {titularCuenta} · {formatGs(discountedMontoNum)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowFullReceiptModal(false)}
-                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold cursor-pointer"
-              >
-                ✕ Cerrar
-              </button>
-            </div>
-            <div className="max-h-[70vh] overflow-auto flex justify-center bg-black rounded-xl p-2">
-              <img
-                src={order.comprobantePagoDataUrl}
-                alt={`Comprobante completo ${order.nombre}`}
-                className="max-w-full h-auto rounded-lg"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 interface ProductConfirmedOrdersPanelProps {
   product: ProductPage;
   orders: Order[];
-  panelMode?: 'confirmados' | 'pagos_adelantados';
-  onSwitchSubTab?: (tab: 'confirmados' | 'pagos_adelantados') => void;
   onUpdateOrderLogistics: (
     orderId: string,
     updates: Partial<Order>,
@@ -558,24 +188,11 @@ interface ProductConfirmedOrdersPanelProps {
 export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelProps> = ({
   product,
   orders,
-  panelMode = 'confirmados',
-  onSwitchSubTab,
   onUpdateOrderLogistics,
   onRequestDeleteOrders,
   onClose
 }) => {
-  const isPrepaidTab = panelMode === 'pagos_adelantados';
-
-  // REGLA ESTRICTA DEL USUARIO:
-  // - En la pestaña "✅ Confirmados": están los pedidos confirmados que TODAVÍA NO pasaron a "💎 Pago Adelantado".
-  //   (Si un pedido recibió pago enviado pero aún no fue verificado con el interruptor, brilla acá con color característico ámbar/dorado para que el vendedor lo vea y lo verifique).
-  // - Una vez que el vendedor activa el interruptor de "Confirmado Pago Adelantado", ese pedido YA NO FIGURA en "✅ Confirmados" y pasa exclusivamente a la nueva pestaña "💎 Pago Adelantado".
-  const allConfirmedOrders = useMemo(() => {
-    if (isPrepaidTab) {
-      return orders.filter(o => isOrderPrepaymentVerifiedAndPaid(o));
-    }
-    return orders.filter(o => isOrderConfirmedByAgent(o) && !isOrderPrepaymentVerifiedAndPaid(o));
-  }, [orders, isPrepaidTab]);
+  const allConfirmedOrders = useMemo(() => orders.filter(o => isOrderConfirmedByAgent(o)), [orders]);
 
   // Filtros compactos desplegables con un simple botón
   const [showFiltersBar, setShowFiltersBar] = useState<boolean>(false);
@@ -639,45 +256,7 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
     allConfirmedOrders[0]?.reservaid || 'TODOS'
   );
   const [updatingLogistics, setUpdatingLogistics] = useState<boolean>(false);
-  const [approvingCardOrderId, setApprovingCardOrderId] = useState<string | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
-
-  const handleQuickApprovePrepaymentCard = async (ord: Order) => {
-    if (approvingCardOrderId) return;
-    setApprovingCardOrderId(ord.reservaid);
-    try {
-      const rawMontoNum =
-        Number(String(ord.montoOriginalSinDescuento || ord.monto || 189000).replace(/\D/g, '')) || 189000;
-      const discountedMontoNum =
-        Number(ord.montoConDescuentoAdelantado) || Math.max(50000, rawMontoNum - 30000);
-      const nowIso = new Date().toISOString();
-      await approveOrderPrepaymentClientSide(ord);
-      await onUpdateOrderLogistics(
-        ord.reservaid,
-        {
-          datosConfirmados: true,
-          agenteCompletado: true,
-          empaquetado: true,
-          pagoAdelantadoComprobanteRecibido: true,
-          pagoAdelantadoVerificadoAdmin: true,
-          pagoAdelantadoEstado: 'pagado_adelantado_confirmado',
-          pagoAdelantadoFecha: ord.pagoAdelantadoFecha || nowIso,
-          pagoAdelantadoFechaVerificado: nowIso,
-          pagoAdelantadoBanco: ord.pagoAdelantadoBanco || 'Banco Familiar',
-          pagoAdelantadoAlias: ord.pagoAdelantadoAlias || '3856033 (3.856.033)',
-          pagoAdelantadoTitular: ord.pagoAdelantadoTitular || 'Richard Almirón',
-          montoOriginalSinDescuento: rawMontoNum,
-          montoConDescuentoAdelantado: discountedMontoNum
-        },
-        `💎 ¡Pago adelantado de ${ord.nombre} aprobado (-Gs. 30.000)! Se envió el audio de confirmación a su WhatsApp.`
-      );
-      if (!isPrepaidTab && onSwitchSubTab) {
-        onSwitchSubTab('pagos_adelantados');
-      }
-    } finally {
-      setApprovingCardOrderId(null);
-    }
-  };
   const [editCantidad, setEditCantidad] = useState<number>(1);
   const [editMonto, setEditMonto] = useState<number>(189000);
   const [editDireccion, setEditDireccion] = useState<string>('');
@@ -719,12 +298,8 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
     if (confirmedOrders.length === 0) return;
     const textLines = confirmedOrders.map((ord, idx) => {
       const comp = buildOrderComparisonSummary(ord);
-      const gps =
-        comp.gpsLink ||
-        ord.gpsLink ||
-        (typeof ord.gpsLat === 'number' && typeof ord.gpsLng === 'number'
-          ? `https://www.google.com/maps?q=${ord.gpsLat.toFixed(6)},${ord.gpsLng.toFixed(6)}`
-          : 'Sin link GPS');
+      const gpsNorm = normalizeOrderGpsFields(ord, ord.comparativaDatos);
+      const gps = comp.gpsLink || gpsNorm.gpsLink || buildGoogleMapsSearchUrl(ord) || 'Sin link GPS';
       return (
         `📦 PEDIDO CONFIRMADO #${idx + 1} (${ord.reservaid})\n` +
         `• Producto: ${product.nombre} (${ord.cantidad} un. - ${formatGs(ord.monto)})\n` +
@@ -798,32 +373,18 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
   const hasActiveFilter = Boolean(filterName || filterPhone || filterLogisticsState !== 'todos' || selectedFilteredIds.length > 0);
 
   return (
-    <div
-      className={`p-3 sm:p-4 rounded-lg bg-[#0f0f11] border shadow-sm space-y-3 text-zinc-100 ${
-        isPrepaidTab
-          ? 'border-cyan-400/70 '
-          : 'border-emerald-900/60'
-      }`}
-    >
+    <div className="p-3 sm:p-4 rounded-lg bg-[#0f0f11] border border-emerald-900/60 shadow-sm space-y-3 text-zinc-100">
       {/* Cabecera Compacta con Descarga 1-Clic en Excel + Copiar p/ Despacho + Botón Compacto de Filtros */}
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
         <div className="flex items-center gap-2 min-w-0">
-          {isPrepaidTab ? (
-            <span className="px-2.5 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-800/60 text-[10px] font-medium uppercase tracking-wider shrink-0 ">
-              Pago Adelantado ({confirmedOrders.length})
-            </span>
-          ) : (
-            <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-medium uppercase tracking-wider shrink-0">
-              Confirmados ({confirmedOrders.length})
-            </span>
-          )}
+          <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-medium uppercase tracking-wider shrink-0">
+            Confirmados ({confirmedOrders.length})
+          </span>
           <h4 className="text-xs sm:text-sm font-semibold text-zinc-100 truncate">
             {product.nombre}
           </h4>
           <span className="hidden xl:inline text-[11px] text-zinc-400 truncate">
-            {isPrepaidTab
-              ? '— Pedidos confirmados que YA PAGARON por adelantado en Banco Familiar (Alias 3856033)'
-              : '— Listos para empaquetar y enviar (los que ya pagaron por adelantado pasan a su propia pestaña)'}
+            — Listos para empaquetar y enviar con datos completos de entrega y GPS
           </span>
         </div>
 
@@ -1090,17 +651,10 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
       {/* LISTA DE TARJETAS HORIZONTALES ENUMERADAS (#1, #2, #3...) CON CASILLA DE SELECCIÓN Y ELIMINADO */}
       {confirmedOrders.length === 0 ? (
         <div className="p-8 rounded-lg bg-[#09090b] border border-dashed border-zinc-800 text-center space-y-2">
-          <PackageCheck className={`w-8 h-8 mx-auto opacity-70 ${isPrepaidTab ? 'text-cyan-400' : 'text-emerald-500'}`} />
+          <PackageCheck className="w-8 h-8 mx-auto opacity-70 text-emerald-500" />
           <div className="text-sm font-semibold text-zinc-300">
-            {isPrepaidTab
-              ? 'Aún no hay pedidos verificados en la pestaña de Pago Adelantado'
-              : 'No se encontraron pedidos confirmados pendientes de pago contra entrega con el filtro actual'}
+            No se encontraron pedidos confirmados con el filtro actual
           </div>
-          {isPrepaidTab && (
-            <p className="text-xs text-zinc-400 max-w-lg mx-auto">
-              Cuando un cliente envíe su comprobante de transferencia a Banco Familiar (Alias 3856033) y actives el interruptor de confirmación dentro del pedido, aparecerá automáticamente en esta lista exclusiva.
-            </p>
-          )}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -1109,33 +663,30 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
             const isCardOpen = expandedOrderId === ord.reservaid;
             const isChecked = selectedConfirmedIds.includes(ord.reservaid);
             const comparison = buildOrderComparisonSummary(ord);
+            const fullCityDept =
+              comparison.ubicacionConfirmada || formatFullCityDepartment(ord.ciudad, ord.departamento);
+            const gpsNorm = normalizeOrderGpsFields(ord, ord.comparativaDatos);
+            const effectiveMapUrl = comparison.gpsLink || gpsNorm.gpsLink || buildGoogleMapsSearchUrl(ord);
+            const hasExactGps = Boolean((comparison.gpsLink || gpsNorm.gpsLink) && gpsNorm.gpsConfirmado);
+            const hasApproxPin = Boolean((comparison.gpsLink || gpsNorm.gpsLink) && !gpsNorm.gpsConfirmado);
             const isConcretado = Boolean(ord.concretadoCobrado || ord.estado === 'entregado_pagado');
             const isEnviado = Boolean(
               isConcretado || ord.estadoEnvioProducto === 'enviado' || ord.estado === 'en_camino'
             );
-            const isPrepaySentPending = isOrderPrepaymentSentPendingVerification(ord);
-            const isPrepayVerified = isOrderPrepaymentVerifiedAndPaid(ord);
-            const displayAmount =
-              isPrepaySentPending || isPrepayVerified
-                ? Number(ord.montoConDescuentoAdelantado) || Math.max(50000, (Number(ord.monto) || 189000) - 30000)
-                : Number(ord.monto) || 189000;
+            const displayAmount = Number(ord.monto) || 189000;
 
             return (
               <div key={ord.reservaid} className="w-full">
-                {/* Tarjeta Horizontal Compacta con Brillo Característico (NO verde) cuando tiene Pago Enviado o Pago Adelantado */}
+                {/* Tarjeta Horizontal Compacta */}
                 <div
                   onClick={() => {
                     setExpandedOrderId(isCardOpen ? null : ord.reservaid);
                     setSelectedUniversalOrderId(ord.reservaid);
                   }}
                   className={`w-full h-11 min-h-[44px] max-h-[44px] px-3 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer select-none transition-all overflow-hidden ${
-                    isPrepayVerified
-                      ? 'border-cyan-400 bg-cyan-950/70 ring-1 ring-cyan-400/50 text-white'
-                      : isPrepaySentPending
-                        ? 'border-amber-400 bg-amber-950/70 ring-1 ring-amber-400/60 text-amber-50'
-                        : isChecked
-                          ? 'border-emerald-600 bg-emerald-950/70 ring-1 ring-emerald-500/30 text-emerald-100'
-                          : 'border-zinc-800 bg-[#0f0f11] hover:bg-zinc-900/90 text-zinc-100'
+                    isChecked
+                      ? 'border-emerald-600 bg-emerald-950/70 ring-1 ring-emerald-500/30 text-emerald-100'
+                      : 'border-zinc-800 bg-[#0f0f11] hover:bg-zinc-900/90 text-zinc-100'
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
@@ -1152,74 +703,25 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                     <span className="font-mono text-[11px] font-bold text-zinc-300 shrink-0 tabular-nums">
                       {ord.reservaid}
                     </span>
-                    {isPrepayVerified ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60 text-[10px] font-semibold uppercase tracking-tight shrink-0 ">
-                        <span>PAGO ADELANTADO</span>
-                      </span>
-                    ) : isPrepaySentPending ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800/60 text-[10px] font-semibold uppercase tracking-tight shrink-0 ">
-                        <span>PAGO ENVIADO (VERIFICAR)</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-semibold uppercase tracking-tight shrink-0">
-                        <CheckCircle2 className="w-2.5 h-2.5" />
-                        <span>Confirmado</span>
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-semibold uppercase tracking-tight shrink-0">
+                      <CheckCircle2 className="w-2.5 h-2.5" />
+                      <span>Confirmado</span>
+                    </span>
                     <span className="font-extrabold text-xs text-zinc-100 truncate max-w-[140px] sm:max-w-[180px] shrink-0">
                       {ord.nombre}
                     </span>
                     <span className="hidden sm:inline-block font-mono text-[11px] font-bold text-zinc-300 tabular-nums whitespace-nowrap shrink-0">
                       {comparison.celularConfirmado}
                     </span>
-                    <span className="hidden md:inline-block text-[11px] font-medium text-zinc-300 truncate max-w-[170px]">
-                      {ord.ciudad}
+                    <span className="hidden md:inline-block text-[11px] font-medium text-zinc-300 truncate max-w-[200px]" title={fullCityDept}>
+                      {fullCityDept}
                     </span>
-                    <span
-                      className={`hidden lg:inline-block font-mono text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0 ${
-                        isPrepayVerified
-                          ? 'text-cyan-300'
-                          : isPrepaySentPending
-                            ? 'text-amber-400'
-                            : 'text-emerald-400'
-                      }`}
-                    >
+                    <span className="hidden lg:inline-block font-mono text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0 text-emerald-400">
                       {ord.cantidad}u · {formatGs(displayAmount)}
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {!isPrepayVerified ? (
-                      <button
-                        type="button"
-                        disabled={approvingCardOrderId === ord.reservaid}
-                        aria-label={`Aprobar pago adelantado de ${ord.nombre}`}
-                        data-testid={`confirmed-card-approve-prepayment-${ord.reservaid}`}
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleQuickApprovePrepaymentCard(ord);
-                        }}
-                        title="Comprobar pago en banco, aprobar descuento de Gs. 30.000 y enviar audio de aprobación al WhatsApp del cliente"
-                        className={`h-7 px-2.5 rounded-lg text-[10px] font-medium inline-flex items-center gap-1 cursor-pointer transition-all border ${
-                          isPrepaySentPending
-                            ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-200 '
-                            : 'bg-cyan-950/90 hover:bg-cyan-900 text-cyan-200 border-cyan-500/70'
-                        }`}
-                      >
-                        <span>
-                          {approvingCardOrderId === ord.reservaid
-                            ? 'Aprobando...'
-                            : isPrepaySentPending
-                              ? '✅ Aprobar Pago (-30k)'
-                              : '✅ Aprobar Pago Adelantado'}
-                        </span>
-                      </button>
-                    ) : (
-                      <span className="h-7 px-2 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/70 text-[10px] font-medium inline-flex items-center gap-1">
-                        Aprobado (-30k)
-                      </span>
-                    )}
-
                     {isConcretado ? (
                       <span className="hidden xl:inline-block bg-emerald-500 text-black px-2 py-0.5 rounded text-[10px] font-medium uppercase">
                         💰 Concretado
@@ -1248,16 +750,8 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                       </button>
                     )}
 
-                    <span
-                      className={`h-7 px-2.5 rounded-lg text-[10px] font-medium inline-flex items-center gap-1 ${
-                        isPrepayVerified
-                          ? 'bg-cyan-400 text-slate-950'
-                          : isPrepaySentPending
-                            ? 'bg-amber-400 text-black'
-                            : 'bg-[#15803d] text-white'
-                      }`}
-                    >
-                      <span>{isCardOpen ? 'Cerrar' : isPrepaySentPending ? 'Ver Comprobante' : 'Abrir Pedido'}</span>
+                    <span className="h-7 px-2.5 rounded-lg text-[10px] font-medium inline-flex items-center gap-1 bg-[#15803d] text-white">
+                      <span>{isCardOpen ? 'Cerrar' : 'Abrir Pedido'}</span>
                       <ChevronDown
                         className={`w-3.5 h-3.5 transition-transform ${isCardOpen ? 'rotate-180' : ''}`}
                       />
@@ -1265,20 +759,9 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                   </div>
                 </div>
 
-                {/* Detalle Desplegable: Panel de Verificación de Pago Adelantado + Ficha Completa del Cliente */}
+                {/* Detalle Desplegable: Ficha Completa del Cliente */}
                 {isCardOpen && (
                   <div className="mt-1 p-2.5 sm:p-3 rounded-xl border border-zinc-800 bg-[#09090b] space-y-2.5">
-                    {/* PANEL DE VERIFICACIÓN DE PAGO ADELANTADO Y COMPROBANTE CON INTERRUPTOR */}
-                    <PrepaymentVerificationSection
-                      order={ord}
-                      onUpdateOrder={onUpdateOrderLogistics}
-                      onMovedToPrepaidTab={() => {
-                        if (!isPrepaidTab && onSwitchSubTab) {
-                          onSwitchSubTab('pagos_adelantados');
-                        }
-                      }}
-                    />
-
                     {/* BANNER COMPACTO: RESUMEN DE CONFIRMACIÓN DEL AGENTE IA */}
                     <div className="p-2 sm:p-2.5 rounded-lg bg-emerald-950/35 border border-emerald-800/60 flex items-center justify-between gap-2 text-xs">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1478,33 +961,62 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                             </div>
 
                             {/* Mapa GPS */}
-                            {comparison.gpsLink ? (
-                              <div className="flex items-center justify-between gap-1.5 py-1 px-2 rounded-lg bg-emerald-950 border border-[#25D366]/50">
+                            {gpsNorm.gpsLink ? (
+                              <div
+                                className={`flex items-center justify-between gap-1.5 py-1.5 px-2 rounded-lg border ${
+                                  hasExactGps
+                                    ? 'bg-emerald-950 border-[#25D366]/50'
+                                    : 'bg-sky-950/60 border-sky-500/40'
+                                }`}
+                              >
                                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                  <span className="text-[10px] font-medium uppercase text-[#25D366] shrink-0">
-                                    GPS:
+                                  <span
+                                    className={`text-[10px] font-semibold uppercase shrink-0 ${
+                                      hasExactGps ? 'text-[#25D366]' : 'text-sky-300'
+                                    }`}
+                                  >
+                                    {hasExactGps ? '📍 GPS Exacto:' : '🧭 Pin Barrio/Dirección:'}
                                   </span>
-                                  <span className="font-mono text-[10px] text-zinc-300 truncate" title={comparison.gpsLink}>
-                                    {comparison.gpsLink}
+                                  <span className="font-mono text-[10px] text-zinc-300 truncate" title={gpsNorm.gpsLink}>
+                                    {gpsNorm.gpsLink}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
-                                  <CopyFieldBtn text={comparison.gpsLink} label="Copiar" tooltip="Copiar Link de Google Maps GPS" />
+                                  <CopyFieldBtn text={gpsNorm.gpsLink} label="Copiar" tooltip="Copiar Link de Google Maps" />
                                   <a
-                                    href={comparison.gpsLink}
+                                    href={gpsNorm.gpsLink}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="px-2 py-0.5 rounded bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold text-[10px] inline-flex items-center gap-1 shrink-0 shadow-sm"
-                                    title="Abrir mapa en Google Maps"
+                                    className={`px-2 py-0.5 rounded font-bold text-[10px] inline-flex items-center gap-1 shrink-0 shadow-sm ${
+                                      hasExactGps
+                                        ? 'bg-[#25D366] hover:bg-[#20bd5a] text-black'
+                                        : 'bg-sky-500 hover:bg-sky-400 text-black'
+                                    }`}
+                                    title="Abrir ubicación en Google Maps"
                                   >
-                                    <span>Abrir</span>
+                                    <span>{hasApproxPin ? 'Ver Zona' : 'Abrir'}</span>
                                     <ExternalLink className="w-2.5 h-2.5" />
                                   </a>
                                 </div>
                               </div>
+                            ) : effectiveMapUrl ? (
+                              <div className="flex items-center justify-between gap-1.5 py-1.5 px-2 rounded-lg bg-zinc-900/90 border border-zinc-700/80">
+                                <span className="text-[11px] text-zinc-300 truncate">
+                                  Sin pin exacto — buscar zona en Google Maps
+                                </span>
+                                <a
+                                  href={effectiveMapUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-2 py-0.5 rounded bg-zinc-700 hover:bg-zinc-600 text-white font-semibold text-[10px] inline-flex items-center gap-1 shrink-0"
+                                >
+                                  <span>🔍 Buscar en Maps</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              </div>
                             ) : (
                               <div className="text-[11px] text-zinc-500 italic py-0.5">
-                                Pendiente de confirmación de link GPS por el cliente.
+                                Sin coordenadas GPS ni dirección suficiente para mapa.
                               </div>
                             )}
                           </div>
@@ -1681,6 +1193,10 @@ export const ProductConfirmedOrdersPanel: React.FC<ProductConfirmedOrdersPanelPr
                                         cantidad: editCantidad as 1 | 2 | 3,
                                         monto: editMonto,
                                         ciudad: editCiudad.trim() || ord.ciudad,
+                                        departamento: inferParaguayDepartmentFromCity(
+                                          editCiudad.trim() || ord.ciudad,
+                                          ord.departamento
+                                        ),
                                         direccion: editDireccion.trim() || ord.direccion,
                                         referenciaCasa: editReferencia.trim() || ord.referenciaCasa
                                       },

@@ -6,7 +6,6 @@ import {
   buildStageCommercialCopyAndPrompt,
   buildFullProductCommercialMatrixSpecs,
   resolvePostTurnCommercialStage,
-  VIP_PREPAYMENT_DISCOUNT_GS,
   WA_COMMERCIAL_STAGES
 } from './waStageCommercials';
 import type { WaStageCommercialAsset } from '../types';
@@ -22,9 +21,7 @@ const sampleProduct = {
   }
 };
 
-test('resolves Pack 1, Pack 2, and Pack 3 strictly without cross-pack confusion and applies -Gs. 30.000 VIP discount', () => {
-  assert.equal(VIP_PREPAYMENT_DISCOUNT_GS, 30000);
-
+test('resolves Pack 1, Pack 2, and Pack 3 strictly without cross-pack confusion', () => {
   const p1 = resolveOrderCommercialPackAndPrice({ cantidad: 1, monto: 189000 }, sampleProduct);
   const p2 = resolveOrderCommercialPackAndPrice({ cantidad: 2, monto: 358000 }, sampleProduct);
   const p3 = resolveOrderCommercialPackAndPrice({ cantidad: 3, monto: 507000 }, sampleProduct);
@@ -34,21 +31,18 @@ test('resolves Pack 1, Pack 2, and Pack 3 strictly without cross-pack confusion 
   assert.equal(p1.packTitleUpper, 'PACK 1 UNIDAD');
   assert.equal(p1.officialPriceGs, 189000);
   assert.equal(p1.officialPriceFormatted, 'Gs. 189.000');
-  assert.equal(p1.vipPriceGs, 159000);
 
   assert.equal(p2.unitCount, 2);
   assert.equal(p2.packKey, 'pack2');
   assert.equal(p2.packTitleUpper, 'PACK 2 UNIDADES');
   assert.equal(p2.officialPriceGs, 358000);
   assert.equal(p2.officialPriceFormatted, 'Gs. 358.000');
-  assert.equal(p2.vipPriceGs, 328000);
 
   assert.equal(p3.unitCount, 3);
   assert.equal(p3.packKey, 'pack3');
   assert.equal(p3.packTitleUpper, 'PACK 3 UNIDADES');
   assert.equal(p3.officialPriceGs, 507000);
   assert.equal(p3.officialPriceFormatted, 'Gs. 507.000');
-  assert.equal(p3.vipPriceGs, 477000);
 });
 
 test('never allows a Pack 1 commercial asset to pass validation for a Pack 3 customer order', () => {
@@ -132,13 +126,6 @@ test('enforces ONLY ONE commercial image stage per order (stage1_welcome x 3 pac
     ),
     null
   );
-  assert.equal(
-    resolvePostTurnCommercialStage(
-      { datosConfirmados: true, promoPagoAdelantadoStage: 'alias_sent_awaiting_receipt' },
-      5
-    ),
-    null
-  );
 });
 
 test('renders crisp 1080x1080 JPEG single-stage commercial buffers for Pack 1, Pack 2, and Pack 3 on disk', async () => {
@@ -171,7 +158,6 @@ test('renders crisp 1080x1080 JPEG single-stage commercial buffers for Pack 1, P
     assert.ok(asset, `Expected asset for ${key}`);
     assert.equal(asset.packQty, packQty);
     assert.equal(asset.framedPriceGs, productionProduct.precios[packQty]);
-    assert.equal(asset.vipPriceGs, productionProduct.precios[packQty] - 30000);
     assert.equal(asset.whatsappCaption, '');
 
     const diskPath = pathMod.resolve(process.cwd(), 'public', asset.imageUrl.replace(/^\/+/, ''));

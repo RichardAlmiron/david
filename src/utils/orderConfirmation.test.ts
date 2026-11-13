@@ -22,8 +22,7 @@ import {
   formatGuaraniesSpeech,
   normalizeGuaraniesCurrencyForSpeech,
   buildExpressInitialAddressTextCard,
-  evaluateExpressOrderConfirmationInput,
-  evaluateExpressPromoDecisionInput
+  evaluateExpressOrderConfirmationInput
 } from './orderConfirmation';
 import { executeDeepseekHarnessOnDraft, cordisKernel } from '../services/deepseekHarnessEngine';
 import { Order } from '../types';
@@ -1263,17 +1262,5 @@ test('Express 1-step confirmation card hides customer GPS URL while preserving d
   assert.equal(
     evaluateExpressOrderConfirmationInput('El mapa está mal, mi barrio es Villa Morra', true).decision,
     'CORRECTION_OR_WRONG_MAP'
-  );
-
-  // Express -Gs. 30.000 promo trigger ("QUIERO PARTICIPAR") vs COD ("Yo pago sl recibir") & polite "Ok"
-  assert.equal(evaluateExpressPromoDecisionInput('Quiero participar'), 'ACCEPT_PROMO_SEND_ALIAS');
-  assert.equal(evaluateExpressPromoDecisionInput('🎤 Sí quiero participar de la promoción'), 'ACCEPT_PROMO_SEND_ALIAS');
-  assert.equal(evaluateExpressPromoDecisionInput('Pasame el alias por favor'), 'ACCEPT_PROMO_SEND_ALIAS');
-  assert.equal(evaluateExpressPromoDecisionInput('Yo pago sl recibir'), 'DECLINE_COD');
-  assert.equal(evaluateExpressPromoDecisionInput('Pago contra entrega en efectivo'), 'DECLINE_COD');
-  assert.equal(evaluateExpressPromoDecisionInput('Ok gracias'), 'POLITE_ACK_KEEP_COD');
-  assert.equal(
-    evaluateExpressPromoDecisionInput('🧾 [COMPROBANTE_PAGO_ADELANTADO: captura]'),
-    'RECEIPT_SENT'
   );
 });

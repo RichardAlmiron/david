@@ -25,6 +25,11 @@ import confetti from 'canvas-confetti';
 import { useStore } from '../context/StoreContext';
 import { formatGs, formatWaPhone } from '../config';
 import { trackMetaFullFunnelEvent } from '../utils/metaPixelEngine';
+import {
+  forwardGeocodeParaguayAddress,
+  inferParaguayDepartmentFromCity,
+  type OrderGpsFuente
+} from '../utils/paraguayGeo';
 
 const DEPARTAMENTOS_PY = [
   'Central',
@@ -106,7 +111,7 @@ export const OrderForm: React.FC = () => {
   const [mapLocked, setMapLocked] = useState<boolean>(true);
   const [nombre, setNombre] = useState('');
   const [celular, setCelular] = useState('');
-  const [departamento, setDepartamento] = useState('Central');
+  const [departamento, setDepartamento] = useState('');
   // Campos precisos escritos por el cliente (jamás pisados por el mapa GPS): Ciudad, Barrio y Nombre de Calle
   const [ciudadTexto, setCiudadTexto] = useState('');
   const [barrioTexto, setBarrioTexto] = useState('');
@@ -135,6 +140,7 @@ export const OrderForm: React.FC = () => {
   const [gpsLng, setGpsLng] = useState<number | null>(null);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [gpsConfirmado, setGpsConfirmado] = useState<boolean>(false);
+  const [gpsFuente, setGpsFuente] = useState<OrderGpsFuente | undefined>(undefined);
   const [gpsLoading, setGpsLoading] = useState<boolean>(false);
   const [gpsDetectedAddress, setGpsDetectedAddress] = useState<string>('');
   const [gpsNotice, setGpsNotice] = useState<string>('');
@@ -219,6 +225,51 @@ export const OrderForm: React.FC = () => {
       }
     };
   }, []);
+
+  // Pre-calentamiento silencioso de GPS cuando el permiso ya está concedido (cero popups)
+  useEffect(() => {
+    if (gpsConfirmado || gpsLat !== null || orderComplete) return;
+    const step2Ready = nombre.trim().length >= 3 && celular.replace(/\D/g, '').length >= 8;
+    if (!step2Ready || typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    let cancelled = false;
+    const warmUpPosition = () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (cancelled) return;
+          const cleanLat = Number(pos.coords.latitude.toFixed(6));
+          const cleanLng = Number(pos.coords.longitude.toFixed(6));
+          const roundedAcc = Math.max(3, Math.round(pos.coords.accuracy || 40));
+          setGpsLat(cleanLat);
+          setGpsLng(cleanLng);
+          setGpsAccuracy(roundedAcc);
+          setGpsConfirmado(true);
+          setGpsFuente('gps_dispositivo');
+          setMapLocked(true);
+          reverseGeocodeCoords(cleanLat, cleanLng);
+        },
+        () => {
+          // Silent ignore
+        },
+        { enableHighAccuracy: false, timeout: 4500, maximumAge: 300000 }
+      );
+    };
+
+    if (navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'geolocation' as PermissionName })
+        .then((perm) => {
+          if (!cancelled && perm.state === 'granted') {
+            warmUpPosition();
+          }
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [nombre, celular, gpsLat, gpsConfirmado, orderComplete]);
 
   // Smoothly focus first empty input ONLY when explicitly opening the fullscreen modal from a CTA button
   useEffect(() => {
@@ -343,7 +394,7 @@ export const OrderForm: React.FC = () => {
   // Synchronous user-gesture GPS acquisition for the Dual-Function Submit Button:
   // Captures the sharpest high-accuracy GPS fix within `timeoutMs` and NEVER throws or blocks lead submission if denied.
   const captureLiveGeolocationForSubmit = (
-    timeoutMs = 4200
+    timeoutMs = 4600
   ): Promise<{ lat: number; lng: number; acc: number } | null> => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       return Promise.resolve(null);
@@ -353,6 +404,8 @@ export const OrderForm: React.FC = () => {
       let settled = false;
       let localWatchId: number | null = null;
       let bestFix: { lat: number; lng: number; acc: number } | null = null;
+      let watchErrored = false;
+      let fastErrored = false;
 
       const finish = (result: { lat: number; lng: number; acc: number } | null) => {
         if (settled) return;
@@ -376,16 +429,21 @@ export const OrderForm: React.FC = () => {
           bestFix = { lat: cleanLat, lng: cleanLng, acc: roundedAcc };
         }
 
-        // Resolve immediately as soon as we lock a crisp rooftop/street-level GPS fix (<= 22m)
-        if (roundedAcc <= 22) {
+        // Resolve immediately as soon as we lock a crisp rooftop/street-level GPS fix (<= 25m)
+        if (roundedAcc <= 25) {
           finish(bestFix);
         }
       };
 
-      const onError = (err: GeolocationPositionError) => {
-        // Any error -> resolve immediately with whatever we have (or null) so customer NEVER waits
-        // Permission denied (code 1), position unavailable (code 2), or timeout (code 3)
-        finish(bestFix);
+      const maybeFinishOnError = (err: GeolocationPositionError) => {
+        // Code 1 = PERMISSION_DENIED -> abort immediately without stalling
+        if (err && err.code === 1) {
+          finish(bestFix);
+          return;
+        }
+        if (watchErrored && fastErrored) {
+          finish(bestFix);
+        }
       };
 
       const deadlineTimer = window.setTimeout(() => {
@@ -393,13 +451,34 @@ export const OrderForm: React.FC = () => {
       }, timeoutMs);
 
       try {
-        localWatchId = navigator.geolocation.watchPosition(onPosition, onError, {
-          enableHighAccuracy: true,
-          timeout: timeoutMs,
-          maximumAge: 0
-        });
+        // Fast cached/Wi-Fi/cell fix resolves in <150ms if browser/device has one
+        navigator.geolocation.getCurrentPosition(
+          onPosition,
+          (err) => {
+            fastErrored = true;
+            maybeFinishOnError(err);
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: Math.min(timeoutMs, 3500),
+            maximumAge: 300000
+          }
+        );
+
+        localWatchId = navigator.geolocation.watchPosition(
+          onPosition,
+          (err) => {
+            watchErrored = true;
+            maybeFinishOnError(err);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: timeoutMs,
+            maximumAge: 60000
+          }
+        );
       } catch {
-        finish(null);
+        finish(bestFix);
       }
     });
   };
@@ -439,6 +518,7 @@ export const OrderForm: React.FC = () => {
       setGpsLng(cleanLng);
       setGpsAccuracy(roundedAcc);
       setGpsConfirmado(true);
+      setGpsFuente('gps_dispositivo');
       setMapLocked(true);
       setGpsLoading(false);
       setMapZoom(18);
@@ -450,12 +530,27 @@ export const OrderForm: React.FC = () => {
         globalPixelId: config.pixelId,
         packQuantity: effectivePack,
         valueGs: total,
-        userData: { nombre, celular, ciudad: ciudadDetectada || ubicacionTexto, departamento }
+        userData: { nombre, celular, ciudad: ciudadDetectada || ciudadTexto || ubicacionTexto, departamento }
       });
     };
 
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       let receivedAnyFix = false;
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const acc = pos.coords.accuracy || 60;
+          if (!receivedAnyFix || acc < bestAccuracyRef.current) {
+            receivedAnyFix = true;
+            bestAccuracyRef.current = Math.min(bestAccuracyRef.current, acc);
+            applyCoordinates(lat, lng, acc);
+          }
+        },
+        () => {},
+        { enableHighAccuracy: false, timeout: 4500, maximumAge: 180000 }
+      );
 
       const wId = navigator.geolocation.watchPosition(
         (pos) => {
@@ -480,23 +575,24 @@ export const OrderForm: React.FC = () => {
           }
           stopGpsWatch();
           // Never block or place fake pin on denial — simply invite typing City/Neighborhood
-          setGpsNotice('No hay problema: escribí tu Ciudad y Barrio en el cuadro de abajo y te contactamos por WhatsApp.');
-          ubicacionInputRef.current?.focus();
+          setGpsNotice('No hay problema: escribí tu Ciudad, Barrio y Calle arriba y al confirmar buscaremos el mapa automáticamente.');
+          ciudadInputRef.current?.focus();
         },
         {
           enableHighAccuracy: true,
           timeout: 12000,
-          maximumAge: 0
+          maximumAge: 30000
         }
       );
 
       watchIdRef.current = wId;
       watchTimeoutRef.current = window.setTimeout(() => {
         stopGpsWatch();
-      }, 6000);
+      }, 6500);
     } else {
-      const fallback = PARAGUAY_DEPT_COORDS[departamento] || PARAGUAY_DEPT_COORDS['Central'];
-      applyCoordinates(fallback.lat, fallback.lng, 30);
+      setGpsLoading(false);
+      setGpsNotice('Tu navegador bloqueó el GPS automático: completá tu Ciudad, Barrio y Calle y ubicamos tu zona al confirmar.');
+      ciudadInputRef.current?.focus();
     }
   };
 
@@ -531,6 +627,7 @@ export const OrderForm: React.FC = () => {
     setGpsLng(Number(nextCoords.lng.toFixed(6)));
     setGpsAccuracy(4);
     setGpsConfirmado(true);
+    setGpsFuente('mapa_manual');
   };
 
   const handleMapPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -565,6 +662,7 @@ export const OrderForm: React.FC = () => {
       setGpsLng(cleanLng);
       setGpsAccuracy(4);
       setGpsConfirmado(true);
+      setGpsFuente('mapa_manual');
       reverseGeocodeCoords(cleanLat, cleanLng);
     }
   };
@@ -614,6 +712,15 @@ export const OrderForm: React.FC = () => {
     submitGuardRef.current = true;
 
     const alreadyHasExactGps = Boolean(gpsConfirmado && gpsLat !== null && gpsLng !== null);
+    const liveCiudad = ciudadTexto.trim();
+    const rawLiveBarrio = barrioTexto.trim();
+    const formattedLiveBarrio = rawLiveBarrio
+      ? /^barrio\b/i.test(rawLiveBarrio)
+        ? rawLiveBarrio
+        : `Barrio ${rawLiveBarrio}`
+      : '';
+    const liveCalle = calleTexto.trim();
+    let resolvedDepartamento = inferParaguayDepartmentFromCity(liveCiudad, departamento);
 
     // FUNCIÓN 1 DEL BOTÓN PRINCIPAL DUAL (Síncrona al toque del botón para máxima compatibilidad en iPhone Safari / Android Chrome):
     // Capturar la geolocalización exacta del cliente mientras corre la cuenta regresiva de 5 segundos ("Preparando tus datos...").
@@ -653,6 +760,10 @@ export const OrderForm: React.FC = () => {
       let effectiveLat = gpsLat;
       let effectiveLng = gpsLng;
       let effectiveAcc = gpsAccuracy;
+      let effectiveConfirmado = alreadyHasExactGps;
+      let effectiveGpsFuente: OrderGpsFuente | undefined = alreadyHasExactGps
+        ? gpsFuente || 'gps_dispositivo'
+        : undefined;
 
       if (!alreadyHasExactGps) {
         let capturedGps: { lat: number; lng: number; acc: number } | null = null;
@@ -666,21 +777,46 @@ export const OrderForm: React.FC = () => {
           effectiveLat = capturedGps.lat;
           effectiveLng = capturedGps.lng;
           effectiveAcc = capturedGps.acc;
+          effectiveConfirmado = true;
+          effectiveGpsFuente = 'gps_dispositivo';
           setGpsLat(capturedGps.lat);
           setGpsLng(capturedGps.lng);
           setGpsAccuracy(capturedGps.acc);
           setGpsConfirmado(true);
+          setGpsFuente('gps_dispositivo');
           // IMPORTANTE: JAMÁS consultamos ni pisamos la ciudad, el barrio ni la calle con datos del mapa GPS.
           // El mapa se adjunta exclusivamente como coordenadas/enlace para el repartidor.
         } else {
-          effectiveLat = null;
-          effectiveLng = null;
-          effectiveAcc = null;
-          setGpsConfirmado(false);
+          // Hardware GPS bloqueado/no disponible: intentar geocodificación honesta de calle/barrio/ciudad durante la espera
+          const geoFallback = await forwardGeocodeParaguayAddress(
+            {
+              calle: liveCalle,
+              barrio: formattedLiveBarrio,
+              ciudad: liveCiudad,
+              departamento: resolvedDepartamento
+            },
+            2200
+          ).catch(() => null);
+
+          if (geoFallback) {
+            effectiveLat = Number(geoFallback.lat.toFixed(6));
+            effectiveLng = Number(geoFallback.lng.toFixed(6));
+            effectiveAcc = null;
+            effectiveConfirmado = false;
+            effectiveGpsFuente = 'geocodificacion_direccion';
+            if (!resolvedDepartamento && geoFallback.matchedDepartment) {
+              resolvedDepartamento = geoFallback.matchedDepartment;
+            }
+          } else {
+            effectiveLat = null;
+            effectiveLng = null;
+            effectiveAcc = null;
+            effectiveConfirmado = false;
+            effectiveGpsFuente = undefined;
+            setGpsConfirmado(false);
+          }
         }
       }
-
-      const hasAnyGpsCoordinates = effectiveLat !== null && effectiveLng !== null;
 
       // Esperar a que se complete la cuenta regresiva de 5 segundos ("Preparando tus datos...") antes de disparar el envío final
       await countdownPromise;
@@ -689,14 +825,9 @@ export const OrderForm: React.FC = () => {
       const finalPack = selectedPack > 0 ? selectedPack : 1;
 
       // 100% DATOS ESCRITOS POR EL CLIENTE EN EL FORMULARIO (CERO DATOS DEL MAPA EN TEXTO E IMÁGENES)
-      const finalCiudad = ciudadTexto.trim();
-      const rawBarrio = barrioTexto.trim();
-      const formattedBarrio = rawBarrio
-        ? /^barrio\b/i.test(rawBarrio)
-          ? rawBarrio
-          : `Barrio ${rawBarrio}`
-        : '';
-      const finalCalle = calleTexto.trim();
+      const finalCiudad = liveCiudad;
+      const formattedBarrio = formattedLiveBarrio;
+      const finalCalle = liveCalle;
 
       const baseStreet = [formattedBarrio, finalCalle].filter(Boolean).join(', ');
 
@@ -733,7 +864,7 @@ export const OrderForm: React.FC = () => {
         waVendedor: formatWaPhone(currentProductPage?.wa || ''),
         nombre: nombre.trim(),
         celular: celular.trim(),
-        departamento: '',
+        departamento: resolvedDepartamento,
         ciudad: finalCiudad,
         barrio: formattedBarrio,
         calle: finalCalle,
@@ -758,7 +889,8 @@ export const OrderForm: React.FC = () => {
         ...(effectiveAcc !== null ? { gpsAccuracy: effectiveAcc } : {}),
         ...(effectiveGpsLink ? { gpsLink: effectiveGpsLink } : {}),
         ...(effectiveStreetViewLink ? { gpsStreetViewLink: effectiveStreetViewLink } : {}),
-        gpsConfirmado: hasAnyGpsCoordinates
+        ...(effectiveGpsFuente ? { gpsFuente: effectiveGpsFuente } : {}),
+        gpsConfirmado: effectiveConfirmado
       });
 
       setOrderComplete(order);
@@ -777,7 +909,7 @@ export const OrderForm: React.FC = () => {
           nombre: nombre.trim(),
           celular: celular.trim(),
           ciudad: finalCiudad,
-          departamento: departamento || finalCiudad,
+          departamento: resolvedDepartamento || finalCiudad,
           externalId: order.visitorId || order.reservaid
         }
       });
@@ -794,7 +926,7 @@ export const OrderForm: React.FC = () => {
             nombre: nombre.trim(),
             celular: celular.trim(),
             ciudad: finalCiudad,
-            departamento: departamento || finalCiudad,
+            departamento: resolvedDepartamento || finalCiudad,
             externalId: order.visitorId || order.reservaid
           }
         });
@@ -1451,6 +1583,30 @@ export const OrderForm: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {step2Done && !gpsConfirmado && (
+                  <div className="rounded-2xl bg-[#ecfdf5] border-2 border-[#6ee7b7] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <p className="text-sm sm:text-base font-black text-[#064e3b] flex items-center gap-1.5">
+                        <Crosshair className="w-4 h-4 text-[#059669] shrink-0" />
+                        <span>¿Querés enviar tu GPS exacto? (Opcional · 1 toque)</span>
+                      </p>
+                      <p className="text-xs font-bold text-[#065f46]/90">
+                        Ayuda al repartidor a ubicar tu casa al instante sin tener que llamarte.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="btn-capture-gps"
+                      disabled={gpsLoading}
+                      onClick={handleOneClickGpsLocation}
+                      className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#059669] hover:bg-[#047857] text-white text-sm font-black shadow-sm cursor-pointer disabled:opacity-65 transition-all"
+                    >
+                      <Crosshair className={`w-4 h-4 ${gpsLoading ? 'animate-spin' : ''}`} />
+                      <span>{gpsLoading ? 'Buscando GPS...' : 'Usar mi GPS actual'}</span>
+                    </button>
+                  </div>
+                )}
 
                 {gpsNotice && (
                   <p className="text-sm sm:text-base font-bold text-amber-900 bg-amber-50 border-2 border-amber-300 rounded-xl px-3.5 py-2.5">

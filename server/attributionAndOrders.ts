@@ -684,11 +684,7 @@ export function applyOrderAxisUpdate(params: {
   if (params.estado && !params.deliveryStatus && !params.customerPaymentStatus) {
     const mapped = deriveDefaultAxesFromLegacyEstado(params.estado);
     nextDelivery = mapped.deliveryStatus;
-    if (current.pagoAdelantadoVerificadoAdmin && params.estado !== 'cancelado') {
-      nextPayment = 'cobrado_verificado';
-    } else {
-      nextPayment = mapped.customerPaymentStatus;
-    }
+    nextPayment = mapped.customerPaymentStatus;
     if (nextDelivery === 'entregado_fisicamente' && nextPayment === 'cobrado_verificado' && nextSettlement === 'no_aplica') {
       nextSettlement = 'pendiente_liquidacion';
     }

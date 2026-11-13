@@ -230,8 +230,7 @@ function summarizeOutgoingMessage(
     : null;
   const isConfirmedTurn =
     (msg.convStep || 1) >= 5 ||
-    msg.commercialStage === 'stage3_confirmed' ||
-    msg.commercialStage === 'stage4_vip_upsell';
+    msg.commercialStage === 'stage3_confirmed';
 
   let channelBadge = isAudio ? '🎤 Audio' : '💬 Texto';
   if (hasImage && nearbyAudioMsg) {

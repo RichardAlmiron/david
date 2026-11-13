@@ -52,9 +52,6 @@ import {
   ChatStatusMessageLike
 } from '../utils/whatsappChatStatus';
 import {
-  ProductConfirmedOrdersPanel,
-  PrepaymentVerificationSection,
-  approveOrderPrepaymentClientSide,
   downloadConfirmedOrdersExcelCsv,
   CopyFieldBtn
 } from '../components/ProductConfirmedOrdersPanel';
@@ -71,13 +68,16 @@ import {
 } from '../utils/metaPixelEngine';
 import {
   isOrderConfirmedByAgent,
-  isOrderPrepaymentSentPendingVerification,
-  isOrderPrepaymentVerifiedAndPaid,
   buildOrderComparisonSummary,
   filterAdminOrders,
   formatParaguayanPhone433,
   formatFullOrderTextForCourier
 } from '../utils/orderConfirmation';
+import {
+  formatFullCityDepartment,
+  normalizeOrderGpsFields,
+  buildGoogleMapsSearchUrl
+} from '../utils/paraguayGeo';
 
 export interface WaSessionCardData {
   id: string;
@@ -237,7 +237,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
   const [manualPack, setManualPack] = useState<number>(1);
   const [manualVivienda, setManualVivienda] = useState<'casa' | 'edificio'>('casa');
   const [manualSubmitting, setManualSubmitting] = useState<boolean>(false);
-  const [approvingPrepayOrderId, setApprovingPrepayOrderId] = useState<string | null>(null);
 
   const openManualOrderModal = (prod: ProductPage) => {
     setManualOrderProduct(prod);
@@ -640,19 +639,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
   const [productSubTabMap, setProductSubTabMap] = useState<
     Record<
       string,
-      'pedidos' | 'confirmados' | 'pagos_adelantados' | 'precios' | 'pixel' | 'voz'
+      'pedidos' | 'confirmados' | 'precios' | 'pixel' | 'voz'
     >
   >({});
 
   const getProductSubTab = (
     productId: string
-  ): 'pedidos' | 'confirmados' | 'pagos_adelantados' | 'precios' | 'pixel' | 'voz' => {
+  ): 'pedidos' | 'confirmados' | 'precios' | 'pixel' | 'voz' => {
     return productSubTabMap[productId] || 'pedidos';
   };
 
   const setProductSubTab = (
     productId: string,
-    tab: 'pedidos' | 'confirmados' | 'pagos_adelantados' | 'precios' | 'pixel' | 'voz'
+    tab: 'pedidos' | 'confirmados' | 'precios' | 'pixel' | 'voz'
   ) => {
     setProductSubTabMap(prev => ({ ...prev, [productId]: tab }));
   };
@@ -2063,59 +2062,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     setSendingWaMsg(false);
   };
 
-  // Botón directo en la Tarjeta de Pedido: Aprobar Pago Adelantado (-Gs. 30.000) + Enviar Nota de Voz automática al cliente
-  const handleQuickApprovePrepayment = async (order: Order) => {
-    if (approvingPrepayOrderId) return;
-    setApprovingPrepayOrderId(order.reservaid);
-    try {
-      const cleanPhone = formatWaPhone(order.celular);
-      const rawMontoNum =
-        Number(String(order.montoOriginalSinDescuento || order.monto || 189000).replace(/\D/g, '')) || 189000;
-      const discountedMontoNum =
-        Number(order.montoConDescuentoAdelantado) || Math.max(50000, rawMontoNum - 30000);
-      const nowIso = new Date().toISOString();
-
-      const apiRes = await approveOrderPrepaymentClientSide(order);
-      if (!apiRes.ok) {
-        await sendWhatsAppCommandToCloud({
-          type: 'approve_prepayment',
-          orderId: order.reservaid,
-          phone: cleanPhone,
-          orderSnapshot: order
-        });
-      }
-
-      await updateOrder(order.reservaid, {
-        datosConfirmados: true,
-        agenteCompletado: true,
-        empaquetado: true,
-        estado: order.estado === 'entregado_pagado' ? 'entregado_pagado' : 'en_camino',
-        pagoAdelantadoComprobanteRecibido: true,
-        pagoAdelantadoVerificadoAdmin: true,
-        pagoAdelantadoEstado: 'pagado_adelantado_confirmado',
-        pagoAdelantadoFecha: order.pagoAdelantadoFecha || nowIso,
-        pagoAdelantadoFechaVerificado: nowIso,
-        pagoAdelantadoBanco: order.pagoAdelantadoBanco || 'Banco Familiar',
-        pagoAdelantadoAlias: order.pagoAdelantadoAlias || '3856033 (3.856.033)',
-        pagoAdelantadoTitular: order.pagoAdelantadoTitular || 'Richard Almirón',
-        montoOriginalSinDescuento: rawMontoNum,
-        montoConDescuentoAdelantado: discountedMontoNum
-      });
-
-      if (activeAiOrder && formatWaPhone(activeAiOrder.celular) === cleanPhone) {
-        await fetchLiveOrderChat(order.celular);
-      }
-      await fetchWhatsAppStatus();
-      showToast(
-        `💎 ¡Pago adelantado de ${order.nombre} aprobado (-Gs. 30.000)! Se envió la Nota de Voz de confirmación y empaquetado a su WhatsApp.`
-      );
-    } catch {
-      showToast('⚠️ No se pudo completar la aprobación en este instante.');
-    } finally {
-      setApprovingPrepayOrderId(null);
-    }
-  };
-
   // Open the embedded WhatsApp chat console in pure read-only view (ZERO autodisparo / no auto-send on open)
   const handleOpenOrderWhatsAppChat = async (
     order: Order,
@@ -3019,15 +2965,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   const totalVentasProd = allProdOrders
                     .filter(o => !o.archivado)
                     .reduce((s, o) => s + (Number(o.monto) || 0), 0);
-                  const confirmedProdOrdersCount = allProdOrders.filter(
-                    o => !o.archivado && isOrderConfirmedByAgent(o) && !isOrderPrepaymentVerifiedAndPaid(o)
-                  ).length;
-                  const prepaidPendingVerifyCount = allProdOrders.filter(
-                    o => !o.archivado && isOrderPrepaymentSentPendingVerification(o)
-                  ).length;
-                  const prepaidVerifiedOrdersCount = allProdOrders.filter(
-                    o => !o.archivado && isOrderPrepaymentVerifiedAndPaid(o)
-                  ).length;
 
                   // Paginación de 10 en 10 sobre los pedidos filtrados
                   const totalPages = Math.max(1, Math.ceil(prodOrders.length / ITEMS_PER_PAGE));
@@ -3765,29 +3702,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   const chatInfo = chatsSummary[cleanOrdPhone];
                                   const msgCount = chatInfo?.totalMessages || 0;
                                   const isConfirmedByAgent = isOrderConfirmedByAgent(ord);
-                                  const isPrepaySentPending = isOrderPrepaymentSentPendingVerification(ord);
-                                  const isPrepayVerified = isOrderPrepaymentVerifiedAndPaid(ord);
                                   const comparison = isConfirmedByAgent
                                     ? buildOrderComparisonSummary(ord)
                                     : null;
                                   const isOrderOpen = expandedBottomSummaryOrderId === ord.reservaid;
                                   const isRowSelected = selectedOrderIds.includes(ord.reservaid);
                                   const rowNumber = startIndex + idx + 1;
-                                  const shortCity = String(ord.ciudad || '').split(' - ')[0].split(',')[0].trim();
-                                  const gpsUrl =
-                                    ord.gpsLink ||
-                                    (typeof ord.gpsLat === 'number' && typeof ord.gpsLng === 'number'
-                                      ? `https://www.google.com/maps?q=${ord.gpsLat.toFixed(6)},${ord.gpsLng.toFixed(6)}`
-                                      : null);
-                                  const displayAmount =
-                                    isPrepaySentPending || isPrepayVerified
-                                      ? Number(ord.montoConDescuentoAdelantado) ||
-                                        Math.max(50000, (Number(ord.monto) || 189000) - 30000)
-                                      : Number(ord.monto) || 189000;
+                                  const fullCityDept = formatFullCityDepartment(ord.ciudad, ord.departamento);
+                                  const shortCity =
+                                    String(ord.ciudad || '').split(' - ')[0].split(',')[0].trim() || fullCityDept;
+                                  const gpsNorm = normalizeOrderGpsFields(ord, ord.comparativaDatos);
+                                  const gpsUrl = gpsNorm.gpsLink;
+                                  const hasExactGps = Boolean(gpsNorm.gpsLink && gpsNorm.gpsConfirmado);
+                                  const hasApproxPin = Boolean(gpsNorm.gpsLink && !gpsNorm.gpsConfirmado);
+                                  const effectiveMapUrl = gpsUrl || buildGoogleMapsSearchUrl(ord);
+                                  const displayAmount = Number(ord.monto) || 189000;
 
                                   return (
                                     <div key={ord.reservaid} className="w-full">
-                                      {/* TARJETA HORIZONTAL ULTRA-COMPACTA DE ALTURA FIJA E IDÉNTICA (44px) CON BRILLO CARACTERÍSTICO */}
+                                      {/* TARJETA HORIZONTAL ULTRA-COMPACTA DE ALTURA FIJA E IDÉNTICA */}
                                       <div
                                         role="button"
                                         tabIndex={0}
@@ -3807,13 +3740,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                           }
                                         }}
                                         className={`w-full h-10 min-h-[40px] max-h-[40px] px-2 rounded-lg border flex items-center justify-between gap-2 transition-all cursor-pointer select-none overflow-hidden ${
-                                          isPrepayVerified
-                                            ? 'bg-cyan-950/70 border-cyan-400 text-white'
-                                            : isPrepaySentPending
-                                              ? 'bg-amber-950/70 border-amber-400 text-amber-50'
-                                              : isConfirmedByAgent
-                                                ? 'bg-[#0f0f11] hover:bg-zinc-900/90 border-emerald-800/80 text-zinc-100'
-                                                : 'bg-[#0f0f11] hover:bg-zinc-900/90 border-zinc-800 text-zinc-200'
+                                          isConfirmedByAgent
+                                            ? 'bg-[#0f0f11] hover:bg-zinc-900/90 border-emerald-800/80 text-zinc-100'
+                                            : 'bg-[#0f0f11] hover:bg-zinc-900/90 border-zinc-800 text-zinc-200'
                                         } ${isRowSelected ? 'ring-1 ring-emerald-500/50' : ''}`}
                                       >
                                         {/* IZQUIERDA Y CENTRO: Pequeñas informaciones bien alineadas en 1 sola línea */}
@@ -3830,13 +3759,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                                           <span
                                             className={`font-mono text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 tabular-nums ${
-                                              isPrepayVerified
-                                                ? 'bg-cyan-950 text-cyan-300 border border-cyan-500'
-                                                : isPrepaySentPending
-                                                  ? 'bg-amber-950 text-amber-400 border border-amber-400'
-                                                  : isConfirmedByAgent
-                                                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                                                    : 'bg-zinc-800 text-zinc-400'
+                                              isConfirmedByAgent
+                                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                                : 'bg-zinc-800 text-zinc-400'
                                             }`}
                                           >
                                             #{rowNumber}
@@ -3846,16 +3771,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                             {ord.reservaid}
                                           </span>
 
-                                          {/* Estado Compacto con Brillo Especial NO Verde para Pagos Enviados / Adelantados */}
-                                          {isPrepayVerified ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800/60 text-[10px] font-semibold uppercase tracking-tight shrink-0 ">
-                                              <span>PAGO ADELANTADO</span>
-                                            </span>
-                                          ) : isPrepaySentPending ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800/60 text-[10px] font-semibold uppercase tracking-tight shrink-0 ">
-                                              <span>PAGO ENVIADO (VERIFICAR)</span>
-                                            </span>
-                                          ) : isConfirmedByAgent ? (
+                                          {isConfirmedByAgent ? (
                                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-semibold uppercase tracking-tight shrink-0">
                                               <CheckCircle2 className="w-2.5 h-2.5" />
                                               <span>Confirmado</span>
@@ -3883,33 +3799,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                           {/* Teléfono 4-3-3 */}
                                           <span
                                             className={`hidden sm:inline-block font-mono text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0 ${
-                                              isPrepayVerified
-                                                ? 'text-cyan-300'
-                                                : isPrepaySentPending
-                                                  ? 'text-amber-400'
-                                                  : isConfirmedByAgent
-                                                    ? 'text-emerald-400'
-                                                    : 'text-zinc-400'
+                                              isConfirmedByAgent ? 'text-emerald-400' : 'text-zinc-400'
                                             }`}
                                           >
                                             {formatParaguayanPhone433(ord.celular)}
                                           </span>
 
-                                          {/* Ciudad resumida */}
-                                          {shortCity && (
+                                          {/* Ciudad completa */}
+                                          {fullCityDept && (
                                             <span
-                                              className={`hidden md:inline-block text-[11px] font-semibold truncate min-w-0 max-w-[120px] ${
-                                                isPrepayVerified
-                                                  ? 'text-cyan-200'
-                                                  : isPrepaySentPending
-                                                    ? 'text-amber-200'
-                                                    : isConfirmedByAgent
-                                                      ? 'text-emerald-400'
-                                                      : 'text-zinc-400'
+                                              className={`hidden md:inline-block text-[11px] font-semibold truncate min-w-0 max-w-[160px] ${
+                                                isConfirmedByAgent ? 'text-emerald-400' : 'text-zinc-400'
                                               }`}
-                                              title={`${ord.ciudad}, ${ord.departamento}`}
+                                              title={fullCityDept}
                                             >
-                                              {ord.tipoVivienda === 'edificio' ? '🏢' : '📍'} {shortCity}
+                                              {ord.tipoVivienda === 'edificio' ? '🏢' : '📍'} {fullCityDept || shortCity}
                                             </span>
                                           )}
                                         </div>
@@ -3919,51 +3823,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                           {/* Pack y Monto siempre 100% visible */}
                                           <span
                                             className={`hidden lg:inline-block font-mono text-[11px] font-medium tabular-nums whitespace-nowrap px-1.5 py-0.5 rounded ${
-                                              isPrepayVerified
-                                                ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/80'
-                                                : isPrepaySentPending
-                                                  ? 'bg-amber-950 text-amber-400 border border-amber-400/80'
-                                                  : isConfirmedByAgent
-                                                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
-                                                    : 'bg-zinc-900 text-emerald-400 border border-zinc-800'
+                                              isConfirmedByAgent
+                                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
+                                                : 'bg-zinc-900 text-emerald-400 border border-zinc-800'
                                             }`}
                                           >
                                             {ord.cantidad}u · {formatGs(displayAmount)}
                                           </span>
-                                          {!isPrepayVerified ? (
-                                            <button
-                                              type="button"
-                                              disabled={approvingPrepayOrderId === ord.reservaid}
-                                              aria-label={`Aprobar pago adelantado de ${ord.nombre}`}
-                                              data-testid={`btn-approve-prepayment-${ord.reservaid}`}
-                                              onClick={e => {
-                                                e.stopPropagation();
-                                                handleQuickApprovePrepayment(ord);
-                                              }}
-                                              className={`h-8 px-2.5 text-[11px] font-medium rounded-lg inline-flex items-center gap-1 cursor-pointer transition-all border ${
-                                                isPrepaySentPending
-                                                  ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-200 '
-                                                  : 'bg-cyan-950/90 hover:bg-cyan-900 text-cyan-200 border-cyan-500/70'
-                                              }`}
-                                              title="Aprobar transferencia con descuento de Gs. 30.000 y enviar audio de confirmación y empaquetado al cliente"
-                                            >
-                                              <span>
-                                                {approvingPrepayOrderId === ord.reservaid
-                                                  ? 'Aprobando...'
-                                                  : isPrepaySentPending
-                                                    ? '✅ Aprobar Pago (-30k)'
-                                                    : '✅ Aprobar Pago'}
-                                              </span>
-                                            </button>
-                                          ) : (
-                                            <span
-                                              data-testid={`badge-approved-prepayment-${ord.reservaid}`}
-                                              className="h-8 px-2.5 text-[10px] font-medium rounded-lg inline-flex items-center gap-1 bg-cyan-950 text-cyan-300 border border-cyan-500/70"
-                                              title="Pago adelantado aprobado (-Gs. 30.000) y audio enviado"
-                                            >
-                                              Pago Aprobado
-                                            </span>
-                                          )}
 
                                           <button
                                             type="button"
@@ -4026,18 +3892,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                                           <span
                                             className={`h-7 px-2 rounded-lg text-[10px] font-medium inline-flex items-center gap-1 border ${
-                                              isPrepayVerified
-                                                ? 'bg-cyan-400 text-slate-950 border-cyan-300'
-                                                : isPrepaySentPending
-                                                  ? 'bg-amber-400 text-black border-amber-300'
-                                                  : isConfirmedByAgent
-                                                    ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                                                    : 'bg-zinc-900 text-zinc-300 border-zinc-800'
+                                              isConfirmedByAgent
+                                                ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                                : 'bg-zinc-900 text-zinc-300 border-zinc-800'
                                             }`}
                                             title="Clic para ver u ocultar toda la información dentro del pedido"
                                           >
                                             <span className="hidden md:inline">
-                                              {isOrderOpen ? 'Cerrar' : isPrepaySentPending ? 'Ver Comprobante' : 'Abrir'}
+                                              {isOrderOpen ? 'Cerrar' : 'Abrir'}
                                             </span>
                                             <ChevronDown
                                               className={`w-3.5 h-3.5 transition-transform ${
@@ -4053,26 +3915,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                         <div
                                           data-testid={`admin-order-detail-panel-${ord.reservaid}`}
                                           className={`mt-1 p-3.5 sm:p-4 rounded-xl border space-y-3 ${
-                                            isPrepayVerified
-                                              ? 'bg-[#09090b] border-cyan-400/90'
-                                              : isPrepaySentPending
-                                                ? 'bg-[#09090b] border-amber-400/90'
-                                                : isConfirmedByAgent
-                                                  ? 'bg-[#09090b] border-emerald-800/80'
-                                                  : 'bg-[#09090b] border-zinc-800'
+                                            isConfirmedByAgent
+                                              ? 'bg-[#09090b] border-emerald-800/80'
+                                              : 'bg-[#09090b] border-zinc-800'
                                           }`}
                                         >
-                                          {/* PANEL DE VERIFICACIÓN DE PAGO ADELANTADO Y COMPROBANTE CON INTERRUPTOR */}
-                                          <PrepaymentVerificationSection
-                                            order={ord}
-                                            onUpdateOrder={async (orderId, updates, toastMsg) => {
-                                              await updateOrder(orderId, updates);
-                                              if (toastMsg) showToast(toastMsg);
-                                            }}
-                                            onMovedToPrepaidTab={() => {
-                                              setProductSubTab(prod.id, 'pagos_adelantados');
-                                            }}
-                                          />
 
                                           {/* Fila Superior del Detalle: Cabecera + Controles de Unidades, Estado y Acciones */}
                                           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
@@ -4197,38 +4044,72 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                                           {/* Grilla de Información Completa del Pedido */}
                                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                                            {/* Columna 1: Cliente y Contacto */}
-                                            <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-1.5 flex flex-col justify-between">
-                                              <div className="space-y-1">
-                                                <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
-                                                  <span>Datos del Cliente</span>
-                                                  <CopyFieldBtn text={ord.nombre} label="Copiar" tooltip="Copiar Nombre" />
+                                            {/* Columna 1: Datos Completos del Cliente (Nombre + Teléfono) */}
+                                            <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-2 flex flex-col justify-between">
+                                              <div className="space-y-1.5">
+                                                <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                                                  Datos del Cliente
                                                 </div>
-                                                <div className="font-semibold text-zinc-100 text-sm truncate" title={ord.nombre}>
-                                                  {ord.nombre}
+                                                <div className="flex items-center justify-between gap-2 pb-1 border-b border-zinc-800/70">
+                                                  <div className="min-w-0">
+                                                    <span className="text-[10px] uppercase text-zinc-500 block">
+                                                      Nombre completo
+                                                    </span>
+                                                    <div className="font-semibold text-zinc-100 text-sm truncate" title={ord.nombre}>
+                                                      {ord.nombre}
+                                                    </div>
+                                                  </div>
+                                                  <CopyFieldBtn text={ord.nombre} label="Copiar" tooltip="Copiar Nombre Completo" />
                                                 </div>
-                                                <div className="font-mono text-xs font-bold text-emerald-400 flex items-center justify-between">
-                                                  <span>{formatParaguayanPhone433(ord.celular)}</span>
+                                                <div className="flex items-center justify-between gap-2 pb-1 border-b border-zinc-800/70">
+                                                  <div className="min-w-0">
+                                                    <span className="text-[10px] uppercase text-zinc-500 block">
+                                                      Teléfono (WhatsApp)
+                                                    </span>
+                                                    <div className="font-mono text-xs font-bold text-emerald-400">
+                                                      {formatParaguayanPhone433(ord.celular)}
+                                                    </div>
+                                                  </div>
                                                   <CopyFieldBtn text={ord.celular} label="Copiar" tooltip="Copiar Teléfono" />
                                                 </div>
                                                 <div className="text-[11px] text-zinc-400">
-                                                  Forma de pago: <strong className="text-zinc-200">{ord.detalle || 'Efectivo al recibir'}</strong>
+                                                  Modalidad de pago:{' '}
+                                                  <strong className="text-zinc-200">
+                                                    {ord.detalle || 'Efectivo / QR al recibir (Contra Entrega)'}
+                                                  </strong>
                                                 </div>
                                               </div>
                                             </div>
 
-                                            {/* Columna 2: Dirección y Vivienda */}
+                                            {/* Columna 2: Ciudad Completa y Dirección */}
                                             <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-1.5 flex flex-col justify-between">
-                                              <div className="space-y-1">
+                                              <div className="space-y-1.5">
                                                 <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
-                                                  <span>Ubicación y Dirección</span>
-                                                  <CopyFieldBtn text={`${ord.ciudad}, ${ord.departamento} — ${ord.direccion}`} label="Copiar" tooltip="Copiar Dirección Completa" />
+                                                  <span>Ciudad Completa y Dirección</span>
+                                                  <CopyFieldBtn
+                                                    text={`${fullCityDept}${ord.direccion ? ` — ${ord.direccion}` : ''}`}
+                                                    label="Copiar"
+                                                    tooltip="Copiar Ciudad Completa y Dirección"
+                                                  />
                                                 </div>
-                                                <div className="font-bold text-zinc-100 truncate" title={`${ord.ciudad}, ${ord.departamento}`}>
-                                                  {ord.ciudad}, {ord.departamento}
+                                                <div>
+                                                  <span className="text-[10px] uppercase text-zinc-500 block">
+                                                    Ciudad / Departamento
+                                                  </span>
+                                                  <div
+                                                    className="font-bold text-zinc-100 text-xs truncate"
+                                                    title={fullCityDept}
+                                                  >
+                                                    {fullCityDept || 'Sin ciudad especificada'}
+                                                  </div>
                                                 </div>
-                                                <div className="text-zinc-300 text-[11px] leading-snug break-words">
-                                                  {ord.direccion}
+                                                <div>
+                                                  <span className="text-[10px] uppercase text-zinc-500 block">
+                                                    Dirección y Barrio
+                                                  </span>
+                                                  <div className="text-zinc-300 text-[11px] leading-snug break-words">
+                                                    {ord.direccion || 'Sin dirección especificada'}
+                                                  </div>
                                                 </div>
                                                 {ord.tipoVivienda === 'edificio' && (
                                                   <div className="p-1.5 rounded-lg bg-blue-950/50 border border-blue-800/70 text-[10px] text-blue-200 mt-1">
@@ -4241,43 +4122,101 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                               </div>
                                             </div>
 
-                                            {/* Columna 3: Referencia de Fachada y Mapa GPS */}
+                                            {/* Columna 3: Ubicación GPS y Referencia */}
                                             <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-2 flex flex-col justify-between">
-                                              <div className="space-y-1">
+                                              <div className="space-y-1.5">
                                                 <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
-                                                  <span>Referencia y GPS</span>
+                                                  <span>Ubicación GPS y Referencia</span>
                                                   {ord.referenciaCasa && (
-                                                    <CopyFieldBtn text={ord.referenciaCasa} label="Copiar" tooltip="Copiar Referencia" />
+                                                    <CopyFieldBtn text={ord.referenciaCasa} label="Copiar Ref." tooltip="Copiar Referencia" />
                                                   )}
                                                 </div>
+
+                                                {gpsUrl ? (
+                                                  <div
+                                                    className={`p-2 rounded-lg border space-y-1.5 ${
+                                                      hasExactGps
+                                                        ? 'bg-emerald-950/50 border-emerald-700/70'
+                                                        : 'bg-sky-950/50 border-sky-700/60'
+                                                    }`}
+                                                  >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                      <span
+                                                        className={`text-[10px] font-bold uppercase ${
+                                                          hasExactGps ? 'text-emerald-300' : 'text-sky-300'
+                                                        }`}
+                                                      >
+                                                        {hasExactGps
+                                                          ? '📍 GPS Exacto del Cliente'
+                                                          : hasApproxPin
+                                                            ? '🧭 Pin Barrio / Dirección'
+                                                            : '📍 Mapa GPS'}
+                                                      </span>
+                                                      {typeof gpsNorm.gpsLat === 'number' &&
+                                                        typeof gpsNorm.gpsLng === 'number' && (
+                                                          <span className="font-mono text-[10px] text-zinc-300">
+                                                            {gpsNorm.gpsLat.toFixed(4)}, {gpsNorm.gpsLng.toFixed(4)}
+                                                          </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                      <CopyFieldBtn
+                                                        text={gpsUrl}
+                                                        label="Copiar GPS"
+                                                        tooltip="Copiar Link de Google Maps"
+                                                      />
+                                                      <a
+                                                        href={gpsUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className={`flex-1 px-2.5 py-1 rounded-lg font-bold text-[11px] inline-flex items-center justify-center gap-1 shadow-sm ${
+                                                          hasExactGps
+                                                            ? 'bg-[#25D366] hover:bg-[#20bd5a] text-black'
+                                                            : 'bg-sky-500 hover:bg-sky-400 text-black'
+                                                        }`}
+                                                      >
+                                                        <span>{hasApproxPin ? 'Ver Pin en Maps' : 'Abrir GPS'}</span>
+                                                        <ExternalLink className="w-3 h-3" />
+                                                      </a>
+                                                    </div>
+                                                  </div>
+                                                ) : effectiveMapUrl ? (
+                                                  <div className="p-2 rounded-lg bg-zinc-950 border border-zinc-700/80 space-y-1.5">
+                                                    <div className="text-[10px] text-amber-300 font-semibold">
+                                                      📍 GPS exacto no autorizado — Enlace por dirección
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                      <CopyFieldBtn
+                                                        text={effectiveMapUrl}
+                                                        label="Copiar Maps"
+                                                        tooltip="Copiar enlace de búsqueda en Google Maps"
+                                                      />
+                                                      <a
+                                                        href={effectiveMapUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="flex-1 px-2.5 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white font-semibold text-[11px] inline-flex items-center justify-center gap-1"
+                                                      >
+                                                        <span>🔍 Buscar en Google Maps</span>
+                                                        <ExternalLink className="w-3 h-3" />
+                                                      </a>
+                                                    </div>
+                                                  </div>
+                                                ) : (
+                                                  <div className="text-[10px] text-zinc-500 italic">
+                                                    Sin coordenadas ni dirección suficiente para mapa.
+                                                  </div>
+                                                )}
+
                                                 {ord.referenciaCasa ? (
-                                                  <div className="p-1.5 rounded-lg bg-emerald-950/50 border border-emerald-800/70 text-emerald-200 font-bold text-xs flex items-start gap-1.5">
+                                                  <div className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-emerald-200 font-semibold text-[11px] flex items-start gap-1.5">
                                                     <Home className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                                                     <span className="leading-tight">{ord.referenciaCasa}</span>
                                                   </div>
                                                 ) : (
-                                                  <div className="text-zinc-500 italic text-[11px]">
-                                                    Pendiente de confirmar referencia de fachada en el chat.
+                                                  <div className="text-zinc-500 italic text-[10px]">
+                                                    Referencia de fachada: pendiente de confirmar en chat.
                                                   </div>
-                                                )}
-                                              </div>
-
-                                              <div className="flex items-center gap-1.5 pt-1">
-                                                {gpsUrl ? (
-                                                  <>
-                                                    <CopyFieldBtn text={gpsUrl} label="Copiar Mapa" tooltip="Copiar Link de Google Maps" />
-                                                    <a
-                                                      href={gpsUrl}
-                                                      target="_blank"
-                                                      rel="noreferrer"
-                                                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold text-[11px] inline-flex items-center justify-center gap-1 shadow-sm"
-                                                    >
-                                                      <span>Abrir GPS</span>
-                                                      <ExternalLink className="w-3 h-3" />
-                                                    </a>
-                                                  </>
-                                                ) : (
-                                                  <span className="text-[10px] text-zinc-500 italic">Sin GPS aún</span>
                                                 )}
                                               </div>
                                             </div>
