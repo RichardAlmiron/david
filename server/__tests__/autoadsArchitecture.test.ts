@@ -38,8 +38,12 @@ import {
   retryPendingCloudSyncQueue
 } from '../attributionAndOrders.ts';
 import {
+  buildFullOpenAiAdImagePrompt,
+  formatGuaranies,
   mineCompetitorsHonestly,
-  runPsychologicalAndHypothesisIntelligence
+  resolveProductGuaraniPricing,
+  runPsychologicalAndHypothesisIntelligence,
+  sanitizePromptUsdToGuaranies
 } from '../autoAdsIntelligence.ts';
 import {
   classifyAdStatisticalVerdict,
@@ -1096,4 +1100,54 @@ test('10) Mappers Supabase y buildPedidoSupabaseRow coinciden exactamente con co
   });
   assert.equal(capi.eventId, 'ord_RESMAP1_Lead');
   assert.equal(capi.status, 'sent');
+});
+
+test('16) Creativos AutoAds: elimina alucinaciones USD ($10/$80) y fuerza Guaraníes reales del producto en todos los anuncios', async t => {
+  withIsolatedTempDataDir(t);
+
+  const product = {
+    slug: 'proyector-navideno-12-disenos',
+    nombre: 'Noelux Proyector Navideño 12 Diseños',
+    descripcion: 'Proyector navideño resistente al clima para exterior.',
+    precios: { 1: 189000, 2: 358000, 3: 507000 },
+    precioNormal: 290000
+  };
+
+  assert.equal(formatGuaranies(189000), 'Gs. 189.000');
+  const resolved = resolveProductGuaraniPricing(product);
+  assert.equal(resolved.p1Gs, 'Gs. 189.000');
+  assert.equal(resolved.p2Gs, 'Gs. 358.000');
+  assert.equal(resolved.pNormalGs, 'Gs. 290.000');
+
+  const pollutedComparisonPrompt =
+    'Split infographic Ad #5: Left side "COSTO ESTIMADO POR TEMPORADA $10" with projector, right side "ALTO COSTO $80" in red, plus USD savings badge and paying cash at door, zero text overlays';
+  const cleanedPrompt = sanitizePromptUsdToGuaranies(pollutedComparisonPrompt, product, { isImagePrompt: true });
+
+  assert.equal(/\$\s*\d/.test(cleanedPrompt), false);
+  assert.equal(/\bUSD\b/i.test(cleanedPrompt), false);
+  assert.equal(cleanedPrompt.includes('Gs. 189.000'), true);
+  assert.equal(cleanedPrompt.includes('Gs. 290.000'), true);
+  assert.equal(cleanedPrompt.includes('zero text overlays'), false);
+  assert.equal(cleanedPrompt.includes('CURRENCY & LAYOUT RULE:'), true);
+
+  const fullImagePrompt = buildFullOpenAiAdImagePrompt(pollutedComparisonPrompt, product);
+  assert.equal(/\$\s*\d/.test(fullImagePrompt), false);
+  assert.equal(fullImagePrompt.includes('Gs. 189.000'), true);
+  assert.equal(fullImagePrompt.includes('Gs. 290.000'), true);
+
+  const singleLowDollarPrompt = 'Flash offer only $12 in USD for your home today';
+  const cleanedSingle = sanitizePromptUsdToGuaranies(singleLowDollarPrompt, product, { isImagePrompt: false });
+  assert.equal(cleanedSingle.includes('$'), false);
+  assert.equal(/\bUSD\b/i.test(cleanedSingle), false);
+  assert.equal(cleanedSingle.includes('Gs. 189.000'), true);
+
+  const out = await runPsychologicalAndHypothesisIntelligence({
+    product,
+    offlineDeterministicOnly: true
+  });
+  assert.equal(out.hypotheses.length, 6);
+  for (const h of out.hypotheses) {
+    assert.equal(/\$\s*\d|\b(?:USD|dollars?)\b/i.test(h.aiImagePrompt), false);
+    assert.equal(h.aiImagePrompt.includes('Gs. 189.000'), true);
+  }
 });

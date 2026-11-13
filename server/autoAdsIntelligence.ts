@@ -212,6 +212,154 @@ function summarizeCircuitAMemoryForPrompt(productSlug: string): {
   };
 }
 
+export function formatGuaranies(amount: number): string {
+  const rounded = Math.max(0, Math.round(Number(amount) || 0));
+  return `Gs. ${rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+}
+
+export interface ProductGuaraniPricing {
+  p1: number;
+  p2: number;
+  p3: number;
+  pNormal: number;
+  p1Gs: string;
+  p2Gs: string;
+  p3Gs: string;
+  pNormalGs: string;
+}
+
+export function resolveProductGuaraniPricing(product: {
+  precios?: Record<number, number>;
+  precioNormal?: number;
+} = {}): ProductGuaraniPricing {
+  const rawP1 = Number(product?.precios?.[1] || 0);
+  const rawNormal = Number(product?.precioNormal || 0);
+  const p1 =
+    Number.isFinite(rawP1) && rawP1 > 0
+      ? Math.round(rawP1)
+      : Number.isFinite(rawNormal) && rawNormal > 0
+      ? Math.round(rawNormal)
+      : 189000;
+  const rawP2 = Number(product?.precios?.[2] || 0);
+  const p2 =
+    Number.isFinite(rawP2) && rawP2 > 0
+      ? Math.round(rawP2)
+      : Math.round((p1 * 1.88) / 1000) * 1000;
+  const rawP3 = Number(product?.precios?.[3] || 0);
+  const p3 =
+    Number.isFinite(rawP3) && rawP3 > 0
+      ? Math.round(rawP3)
+      : Math.round((p1 * 2.68) / 1000) * 1000;
+  const pNormal =
+    Number.isFinite(rawNormal) && rawNormal > p1
+      ? Math.round(rawNormal)
+      : Math.round((p1 * 1.45) / 1000) * 1000;
+
+  return {
+    p1,
+    p2,
+    p3,
+    pNormal,
+    p1Gs: formatGuaranies(p1),
+    p2Gs: formatGuaranies(p2),
+    p3Gs: formatGuaranies(p3),
+    pNormalGs: formatGuaranies(pNormal)
+  };
+}
+
+export function buildImagePromptCurrencyAndMarginGuard(pricing: ProductGuaraniPricing): string {
+  return (
+    `CURRENCY & LAYOUT RULE: 100% Paraguayan Guaraníes ONLY (Real 1x price: ${pricing.p1Gs}; Pack 2x: ${pricing.p2Gs}; Higher market reference: ${pricing.pNormalGs}). ` +
+    `Use strictly Paraguay Guaraníes ("Gs.") currency format with zero foreign currency symbols anywhere in the artwork. ` +
+    `If ANY cost, savings, or price comparison badge appears visually, write ONLY "${pricing.p1Gs}" for this product's real price and at most "${pricing.pNormalGs}" for the higher alternative cost in Guaraníes. ` +
+    `Leave the bottom 15% band visually clean and dark with zero text or badges so feed preview overlays never collide.`
+  );
+}
+
+/**
+ * Elimina alucinaciones en dólares ("$10", "$80", "USD", "dollars") en copy o aiImagePrompt
+ * y las sustituye coherentemente por los precios reales del producto en Guaraníes (Gs.).
+ */
+export function sanitizePromptUsdToGuaranies(
+  raw: string,
+  pricingInput: { precios?: Record<number, number>; precioNormal?: number; p1?: number; p2?: number; p3?: number; pNormal?: number } = {},
+  options: { isImagePrompt?: boolean } = {}
+): string {
+  const pricing = resolveProductGuaraniPricing({
+    precios: pricingInput.precios || (pricingInput.p1 || pricingInput.p2 || pricingInput.p3
+      ? {
+          1: Number(pricingInput.p1 || 0),
+          2: Number(pricingInput.p2 || 0),
+          3: Number(pricingInput.p3 || 0)
+        }
+      : undefined),
+    precioNormal: pricingInput.precioNormal ?? pricingInput.pNormal
+  });
+
+  let text = String(raw || '').trim();
+
+  if (options.isImagePrompt) {
+    text = text
+      .replace(/,?\s*zero text overlays/gi, '')
+      .replace(/,?\s*no text overlays/gi, '')
+      .replace(/\bbanknotes?\b/gi, 'delivery receipt')
+      .replace(/\bcash bills?\b/gi, 'delivery package')
+      .replace(/\bpaying cash\b/gi, 'receiving the package at the door');
+  }
+
+  const usdTokenRegex =
+    /(?:\bUS\s*\$\s*|\bUSD\s*:?\s*|\$\s*)(\d+(?:[.,]\d+)?)\b|\b(\d+(?:[.,]\d+)?)\s*(?:USD|US\s*\$|US\s+dollars?|dollars?|d[oó]lares?)\b/gi;
+
+  const foundValues: number[] = [];
+  for (const m of text.matchAll(usdTokenRegex)) {
+    const rawNum = String(m[1] || m[2] || '').replace(/,/g, '.');
+    const parsed = parseFloat(rawNum);
+    if (Number.isFinite(parsed)) {
+      foundValues.push(parsed);
+    }
+  }
+
+  const hasMultipleDistinctUsd = foundValues.length >= 2 && Math.max(...foundValues) > Math.min(...foundValues);
+  const maxUsdVal = foundValues.length > 0 ? Math.max(...foundValues) : 0;
+
+  text = text.replace(usdTokenRegex, (fullMatch, g1, g2, offset: number) => {
+    const rawNum = String(g1 || g2 || '').replace(/,/g, '.');
+    const parsed = parseFloat(rawNum);
+    if (hasMultipleDistinctUsd && Number.isFinite(parsed)) {
+      return parsed >= maxUsdVal ? pricing.pNormalGs : pricing.p1Gs;
+    }
+    const startIdx = Math.max(0, offset - 42);
+    const contextBefore = text.slice(startIdx, offset + fullMatch.length);
+    if (/(?:alto|high|higher|before|antes|normal|retail|bruto|tradicional|compet|caro|expensive|costoso)/i.test(contextBefore)) {
+      return pricing.pNormalGs;
+    }
+    return pricing.p1Gs;
+  });
+
+  text = text
+    .replace(/\bdollar\s*signs?\b/gi, 'Guaraníes price badge')
+    .replace(/\b(?:US\s+dollars?|dollars?|d[oó]lares?|USD)\b/gi, 'Guaraníes (Gs.)')
+    .replace(/\$/g, 'Gs. ')
+    .replace(/Gs\.\s+Gs\./gi, 'Gs.')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  if (options.isImagePrompt && !text.includes('CURRENCY & LAYOUT RULE:')) {
+    const guard = buildImagePromptCurrencyAndMarginGuard(pricing);
+    text = text ? `${text}. ${guard}` : guard;
+  }
+
+  return text;
+}
+
+export function buildFullOpenAiAdImagePrompt(
+  rawPrompt: string,
+  pricingInput: { precios?: Record<number, number>; precioNormal?: number; p1?: number; p2?: number; p3?: number; pNormal?: number } = {}
+): string {
+  const cleanPrompt = sanitizePromptUsdToGuaranies(rawPrompt, pricingInput, { isImagePrompt: true });
+  return `Generate a high-converting, hyper-impactful commercial Meta Ad poster photograph showing the product in active use producing its real visible result, with bold, legible Spanish advertising typography (strictly in Paraguayan Guaraníes Gs. with zero foreign currencies): ${cleanPrompt}`;
+}
+
 function buildDiverseDynamicHypothesesFallback(params: {
   product: RunIntelligenceInput['product'];
   psychologicalProfile: PsychologicalProfileV2;
@@ -219,8 +367,8 @@ function buildDiverseDynamicHypothesesFallback(params: {
   losingSummary: string[];
 }): AutoAdsHypothesisV2[] {
   const name = params.product.nombre;
-  const price1 = Number(params.product.precios?.[1] || params.product.precioNormal || 150000);
-  const priceFormatted = `Gs. ${price1.toLocaleString('es-PY')}`;
+  const pricing = resolveProductGuaraniPricing(params.product);
+  const priceFormatted = pricing.p1Gs;
   const truth = params.product.physicalTruth;
   const visualDetail = truth?.realMaterialOrFinish
     ? `real physical texture (${truth.realMaterialOrFinish})`
@@ -392,7 +540,8 @@ function buildDiverseDynamicHypothesesFallback(params: {
 
   return seedSpecs.map((spec, idx) => ({
     ...spec,
-    id: `hyp_${Date.now()}_${idx + 1}`
+    id: `hyp_${Date.now()}_${idx + 1}`,
+    aiImagePrompt: sanitizePromptUsdToGuaranies(spec.aiImagePrompt, pricing, { isImagePrompt: true })
   }));
 }
 
@@ -403,13 +552,17 @@ async function synthesizeWithOpenRouter(params: {
   winningSummary: string[];
   losingSummary: string[];
 }): Promise<{ psychologicalProfile: PsychologicalProfileV2; hypotheses: AutoAdsHypothesisV2[] } | null> {
+  const pricing = resolveProductGuaraniPricing(params.product);
   const prompt = `Sos un director senior de respuesta directa, psicología del consumidor (Eugene Schwartz - Niveles de Conciencia y Sofisticación del Mercado) y pauta Meta Ads COD en Paraguay.
 
 PRODUCTO:
 - Nombre: ${params.product.nombre}
 - Slug: ${params.product.slug}
 - Descripción: ${params.product.descripcion}
-- Precio Pack 1: Gs. ${Number(params.product.precios?.[1] || params.product.precioNormal || 150000)}
+- Precio Pack 1 (REAL): ${pricing.p1Gs}
+- Precio Pack 2 (REAL): ${pricing.p2Gs}
+- Precio Pack 3 (REAL): ${pricing.p3Gs}
+- Precio Normal / Referencia Alta (para contraste o precio tachado): ${pricing.pNormalGs}
 - Contexto IA adicional: ${params.product.contextoIA || 'N/A'}
 - Physical truth: ${JSON.stringify(params.product.physicalTruth || {})}
 
@@ -423,8 +576,9 @@ MEMORIA PREVIA DEL CIRCUITO A (ÚNICAMENTE CONVERSIONES DE FORMULARIO Y COSTO PO
 REGLAS OBLIGATORIAS:
 1. Diagnosticá nivel de conciencia y sofisticación de mercado (1..5), dolores viscerales, deseos profundos, objeciones COD Paraguay, mecanismo único del problema y mecanismo único de solución.
 2. Creá EXACTAMENTE 6 hipótesis publicitarias GENUINAMENTE DISTINTAS (NO uses ángulos genéricos repetidos ni textos idénticos; cada hipótesis debe variar targetAvatar, awarenessLevel, objectionTargeted, hookFormula, testVariable, copyFramework, visualArchetype, primaryTextDraft en español rioplatense/paraguayo natural, headlineDraft, ctaDraft, aiImagePrompt específico en inglés fotográfico y videoScriptPrompt).
-3. NO menciones datos de courier/entregas/devoluciones ni supongas garantías inventadas fuera del producto real.
-4. Respondé ÚNICAMENTE JSON válido con esta estructura exacta:
+3. MONEDA OBLIGATORIA PARAGUAY (100% GUARANÍES — CERO DÓLARES): Está TERMINANTEMENTE PROHIBIDO escribir dólares ("$", "USD", "US$", "dollars", "dólares", "$10", "$80", etc.) en CUALQUIERA de los 6 anuncios (ni en el copy ni en "aiImagePrompt"). Si un "aiImagePrompt" muestra precios, ahorros, costo estimado o comparativas económicas, DEBE imprimir exclusivamente Guaraníes usando el precio real de la web ("${pricing.p1Gs}") y, si muestra un costo alto/bruto para contrastar marketing, usar "${pricing.pNormalGs}" en Guaraníes. Además, dejá el 15% inferior de la imagen limpio y oscuro sin textos ni etiquetas para que no choque con el zócalo inferior.
+4. NO menciones datos de courier/entregas/devoluciones ni supongas garantías inventadas fuera del producto real.
+5. Respondé ÚNICAMENTE JSON válido con esta estructura exacta:
 {
   "psychologicalProfile": {
     "productSlug": "${params.product.slug}",
@@ -512,11 +666,11 @@ REGLAS OBLIGATORIAS:
       testVariable: String(h.testVariable || `var_${i + 1}`),
       copyFramework: String(h.copyFramework || 'PAS'),
       visualArchetype: String(h.visualArchetype || `archetype_${i + 1}`),
-      primaryTextDraft: String(h.primaryTextDraft || ''),
-      headlineDraft: String(h.headlineDraft || ''),
+      primaryTextDraft: sanitizePromptUsdToGuaranies(String(h.primaryTextDraft || ''), pricing),
+      headlineDraft: sanitizePromptUsdToGuaranies(String(h.headlineDraft || ''), pricing),
       ctaDraft: String(h.ctaDraft || 'Pedir ahora'),
-      aiImagePrompt: String(h.aiImagePrompt || ''),
-      videoScriptPrompt: String(h.videoScriptPrompt || ''),
+      aiImagePrompt: sanitizePromptUsdToGuaranies(String(h.aiImagePrompt || ''), pricing, { isImagePrompt: true }),
+      videoScriptPrompt: sanitizePromptUsdToGuaranies(String(h.videoScriptPrompt || ''), pricing),
       strategicRationale: String(h.strategicRationale || '')
     }));
 

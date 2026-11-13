@@ -1278,3 +1278,14 @@ Al auditar las conversaciones reales en producción (incluyendo el caso de la cl
 - **Imágenes entrantes de clientes en `localStorage`:**
   - Descarga de imágenes enviadas por clientes en `messages.upsert` con caché local por pedido en el navegador (`noelux_chat_imgs_<orderId>`) y eliminación automática al borrar el pedido, sin acumular binarios en la base de datos.
 
+---
+
+## 43. Fase 82 — Blindaje Guaraníes en Creativos AutoAds y Rediseño Compacto sin Barullo (`AutoAdsView`)
+
+- **Moneda 100% Paraguayan Guaraníes (`Gs.`) en todos los creativos y prompts (`server/autoAdsIntelligence.ts`, `vite.config.ts`):**
+  - Se añadieron `formatGuaranies()`, `resolveProductGuaraniPricing()`, `sanitizePromptUsdToGuaranies()` y `buildFullOpenAiAdImagePrompt()` aplicados en `synthesizeWithOpenRouter()`, `buildDiverseDynamicHypothesesFallback()`, `/api/autoads/train-brain`, `/api/autoads/generate-ad-images` y `/api/autoads/regenerate-single-ad`.
+  - Inyección explícita de precios reales (`precios[1]`, `precios[2]`, `precioNormal`) en Guaraníes y conversión automática de cualquier monto en dólares (`$10`, `$80`, `USD`), con margen inferior limpio del 15% para evitar colisiones visuales con el zócalo de vista previa.
+- **Reestructuración limpia de [`src/components/AutoAdsView.tsx`](./src/components/AutoAdsView.tsx) (sin sidebar interno y conservando el 100% de la lógica):**
+  - Cabecera compacta con pestañas horizontales (`Crear Campaña & Creativos`, `Campañas`, `Cuenta Meta & CAPI`), tarjetas de campañas publicadas visibles al tope con acceso directo a creativos/Ads Manager, selector e interruptor `Solo Imágenes` horizontales compactos, filtros de vista previa (`Todos`, `#1-#3`, `#4-#6`), estrategia colapsable y zócalo inferior limpio sobre imagen/video.
+
+

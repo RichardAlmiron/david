@@ -16,7 +16,11 @@ import {
   Share2,
   Send,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Megaphone
 } from 'lucide-react';
 import { ProductPage } from '../types';
 import { formatGs } from '../config';
@@ -80,6 +84,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
   // Interruptor (Switch) para que el usuario pueda evitar que se creen los 2 Reels de video y hacer que TODO el paquete sea 100% de Imágenes
   const [onlyImagesMode, setOnlyImagesMode] = useState<boolean>(false);
+
+  // Pestañas horizontales, filtro de vista previa y acordeón de estrategia (sin sidebar interno)
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'crear' | 'campanas' | 'conexion'>('crear');
+  const [creativesFilter, setCreativesFilter] = useState<'all' | 'feed' | 'pack_reels'>('all');
+  const [showIntelDetails, setShowIntelDetails] = useState<boolean>(false);
 
   const handleToggleOnlyImagesMode = (nextValue: boolean) => {
     setOnlyImagesMode(nextValue);
@@ -1833,304 +1842,521 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     return (window.location.hostname || 'AUTOADS360.UP.RAILWAY.APP').toUpperCase();
   }, [sourceMode, externalUrlInput]);
 
-  return (
-    <div data-testid="autoads-view" className="max-w-6xl mx-auto space-y-4 font-sans text-zinc-100">
-      {/* ===================================================================== */}
-      {/* 1. CABECERA ULTRA-COMPACTA CON BOTONES DE DIAGNÓSTICO Y CONFIGURACIÓN */}
-      {/* ===================================================================== */}
-      <div className="p-3.5 sm:px-5 rounded-lg bg-[#0f0f11] border border-zinc-800 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 text-emerald-400 flex items-center justify-center font-semibold text-xs shrink-0">
-            ▲
+  const filteredCreativeEntries = useMemo(() => {
+    return creatives
+      .map((ad, idx) => ({ ad, idx }))
+      .filter(({ idx }) => {
+        if (creativesFilter === 'feed') return idx < 3;
+        if (creativesFilter === 'pack_reels') return idx >= 3;
+        return true;
+      });
+  }, [creatives, creativesFilter]);
+
+  const handleOpenCampaignWorkspace = (camp: PipeboardPublishedCampaignRecord) => {
+    const matchedProd = productPages.find(
+      p => p.id === camp.productId || (camp.productSlug && p.slug === camp.productSlug)
+    );
+    if (matchedProd) {
+      setSourceMode('catalog');
+      setSelectedProductId(matchedProd.id);
+      const key = computeWorkspaceKey('catalog', matchedProd.id, externalUrlInput);
+      applySavedWorkspaceToState(workspacesCache[key], matchedProd);
+      setActiveWorkspaceTab('crear');
+      showToast(`📣 Cargando creativos de "${matchedProd.nombre}"`);
+    } else if (camp.landingUrl) {
+      setSourceMode('external_url');
+      setExternalUrlInput(camp.landingUrl);
+      const key = computeWorkspaceKey('external_url', selectedProductId, camp.landingUrl);
+      applySavedWorkspaceToState(workspacesCache[key]);
+      setActiveWorkspaceTab('crear');
+      showToast(`🌐 Cargando campaña externa "${camp.productName}"`);
+    }
+  };
+
+  const renderCampaignCard = (camp: PipeboardPublishedCampaignRecord, compact = false) => {
+    const primaryStatus = camp.publishedAds?.[0]?.status || 'ACTIVE';
+    const isActiveStatus = primaryStatus === 'ACTIVE';
+    const actNum = String(camp.adAccountId || '1048211497774834').replace(/^act_/, '');
+    const adsCount = camp.publishedAds?.length || 6;
+    const dateLabel = camp.createdAt
+      ? new Date(camp.createdAt).toLocaleDateString('es-PY', { day: '2-digit', month: 'short' })
+      : 'En vivo';
+
+    return (
+      <div
+        key={camp.id}
+        className="rounded-xl border border-zinc-800/90 hover:border-emerald-700/70 bg-[#0f0f11] p-3 flex flex-col justify-between gap-2 transition-colors"
+      >
+        <div className="space-y-1">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-bold text-zinc-100 leading-snug line-clamp-1" title={camp.campaignName}>
+              {camp.campaignName}
+            </span>
+            <span
+              className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold shrink-0 border ${
+                isActiveStatus
+                  ? 'bg-emerald-950/80 border-emerald-700/70 text-emerald-300'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+              }`}
+            >
+              {isActiveStatus ? '● ACTIVA' : primaryStatus}
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm sm:text-base font-bold text-zinc-100">AutoAds Piloto IA</h1>
-              <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/90 border border-emerald-800/80 px-2 py-0.5 rounded-md">
-                OpenRouter: {AUTOADS_LLM_MODEL} + {selectedImageModel} + {selectedVideoModel}
-              </span>
+          <div className="text-[11px] text-zinc-400 truncate">
+            {camp.productName} · <span className="font-mono text-zinc-500">{adsCount} ads</span> ·{' '}
+            <span className="font-mono text-zinc-500">{dateLabel}</span>
+          </div>
+          {!compact && (
+            <div className="text-[10px] font-mono text-zinc-500 truncate">
+              Campaña {camp.campaignId} · Cuenta ...{actNum.slice(-3)} · {camp.executionMode}
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Botones compactos en la cabecera (incluyendo Login OAuth 1-Clic con Facebook / Meta Ads) */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800/80">
           <button
             type="button"
-            data-testid="facebook-oauth-header-btn"
-            onClick={() => handleConnectFacebookOAuth(metaConnected ? true : false)}
-            disabled={connectingFacebookOAuth}
-            title="Iniciar sesión con Facebook (OAuth 1-Clic) para autorizar tu cuenta de Meta Ads y publicar directo"
-            className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer ${metaConnected
-                ? 'border-emerald-500/80 bg-emerald-950/80 hover:bg-emerald-900/70 text-emerald-300'
-                : 'border-[#1877F2] bg-[#1877F2] hover:bg-[#166fe5] text-white shadow-sm shadow-blue-950/60'
-              }`}
+            onClick={() => handleOpenCampaignWorkspace(camp)}
+            className="text-[11px] font-semibold text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1 cursor-pointer"
           >
-            {connectingFacebookOAuth ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <span className="w-4 h-4 rounded-full bg-white text-[#1877F2] font-semibold text-[11px] inline-flex items-center justify-center leading-none">
-                f
-              </span>
-            )}
-            <span>
-              {metaConnected
-                ? `✅ Meta Ads: ${activeAdAccountName} (834) · Píxel ${activeMetaPixel.name} (377)`
-                : 'Conectar Meta Ads (Facebook OAuth)'}
-            </span>
+            <Layers className="w-3 h-3" />
+            <span>Ver Creativos</span>
           </button>
-
-          <button
-            type="button"
-            onClick={handleVerifyCapiTunnel}
-            disabled={testingCapi}
-            title="Probar y verificar en vivo los 12 Eventos del Píxel y el Túnel CAPI Anti-Bloqueo"
-            className="px-3 py-1.5 rounded-xl border border-emerald-800/80 bg-emerald-950/50 hover:bg-emerald-900/60 text-[11px] font-semibold text-emerald-300 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            {testingCapi ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            )}
-            <span>
-              Píxel 12 Eventos + CAPI OK (EMQ {capiAudit.emqScoreEstimated})
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowCapiDetailsModal(prev => !prev)}
-            className="px-2.5 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-medium text-zinc-300 cursor-pointer transition-colors"
-          >
-            {showCapiDetailsModal ? 'Ocultar Auditoría' : 'Ver 12 Eventos'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowSettingsDrawer(prev => !prev)}
-            className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Settings2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>OpenRouter &amp; Meta Ads</span>
-          </button>
-
           <a
-            href="https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=1048211497774834"
+            href={`https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${actNum}`}
             target="_blank"
             rel="noreferrer"
-            className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1.5 transition-colors"
+            className="text-[11px] font-medium text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1"
           >
-            <span>Ads Manager (834)</span>
-            <ExternalLink className="w-3 h-3 text-zinc-400" />
+            <span>Ads Manager</span>
+            <ExternalLink className="w-3 h-3" />
           </a>
         </div>
       </div>
+    );
+  };
 
+  return (
+    <div data-testid="autoads-view" className="max-w-6xl mx-auto space-y-3.5 font-sans text-zinc-100">
       {/* ===================================================================== */}
-      {/* 1.B TARJETA DE REFERENCIA EXACTA: PORTAFOLIO + CUENTA 834 + PÍXEL 377 */}
+      {/* 1. CABECERA COMPACTA CON PESTAÑAS HORIZONTALES Y ACCESOS RÁPIDOS      */}
       {/* ===================================================================== */}
-      <div
-        data-testid="meta-official-reference-card"
-        className="p-3.5 sm:px-5 rounded-lg bg-[#0f0f11] border border-emerald-900/70 space-y-3"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-semibold text-[10px] uppercase tracking-wider">
-              Referencia Oficial en Vivo (Sincronizada con Meta Graph API)
-            </span>
-            <span className="text-xs font-bold text-zinc-100">
-              Estructura Exacta de tu Meta Ads conectada a esta Herramienta (Copiá con 1 Clic)
-            </span>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
+      <div className="p-3.5 sm:px-5 rounded-xl bg-[#0f0f11] border border-zinc-800/90 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 text-emerald-400 flex items-center justify-center font-semibold text-xs shrink-0">
+              ▲
+            </div>
+            <h1 className="text-sm sm:text-base font-bold text-zinc-100">AutoAds Piloto IA</h1>
+
             <button
               type="button"
-              onClick={handleDiscoverLiveMetaNames}
-              disabled={syncingLiveMetaNames}
-              data-testid="btn-discover-live-meta-names"
-              className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-[11px] inline-flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
+              data-testid="facebook-oauth-header-btn"
+              onClick={() => handleConnectFacebookOAuth(metaConnected ? true : false)}
+              disabled={connectingFacebookOAuth}
+              title="Iniciar sesión con Facebook (OAuth 1-Clic) para autorizar tu cuenta de Meta Ads y publicar directo"
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                metaConnected
+                  ? 'border-emerald-800/80 bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300'
+                  : 'border-[#1877F2] bg-[#1877F2] hover:bg-[#166fe5] text-white'
+              }`}
             >
-              {syncingLiveMetaNames ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {connectingFacebookOAuth ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
               ) : (
-                <RefreshCw className="w-3.5 h-3.5" />
+                <span className="w-3.5 h-3.5 rounded-full bg-white text-[#1877F2] font-bold text-[10px] inline-flex items-center justify-center leading-none">
+                  f
+                </span>
               )}
               <span>
                 {metaConnected
-                  ? '🔄 Actualizar Nombres Reales desde Meta (834 / 377)'
-                  : '🔍 Conectar y Descubrir Nuevos Nombres en Meta (834 / 377)'}
+                  ? `${activeAdAccountName} (834) · Píxel ${activeMetaPixel.id.slice(-3)}`
+                  : 'Conectar Meta Ads'}
               </span>
             </button>
-            <span className="text-[11px] font-mono text-zinc-400">
-              ❌ Cuenta personal Richard Almiron (699) bloqueada
-            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                handleVerifyCapiTunnel();
+                setShowCapiDetailsModal(true);
+              }}
+              disabled={testingCapi}
+              title="Probar y verificar en vivo los 12 Eventos del Píxel y el Túnel CAPI Anti-Bloqueo"
+              className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-medium text-emerald-300 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {testingCapi ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              )}
+              <span>CAPI · EMQ {capiAudit.emqScoreEstimated}</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowSettingsDrawer(prev => !prev)}
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                showSettingsDrawer
+                  ? 'border-emerald-600 bg-emerald-950/70 text-emerald-300'
+                  : 'border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200'
+              }`}
+            >
+              <Settings2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Configuración</span>
+            </button>
+
+            <a
+              href="https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=1048211497774834"
+              target="_blank"
+              rel="noreferrer"
+              className="px-2.5 py-1 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-200 inline-flex items-center gap-1 transition-colors"
+            >
+              <span>Ads Manager</span>
+              <ExternalLink className="w-3 h-3 text-zinc-400" />
+            </a>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
-          {/* 1. Portafolio Comercial */}
-          <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
-                1. Portafolio Comercial (Business)
-              </span>
-              <div className="text-sm font-semibold text-zinc-100 mt-0.5">Landingcod</div>
-              <span className="text-[11px] text-zinc-400 block mt-0.5">
-                Tu cuenta comercial principal en Meta Business Suite
-              </span>
-            </div>
+        {/* Barra de Pestañas Horizontales (estilo limpio y sin sidebar interno) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-zinc-800/80">
+          <div className="bg-zinc-950 p-1 rounded-xl border border-zinc-800 inline-flex flex-wrap items-center gap-1">
             <button
               type="button"
-              onClick={() => handleCopyMetaRef('portfolio', 'Portafolio Comercial', 'Landingcod')}
-              className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              data-testid="autoads-tab-crear"
+              onClick={() => setActiveWorkspaceTab('crear')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
+                activeWorkspaceTab === 'crear'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
             >
-              <span>{copiedRefKey === 'portfolio' ? '✅ Copiado: Landingcod' : '📋 Copiar Nombre: Landingcod'}</span>
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Crear Campaña &amp; Creativos</span>
+              {creatives.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-700/70 text-emerald-300 font-mono text-[10px]">
+                  {creatives.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              data-testid="autoads-tab-campanas"
+              onClick={() => setActiveWorkspaceTab('campanas')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
+                activeWorkspaceTab === 'campanas'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Megaphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Campañas ({publishedCampaigns.length})</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="autoads-tab-conexion"
+              onClick={() => setActiveWorkspaceTab('conexion')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
+                activeWorkspaceTab === 'conexion'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Cuenta Meta &amp; CAPI (12)</span>
             </button>
           </div>
 
-          {/* 2. Cuenta Publicitaria Principal (834) — Nombre Real Dinámico */}
-          <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
-            <div>
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                  2. Cuenta Publicitaria (834)
-                </span>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
-                  Termina en 834 · USD
-                </span>
-              </div>
-              <div
-                data-testid="live-ad-account-name-834"
-                className="text-sm font-semibold text-white mt-0.5"
-              >
-                {activeAdAccountName}
-              </div>
-              <div className="text-[11px] font-mono text-emerald-300 mt-0.5">
-                ID: 1048211497774834
-              </div>
-              <span className="text-[10px] text-zinc-400 block">
-                Nombre sincronizado en vivo desde Meta Graph API
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() =>
-                  handleCopyMetaRef('acc_num', `ID Cuenta ${activeAdAccountName} (834)`, '1048211497774834')
-                }
-                className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-medium flex items-center justify-center cursor-pointer transition-colors"
-              >
-                {copiedRefKey === 'acc_num' ? '✅ Copiado' : '📋 Copiar 104821...834'}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleCopyMetaRef('acc_name', 'Nombre Cuenta Publicitaria (834)', activeAdAccountName)
-                }
-                className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold flex items-center justify-center cursor-pointer transition-colors"
-              >
-                {copiedRefKey === 'acc_name' ? '✅ Copiado' : '📋 Copiar Nombre'}
-              </button>
-            </div>
-          </div>
-
-          {/* 3. Píxel Oficial de esta Cuenta 834 (Termina en 377) — Nombre Real Dinámico */}
-          <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
-            <div>
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                  3. Píxel de la Cuenta 834 (377)
-                </span>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
-                  Termina en 377
-                </span>
-              </div>
-              <div
-                data-testid="live-pixel-name-377"
-                className="text-sm font-semibold text-white mt-0.5"
-              >
-                {activeMetaPixel.name}
-              </div>
-              <div className="text-[11px] font-mono text-emerald-300 mt-0.5">
-                ID: {activeMetaPixel.id}
-              </div>
-              <span className="text-[10px] text-zinc-400 block">
-                Pertenece a la cuenta {activeAdAccountName} (834)
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() =>
-                  handleCopyMetaRef('pixel_id', `ID Píxel ${activeMetaPixel.name} (377)`, activeMetaPixel.id)
-                }
-                className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-medium flex items-center justify-center cursor-pointer transition-colors"
-              >
-                {copiedRefKey === 'pixel_id' ? '✅ Copiado' : '📋 Copiar ID 1276...377'}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleCopyMetaRef('pixel_name', 'Nombre del Píxel (377)', activeMetaPixel.name)
-                }
-                className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold flex items-center justify-center cursor-pointer transition-colors"
-              >
-                {copiedRefKey === 'pixel_name' ? '✅ Copiado' : '📋 Copiar Nombre'}
-              </button>
-            </div>
-          </div>
-
-          {/* 4. Página Oficial de Facebook */}
-          <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
-                4. Página de Facebook (Fanpage)
-              </span>
-              <div className="text-sm font-semibold text-zinc-100 mt-0.5">Landingcod Shop</div>
-              <div className="text-[11px] font-mono text-zinc-300 mt-0.5">
-                ID: 1050835598123904
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                handleCopyMetaRef('page_id', 'ID Página Landingcod Shop', '1050835598123904')
-              }
-              className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-            >
-              <span>
-                {copiedRefKey === 'page_id' ? '✅ Copiado: 1050835598123904' : '📋 Copiar ID: 1050835598123904'}
-              </span>
-            </button>
-          </div>
+          <span className="text-[10px] font-mono text-zinc-400 hidden sm:inline-flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>
+              {AUTOADS_LLM_MODEL} · {selectedImageModel}
+              {!onlyImagesMode ? ` · ${selectedVideoModel}` : ''}
+            </span>
+          </span>
         </div>
       </div>
 
-      {/* Panel desplegable de los 12 Eventos del Píxel + Túnel CAPI (solo si el usuario toca "Ver 12 Eventos") */}
-      {showCapiDetailsModal && (
-        <div className="p-4 rounded-lg border border-emerald-900/70 bg-[#0f0f11] space-y-3">
+      {/* ===================================================================== */}
+      {/* 1.B CABECERA DE CAMPAÑAS PUBLICADAS (TARJETAS COMPACTAS EN TOPE)       */}
+      {/* ===================================================================== */}
+      {activeWorkspaceTab === 'crear' && publishedCampaigns.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 inline-flex items-center gap-1.5">
+              <Megaphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Campañas en Meta Ads ({publishedCampaigns.length})</span>
+            </span>
+            {publishedCampaigns.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setActiveWorkspaceTab('campanas')}
+                className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+              >
+                Ver todas ({publishedCampaigns.length}) →
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {publishedCampaigns.slice(0, 3).map(camp => renderCampaignCard(camp, true))}
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* TAB: CUENTA META OFICIAL & AUDITORÍA CAPI (SIN RUIDO EN INICIO)       */}
+      {/* ===================================================================== */}
+      {activeWorkspaceTab === 'conexion' && (
+        <div className="space-y-3.5">
+          <div
+            data-testid="meta-official-reference-card"
+            className="p-4 rounded-xl bg-[#0f0f11] border border-emerald-900/60 space-y-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-semibold text-[10px] uppercase tracking-wider">
+                  Meta Graph Live
+                </span>
+                <span className="text-xs font-bold text-zinc-100">
+                  Portafolio, Cuenta 834, Píxel 377 y Fanpage Oficial
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleDiscoverLiveMetaNames}
+                  disabled={syncingLiveMetaNames}
+                  data-testid="btn-discover-live-meta-names"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-[11px] inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  {syncingLiveMetaNames ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {metaConnected
+                      ? 'Actualizar Nombres Reales (834 / 377)'
+                      : 'Conectar y Descubrir Nombres Meta'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+              <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
+                    1. Portafolio Comercial
+                  </span>
+                  <div className="text-sm font-semibold text-zinc-100 mt-0.5">Landingcod</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyMetaRef('portfolio', 'Portafolio Comercial', 'Landingcod')}
+                  className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center cursor-pointer"
+                >
+                  {copiedRefKey === 'portfolio' ? '✅ Copiado' : '📋 Copiar Landingcod'}
+                </button>
+              </div>
+
+              <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
+                <div>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                      2. Cuenta (834)
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
+                      ACTIVA
+                    </span>
+                  </div>
+                  <div data-testid="live-ad-account-name-834" className="text-sm font-semibold text-white mt-0.5">
+                    {activeAdAccountName}
+                  </div>
+                  <div className="text-[11px] font-mono text-emerald-300 mt-0.5">ID: 1048211497774834</div>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyMetaRef('acc_num', `ID Cuenta ${activeAdAccountName} (834)`, '1048211497774834')
+                    }
+                    className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-semibold cursor-pointer"
+                  >
+                    {copiedRefKey === 'acc_num' ? '✅ OK' : '📋 ID 834'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyMetaRef('acc_name', 'Nombre Cuenta Publicitaria (834)', activeAdAccountName)
+                    }
+                    className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
+                  >
+                    {copiedRefKey === 'acc_name' ? '✅ OK' : '📋 Nombre'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 flex flex-col justify-between gap-2">
+                <div>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                      3. Píxel (377)
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
+                      ACTIVO
+                    </span>
+                  </div>
+                  <div data-testid="live-pixel-name-377" className="text-sm font-semibold text-white mt-0.5">
+                    {activeMetaPixel.name}
+                  </div>
+                  <div className="text-[11px] font-mono text-emerald-300 mt-0.5">ID: {activeMetaPixel.id}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyMetaRef('pixel_id', `ID Píxel ${activeMetaPixel.name} (377)`, activeMetaPixel.id)
+                    }
+                    className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-[10px] font-semibold cursor-pointer"
+                  >
+                    {copiedRefKey === 'pixel_id' ? '✅ OK' : '📋 ID 377'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyMetaRef('pixel_name', 'Nombre del Píxel (377)', activeMetaPixel.name)
+                    }
+                    className="py-1.5 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
+                  >
+                    {copiedRefKey === 'pixel_name' ? '✅ OK' : '📋 Nombre'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
+                    4. Página Facebook
+                  </span>
+                  <div className="text-sm font-semibold text-zinc-100 mt-0.5">Landingcod Shop</div>
+                  <div className="text-[11px] font-mono text-zinc-300 mt-0.5">ID: 1050835598123904</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleCopyMetaRef('page_id', 'ID Página Landingcod Shop', '1050835598123904')
+                  }
+                  className="w-full py-1.5 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[11px] font-bold flex items-center justify-center cursor-pointer"
+                >
+                  {copiedRefKey === 'page_id' ? '✅ Copiado' : '📋 Copiar ID Página'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-emerald-900/70 bg-[#0f0f11] space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
+                  Los 12 Eventos del Píxel &amp; Túnel First-Party CAPI (EMQ {capiAudit.emqScoreEstimated})
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-zinc-400">
+                {capiAudit.lastTestAt ? `Último test en vivo: ${capiAudit.lastTestAt}` : 'SHA-256 Advanced Matching Activo'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+              {capiAudit.eventsList.map(evName => (
+                <div
+                  key={evName}
+                  className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center gap-1.5 text-[11px] text-zinc-200 font-mono"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                  <span className="truncate">{evName}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal rápido CAPI si se presionó desde la cabecera sin cambiar de pestaña */}
+      {showCapiDetailsModal && activeWorkspaceTab !== 'conexion' && (
+        <div className="p-3.5 rounded-xl border border-emerald-900/70 bg-[#0f0f11] space-y-2.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
-                Diagnóstico del Píxel Universal y Túnel First-Party CAPI (Anti-Bloqueo iOS/Safari)
+                Píxel Universal &amp; Túnel CAPI ({capiAudit.eventsList.length} Eventos · EMQ {capiAudit.emqScoreEstimated})
               </span>
             </div>
-            <span className="text-[11px] font-mono text-zinc-400">
-              {capiAudit.lastTestAt ? `Último test en vivo: ${capiAudit.lastTestAt}` : 'SHA-256 Advanced Matching Activo'}
-            </span>
+            <button
+              type="button"
+              onClick={() => setShowCapiDetailsModal(false)}
+              className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400 hover:text-zinc-200 cursor-pointer"
+            >
+              Cerrar ✕
+            </button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-1.5">
             {capiAudit.eventsList.map(evName => (
               <div
                 key={evName}
-                className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center gap-1.5 text-[11px] text-zinc-200 font-mono"
+                className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 flex items-center gap-1.5 text-[11px] text-zinc-200 font-mono"
               >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
                 <span className="truncate">{evName}</span>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* TAB: TODAS LAS CAMPAÑAS PUBLICADAS EN META ADS                        */}
+      {/* ===================================================================== */}
+      {activeWorkspaceTab === 'campanas' && (
+        <div className="p-4 sm:p-5 rounded-xl bg-[#0f0f11] border border-zinc-800 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-100">
+                Campañas Publicadas en Meta Ads ({publishedCampaigns.length})
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Tocá &ldquo;Ver Creativos&rdquo; en cualquier campaña para editar o generar nuevos anuncios del producto.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveWorkspaceTab('crear')}
+              className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Crear Nueva Campaña</span>
+            </button>
+          </div>
+
+          {publishedCampaigns.length === 0 ? (
+            <div className="p-8 rounded-xl border border-dashed border-zinc-800 text-center space-y-2">
+              <Megaphone className="w-6 h-6 text-zinc-500 mx-auto" />
+              <div className="text-xs font-semibold text-zinc-300">
+                Todavía no hay campañas publicadas desde AutoAds
+              </div>
+              <p className="text-[11px] text-zinc-500">
+                Generá tus 6 anuncios en la pestaña &ldquo;Crear Campaña&rdquo; y publicalos en 1 clic.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {publishedCampaigns.map(camp => renderCampaignCard(camp, false))}
+            </div>
+          )}
         </div>
       )}
 
@@ -2329,373 +2555,372 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       )}
 
       {/* ===================================================================== */}
-      {/* 3. PANEL PRINCIPAL MANOS LIBRES: SELECCIÓN + 3 BOTONES SECUENCIALES   */}
+      {/* TAB PRINCIPAL: CREAR CAMPAÑA & CREATIVOS (FORMAS HORIZONTALES LIMPIAS) */}
       {/* ===================================================================== */}
-      <div className="bg-[#0f0f11] rounded-lg border border-zinc-800 p-4 sm:p-5 space-y-4">
-        {/* Selector compacto: Página Creada vs Pegar Cualquier URL */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800/80">
-          <div className="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-800 w-fit">
-            <button
-              type="button"
-              onClick={() => {
-                setSourceMode('catalog');
-                const key = computeWorkspaceKey('catalog', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
-                applySavedWorkspaceToState(workspacesCache[key]);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${sourceMode === 'catalog'
-                  ? 'bg-emerald-500 text-black'
-                  : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-            >
-              📄 Elegir Página de Producto Creada
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSourceMode('external_url');
-                const key = computeWorkspaceKey('external_url', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
-                applySavedWorkspaceToState(workspacesCache[key]);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1.5 ${sourceMode === 'external_url'
-                  ? 'bg-emerald-500 text-black'
-                  : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>Pegar Cualquier URL Externa</span>
-            </button>
-          </div>
+      {activeWorkspaceTab === 'crear' && (
+        <>
+          <div className="bg-[#0f0f11] rounded-xl border border-zinc-800/90 p-3.5 sm:p-4 space-y-3">
+            {/* Fila Horizontal 1: Origen del Producto + Modo Solo Imágenes (Compacto) + Guardado */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-zinc-800/80">
+              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 w-fit">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSourceMode('catalog');
+                    const key = computeWorkspaceKey('catalog', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
+                    applySavedWorkspaceToState(workspacesCache[key]);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    sourceMode === 'catalog'
+                      ? 'bg-zinc-800 text-white'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  📄 Página Creada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSourceMode('external_url');
+                    const key = computeWorkspaceKey('external_url', selectedCatalogProduct?.id || selectedProductId, externalUrlInput);
+                    applySavedWorkspaceToState(workspacesCache[key]);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 ${
+                    sourceMode === 'external_url'
+                      ? 'bg-zinc-800 text-white'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Globe className="w-3 h-3 text-emerald-400" />
+                  <span>URL Externa</span>
+                </button>
+              </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-700/70 text-[11px] font-mono text-emerald-300 inline-flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>
-                💾 Guardado en Backend{lastBackendSavedAt ? ` (${lastBackendSavedAt})` : ''} · No perdés nada al actualizar
-              </span>
-            </span>
-          </div>
-        </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Switch Horizontal Compacto: Modo 100% Solo Imágenes vs Mixto */}
+                <div
+                  className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center gap-2.5"
+                  title={
+                    onlyImagesMode
+                      ? 'Los 6 anuncios se generan como imágenes con OpenAI GPT Image 2.6 Sunburst (cero videos).'
+                      : '4 Imágenes (Sunburst) + 2 Videos Reels de 15s (Gemini Omni 1.2 Flash). Activá para usar 100% imágenes.'
+                  }
+                >
+                  <span className="text-[11px] font-semibold text-zinc-200 whitespace-nowrap">
+                    {onlyImagesMode ? '🖼️ Solo Imágenes (6×)' : '🎬 4 Img + 2 Reels'}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={onlyImagesMode}
+                    data-testid="autoads-only-images-switch"
+                    onClick={() => handleToggleOnlyImagesMode(!onlyImagesMode)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                      onlyImagesMode ? 'bg-emerald-500' : 'bg-zinc-700'
+                    }`}
+                    title="Alternar entre Modo 100% Solo Imágenes (6 imágenes) y Modo Mixto (4 imágenes + 2 Reels)"
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition duration-200 ${
+                        onlyImagesMode ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
 
-        {/* Entrada según el modo elegido */}
-        {sourceMode === 'catalog' ? (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="flex-1">
-              <select
-                data-testid="autoads-product-select"
-                value={selectedCatalogProduct?.id || ''}
-                onChange={e => {
-                  const newId = e.target.value;
-                  setSelectedProductId(newId);
-                  const key = computeWorkspaceKey('catalog', newId, externalUrlInput);
-                  applySavedWorkspaceToState(workspacesCache[key]);
-                }}
-                className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-sm font-bold text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                {productPages.map(prod => (
-                  <option key={prod.id} value={prod.id} className="bg-zinc-900 text-zinc-100">
-                    {prod.nombre} — 1x {formatGs(prod.precios?.[1] || 189000)} · 2x {formatGs(prod.precios?.[2] || 358000)} (/?p={prod.slug})
-                  </option>
-                ))}
-              </select>
+                <span
+                  className="px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-800/70 text-[11px] font-mono text-emerald-300 inline-flex items-center gap-1"
+                  title="Todo tu progreso se guarda automáticamente en el backend"
+                >
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                  <span>💾 Guardado{lastBackendSavedAt ? ` · ${lastBackendSavedAt}` : ''}</span>
+                </span>
+              </div>
             </div>
-            {selectedCatalogProduct && (
+
+            {/* Fila Horizontal 2: Selector de Producto o URL Externa */}
+            {sourceMode === 'catalog' ? (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="flex-1">
+                  <select
+                    data-testid="autoads-product-select"
+                    value={selectedCatalogProduct?.id || ''}
+                    onChange={e => {
+                      const newId = e.target.value;
+                      setSelectedProductId(newId);
+                      const key = computeWorkspaceKey('catalog', newId, externalUrlInput);
+                      applySavedWorkspaceToState(workspacesCache[key]);
+                    }}
+                    className="w-full px-3.5 py-2 rounded-lg border border-zinc-800 bg-zinc-900 text-xs sm:text-sm font-semibold text-zinc-100 outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    {productPages.map(prod => (
+                      <option key={prod.id} value={prod.id} className="bg-zinc-900 text-zinc-100">
+                        {prod.nombre} — 1x {formatGs(prod.precios?.[1] || 189000)} · 2x {formatGs(prod.precios?.[2] || 358000)} (/?p={prod.slug})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedCatalogProduct && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenLiveProductPage(selectedCatalogProduct)}
+                    className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-300 inline-flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <span>Ver Página</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <input
+                  type="url"
+                  value={externalUrlInput}
+                  onChange={e => {
+                    const nextUrl = e.target.value;
+                    setExternalUrlInput(nextUrl);
+                    const key = computeWorkspaceKey('external_url', selectedProductId, nextUrl);
+                    applySavedWorkspaceToState(workspacesCache[key]);
+                  }}
+                  placeholder="https://... Pegá la URL de cualquier página de producto para extraer fotos y precios"
+                  className="flex-1 px-3.5 py-2 rounded-lg border border-zinc-800 bg-zinc-900 text-xs sm:text-sm text-zinc-100 placeholder-zinc-500 font-mono outline-none focus:border-emerald-500"
+                />
+              </div>
+            )}
+
+            {/* Fila Horizontal 3: Flujo Secuencial en 3 Pasos */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
               <button
                 type="button"
-                onClick={() => onOpenLiveProductPage(selectedCatalogProduct)}
-                className="px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-zinc-300 inline-flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                data-testid="autoads-step1-btn"
+                onClick={handleStep1Research}
+                disabled={workflowStep === 'researching' || workflowStep === 'generating' || workflowStep === 'publishing'}
+                className={`py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                  workflowStep === 'idle' || workflowStep === 'researching'
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-400 shadow-sm'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-emerald-300 border-emerald-800/70'
+                }`}
               >
-                <span>Ver Página</span>
-                <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                {workflowStep === 'researching' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>Investigando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {workflowStep === 'idle'
+                        ? '1. Investigar Producto'
+                        : '✓ 1. Re-Investigar'}
+                    </span>
+                  </>
+                )}
               </button>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-              <input
-                type="url"
-                value={externalUrlInput}
-                onChange={e => {
-                  const nextUrl = e.target.value;
-                  setExternalUrlInput(nextUrl);
-                  const key = computeWorkspaceKey('external_url', selectedProductId, nextUrl);
-                  applySavedWorkspaceToState(workspacesCache[key]);
-                }}
-                placeholder="https://... Pegá la URL de cualquier página de producto (de Paraguay o del extranjero)"
-                className="flex-1 px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-sm text-zinc-100 placeholder-zinc-500 font-mono outline-none focus:border-emerald-500"
-              />
-            </div>
-            <p className="text-[11px] text-zinc-400">
-              El algoritmo escrapeará automáticamente las fotos, títulos, precios y promesas de esa URL y buscará cómo ganarle a toda la competencia.
-            </p>
-          </div>
-        )}
 
-        {/* Motores Exclusivos Fijos en Código + Interruptor para Evitar los 2 Reels de Video */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-1">
-          <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex flex-col justify-between gap-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-[11px] font-bold text-emerald-300 font-mono">
-                Motores Exclusivos Fijos en Código (Sin Fallbacks ni Imágenes Ficticias):
-              </span>
-              <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700/70 text-[10px] font-mono text-emerald-300">
-                100% Oficial OpenRouter
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono">
-              <span className="px-2 py-1 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200">
-                Copy + Investigación: <strong className="text-emerald-400">{AUTOADS_LLM_MODEL}</strong>
-              </span>
-              <span className="px-2 py-1 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200">
-                Imagen: <strong className="text-emerald-400">{selectedImageModel}</strong>
-              </span>
-              {!onlyImagesMode && (
-                <span className="px-2 py-1 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200">
-                  Video Reel: <strong className="text-sky-400">{selectedVideoModel}</strong>
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* INTERRUPTOR (SWITCH) PARA EVITAR CREAR LOS 2 REELS DE VIDEO Y USAR 100% IMÁGENES */}
-          <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-zinc-100">
-                  {onlyImagesMode
-                    ? '🖼️ Modo 100% Solo Imágenes Activo (6 Imágenes · Cero Reels de Video)'
-                    : '🎬 Modo Mixto: 4 Imágenes + 2 Reels de 15s (Gemini Omni 1.2 Flash)'}
-                </span>
-              </div>
-              <p className="text-[11px] text-zinc-400 leading-snug">
-                {onlyImagesMode
-                  ? 'Se evita crear los 2 videos Reels (#5 y #6). Los 6 anuncios se generan como imágenes estáticas con GPT Image 2.6 Sunburst (aptos para Feed, Stories y Reels en Meta Ads).'
-                  : 'Los Reels #5 y #6 se crean de 15 segundos con Avatar hablando + tu Producto real en Google Gemini Omni 1.2 Flash. Activá este interruptor si preferís usar 100% solo imágenes.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={onlyImagesMode}
-              data-testid="autoads-only-images-switch"
-              onClick={() => handleToggleOnlyImagesMode(!onlyImagesMode)}
-              className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${onlyImagesMode ? 'bg-emerald-500' : 'bg-zinc-700'
+              <button
+                type="button"
+                data-testid="autoads-step2-btn"
+                onClick={handleStep2GenerateAds}
+                disabled={
+                  workflowStep === 'idle' ||
+                  workflowStep === 'researching' ||
+                  workflowStep === 'generating' ||
+                  workflowStep === 'publishing'
+                }
+                className={`py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border ${
+                  workflowStep === 'researched'
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-400 shadow-sm cursor-pointer'
+                    : workflowStep === 'generated' || workflowStep === 'published'
+                      ? 'bg-zinc-900 hover:bg-zinc-800 text-emerald-300 border-emerald-800/70 cursor-pointer'
+                      : 'bg-zinc-900/50 text-zinc-500 border-zinc-800/60 cursor-not-allowed'
                 }`}
-              title="Interruptor para evitar crear los 2 Reels de video y usar 100% imágenes"
-            >
-              <span
-                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${onlyImagesMode ? 'translate-x-7' : 'translate-x-0'
-                  }`}
-              />
-            </button>
-          </div>
-        </div>
+              >
+                {workflowStep === 'generating' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>
+                      {onlyImagesMode ? 'Generando 6 Imágenes...' : 'Generando Anuncios...'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {creatives.length > 0 &&
+                        creatives.slice(0, onlyImagesMode ? 6 : 4).some(c => !c.aiGeneratedImageUrl)
+                        ? '⚡ 2. Completar Faltantes'
+                        : !onlyImagesMode && creatives.length > 0 && creatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl)
+                          ? '🎬 2. Crear Reels #5 y #6'
+                          : creatives.length > 0
+                            ? `✓ 2. Regenerar (${creatives.length})`
+                            : onlyImagesMode
+                              ? '2. Crear 6 Imágenes IA'
+                              : '2. Crear 6 Anuncios IA'}
+                    </span>
+                  </>
+                )}
+              </button>
 
-        {/* ================================================================= */}
-        {/* BARRA DE LOS 3 BOTONES MAESTROS DEL PILOTO AUTOMÁTICO             */}
-        {/* ================================================================= */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-          {/* BOTÓN 1: INVESTIGAR PRODUCTO Y COMPETENCIA */}
-          <button
-            type="button"
-            data-testid="autoads-step1-btn"
-            onClick={handleStep1Research}
-            disabled={workflowStep === 'researching' || workflowStep === 'generating' || workflowStep === 'publishing'}
-            className={`p-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer border ${workflowStep === 'idle' || workflowStep === 'researching'
-                ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-400 shadow-lg shadow-emerald-950/50'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-emerald-300 border-emerald-800/70'
-              }`}
-          >
-            {workflowStep === 'researching' ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                <span>Investigando Competencia...</span>
-              </>
-            ) : (
-              <>
-                <Search className="w-4 h-4 shrink-0" />
-                <span>
-                  {workflowStep === 'idle'
-                    ? '1. Investigar Producto y Competencia'
-                    : '✓ 1. Re-Investigar Competencia'}
-                </span>
-              </>
-            )}
-          </button>
-
-          {/* BOTÓN 2: GENERAR TODOS LOS ANUNCIOS (Aparece habilitado cuando el Paso 1 termina) */}
-          <button
-            type="button"
-            data-testid="autoads-step2-btn"
-            onClick={handleStep2GenerateAds}
-            disabled={
-              workflowStep === 'idle' ||
-              workflowStep === 'researching' ||
-              workflowStep === 'generating' ||
-              workflowStep === 'publishing'
-            }
-            className={`p-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all border ${workflowStep === 'researched'
-                ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-400 shadow-lg shadow-emerald-950/50 cursor-pointer'
-                : workflowStep === 'generated' || workflowStep === 'published'
-                  ? 'bg-zinc-900 hover:bg-zinc-800 text-emerald-300 border-emerald-800/70 cursor-pointer'
-                  : 'bg-zinc-900/50 text-zinc-500 border-zinc-800/60 cursor-not-allowed'
-              }`}
-          >
-            {workflowStep === 'generating' ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                <span>
-                  {onlyImagesMode
-                    ? 'Creando 6 Anuncios de Imagen IA (Sunburst)...'
-                    : 'Creando Anuncios, Fotos y Reels MP4...'}
-                </span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 shrink-0" />
-                <span>
-                  {creatives.length > 0 &&
-                    creatives.slice(0, onlyImagesMode ? 6 : 4).some(c => !c.aiGeneratedImageUrl)
-                    ? '⚡ 2. Continuar donde quedó (Completar Faltantes)'
-                    : !onlyImagesMode && creatives.length > 0 && creatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl)
-                      ? '🎬 2. Continuar donde quedó (Crear Reels #5 y #6)'
-                      : creatives.length > 0
-                        ? `✓ 2. Regenerar los ${creatives.length} Anuncios`
-                        : onlyImagesMode
-                          ? '2. Generar las 6 Imágenes IA (Sin Videos)'
-                          : '2. Generar Todos los Anuncios IA'}
-                </span>
-              </>
-            )}
-          </button>
-
-          {/* BOTÓN 3: PUBLICAR AHORA EN META ADS (Habilitado recién cuando los anuncios están creados en pantalla) */}
-          <div className="flex flex-col gap-1">
-            <button
-              type="button"
-              data-testid="autoads-step3-btn"
-              onClick={handleStep3PublishNow}
-              disabled={creatives.length === 0 || workflowStep === 'publishing'}
-              className={`p-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all border ${creatives.length > 0 && workflowStep !== 'publishing'
-                  ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-400 shadow-lg shadow-blue-950/50 cursor-pointer'
-                  : 'bg-zinc-900/50 text-zinc-500 border-zinc-800/60 cursor-not-allowed'
+              <button
+                type="button"
+                data-testid="autoads-step3-btn"
+                onClick={handleStep3PublishNow}
+                disabled={creatives.length === 0 || workflowStep === 'publishing'}
+                className={`py-2.5 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border ${
+                  creatives.length > 0 && workflowStep !== 'publishing'
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-400 shadow-sm cursor-pointer'
+                    : 'bg-zinc-900/50 text-zinc-500 border-zinc-800/60 cursor-not-allowed'
                 }`}
-            >
-              {workflowStep === 'publishing' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                  <span>Publicando en Meta Ads...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4 shrink-0" />
-                  <span>
-                    {workflowStep === 'published'
-                      ? '✅ 3. Publicado · Volver a Publicar'
-                      : '3. Publicar Ahora en Meta Ads'}
-                  </span>
-                </>
-              )}
-            </button>
-            <div className="flex items-center justify-center gap-1.5 text-[11px] font-mono text-emerald-400 pt-0.5">
-              <span>🇵🇾 Segmentación fijada al 100%:</span>
-              <strong className="text-white">Paraguay (PY) · 18 a 65 años</strong>
-            </div>
-          </div>
-        </div>
-
-        {/* Barra de progreso en vivo durante la investigación o generación con OpenRouter */}
-        {(workflowStep === 'researching' || workflowStep === 'generating') && (
-          <div className="p-3.5 rounded-lg bg-zinc-900 border border-emerald-800/60 flex items-center gap-3 text-xs text-emerald-300">
-            <Loader2 className="w-4 h-4 animate-spin shrink-0 text-emerald-400" />
-            <span className="font-mono">
-              {workflowStep === 'researching' ? researchProgressText : generationProgressText}
-            </span>
-          </div>
-        )}
-
-        {/* Resumen Compacto de la Investigación Competitiva (Una vez completado el Botón 1) */}
-        {brainProfile && workflowStep !== 'idle' && workflowStep !== 'researching' && (
-          <div className="p-3.5 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="text-xs font-bold text-zinc-100">
-                  Inteligencia Lista para &ldquo;{activeProduct?.nombre}&rdquo; · {allProductPhotos.length} Fotos Reales Extraídas
-                </span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono">
-                <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                  Mercados: PY + LATAM + Global
-                </span>
-                <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800 text-emerald-300">
-                  {brainProfile.competitorInsights.activeAdsFound} Ads Competidores Analizados
-                </span>
-                <span className="px-2 py-0.5 rounded bg-blue-950 border border-blue-800 text-sky-300">
-                  {brainProfile.avatars.length} Avatares × 6 Ángulos Andrómeda
-                </span>
-              </div>
+              >
+                {workflowStep === 'publishing' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>Publicando en Meta Ads...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {workflowStep === 'published'
+                        ? '✅ 3. Publicado · Republicar'
+                        : '3. Publicar en Meta Ads'}
+                    </span>
+                  </>
+                )}
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-800/80 space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">
-                  Ganchos y Patrones Ganadores Detectados en la Competencia
-                </span>
-                <ul className="space-y-1 text-[11px] text-zinc-300">
-                  {brainProfile.competitorInsights.commonHooks.slice(0, 3).map((hook, idx) => (
-                    <li key={idx} className="truncate">
-                      • {hook}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-800/80 space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 block">
-                  Estrategia Suprema Aplicada (Andrómeda + Hormozi + Schwartz)
-                </span>
-                <ul className="space-y-1 text-[11px] text-zinc-300">
-                  {brainProfile.competitorInsights.winningPatterns.slice(0, 3).map((pat, idx) => (
-                    <li key={idx} className="truncate">
-                      • {pat}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-zinc-400 pt-0.5">
+              <span>
+                🇵🇾 Segmentación fijada: <strong className="text-zinc-200">Paraguay (PY) · 18–65 años</strong> · Precios 100% en Guaraníes (Gs.)
+              </span>
+              <span className="text-emerald-400/90">
+                100% OpenRouter Oficial · Cero fallbacks ficticios
+              </span>
             </div>
-          </div>
-        )}
-      </div>
 
-      {/* ===================================================================== */}
-      {/* 4. PREVISUALIZACIÓN EXACTA DE ANUNCIOS COMO SE VEN EN FACEBOOK ADS    */}
-      {/* ===================================================================== */}
-      {creatives.length > 0 && (
-        <div className="space-y-4">
-          <div className="p-4 rounded-lg bg-[#0f0f11] border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-zinc-100">
-                Vista Previa Exacta de tus {creatives.length} Anuncios en Facebook / Instagram
-              </h2>
-              <p className="text-xs text-zinc-400">
-                Así mismo verán tus anuncios los compradores en su celular. Si alguno no te gusta, tocá{' '}
-                <strong className="text-emerald-300">&ldquo;Cambiar este anuncio&rdquo;</strong> arriba de esa tarjeta para que la IA genere otro nuevo antes de publicar.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleStep3PublishNow}
-              disabled={workflowStep === 'publishing'}
-              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-lg shadow-blue-950/60"
-            >
-              <Send className="w-4 h-4" />
-              <span>Publicar Todos Ahora en Meta Ads</span>
-            </button>
+            {/* Barra de progreso en vivo */}
+            {(workflowStep === 'researching' || workflowStep === 'generating') && (
+              <div className="p-3 rounded-lg bg-zinc-900 border border-emerald-800/60 flex items-center gap-2.5 text-xs text-emerald-300">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0 text-emerald-400" />
+                <span className="font-mono">
+                  {workflowStep === 'researching' ? researchProgressText : generationProgressText}
+                </span>
+              </div>
+            )}
+
+            {/* Resumen Compacto Colapsable de Inteligencia Competitiva */}
+            {brainProfile && workflowStep !== 'idle' && workflowStep !== 'researching' && (
+              <div className="rounded-lg bg-zinc-900/70 border border-zinc-800 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowIntelDetails(prev => !prev)}
+                  className="w-full px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-left hover:bg-zinc-900 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="text-xs font-semibold text-zinc-100 truncate">
+                      Inteligencia Lista: &ldquo;{activeProduct?.nombre}&rdquo; · {allProductPhotos.length} fotos · {brainProfile.competitorInsights.activeAdsFound} ads analizados
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] font-mono shrink-0">
+                    <span className="px-2 py-0.5 rounded bg-blue-950/80 border border-blue-800/70 text-sky-300">
+                      {brainProfile.avatars.length}×6 Ángulos
+                    </span>
+                    <span className="text-zinc-400 inline-flex items-center gap-1">
+                      <span>{showIntelDetails ? 'Ocultar' : 'Estrategia'}</span>
+                      {showIntelDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                </button>
+
+                {showIntelDetails && (
+                  <div className="px-3 pb-3 pt-1 border-t border-zinc-800/80 grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+                    <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-800/80 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">
+                        Ganchos Ganadores Detectados
+                      </span>
+                      <ul className="space-y-1 text-[11px] text-zinc-300">
+                        {brainProfile.competitorInsights.commonHooks.slice(0, 3).map((hook, idx) => (
+                          <li key={idx} className="truncate">
+                            • {hook}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-black/60 border border-zinc-800/80 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 block">
+                        Estrategia Aplicada (Andrómeda + Hormozi + Schwartz)
+                      </span>
+                      <ul className="space-y-1 text-[11px] text-zinc-300">
+                        {brainProfile.competitorInsights.winningPatterns.slice(0, 3).map((pat, idx) => (
+                          <li key={idx} className="truncate">
+                            • {pat}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Grid de los 6 Anuncios con Diseño Idéntico al Feed de Facebook / Instagram + Imágenes Limpias sin Capas Rotativas */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {creatives.map((ad, idx) => {
+          {/* ===================================================================== */}
+          {/* 4. PREVISUALIZACIÓN EXACTA DE ANUNCIOS CON FILTRO POR BLOQUE          */}
+          {/* ===================================================================== */}
+          {creatives.length > 0 && (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-[#0f0f11] border border-zinc-800/90 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h2 className="text-xs sm:text-sm font-bold text-zinc-100">
+                    Vista Previa Feed ({filteredCreativeEntries.length}/{creatives.length})
+                  </h2>
+                  <div className="bg-zinc-950 p-0.5 rounded-lg border border-zinc-800 inline-flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setCreativesFilter('all')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-colors ${
+                        creativesFilter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Todos ({creatives.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreativesFilter('feed')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-colors ${
+                        creativesFilter === 'feed' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Anuncios #1–#3
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreativesFilter('pack_reels')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-colors ${
+                        creativesFilter === 'pack_reels' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {onlyImagesMode ? 'Anuncios #4–#6' : 'Packs & Reels #4–#6'}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleStep3PublishNow}
+                  disabled={workflowStep === 'publishing'}
+                  className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Publicar Todos en Meta Ads</span>
+                </button>
+              </div>
+
+              {/* Grid de los Anuncios con Diseño Limpio Tipo Feed Facebook / Instagram */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredCreativeEntries.map(({ ad, idx }) => {
               const isReel = !onlyImagesMode && (ad.type === 'video_reel_9x16' || idx >= 4);
               const aiGeneratedPhotoUrl = !isReel
                 ? ad.aiGeneratedImageDataUrl || ad.aiGeneratedImageUrl || ''
@@ -2875,19 +3100,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                               </span>
                             </div>
 
-                            {/* Zócalo Inferior 100% Congruente con la Primera Estrofa + CTA de Alto Impacto (elevado sutilmente para dejar libres los controles de video) */}
-                            <div className="absolute bottom-8 inset-x-0 p-2.5 bg-gradient-to-t from-black/95 via-black/80 to-transparent flex flex-col gap-1.5 pointer-events-none">
-                              <div className="text-[11px] font-medium text-white leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] line-clamp-2">
-                                {((ad.primaryText || '').split(/\n\s*\n/)[0] || ad.headline).trim()}
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="px-2 py-0.5 rounded bg-zinc-900/95 border border-emerald-500/60 text-emerald-300 text-[10px] font-extrabold truncate">
-                                  💰 1x Gs. {Number(activeProduct.precios?.[1] || 189000).toLocaleString('es-PY')} · Pagás Cuando Recibís
-                                </span>
-                                <span className="px-2.5 py-1 rounded-md bg-emerald-500 text-black text-[10px] font-medium uppercase tracking-wide  shrink-0">
-                                  👇 {ad.ctaLabel}
-                                </span>
-                              </div>
+                            {/* Zócalo Inferior Compacto (sin tapar video ni controles) */}
+                            <div className="absolute bottom-9 left-2.5 right-2.5 flex items-center justify-between gap-2 pointer-events-none">
+                              <span className="px-2 py-0.5 rounded bg-black/85 border border-emerald-500/60 text-emerald-300 text-[10px] font-bold truncate backdrop-blur-sm">
+                                1x Gs. {Number(activeProduct.precios?.[1] || 189000).toLocaleString('es-PY')} · Pagás al recibir
+                              </span>
                             </div>
                           </>
                         ) : !isReel && aiGeneratedPhotoUrl ? (
@@ -2921,22 +3138,14 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                               </span>
                             </div>
 
-                            {/* Zócalo Inferior 100% Congruente con la Primera Estrofa + CTA de Alto Impacto */}
-                            <div className="absolute bottom-0 inset-x-0 p-2.5 bg-gradient-to-t from-black/95 via-black/85 to-transparent flex flex-col gap-1.5 pointer-events-none">
-                              <div className="text-[11px] font-medium text-white leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] line-clamp-2">
-                                {((ad.primaryText || '').split(/\n\s*\n/)[0] || ad.headline).trim()}
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="px-2 py-0.5 rounded bg-zinc-900/95 border border-emerald-500/60 text-emerald-300 text-[10px] font-extrabold truncate">
-                                  💰 {idx === 3
-                                    ? `Pack 2x Gs. ${Number(activeProduct.precios?.[2] || 358000).toLocaleString('es-PY')}`
-                                    : `1x Gs. ${Number(activeProduct.precios?.[1] || 189000).toLocaleString('es-PY')}`}{' '}
-                                  · Pagás Cuando Recibís
-                                </span>
-                                <span className="px-2.5 py-1 rounded-md bg-emerald-500 text-black text-[10px] font-medium uppercase tracking-wide  shrink-0">
-                                  👇 {ad.ctaLabel}
-                                </span>
-                              </div>
+                            {/* Zócalo Inferior Compacto (sin duplicar texto largo encima de la imagen) */}
+                            <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2 pointer-events-none">
+                              <span className="px-2 py-0.5 rounded bg-black/85 border border-emerald-500/60 text-emerald-300 text-[10px] font-bold truncate backdrop-blur-sm">
+                                {idx === 3
+                                  ? `Pack 2x Gs. ${Number(activeProduct.precios?.[2] || 358000).toLocaleString('es-PY')}`
+                                  : `1x Gs. ${Number(activeProduct.precios?.[1] || 189000).toLocaleString('es-PY')}`}{' '}
+                                · Pagás al recibir
+                              </span>
                             </div>
                           </>
                         ) : workflowStep === 'generating' ? (
@@ -3033,34 +3242,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* ===================================================================== */}
-      {/* 5. HISTORIAL DE CAMPAÑAS PUBLICADAS                                   */}
-      {/* ===================================================================== */}
-      {publishedCampaigns.length > 0 && (
-        <div className="p-4 rounded-lg bg-[#0f0f11] border border-zinc-800 space-y-2.5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-            Campañas Publicadas en Meta Ads ({publishedCampaigns.length})
-          </h3>
-          <div className="space-y-2">
-            {publishedCampaigns.slice(0, 5).map(camp => (
-              <div
-                key={camp.id}
-                className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-xs"
-              >
-                <div>
-                  <span className="font-bold text-zinc-100">{camp.campaignName}</span>
-                  <span className="text-zinc-400 block text-[11px] font-mono">
-                    ID Campaña: {camp.campaignId} · Cuenta: {camp.adAccountId} · {camp.publishedAds?.length || 6} anuncios
-                  </span>
-                </div>
-                <span className="px-2.5 py-1 rounded-md bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono text-[10px]">
-                  {camp.publishedAds?.[0]?.status || 'ACTIVE'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        </>
       )}
 
       {/* Pop-up Modal de Error (OpenRouter o Publicación en Meta Ads) */}

@@ -2,8 +2,8 @@
 
 Este documento describe exclusivamente la arquitectura y el código **realmente implementados** en el repositorio para el **Cerebro de Inteligencia Publicitaria de AutoAds (`AutoAds v2`)**.
 
-> **Regla fundamental de diseño:** Se conservaron al 100% los motores operativos existentes (imágenes, vídeos, textos base, publicación Directa en Meta y publicación mediante Pipeboard MCP) y se mantuvo **sin cambios la interfaz y el flujo de 3 pasos en [`src/components/AutoAdsView.tsx`](./src/components/AutoAdsView.tsx)**:
-> **`1. INVESTIGAR` → `2. GENERAR TODOS LOS CREATIVOS` → `3. PUBLICAR EN META ADS`**.
+> **Regla fundamental de diseño:** Se conservaron al 100% los motores operativos existentes (imágenes, vídeos, textos base, publicación Directa en Meta y publicación mediante Pipeboard MCP) y el flujo de 3 pasos en [`src/components/AutoAdsView.tsx`](./src/components/AutoAdsView.tsx):
+> **`1. INVESTIGAR` → `2. CREAR ANUNCIOS IA` → `3. PUBLICAR EN META ADS`**, ahora organizado mediante pestañas horizontales (`Crear Campaña`, `Campañas`, `Cuenta Meta & CAPI`) y tarjetas de campaña en cabecera sin alterar ninguna lógica.
 > Toda la nueva inteligencia opera internamente desde el backend.
 
 ---
@@ -182,9 +182,10 @@ Para no mezclar la contabilidad del negocio con el aprendizaje de formularios de
   - [`server/metaPublishPreflight.ts`](./server/metaPublishPreflight.ts) (validación previa Meta Direct / Pipeboard MCP, `/advideos`, `ad_entities`)
   - [`server/erpFinanceAndCourier.ts`](./server/erpFinanceAndCourier.ts) (costos, FX, liquidaciones CSV y utilidad auditada Circuito B)
   - [`server/metaCapiWorker.ts`](./server/metaCapiWorker.ts) (despacho CAPI `Lead`, opcional `OrderReservedCOD`, `Purchase` independiente con ventana 7d y reintentos)
-- **Base de datos y Pruebas:**
+- **Base de datos, Protección de Moneda y Pruebas:**
   - [`database/autoads_v2_additive_migration.sql`](./database/autoads_v2_additive_migration.sql) (migración SQL idempotente no destructiva; **ejecutada y verificada en Supabase**)
-  - [`server/__tests__/autoadsArchitecture.test.ts`](./server/__tests__/autoadsArchitecture.test.ts) (`9/9` pruebas automatizadas: `ISO-01` a `ISO-09` + verificación exacta de mappers Supabase y `buildPedidoSupabaseRow`)
+  - [`server/autoAdsIntelligence.ts`](./server/autoAdsIntelligence.ts) + [`vite.config.ts`](./vite.config.ts): `resolveProductGuaraniPricing()`, `sanitizePromptUsdToGuaranies()` y `buildFullOpenAiAdImagePrompt()` garantizan precios 100% en **Paraguayan Guaraníes (`Gs.`)** (cero dólares / USD en copy y creatividades) más margen inferior limpio.
+  - [`server/__tests__/autoadsArchitecture.test.ts`](./server/__tests__/autoadsArchitecture.test.ts) (`10/10` pruebas automatizadas: `ISO-01` a `ISO-09`, mappers Supabase/`buildPedidoSupabaseRow` y blindaje Guaraníes).
 
 ### Persistencia Autoritativa en Supabase e Hidratación Sin JSON Local (`server/autoadsStore.ts`)
 - **Fuente autoritativa en producción:** Aunque el contenedor de Railway inicie con un sistema de archivos limpio (sin archivos `.json` locales en `/data/autoads_v2` ni `pedidos.json`), `hydrateAutoadsFromSupabase()` consulta en paralelo mediante `postgrestSelect()` las **11 tablas nuevas de AutoAds v2**, `public.pedidos` y la clave `AAFLAGS-v2-*` en `codigos`.

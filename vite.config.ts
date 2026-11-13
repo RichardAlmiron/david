@@ -77,7 +77,12 @@ import {
   issueWaAttributionToken,
   retryPendingCloudSyncQueue
 } from './server/attributionAndOrders.ts';
-import { runPsychologicalAndHypothesisIntelligence } from './server/autoAdsIntelligence.ts';
+import {
+  buildFullOpenAiAdImagePrompt,
+  resolveProductGuaraniPricing,
+  runPsychologicalAndHypothesisIntelligence,
+  sanitizePromptUsdToGuaranies
+} from './server/autoAdsIntelligence.ts';
 import { recomputeCircuitALearning, syncMetaInsightsForAccount } from './server/metaInsightsAndAdsLearning.ts';
 import {
   computeAuditedErpProfitability,
@@ -3556,15 +3561,16 @@ function registerApiServerMiddlewares(server: any) {
                     }
                   }
 
-                  return txt;
+                  return sanitizePromptUsdToGuaranies(txt, resolveProductGuaraniPricing(product));
                 };
 
                 const prodName = genericProdName;
                 const prodDesc = sanitizeServerAdCopy(String(product.descripcion || '').trim());
-                const p1 = Number(product.precios?.[1] || 189000);
-                const p2 = Number(product.precios?.[2] || 358000);
-                const p3 = Number(product.precios?.[3] || 507000);
-                const pNormal = Number(product.precioNormal || Math.round(p1 * 1.35));
+                const pricingPy = resolveProductGuaraniPricing(product);
+                const p1 = pricingPy.p1;
+                const p2 = pricingPy.p2;
+                const p3 = pricingPy.p3;
+                const pNormal = pricingPy.pNormal;
                 const freeShipping = product.freeShipping !== false;
                 const physicalTruth = product.physicalTruth || {};
                 const agentBrain = product.agentBrain || {};
@@ -3779,8 +3785,8 @@ function registerApiServerMiddlewares(server: any) {
                         .replace(/pedir\s+contra\s+entrega/gi, 'PAGÁS CUANDO RECIBÍS')
                         .replace(/contra\s+entrega/gi, 'PAGÁS CUANDO RECIBÍS')
                         .trim(),
-                      aiImagePrompt: brief.aiImagePrompt || '',
-                      videoScriptPrompt: brief.videoScriptPrompt || ''
+                      aiImagePrompt: sanitizePromptUsdToGuaranies(brief.aiImagePrompt || '', product, { isImagePrompt: true }),
+                      videoScriptPrompt: sanitizePromptUsdToGuaranies(brief.videoScriptPrompt || '', product)
                     }));
 
                     const v2Avatars = v2Out.hypotheses.slice(0, 3).map((h: any, idx: number) => ({
@@ -3872,8 +3878,9 @@ REGLAS ESTRICTAS E INQUEBRANTABLES DE COPYWRITING PARAGUAY:
    - Prohibido decir "hoy mismo en tu puerta". En el bloque final de envío decí que llega en 2 a 3 días hábiles (48 a 72 hs).
 4. CERO REDUNDANCIAS Y ESTRUCTURA PERSUASIVA DE 7 A 9 LÍNEAS:
    - Usá español paraguayo natural ("vos", "tenés", "disfrutás").
-5. REGLA DE ORO PARA "aiImagePrompt" (PRODUCTO USÁNDOSE + RESULTADO VISIBLE + CONGRUENCIA 100% CON LA PRIMERA ESTROFA):
+5. REGLA DE ORO PARA "aiImagePrompt" (PRODUCTO USÁNDOSE + RESULTADO VISIBLE + CONGRUENCIA 100% + MONEDA GUARANÍES):
    - Cada "aiImagePrompt" DEBE reflejar exactamente lo que ofrece la primera estrofa de ese anuncio: mostrar (A) el producto "${prodName}" ("${ultraShortObjectLabel}") USÁNDOSE ACTIVAMENTE en primer plano, (B) el RESULTADO REAL e impactante que provoca (${mainBenefit}), y (C) un titular publicitario en ESPAÑOL en tipografía grande y legible + botón CTA congruente ("PAGÁS CUANDO RECIBÍS").
+   - MONEDA 100% GUARANÍES (CERO DÓLARES): Está TERMINANTEMENTE PROHIBIDO escribir "$", "USD", "dólares" o montos extranjeros (como "$10" o "$80") en NINGÚN copy ni en NINGÚN "aiImagePrompt". Si alguna comparativa económica, ahorro o costo estimado muestra precios dentro de la imagen, DEBE escribir el precio real de la web ("Gs. ${p1.toLocaleString('es-PY')}") y, si compara contra un costo alto, "Gs. ${pNormal.toLocaleString('es-PY')}" en Guaraníes. Dejá siempre el 15% inferior limpio y oscuro sin texto para evitar choques con el zócalo inferior.
 
 Devolvé ÚNICAMENTE un objeto JSON válido (sin bloques markdown \`\`\`json) con esta estructura exacta:
 {
@@ -4069,6 +4076,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                         .replace(/contra\s+entrega/gi, 'PAGÁS CUANDO RECIBÍS')
                         .trim(),
                       aiGeneratedImageUrl: brief.aiGeneratedImageUrl || '',
+                      aiImagePrompt: sanitizePromptUsdToGuaranies(brief.aiImagePrompt || '', { p1, p2, p3, pNormal }, { isImagePrompt: true }),
                       videoScenes: Array.isArray(brief.videoScenes) && brief.videoScenes.length > 0 && typeof brief.videoScenes[0] === 'object'
                         ? brief.videoScenes.map((s: any) => ({
                             durationSec: s.durationSec || 3,
@@ -4907,8 +4915,10 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                 const objUpper = ultraShortObjectLabel.toUpperCase();
                 const prodName = genericProdName;
                 const prodDesc = String(product.descripcion || '').trim();
-                const p1 = Number(product.precios?.[1] || 189000);
-                const p2 = Number(product.precios?.[2] || 358000);
+                const pricingPy = resolveProductGuaraniPricing(product);
+                const p1 = pricingPy.p1;
+                const p2 = pricingPy.p2;
+                const pNormal = pricingPy.pNormal;
                 const mainBenefit = String(
                   product?.landingContent?.benefitCards?.[0]?.title ||
                     product?.agentBrain?.usageSummarySpoken ||
@@ -5001,14 +5011,9 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   `Complete Kit & Live Result commercial ad poster for "${prodName}": ${s5.stanzaClause}Foreground displays the unboxed "${prodName}" with all included accessories (${boxItems}) while the "${prodName}" is switched on and actively demonstrating its real result (${mainBenefit}). Bold Spanish headline at top: "${s5.headline}" and bottom CTA button: "${s5.cta}", 8k photorealistic`
                 ];
 
-                // Sanitizar palabras que puedan disparar filtros de billetes/moneda en OpenAI Images API y eliminar viejos bloqueos de texto
+                // Sanitizar palabras de billetes, eliminar bloqueos viejos y forzar 100% Guaraníes reales (cero "$"/USD)
                 const sanitizePromptForOpenAiImages = (raw: string) =>
-                  String(raw || '')
-                    .replace(/,?\s*zero text overlays/gi, '')
-                    .replace(/,?\s*no text overlays/gi, '')
-                    .replace(/\bbanknotes?\b/gi, 'delivery receipt')
-                    .replace(/\bcash bills?\b/gi, 'delivery package')
-                    .replace(/\bpaying cash\b/gi, 'receiving the package at the door');
+                  sanitizePromptUsdToGuaranies(raw, pricingPy, { isImagePrompt: true });
 
                 const aiAdsDir = path.resolve(__dirname, 'public/assets/ai-ads');
                 if (!fs.existsSync(aiAdsDir)) {
@@ -5103,7 +5108,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   aspectRatio: '1:1' | '9:16' = '1:1'
                 ): Promise<{ savedUrl: string; errorText: string; fatalAuth: boolean }> => {
                   const cleanPrompt = sanitizePromptForOpenAiImages(prompt);
-                  const fullPrompt = `Generate a high-converting, hyper-impactful commercial Meta Ad poster photograph showing the product in active use producing its real visible result, with bold, legible Spanish advertising typography: ${cleanPrompt}`;
+                  const fullPrompt = buildFullOpenAiAdImagePrompt(cleanPrompt, pricingPy);
 
                   // A. Si el modelo pertenece a la familia /api/v1/images (ej: openai/gpt-image-2.6-sunburst, openai/gpt-image-2.6-flare)
                   if (usesDedicatedImagesEndpointOnly(imgModel)) {
@@ -5552,7 +5557,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     }
                   }
 
-                  return txt;
+                  return sanitizePromptUsdToGuaranies(txt, resolveProductGuaraniPricing(product));
                 };
 
                 const prodName = genericProdName;
@@ -5578,9 +5583,10 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                       `${prodName} completo con todos sus accesorios de fábrica`
                   ).trim()
                 );
-                const p1 = Number(product.precios?.[1] || 189000);
-                const p2 = Number(product.precios?.[2] || 358000);
-                const pNormal = Number(product.precioNormal || Math.round(p1 * 1.35));
+                const pricingRegenPy = resolveProductGuaraniPricing(product);
+                const p1 = pricingRegenPy.p1;
+                const p2 = pricingRegenPy.p2;
+                const pNormal = pricingRegenPy.pNormal;
                 const freeShipping = product.freeShipping !== false;
 
                 const sceneContexts = [
@@ -5646,7 +5652,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                               `3) PROHIBIDO DECIR "CONTRA ENTREGA": En el cierre decí SIEMPRE "pagás cuando recibís" o "PAGÁS CUANDO RECIBÍS".\n` +
                               `4) TIEMPO DE ENTREGA REAL PARAGUAY EN EL BLOQUE FINAL (2 A 3 DÍAS HÁBILES / 48 A 72 HS): Prohibido decir "lo tenés hoy mismo en tu puerta".\n` +
                               `5) ESTRUCTURA DE 7 A 9 LÍNEAS: Escribí de 7 a 9 líneas con saltos de línea (\\n), iconos y emojis en cada bloque, beneficio clave (${mainBenefit}), y colocá los precios exactos recién en el bloque de precios inferior (1x Gs. ${p1.toLocaleString('es-PY')} — Antes Gs. ${pNormal.toLocaleString('es-PY')} | Pack 2x Ahorro: Gs. ${p2.toLocaleString('es-PY')}).\n` +
-                              `6) IMAGEN CON PRODUCTO USÁNDOSE + RESULTADO + TEXTO Y CTA CONGRUENTE: "aiImagePrompt" debe mostrar el "${prodName}" funcionando en vivo, el resultado real que provoca (${mainBenefit}) y el titular + botón CTA congruente en español.\n` +
+                              `6) IMAGEN CON PRODUCTO USÁNDOSE + RESULTADO + TEXTO Y CTA CONGRUENTE + 100% GUARANÍES: "aiImagePrompt" debe mostrar el "${prodName}" funcionando en vivo, el resultado real que provoca (${mainBenefit}) y el titular + botón CTA congruente en español. Está TERMINANTEMENTE PROHIBIDO usar dólares ("$", "USD", "dollars", "$10", "$80") en el copy o en "aiImagePrompt"; cualquier precio o comparativa económica debe usar EXCLUSIVAMENTE el precio real "Gs. ${p1.toLocaleString('es-PY')}" (y si compara con un precio alto, "Gs. ${pNormal.toLocaleString('es-PY')}"), dejando libre de texto el 15% inferior.\n` +
                               `No repitas el titular anterior ("${currentHeadline}").\n` +
                               `Devolvé SOLO un objeto JSON válido con:\n` +
                               `{ "hookBadge": "🔥 ${objUpper} · RESULTADO INMEDIATO", "headline": "🔥 ${ultraShortObjectLabel}: ${mainBenefit.slice(0, 42)}", "primaryText": "Copy persuasivo completo de 7 a 9 líneas donde toda la primera estrofa habla 100% del producto, su placer y solución sin precios ni pagos", "descriptionText": "⭐ Entrega en 48 a 72 hs en todo Paraguay · Pagás cuando recibís", "aiImagePrompt": "${targetScene.enPrompt}" }`
@@ -5754,12 +5760,9 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   customImagePromptInput ||
                   customBrief?.aiImagePrompt ||
                   targetScene.enPrompt;
-                const finalImagePrompt = String(rawFinalImgPrompt || '')
-                  .replace(/,?\s*zero text overlays/gi, '')
-                  .replace(/,?\s*no text overlays/gi, '')
-                  .replace(/\bbanknotes?\b/gi, 'delivery receipt')
-                  .replace(/\bcash bills?\b/gi, 'delivery package')
-                  .replace(/\bpaying cash\b/gi, 'receiving the package at the door');
+                const finalImagePrompt = sanitizePromptUsdToGuaranies(String(rawFinalImgPrompt || ''), pricingRegenPy, {
+                  isImagePrompt: true
+                });
 
                 const isReel = adIndex >= 4 && !onlyImagesMode;
                 let newGeneratedImageUrl = '';
@@ -5807,10 +5810,11 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                         ? 'https://openrouter.ai/api/v1/images'
                         : 'https://openrouter.ai/api/v1/chat/completions';
 
+                      const regenFullPrompt = buildFullOpenAiAdImagePrompt(finalImagePrompt, pricingRegenPy);
                       const reqPayload = isDedicatedImgEndpoint
                         ? {
                             model: imgModel,
-                            prompt: `Generate a high-converting, hyper-impactful commercial Meta Ad poster photograph showing the product in active use producing its real visible result, with bold, legible Spanish advertising typography: ${finalImagePrompt}`,
+                            prompt: regenFullPrompt,
                             aspect_ratio: '1:1',
                             quality: 'high',
                             output_format: 'jpeg',
@@ -5823,7 +5827,7 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                             messages: [
                               {
                                 role: 'user',
-                                content: `Generate a high-converting, hyper-impactful commercial Meta Ad poster photograph showing the product in active use producing its real visible result, with bold, legible Spanish advertising typography: ${finalImagePrompt}`
+                                content: regenFullPrompt
                               }
                             ]
                           };
