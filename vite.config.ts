@@ -8696,7 +8696,13 @@ export default defineConfig({
       name: 'api-server-middleware',
       transformIndexHtml(html, ctx) {
         const reqUrl = String(ctx?.originalUrl || '').toLowerCase();
-        if (reqUrl.includes('/app-android') || reqUrl.includes('app=android')) {
+        const pathname = reqUrl.split('?')[0];
+        if (
+          reqUrl.includes('/app-android') ||
+          reqUrl.includes('app=android') ||
+          pathname === '/admin' ||
+          pathname === '/admin/'
+        ) {
           return html
             .replace(/<title>.*?<\/title>/i, '<title>Noelux Admin Android</title>')
             .replace(/href=["']\.?\/manifest\.json["']/i, 'href="/manifest-android.webmanifest"')
@@ -8726,13 +8732,15 @@ export default defineConfig({
             req.method === 'GET' &&
             (pathname === '/app-android' ||
               pathname === '/app-android/' ||
+              pathname === '/admin' ||
+              pathname === '/admin/' ||
               pathname === '/app-iphone' ||
               pathname === '/app-iphone/')
           ) {
             const distIndex = path.resolve(process.cwd(), 'dist', 'index.html');
             if (fs.existsSync(distIndex)) {
               let html = fs.readFileSync(distIndex, 'utf-8');
-              if (pathname.startsWith('/app-android')) {
+              if (pathname.startsWith('/app-android') || pathname.startsWith('/admin')) {
                 html = html
                   .replace(/<title>.*?<\/title>/i, '<title>Noelux Admin Android</title>')
                   .replace(/href=["']\.?\/manifest\.json["']/i, 'href="/manifest-android.webmanifest"')

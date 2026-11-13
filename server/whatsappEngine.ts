@@ -4727,8 +4727,10 @@ export function formatBuildingDetailsServer(order: any): string {
 }
 
 // CONFIRMACIÓN EXPRESS EN 1 PASO:
-// 1) Audio #1 enviado PRIMERO pidiendo al cliente que mire la imagen de acá abajo que se le acabó de enviar y confirme con "CORRECTO" o "ESTÁ BIEN"
-// 2) Imagen #1 generada dinámicamente con TODOS los datos del cliente (nombre, celular, ciudad, barrio/dirección, monto, SIN GPS), enviada 1s DESPUÉS del Audio #1 (queda abajo del audio)
+export const IMAGE_AFTER_AUDIO_DELAY_MS = 5000;
+
+// 1) Audio #1 enviado PRIMERO pidiendo al cliente que mire la imagen que le va a llegar abajo (5s después) y confirme con "CORRECTO"
+// 2) Imagen #1 generada dinámicamente con TODOS los datos del cliente (nombre, celular, ciudad, barrio/dirección, monto, SIN GPS), enviada 5s DESPUÉS del Audio #1 (queda abajo del audio)
 export async function buildInitialOrderAiMessage(
   order: any
 ): Promise<{ text: string; locationTextConfirmation: string; error?: string }> {
@@ -4758,8 +4760,8 @@ export async function buildInitialOrderAiMessage(
     ? `del ${shortProduct.replace(/^el\s+/i, '')}`
     : `de ${shortProduct}`;
 
-  // Audio Paso 1: Saludo personalizado conciso y cálido (sale primero que la imagen 1:1) guiando al cliente a revisar la imagen de acá abajo y responder con la palabra CORRECTO
-  const expressGreetingAudio = `¡Hola ${displayFirstName}, qué tal! Te hablo del área de envíos de Noelux para confirmar ${packPhrase} ${productDePhrase} a nombre de ${fullDisplayName}, por ${montoSpeech} con envío gratis al recibir. Mirá la imagen de acá abajo que te acabé de enviar con tu celular ${phone433}, tu ciudad, tu barrio y tu dirección, y para confirmar que tus datos son correctos, respondeme con la palabra CORRECTO para confirmar tu envío.`;
+  // Audio Paso 1: Saludo personalizado conciso y cálido (sale primero; la imagen sale 5 segundos después abajo)
+  const expressGreetingAudio = `¡Hola ${displayFirstName}, qué tal! Te hablo del área de envíos de Noelux para confirmar ${packPhrase} ${productDePhrase} a nombre de ${fullDisplayName}, por ${montoSpeech} con envío gratis al recibir. Acá te voy a pasar la imagen abajo con tu celular ${phone433}, tu ciudad, tu barrio y tu dirección. Quiero que mires y me confirmes con la palabra CORRECTO para confirmar tu envío.`;
 
   return {
     text: normalizeParaguayanPhonesInText(expressGreetingAudio),
@@ -5356,11 +5358,11 @@ export async function sendWhatsAppVoiceCallTurn(
       });
 
       // 3. COMPUERTA ESTRICTA AUDIO-PRIMERO:
-      // Una vez enviado el audio por el agente, se autoriza automáticamente en tiempo real la imagen
-      // exactamente 1 segundo (1000ms) después de que salió el audio.
+      // Una vez enviado el audio por el agente, esperar exactamente 5 segundos (5000ms) mientras escucha el audio
+      // antes de enviar la imagen abajo.
       if (effectiveCommercialStage) {
-        activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 15_000);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 20_000);
+        await new Promise(resolve => setTimeout(resolve, IMAGE_AFTER_AUDIO_DELAY_MS));
         await dispatchStageCommercialForOrderIfNeeded(
           cleanPhone,
           officialOrderCheck,
@@ -7745,8 +7747,8 @@ async function flushPendingMessages(session: WaSessionRuntime) {
                 const candidateImgPath = path.resolve(process.cwd(), 'public', relImgPath);
                 const resolvedQueuedImgPath = fs.existsSync(candidateImgPath) ? candidateImgPath : '';
                 if (resolvedQueuedImgPath) {
-                  // Garantizar que también al vaciar cola offline la imagen salga 1 segundo después del audio previo
-                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  // Garantizar que también al vaciar cola offline la imagen salga 5 segundos después del audio previo
+                  await new Promise(resolve => setTimeout(resolve, IMAGE_AFTER_AUDIO_DELAY_MS));
                   const queuedImgBuf = fs.readFileSync(resolvedQueuedImgPath);
                   const sentImg = await session.sock.sendMessage(jid, {
                     image: queuedImgBuf,

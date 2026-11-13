@@ -1125,12 +1125,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const appleTitleEl = document.getElementById('app-apple-title') as HTMLMetaElement | null;
       const themeColorEl = document.getElementById('app-theme-color') as HTMLMetaElement | null;
 
-      if (currentView === 'app-android') {
+      if (currentView === 'app-android' || currentView === 'admin') {
         if (manifestEl) manifestEl.href = '/manifest-android.webmanifest';
         if (appleIconEl) appleIconEl.href = '/assets/app-android-192.png';
         if (appleTitleEl) appleTitleEl.content = 'Noelux Admin';
         if (themeColorEl) themeColorEl.content = '#09090b';
-        document.title = 'Noelux Admin Android';
+        document.title = currentView === 'app-android' ? 'Noelux Admin Android' : 'Noelux Admin';
       } else if (currentView === 'app-iphone') {
         if (manifestEl) manifestEl.href = '/manifest-iphone.webmanifest';
         if (appleIconEl) appleIconEl.href = '/assets/apple-touch-icon-iphone.png';

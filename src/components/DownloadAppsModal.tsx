@@ -23,7 +23,7 @@ export const DownloadAppsModal: React.FC<DownloadAppsModalProps> = ({
   onLaunchAndroidApp,
   onLaunchIphoneApp
 }) => {
-  const { isInstallable, isAndroid, install } = usePWAInstall();
+  const { isInstallable, install } = usePWAInstall();
   const [copiedTarget, setCopiedTarget] = useState<'android' | 'iphone' | null>(null);
   const [qrAndroid, setQrAndroid] = useState<string>('');
   const [qrIphone, setQrIphone] = useState<string>('');
@@ -61,12 +61,7 @@ export const DownloadAppsModal: React.FC<DownloadAppsModalProps> = ({
   };
 
   const handleDirectAndroidDownload = async () => {
-    if (
-      typeof window !== 'undefined' &&
-      window.location.pathname.includes('/app-android') &&
-      isInstallable &&
-      isAndroid
-    ) {
+    if (isInstallable) {
       const accepted = await install();
       if (accepted) {
         onClose();
@@ -75,7 +70,6 @@ export const DownloadAppsModal: React.FC<DownloadAppsModalProps> = ({
     }
     onClose();
     if (typeof window !== 'undefined') {
-      // Full navigation to /app-android?instalar=1 binds Chrome directly to manifest-android.webmanifest
       window.location.assign('/app-android?instalar=1');
       return;
     }
