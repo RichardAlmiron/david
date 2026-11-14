@@ -92,6 +92,7 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ({
 
   const entryName = trip?.entryProductName || 'Artículo de Entrada';
   const entryPrice = Number(trip?.entryPriceGs ?? trip?.entryProductPriceGs ?? 20000);
+  const entryDelivery = Number(trip?.deliveryFeeGs ?? trip?.entryDeliveryFeeGs ?? 40000);
 
   const isEntrySelected = hasEntryHook && purchasePath === 'entry_only';
   const revealIndex = vis.sheets.length >= 3 ? vis.sheets.length - 1 : Math.max(0, vis.sheets.length - 1);
@@ -180,7 +181,9 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ({
                       isEntrySelected ? 'text-[#090b10]/80 font-semibold' : 'text-zinc-400'
                     }`}
                   >
-                    Oferta promocional de entrada · Solicitud directa
+                    {showPrincipalCard
+                      ? `Solo ${entryName} · Delivery de zona ${formatGs(entryDelivery)} al recibir`
+                      : 'Oferta promocional de entrada · Solicitud directa'}
                   </div>
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
@@ -196,13 +199,20 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ({
                   type="button"
                   data-testid="landing-btn-principal-bundle"
                   onClick={selectWinnerBundle}
-                  className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                  className={`w-full text-left p-4 sm:p-5 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-3 ${
                     !isEntrySelected
                       ? 'bg-emerald-500 text-[#041a12] border-emerald-300 shadow-lg'
-                      : 'bg-[#0b1f17] hover:bg-[#0f291e] text-white border-emerald-700/50'
+                      : 'bg-[#0b1f17] hover:bg-[#0f291e] text-white border-emerald-500/70'
                   }`}
                 >
-                  <div className="min-w-0 space-y-0.5">
+                  <div className="min-w-0 space-y-1">
+                    <div
+                      className={`text-xs sm:text-sm font-black uppercase tracking-wide ${
+                        !isEntrySelected ? 'text-[#041a12]' : 'text-emerald-300'
+                      }`}
+                    >
+                      ENVÍO GRATUITO + {entryName} DE REGALO
+                    </div>
                     <div className="text-sm sm:text-base font-extrabold leading-snug">
                       {vis.bundleButtonLabel ||
                         `Solicitar ${currentProductPage.nombre} + ${entryName} DE REGALO`}
@@ -212,7 +222,7 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ({
                         !isEntrySelected ? 'text-[#041a12]/85 font-semibold' : 'text-emerald-200/80'
                       }`}
                     >
-                      Incluye {entryName} GRATIS · Envío Gratis en todo Paraguay
+                      Llevás gratis el producto del anuncio · Envío 100% gratuito en Paraguay
                     </div>
                   </div>
                   <div className="shrink-0 flex items-center gap-2">

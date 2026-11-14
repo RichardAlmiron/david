@@ -1018,6 +1018,7 @@ test('dual_tripwire_winner ordena 3 actos progresivos: Lámina 1 100% entrada si
     assert.ok(sysPrompt.includes('ACTO 3 (EXPLOSIÓN INFERIOR)'), 'Debe exigir explosión del Producto Principal en Acto 3');
     assert.ok(userPrompt.includes("DO NOT depict, name, or spoil 'Proyector Láser Pro'"), 'Lámina 1 debe prohibir mostrar el producto principal');
     assert.ok(userPrompt.includes("DO NOT write 'Envío Gratis' or any delivery charge"), 'Lámina 1 no debe prometer envío gratis ni recargo');
+    assert.ok(userPrompt.includes('ENVÍO GRATUITO EN TODO PARAGUAY'), 'Lámina 3 (abajo en el BOOM) debe exhibir en grande ENVÍO GRATUITO');
     assert.ok(
       res.product.visualLanding?.entryDisclaimer?.toLowerCase().includes('no incluye'),
       'Fallback entryDisclaimer debe aclarar que no incluye el principal ni envío gratuito'

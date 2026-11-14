@@ -1137,21 +1137,21 @@ export const OrderForm: React.FC<{
               <div className="font-black">
                 {isEntryOnly
                   ? `Opción seleccionada: SOLO ${entryOfferCfg.entryProductName} (${formatGs(entryOfferCfg.entryPriceGs)})`
-                  : `Opción seleccionada: ${targetProductName} + ${entryOfferCfg.entryProductName} DE REGALO`}
+                  : `ENVÍO GRATUITO · ${targetProductName} + ${entryOfferCfg.entryProductName} DE REGALO`}
               </div>
               <p className="text-stone-700 leading-snug">
                 {isEntryOnly
-                  ? `Aclaración importante: esta solicitud incluye únicamente 1x ${entryOfferCfg.entryProductName}. No incluye ${targetProductName} ni envío gratuito.`
-                  : `Incluye ${targetProductName} completo + ${entryOfferCfg.entryProductName} GRATIS + Envío Gratis directo a tu puerta (sin lista de espera).`}
+                  ? `Aclaración transparente: pedir solo 1x ${entryOfferCfg.entryProductName} NO incluye ${targetProductName} ni envío gratuito (abona delivery de ${formatGs(entryOfferCfg.deliveryFeeGs || 40000)}). Con el paquete completo el envío es 100% GRATUITO.`
+                  : `Incluye ${targetProductName} completo + ${entryOfferCfg.entryProductName} DE REGALO + ENVÍO GRATUITO en todo Paraguay (sin lista de espera).`}
               </p>
               <div className="flex items-center gap-2 flex-wrap pt-0.5">
                 {isEntryOnly ? (
                   <button
                     type="button"
                     onClick={() => setPurchasePath('principal_bundle')}
-                    className="text-xs font-bold text-[#062319] underline cursor-pointer"
+                    className="text-xs font-black text-[#062319] underline cursor-pointer"
                   >
-                    Cambiar al equipo completo (con envío gratis + {entryOfferCfg.entryProductName} incluido)
+                    Cambiar al Producto Estrella con ENVÍO GRATUITO + {entryOfferCfg.entryProductName} DE REGALO
                   </button>
                 ) : (
                   <button
@@ -1162,7 +1162,7 @@ export const OrderForm: React.FC<{
                     }}
                     className="text-xs font-semibold text-stone-600 underline cursor-pointer"
                   >
-                    Preferir pedir solo {entryOfferCfg.entryProductName} ({formatGs(entryOfferCfg.entryPriceGs)})
+                    Preferir pedir solo {entryOfferCfg.entryProductName} ({formatGs(entryOfferCfg.entryPriceGs)} + delivery {formatGs(entryOfferCfg.deliveryFeeGs || 40000)})
                   </button>
                 )}
               </div>

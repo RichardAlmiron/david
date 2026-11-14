@@ -706,7 +706,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
         whatYouDo:
           'Elegí una de las 2 tarjetas de abajo según tu estrategia: Página de Producto Estándar (venta 100% directa de un solo producto) o Página Tripwire (oferta gancho de entrada + producto principal adentro).',
         whyItMatters:
-          'La Página Estándar es 100% directa a un único producto con envío gratis. En cambio, la Página Tripwire usa una oferta gancho de bajo valor para que el usuario no piense dos veces en tocar el botón de adquirir: llega desde el anuncio creyendo que vino por esa oferta, pero adentro ve tu Producto Principal con psicología inversa (llevando el principal se lleva el gancho gratis). Clave: en el apartado Tripwire NO se ofrece envío gratuito porque el envío gratis es la llave secreta para atacarlo por mensajes en el chat; recién al final del evento, si sigue firme queriendo solo el Tripwire, se le dice que paga el envío.',
+          'La Página Estándar va 100% directa a un solo producto. La Página Tripwire arranca arriba solo con el gancho económico (sin mencionar envío todavía) para que solicite sin pensarlo; luego va calentando hacia abajo y al final explota en un BOOM el Producto Estrella con el Tripwire DE REGALO y exhibiendo EN GRANDE que tiene ENVÍO GRATUITO. Así el cliente hace clic solo: descubre abajo que el envío del Tripwire solo sí se paga y decide llevar nomás ya el paquete estrella con envío gratis (y si pidió arriba el Tripwire solo, WhatsApp lo ataca con Envío Gratis como llave).',
         unlockHint: pageCreationMode
           ? `Elegiste "${isStandardMode ? 'Página Estándar' : 'Página Tripwire'}". Tocá "Continuar al Paso 2" para avanzar.`
           : 'Tocá una de las 2 tarjetas de abajo para desbloquear el botón Continuar.'
@@ -763,7 +763,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
           ? `Tu Oferta Principal ("${productName}") ya quedó conectada a la derecha. Acá a la izquierda definí tu oferta económica de bajo valor que hace que el usuario no piense dos veces en tocar "Adquirir".`
           : 'A la izquierda cargá tu Oferta de Gancho de bajo valor (Tripwire) y a la derecha tu Oferta Principal completa.',
         whyItMatters:
-          'En el bloque Tripwire NO se promete envío gratuito (el envío gratis queda guardado como llave para el chat cuando le escribamos ofertas). Si el usuario insiste en llevar solo el Tripwire hasta el cierre del evento, recién ahí se le cobra el valor de envío que configurás aquí.',
+          'Arriba en la cabecera NO hablamos de envío. Abajo, en el BOOM del Producto Estrella, exhibimos EN GRANDE el ENVÍO GRATUITO + el Tripwire de regalo y transparentamos este costo de envío del gancho individual para que el cliente elija el paquete estrella (o pague el envío si insiste en el gancho).',
         unlockHint: isReadyForLaunchStep
           ? 'Gancho y Oferta Principal listos. Tocá "Ir al Estudio IA y Lanzamiento".'
           : 'Completá el nombre y precio del Gancho (y de la Oferta Principal si la cargás nueva) para continuar.'
@@ -784,9 +784,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
     return {
       title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (3 Actos Progresivos)',
       whatYouDo:
-        'La IA arma tu página en 3 actos sin rogar compra: arriba 100% Tripwire (cero spoiler del principal), al medio va calentando hasta dar un clic mental, y abajo explota el Producto Principal como la solución definitiva con el Tripwire gratis.',
+        'La IA arma tu página en 3 actos sin rogar compra: arriba 100% Tripwire (cero spoiler del principal y cero mención de envío), al medio va calentando, y abajo explota el Producto Estrella exhibiendo EN GRANDE ENVÍO GRATUITO + el Tripwire gratis.',
       whyItMatters:
-        'Así el usuario pide el producto por puro deseo propio (nosotros nunca gritamos venta). Y si en la página solo solicita el Tripwire, WhatsApp usa el Envío Gratis como llave en el chat y recién al final del evento le informa el costo del envío si sigue solo con el gancho.',
+        'Al llegar abajo al BOOM, el cliente ve en grande que el Producto Estrella tiene ENVÍO GRATUITO y nota que el Tripwire solo sí abona envío: ahí decide solo llevar el paquete estrella. Y si pidió arriba el Tripwire sin bajar, el chat usa Envío Gratis como llave y al final confirma el envío.',
       unlockHint:
         'Tocá "Lanzar Página Tripwire" para generar la página progresiva en GPT-2.6 y conectarla a tus campañas.'
     };
@@ -1034,10 +1034,10 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
 
                   <div className="space-y-1.5">
                     <div className="font-semibold text-[#e5c88b]">
-                      3. Envío Gratis es la llave secreta del chat
+                      3. Cabecera sin envío · Abajo BOOM con Envío Gratuito
                     </div>
                     <p className="text-zinc-400">
-                      En la oferta Tripwire NO se promete envío gratuito. Si pide solo el Tripwire, lo atacamos por WhatsApp usando el Envío Gratis como llave para subirlo al Producto Principal; y si sigue firme solo con el Tripwire hasta el final del evento, recién ahí se le dice que paga el envío.
+                      Arriba en la cabecera NO se habla de envío: si pide arriba, solicita sin pensarlo. Recién abajo en el BOOM del Producto Estrella exhibimos EN GRANDE el ENVÍO GRATUITO + Tripwire gratis para que note que el Tripwire solo paga envío y elija nomás ya el Producto Estrella (y si pidió arriba el Tripwire solo, WhatsApp lo trabaja con Envío Gratis como llave).
                     </p>
                   </div>
                 </div>

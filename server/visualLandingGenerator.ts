@@ -330,10 +330,10 @@ TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES sin tener que diseñar nad
 PSICOLOGÍA DEL EMBUDO DUAL QUE DOMINÁS (OBLIGATORIO):
 1. TONO DE AUTORIDAD Y DESEO PURO (JAMÁS ROGAR COMPRA): Cuando el cliente siente que le están intentando vender, huye. Tu lenguaje despierta deseo irresistible y estatus para que el propio usuario quiera pedir y solicitar el producto sin que nosotros roguemos.
 2. ARQUITECTURA PROGRESIVA EN 3 ACTOS (OBLIGATORIA EN PÁGINA TRIPWIRE — usar siempre 3 láminas):
-   - LÁMINA 1 (Al aterrizar / parte superior): 100% "${safeEntryName}" ÚNICAMENTE (Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))}). PROHIBIDO mostrar, nombrar o insinuar a "${input.productName}" en la Lámina 1. El visitante llegó por este gancho y debe sentir congruencia total y deseo inmediato de solicitarlo.
+   - LÁMINA 1 (Al aterrizar / parte superior): 100% "${safeEntryName}" ÚNICAMENTE (Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))}). PROHIBIDO mostrar, nombrar o insinuar a "${input.productName}" en la Lámina 1, y PROHIBIDO hablar de envío (ni gratis ni pago) en esta cabecera. El visitante llegó por este gancho y debe sentir deseo inmediato de solicitarlo sin fricción.
    - LÁMINA 2 (Zona media / Calentamiento y Clic Mental): Va calentando de a poco desde "${safeEntryName}", muestra el límite de quedarse solo con lo básico y genera el "clic en la cabeza" despertando hambre por la solución definitiva completa.
-   - LÁMINA 3 (Abajo / Explosión de la Solución Definitiva): Recién abajo explota en su cara "${input.productName}" como la solución definitiva del mundo imposible de evitar, revelando con psicología inversa que al solicitar "${input.productName}", el "${safeEntryName}" le va TOTALMENTE DE REGALO + ENVÍO GRATIS.
-3. REGLA CRÍTICA DE ENVÍO: En el bloque/apartado de "${safeEntryName}" NUNCA prometas "Envío Gratis" ni menciones costos de delivery en la página; el Envío Gratis es la llave secreta reservada para el chat de WhatsApp (y recién al cierre del evento si sigue solo con el artículo de entrada se le informa el costo del envío).
+   - LÁMINA 3 (Abajo / Explosión BOOM de la Solución Definitiva): Recién abajo explota en su cara "${input.productName}" como la solución definitiva del mundo imposible de evitar, exhibiendo EN GRANDE que incluye **ENVÍO GRATUITO** + el **${safeEntryName} que vino a buscar del anuncio TOTALMENTE DE REGALO** (dejando transparente que pedir solo el artículo individual sí paga envío, para que el cliente haga clic solo: "ah, mejor pido ya el paquete estrella con envío gratis").
+3. REGLA CRÍTICA DE ENVÍO (ARRIBA vs ABAJO + CHAT): Arriba en la cabecera NO se habla de envío ni si es gratis o pago. Abajo en el BOOM del Producto Estrella se exhibe EN GRANDE **ENVÍO GRATUITO** para el Producto Estrella y transparente el envío del gancho individual; y si pidió arriba solo el gancho, el chat de WhatsApp usa Envío Gratis como llave y al cierre confirma el costo de envío si sigue solo con el gancho.
 4. NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
 REGLAS ESTRICTAS:
 - Si existe PÁGINA CLONADA, primero diagnosticá qué ángulo y estética visual usaba la página original ("currentPageDiagnosis") y proponé 3 opciones frescas distintas.
@@ -629,8 +629,8 @@ ARTÍCULO COMPLEMENTARIO DE ENTRADA (BLOQUE 1 DE LA MISMA PÁGINA):
 - Nombre real: ${safeEntryName}
 - Qué hace: ${resolvedEntryDesc || safeEntryName}
 - Precio Normal comparativo: Gs. ${formatParaguayGs(entryNormal)}
-- Precio Promo Entrada: Gs. ${formatParaguayGs(entryPrice)} (NUNCA prometas "Envío Gratis" para este artículo individual, y tampoco menciones recargos de delivery en esta pantalla para no frenar la interacción; el envío gratis queda reservado como llave para el Producto Principal y el chat).
-- REGLA TRANSPARENTE: Si lleva el Producto Principal (${input.productName}), este complemento "${safeEntryName}" le va TOTALMENTE DE REGALO + ENVÍO GRATIS directo a su puerta.
+- Precio Promo Entrada: Gs. ${formatParaguayGs(entryPrice)} (ARRIBA en la Lámina 1 está PROHIBIDO hablar de envío — ni gratis ni pago — para que solicite sin fricción. Recién ABAJO en el BOOM de la Lámina 3 se exhibe en grande **ENVÍO GRATUITO** exclusivo para el Producto Principal junto al ${safeEntryName} DE REGALO, transparentando que llevar solo ${safeEntryName} abona delivery Gs. ${formatParaguayGs(deliveryFee)} para que el propio usuario decida pedir el Producto Principal).
+- REGLA TRANSPARENTE: Si lleva el Producto Principal (${input.productName}), este complemento "${safeEntryName}" que vino a buscar del anuncio le va TOTALMENTE DE REGALO + ENVÍO GRATUITO exhibido en grande.
 
 CANTIDAD DE LÁMINAS A DISEÑAR: ${sheetCountMode === 'auto' ? `Decidí automáticamente entre 2 o 3 láminas según la complejidad de la oferta dual (sugerido: ${requestedSheetCount})` : requestedSheetCount}
 
@@ -664,9 +664,9 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
         ? `,
     {
       "role": "social_trust_specs",
-      "title": "La Solución Definitiva: ${input.productName} + ${safeEntryName} GRATIS",
-      "caption": "Explosión de la oferta principal congruente",
-      "imagePrompt": "Flagship full-bleed 3:4 explosive climax poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: breathtaking center-stage reveal of '${input.productName}' (${cleanAngleInput || 'solución definitiva'}) presented as the undisputed ultimate solution in its category (Gs. ${formatParaguayGs(price1)}), featuring crisp editorial reverse-psychology reveal 'Solicitando ${input.productName} llevás ${safeEntryName} TOTALMENTE DE REGALO + Envío Gratis · Pagás al Recibir', irresistible status and desire without begging, luxury studio lighting, edge-to-edge."
+      "title": "La Solución Definitiva: ${input.productName} + ${safeEntryName} GRATIS + ENVÍO GRATUITO",
+      "caption": "Explosión de la oferta estrella con Envío Gratuito",
+      "imagePrompt": "Flagship full-bleed 3:4 explosive BOOM climax poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: breathtaking center-stage reveal of '${input.productName}' (${cleanAngleInput || 'solución definitiva'}) presented as the undisputed ultimate flagship solution (Gs. ${formatParaguayGs(price1)}), featuring a PROMINENT BOLD TYPOGRAPHIC CALLOUT 'ENVÍO GRATUITO EN TODO PARAGUAY' alongside clear reverse-psychology reward 'Solicitando ${input.productName} llevás ${safeEntryName} TOTALMENTE DE REGALO' and transparent bottom comparison noting single '${safeEntryName}' alone pays delivery (Gs. ${formatParaguayGs(deliveryFee)}) while the flagship package ships 100% FREE, irresistible desire without begging, luxury studio lighting, edge-to-edge."
     }`
         : ''
     }
