@@ -25,7 +25,10 @@ import {
 } from '../../src/data/noeluxVisualPreset.ts';
 import {
   analyzeQuickCreatorStrategy,
-  generateUniversalVisualProductPage
+  generateUniversalVisualProductPage,
+  recreateExactProductStudioImage,
+  researchProductDeeplyWithAI,
+  scrapeEntryProductUrlInfo
 } from '../visualLandingGenerator.ts';
 import {
   buildPlannedSlotSpecs,
@@ -740,8 +743,11 @@ test('generateUniversalVisualProductPage inyecta clonedFromContext al agente par
       }
     }
 
-    assert.equal(capturedChatPayloads.length, 1);
-    const systemMsg = String(capturedChatPayloads[0]?.messages?.[0]?.content || '');
+    const blueprintCall = capturedChatPayloads.find((p) =>
+      String(p?.messages?.[0]?.content || '').includes('CONOCIMIENTO COMPLETO DE PÁGINA CLONADA')
+    );
+    assert.ok(blueprintCall, 'Debe generar la llamada blueprint heredando contexto clonado');
+    const systemMsg = String(blueprintCall?.messages?.[0]?.content || '');
     assert.ok(systemMsg.includes('Freidora Clásica 6L'), 'Debe heredar conocimiento de la página clonada');
     assert.ok(
       systemMsg.includes('Estilo nocturno minimalista enfocado en cenas rápidas sin limpiar'),
@@ -1010,8 +1016,11 @@ test('dual_tripwire_winner ordena 3 actos progresivos: Lámina 1 100% entrada si
     }
 
     assert.equal(res.product.visualLanding?.sheets.length, 3);
-    const sysPrompt = String(capturedChatPayloads[0]?.messages?.[0]?.content || '');
-    const userPrompt = String(capturedChatPayloads[0]?.messages?.[1]?.content || '');
+    const blueprintPayload = capturedChatPayloads.find((p) =>
+      String(p?.messages?.[0]?.content || '').includes('CERO ROGAR COMPRA')
+    );
+    const sysPrompt = String(blueprintPayload?.messages?.[0]?.content || '');
+    const userPrompt = String(blueprintPayload?.messages?.[1]?.content || '');
     assert.ok(sysPrompt.includes('CERO ROGAR COMPRA'), 'Debe exigir autoridad y prohibir rogar compra');
     assert.ok(sysPrompt.includes('ACTO 1 (ARRIBA AL ATERRIZAR): 100%'), 'Debe exigir Acto 1 exclusivo de entrada arriba');
     assert.ok(sysPrompt.includes('ACTO 2 (ZONA MEDIA): Calentamiento progresivo'), 'Debe exigir calentamiento progresivo en Acto 2');
@@ -1036,6 +1045,225 @@ test('dual_tripwire_winner ordena 3 actos progresivos: Lámina 1 100% entrada si
     }
   }
 });
+
+test('scrapeEntryProductUrlInfo y researchProductDeeplyWithAI investigan online sin copiar en crudo y con visión exacta', async () => {
+  const capturedCalls: Array<{ url: string; body: any }> = [];
+  const sampleHtml = `
+    <html>
+      <head>
+        <title>OEM Hot Sale Mini Humidifier 300ml</title>
+        <meta property="og:title" content="Mini Humidificador Portátil 300ml USB" />
+        <meta property="og:image" content="/images/ugly-supplier-collage.jpg" />
+        <script type="application/ld+json">{"@type":"Product","name":"Difusor Ultrasónico 300ml","description":"Tanque 300ml apagado automático silencioso USB-C"}</script>
+      </head>
+      <body>
+        <h1>Difusor Ultrasónico USB-C</h1>
+        <p>Capacidad real de 300 ml con luz cálida ambiental y apagado automático a las 4 horas de uso continuo.</p>
+      </body>
+    </html>
+  `;
+
+  const mockFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.startsWith('https://proveedor.example.com')) {
+      return new Response(sampleHtml, { status: 200 });
+    }
+    const parsedBody = init?.body ? JSON.parse(String(init.body)) : {};
+    capturedCalls.push({ url, body: parsedBody });
+
+    // Simular fallback limpio si :online no responde
+    if (parsedBody.model === 'openai/gpt-4o:online') {
+      return new Response('Online plugin fallback test', { status: 400 });
+    }
+
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                researchedName: 'Difusor Ultrasónico Portátil 300 ml USB-C',
+                researchedDescription:
+                  'Difusor ultrasónico silencioso con depósito de 300 ml, niebla fina continua, luz cálida regulable y apagado automático de seguridad por USB-C.',
+                verifiedSpecs: [
+                  'Depósito de 300 ml con autonomía hasta 6 horas',
+                  'Alimentación USB-C de bajo consumo silencioso',
+                  'Apagado automático al agotarse el agua'
+                ],
+                usageSummary: 'Ideal para escritorio, dormitorio o vehículo con aromas hidrosolubles.',
+                exactVisualBlueprint:
+                  'Compact cylindrical matte pearl-white ultrasonic aroma diffuser (300ml) with champagne metallic top ring, vertical warm glow slit, and single tactile chrome button on a 3/4 elevated studio angle'
+              })
+            }
+          }
+        ]
+      }),
+      { status: 200 }
+    );
+  }) as any;
+
+  // 1. Con URL de proveedor + texto crudo spammy
+  const rawSpamCopy = 'BUY NOW HOT SALE SKU-88291 dropshipping cheap humidifier 2025!!!';
+  const resWithUrl = await researchProductDeeplyWithAI({
+    openRouterApiKey: 'test-key',
+    url: 'https://proveedor.example.com/item/123',
+    productName: 'Humidifier SKU 88291',
+    rawDescription: rawSpamCopy,
+    fetchImpl: mockFetch
+  });
+
+  assert.equal(resWithUrl.ok, true);
+  assert.equal(resWithUrl.scrapedImageUrl, 'https://proveedor.example.com/images/ugly-supplier-collage.jpg');
+  assert.ok(!resWithUrl.researchedDescription.includes('SKU-88291'), 'No debe copiar texto crudo literalmente');
+  assert.ok(resWithUrl.researchedDescription.includes('300 ml'), 'Debe sintetizar datos técnicos reales investigados');
+  assert.ok(resWithUrl.verifiedSpecs.length >= 2);
+  assert.ok(resWithUrl.exactVisualBlueprint.includes('300ml'));
+
+  // Confirmar que incluyó vision image_url extraído de la URL en la llamada multimodal
+  const visionCall = capturedCalls.find((c) => Array.isArray(c.body?.messages?.[1]?.content));
+  assert.ok(visionCall, 'Debe analizar la imagen de referencia vía multimodal vision');
+
+  // 2. Sin URL: solo nombre + texto en crudo
+  const resWithoutUrl = await researchProductDeeplyWithAI({
+    openRouterApiKey: 'test-key',
+    productName: 'Difusor Ultrasónico USB',
+    rawDescription: 'Difusor chiquito usb barato lindo',
+    fetchImpl: mockFetch
+  });
+  assert.equal(resWithoutUrl.ok, true);
+  assert.ok(resWithoutUrl.researchedDescription.length > 30);
+});
+
+test('Tripwire precio único + anti copia-pega + recreación automática de imagen limpia de estudio del producto exacto', async () => {
+  const createdTempFiles: string[] = [];
+  const fakeJpgB64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46]).toString('base64');
+  const rawSupplierPaste = 'TEXTO CRUDO PROVEEDOR CHINO OEM 9999 COMPRE BARATO';
+  const capturedImagePrompts: string[] = [];
+
+  const mockFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const bodyObj = init?.body ? JSON.parse(String(init.body)) : {};
+
+    if (url.includes('/chat/completions')) {
+      const sys = String(bodyObj?.messages?.[0]?.content || '');
+      if (sys.includes('Cerebro de Investigación Real')) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    researchedName: 'Organizador Giratorio Acrílico 360°',
+                    researchedDescription:
+                      'Base giratoria de acrílico cristalino 360 grados con rodamiento silencioso y bandejas ajustables en altura para organizar cosméticos o especias.',
+                    verifiedSpecs: [
+                      'Giro suave 360 grados con rodamiento de acero',
+                      'Acrílico transparente de 4 mm lavable',
+                      'Diámetro de 23 cm adaptable'
+                    ],
+                    usageSummary: 'Mantiene todo visible y al alcance sin desorden.',
+                    exactVisualBlueprint:
+                      'Clear thick crystal-acrylic 2-tier 360-degree rotating vanity organizer tray with brushed gold vertical dividers and raised guard rails'
+                  })
+                }
+              }
+            ]
+          }),
+          { status: 200 }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  strategySummary: 'Precio único 1 unidad + estudio recreado',
+                  recommendedAudioPreset: 'warm_ambient',
+                  researchedProductDescription:
+                    'Estación organizadora modular premium diseñada para transformar tu espacio con acceso inmediato.',
+                  researchedEntryDescription:
+                    'Organizador giratorio de acrílico cristalino 360° con niveles ajustables para uso diario.',
+                  sobrietyHeadline: 'Orden instantáneo en cada giro',
+                  subheadline: 'Organizá todo en segundos.',
+                  winnerAngleHeadline: 'La solución definitiva para todo tu ambiente',
+                  winnerAngleDescription: 'Pensada para quien desea orden absoluto todos los días.',
+                  reversePsychologyHook: 'Llevando el sistema completo te llevás el organizador giratorio gratis.',
+                  entryButtonLabel: 'Solicitar Organizador 360° — 1 unidad (Gs. 25.000)',
+                  bundleButtonLabel: 'Solicitar Sistema Completo + Organizador GRATIS (Gs. 195.000)',
+                  bundleDisclaimer: 'Envío GRATUITO incluido en todo Paraguay.',
+                  sheetPrompts: [
+                    { role: 'hero_presentation', title: 'Organizador 360', caption: 'Entrada', imagePrompt: 'Hero entry' },
+                    { role: 'comparison_need', title: 'Clic', caption: 'Medio', imagePrompt: 'Bridge' },
+                    { role: 'social_trust_specs', title: 'Solución', caption: 'Final', imagePrompt: 'Boom' }
+                  ],
+                  faq: [{ q: '¿Es 1 sola unidad?', a: 'Sí, el gancho es precio único por 1 unidad.' }],
+                  agentContext: 'Precios exactos.'
+                })
+              }
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    }
+
+    capturedImagePrompts.push(String(bodyObj?.prompt || ''));
+    return new Response(JSON.stringify({ data: [{ b64_json: fakeJpgB64 }] }), { status: 200 });
+  }) as any;
+
+  try {
+    const res = await generateUniversalVisualProductPage({
+      openRouterApiKey: 'test-key',
+      pageCreationMode: 'dual_tripwire_winner',
+      productName: 'Sistema Modular Casa Pro',
+      productDescription: 'RAW SUPPLIER TEXT COPIADO DEL CATALOGO MAYORISTA',
+      price1Gs: 195000,
+      entryProductName: 'Organizador 360',
+      entryProductDescription: rawSupplierPaste,
+      entryPriceGs: 25000,
+      // SIN entryNormalPriceGs ni entrega custom: precio único solamente
+      entryProductImageInput: 'https://ugly-supplier.example.com/raw-dirty-photo.jpg',
+      sheetCount: 'auto',
+      fetchImpl: mockFetch
+    });
+
+    const collectLocal = (u?: string) => {
+      if (u && u.startsWith('/assets/visual-pages/')) {
+        createdTempFiles.push(path.resolve(process.cwd(), 'public', u.replace(/^\//, '')));
+      }
+    };
+    collectLocal(res.product.tripwireConfig?.entryProductImage);
+    for (const sh of res.product.visualLanding?.sheets || []) collectLocal(sh.imageUrl);
+
+    // 1. Cero copia-pega literal del texto crudo de proveedor
+    assert.notEqual(res.product.tripwireConfig?.entryProductDescription, rawSupplierPaste);
+    assert.ok(res.product.tripwireConfig?.entryProductDescription?.includes('360'));
+    assert.notEqual(res.product.descripcion, 'RAW SUPPLIER TEXT COPIADO DEL CATALOGO MAYORISTA');
+
+    // 2. Imagen recreada de estudio limpia en lugar de la foto fea de proveedor
+    assert.ok(
+      String(res.product.tripwireConfig?.entryProductImage || '').includes('entry_studio_'),
+      'Debe reemplazar la imagen cruda de proveedor por imagen de estudio recreada del objeto exacto'
+    );
+    assert.ok(
+      capturedImagePrompts.some((p) => p.includes('2-tier 360-degree rotating vanity organizer')),
+      'El prompt de recreación de estudio debe usar el blueprint físico exacto investigado'
+    );
+
+    // 3. Precio único sin normal tachado inventado
+    assert.equal(res.product.tripwireConfig?.entryPriceGs, 25000);
+    assert.equal(res.product.tripwireConfig?.entryNormalPriceGs, undefined);
+  } finally {
+    for (const abs of createdTempFiles) {
+      try {
+        if (fs.existsSync(abs)) fs.unlinkSync(abs);
+      } catch {}
+    }
+  }
+});
+
 
 
 

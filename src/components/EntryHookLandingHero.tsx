@@ -21,7 +21,7 @@ export const EntryHookLandingHero: React.FC = () => {
     trip.entryProductDescription ||
     `Artículo de entrada disponible con entrega puerta a puerta en Paraguay.`;
   const entryPrice = Number(trip.entryPriceGs ?? trip.entryProductPriceGs ?? 20000);
-  const entryNormal = Number(trip.entryNormalPriceGs || Math.round(entryPrice * 2.1));
+  const entryNormal = Number(trip.entryNormalPriceGs || 0);
   const deliveryFee = Number(trip.deliveryFeeGs ?? trip.entryDeliveryFeeGs ?? 40000);
   const heroImg = trip.entryProductImage || currentProductPage.imagen;
   const principalPrice = Number(

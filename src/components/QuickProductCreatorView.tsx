@@ -134,9 +134,11 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
   const [entryProductName, setEntryProductName] = useState('');
   const [entryProductDescription, setEntryProductDescription] = useState('');
   const [entryPriceGs, setEntryPriceGs] = useState<number>(20000);
-  const [entryNormalPriceGs, setEntryNormalPriceGs] = useState<number>(45000);
-  const [entryDeliveryFeeGs, setEntryDeliveryFeeGs] = useState<number>(40000);
   const [entryProductImageInput, setEntryProductImageInput] = useState('');
+  const [entryResearched, setEntryResearched] = useState(false);
+  const [entryVisualBlueprint, setEntryVisualBlueprint] = useState('');
+  const [entryVerifiedSpecs, setEntryVerifiedSpecs] = useState<string[]>([]);
+  const [entryRecreatedImage, setEntryRecreatedImage] = useState(false);
   const [instantDiscountPercent, setInstantDiscountPercent] = useState<number>(12);
   const [eventDurationHours, setEventDurationHours] = useState<number>(6);
   const [slotsTotal, setSlotsTotal] = useState<number>(10);
@@ -332,7 +334,6 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
           entryProductName: isTripwireMode ? entryProductName.trim() : undefined,
           entryProductDescription: isTripwireMode ? entryProductDescription.trim() : undefined,
           entryPriceGs: isTripwireMode ? entryPriceGs : undefined,
-          entryDeliveryFeeGs: isTripwireMode ? entryDeliveryFeeGs : undefined,
           clonedFromContext: sanitizedCloneContext,
           userQuestion: customQuestion || undefined,
           conversationHistory: customQuestion ? nextHistory : undefined
@@ -428,9 +429,11 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       setEntryProductName(cloned.entryProductName);
       setEntryProductDescription(cloned.entryProductDescription);
       setEntryPriceGs(cloned.entryPriceGs);
-      setEntryNormalPriceGs(cloned.entryNormalPriceGs);
-      setEntryDeliveryFeeGs(cloned.entryDeliveryFeeGs);
       setEntryProductImageInput(cloned.entryProductImageInput);
+      setEntryResearched(false);
+      setEntryVisualBlueprint('');
+      setEntryVerifiedSpecs([]);
+      setEntryRecreatedImage(false);
       setInstantDiscountPercent(cloned.instantDiscountPercent);
       setEventDurationHours(cloned.eventDurationHours);
       setSlotsTotal(cloned.slotsTotal);
@@ -479,7 +482,12 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
     setEntrySourceUrl('');
     setEntryProductName('');
     setEntryProductDescription('');
+    setEntryPriceGs(20000);
     setEntryProductImageInput('');
+    setEntryResearched(false);
+    setEntryVisualBlueprint('');
+    setEntryVerifiedSpecs([]);
+    setEntryRecreatedImage(false);
     setProductName('');
     setWinnerAngle('');
     setProductDescription('');
@@ -528,8 +536,8 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
   };
 
   const handleAnalyzeHookUrl = async () => {
-    if (!entrySourceUrl.trim()) {
-      showToast('Pegá primero el link del artículo gancho.');
+    if (!entrySourceUrl.trim() && !entryProductName.trim() && !entryProductDescription.trim()) {
+      showToast('Pegá el link del proveedor o escribí al menos el nombre del artículo para investigar.');
       return;
     }
     setAnalyzingUrl(true);
@@ -538,19 +546,33 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
         method: 'POST',
         headers: authHeaders,
         credentials: 'include',
-        body: JSON.stringify({ url: entrySourceUrl.trim() })
+        body: JSON.stringify({
+          url: entrySourceUrl.trim() || undefined,
+          productName: entryProductName.trim() || undefined,
+          rawDescription: entryProductDescription.trim() || undefined,
+          referenceImageInput: entryProductImageInput.trim() || undefined,
+          recreateImage: true
+        })
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
-        showToast(data?.error || 'No se pudo extraer info de esa URL.');
+        showToast(data?.error || 'No se pudo investigar ese artículo.');
         return;
       }
-      if (data.title && !entryProductName.trim()) setEntryProductName(data.title);
-      if (data.description) setEntryProductDescription(data.description);
-      if (data.imageUrl && !entryProductImageInput) setEntryProductImageInput(data.imageUrl);
-      showToast('Datos e imagen cargados en la oferta gancho.');
+      if (data.title) setEntryProductName(String(data.title));
+      if (data.description) setEntryProductDescription(String(data.description));
+      if (data.imageUrl) setEntryProductImageInput(String(data.imageUrl));
+      setEntryResearched(Boolean(data.researched));
+      setEntryVisualBlueprint(String(data.exactVisualBlueprint || ''));
+      setEntryVerifiedSpecs(Array.isArray(data.verifiedSpecs) ? data.verifiedSpecs : []);
+      setEntryRecreatedImage(Boolean(data.recreatedImage));
+      showToast(
+        data.recreatedImage
+          ? 'Producto investigado online, ficha redactada sin copia-pega e imagen de estudio recreada.'
+          : 'Investigación IA completada y ficha comercial sintetizada.'
+      );
     } catch (err: any) {
-      showToast(err?.message || 'Error analizando URL.');
+      showToast(err?.message || 'Error investigando producto con IA.');
     } finally {
       setAnalyzingUrl(false);
     }
@@ -636,10 +658,11 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
         payload.entryProductName = entryProductName.trim();
         payload.entryProductDescription = entryProductDescription.trim() || entryProductName.trim();
         payload.entryPriceGs = entryPriceGs;
-        payload.entryNormalPriceGs = entryNormalPriceGs;
-        payload.entryDeliveryFeeGs = entryDeliveryFeeGs;
         payload.entryProductImageInput = entryProductImageInput.trim();
         payload.entrySourceUrl = entrySourceUrl.trim() || undefined;
+        payload.entryResearched = entryResearched;
+        payload.entryVisualBlueprint = entryVisualBlueprint.trim() || undefined;
+        payload.entryVerifiedSpecs = entryVerifiedSpecs.length > 0 ? entryVerifiedSpecs : undefined;
         payload.instantDiscountPercent = instantDiscountPercent;
         payload.eventDurationHours = eventDurationHours;
         payload.slotsTotal = slotsTotal;
@@ -760,13 +783,13 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       return {
         title: 'Paso 3 de 4 · Definí tu Oferta de Gancho (Tripwire)',
         whatYouDo: clonedFrom
-          ? `Tu Oferta Principal ("${productName}") ya quedó conectada a la derecha. Acá a la izquierda definí tu oferta económica de bajo valor que hace que el usuario no piense dos veces en tocar "Adquirir".`
-          : 'A la izquierda cargá tu Oferta de Gancho de bajo valor (Tripwire) y a la derecha tu Oferta Principal completa.',
+          ? `Tu Oferta Principal ("${productName}") ya quedó conectada a la derecha. Acá a la izquierda pegá un link o escribí el nombre/notas en crudo del gancho y definí UN SOLO precio cerrado para 1 unidad.`
+          : 'A la izquierda cargá tu Oferta de Gancho (1 solo precio para 1 unidad) y a la derecha tu Oferta Principal completa.',
         whyItMatters:
-          'Arriba en la cabecera NO hablamos de envío. Abajo, en el BOOM del Producto Estrella, exhibimos EN GRANDE el ENVÍO GRATUITO + el Tripwire de regalo y transparentamos este costo de envío del gancho individual para que el cliente elija el paquete estrella (o pague el envío si insiste en el gancho).',
+          'La IA NO copia y pega tu texto en crudo: investiga el producto en internet, sintetiza sus datos reales y recrea una foto limpia de estudio del mismo objeto (no necesitás subir la foto fea del proveedor). Además el gancho maneja un único precio para 1 sola unidad sin packs ni normal tachado.',
         unlockHint: isReadyForLaunchStep
           ? 'Gancho y Oferta Principal listos. Tocá "Ir al Estudio IA y Lanzamiento".'
-          : 'Completá el nombre y precio del Gancho (y de la Oferta Principal si la cargás nueva) para continuar.'
+          : 'Completá el nombre y el precio único del Gancho (y de la Oferta Principal si la cargás nueva) para continuar.'
       };
     }
     // Step 4
@@ -1344,38 +1367,54 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                   >
                     <div className="border-b border-white/10 pb-3 space-y-1">
                       <div className="text-[11px] font-mono uppercase tracking-wider text-[#e5c88b]">
-                        Oferta de Gancho · Tripwire
+                        Oferta de Gancho · 1 Unidad · Precio Único
                       </div>
                       <h3 className="text-base font-bold text-white">Producto Gancho Accesible (Bajo Valor)</h3>
                       <p className="text-xs text-zinc-400">
-                        Oferta irresistible que el usuario solicita sin pensarlo dos veces. No ofrece envío gratis en la página (el envío gratis es la llave de cierre en el chat) y va DE REGALO si elige el Producto Principal.
+                        El cliente solicita únicamente 1 unidad a un solo precio cerrado. La IA investiga el producto por internet (link o nombre) sin copiar texto en crudo y recrea una foto limpia de estudio del objeto exacto.
                       </p>
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-zinc-300 block">
-                        Importar desde link del proveedor (opcional)
+                        Investigación IA por link del proveedor o nombre (opcional)
                       </label>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <div className="relative flex-1">
                           <LinkIcon className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                           <input
                             type="url"
-                            placeholder="https://proveedor.com/producto"
+                            data-testid="quick-creator-entry-url"
+                            placeholder="https://proveedor.com/producto (opcional)"
                             value={entrySourceUrl}
-                            onChange={(e) => setEntrySourceUrl(e.target.value)}
+                            onChange={(e) => {
+                              setEntrySourceUrl(e.target.value);
+                              setEntryResearched(false);
+                            }}
                             className="w-full pl-8 pr-3 py-2 rounded-xl bg-[#07090f]/90 border border-white/10 text-xs text-white outline-none focus:border-[#e5c88b]/70"
                           />
                         </div>
                         <button
                           type="button"
+                          data-testid="quick-creator-research-hook-btn"
                           onClick={handleAnalyzeHookUrl}
-                          disabled={analyzingUrl}
-                          className="px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-xs font-semibold text-zinc-200 cursor-pointer shrink-0 disabled:opacity-50"
+                          disabled={
+                            analyzingUrl ||
+                            (!entrySourceUrl.trim() && !entryProductName.trim() && !entryProductDescription.trim())
+                          }
+                          className="px-3.5 py-2 rounded-xl bg-[#e5c88b]/15 hover:bg-[#e5c88b]/25 border border-[#e5c88b]/40 text-xs font-semibold text-[#e5c88b] cursor-pointer shrink-0 disabled:opacity-45 inline-flex items-center justify-center gap-1.5"
                         >
-                          {analyzingUrl ? 'Leyendo...' : 'Leer URL'}
+                          {analyzingUrl ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <BrainCircuit className="w-3.5 h-3.5" />
+                          )}
+                          <span>{analyzingUrl ? 'Investigando y recreando...' : 'Investigar y Recrear IA'}</span>
                         </button>
                       </div>
+                      <span className="text-[11px] text-zinc-500 block leading-tight">
+                        Podés pegar un link o simplemente escribir el nombre + texto en crudo abajo y tocar «Investigar y Recrear IA» (o dejar que lo haga automático al lanzar).
+                      </span>
                     </div>
 
                     <div className="space-y-1.5">
@@ -1387,78 +1426,86 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                         data-testid="quick-creator-entry-name"
                         placeholder="Ej: Set de Papeles Antiadherentes x50"
                         value={entryProductName}
-                        onChange={(e) => setEntryProductName(e.target.value)}
+                        onChange={(e) => {
+                          setEntryProductName(e.target.value);
+                          setEntryResearched(false);
+                        }}
                         className={inputClass}
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-zinc-300 block">
-                        2. Qué incluye exactamente
+                        2. Pega notas / descripción en crudo (la IA lo investiga y reescribe sin copiar literal)
                       </label>
                       <textarea
                         data-testid="quick-creator-entry-desc"
-                        rows={2}
-                        placeholder="Ej: Pack de 50 unidades descartables medida universal."
+                        rows={3}
+                        placeholder="Pegá acá el texto del proveedor o qué incluye en crudo: la IA investiga online las especificaciones reales y redacta una ficha comercial limpia."
                         value={entryProductDescription}
-                        onChange={(e) => setEntryProductDescription(e.target.value)}
+                        onChange={(e) => {
+                          setEntryProductDescription(e.target.value);
+                          setEntryResearched(false);
+                        }}
                         className={inputClass}
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-xs text-[#e5c88b] font-medium block">Precio Gancho (Gs.) *</label>
-                        <input
-                          type="number"
-                          min={5000}
-                          step={1000}
-                          value={entryPriceGs}
-                          onChange={(e) => setEntryPriceGs(Number(e.target.value) || 0)}
-                          className={monoInputClass}
-                        />
+                    {entryResearched && (
+                      <div
+                        data-testid="quick-creator-hook-research-badge"
+                        className="p-3 rounded-xl bg-[#07090f]/90 border border-[#e5c88b]/30 space-y-1.5"
+                      >
+                        <div className="text-[11px] font-mono uppercase tracking-wider text-[#e5c88b] flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Investigación IA aplicada · Cero texto copiado en crudo</span>
+                        </div>
+                        {entryVerifiedSpecs.length > 0 && (
+                          <ul className="space-y-0.5 text-[11px] text-zinc-300 list-disc list-inside">
+                            {entryVerifiedSpecs.slice(0, 3).map((spec, idx) => (
+                              <li key={idx}>{spec}</li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-xs text-zinc-400 block">Normal tachado</label>
-                        <input
-                          type="number"
-                          min={10000}
-                          step={1000}
-                          value={entryNormalPriceGs}
-                          onChange={(e) => setEntryNormalPriceGs(Number(e.target.value) || 45000)}
-                          className={monoInputClass}
-                        />
-                      </div>
-                      <div className="space-y-1 col-span-2 sm:col-span-1">
-                        <label className="text-xs text-zinc-400 block">Envío al final del evento</label>
-                        <input
-                          type="number"
-                          min={10000}
-                          step={5000}
-                          value={entryDeliveryFeeGs}
-                          onChange={(e) => setEntryDeliveryFeeGs(Number(e.target.value) || 40000)}
-                          className={monoInputClass}
-                        />
-                        <span className="text-[10px] text-zinc-500 block leading-tight">
-                          No se ofrece envío gratis en Tripwire; solo se cobra al cierre si rechaza el Principal en el chat.
-                        </span>
-                      </div>
+                    )}
+
+                    {/* PRECIO ÚNICO SOLAMENTE (1 UNIDAD — CERO NORMAL TACHADO, CERO PACKS, CERO CAMPO ENVÍO) */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-[#e5c88b] font-medium block">
+                        3. Precio único del Gancho · 1 unidad (Gs.) *
+                      </label>
+                      <input
+                        type="number"
+                        data-testid="quick-creator-entry-price"
+                        min={5000}
+                        step={1000}
+                        value={entryPriceGs}
+                        onChange={(e) => setEntryPriceGs(Number(e.target.value) || 0)}
+                        className={monoInputClass}
+                      />
+                      <span className="text-[11px] text-zinc-500 block leading-tight">
+                        Precio único cerrado por 1 sola unidad. Sin packs 2x/3x, sin precio normal tachado ni envío visible al crear.
+                      </span>
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-zinc-300 block">
-                        Foto de referencia del gancho (opcional)
+                        Foto de referencia o imagen recreada por IA (100% opcional)
                       </label>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
-                          placeholder="https://... o subí foto"
+                          placeholder="Opcional: la IA recrea una imagen limpia de estudio automática"
                           value={
                             entryProductImageInput.startsWith('data:')
-                              ? 'Imagen cargada'
+                              ? 'Imagen de referencia cargada'
                               : entryProductImageInput
                           }
-                          onChange={(e) => setEntryProductImageInput(e.target.value)}
+                          onChange={(e) => {
+                            setEntryProductImageInput(e.target.value);
+                            setEntryRecreatedImage(false);
+                          }}
                           className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-[#07090f]/90 border border-white/10 text-xs text-white outline-none"
                         />
                         <label className="px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-xs text-zinc-200 cursor-pointer shrink-0 inline-flex items-center gap-1.5">
@@ -1467,15 +1514,22 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                           <input type="file" accept="image/*" onChange={handleUploadEntryImg} className="hidden" />
                         </label>
                       </div>
+                      <span className="text-[11px] text-zinc-500 block leading-tight">
+                        No es obligatorio subir imagen (las de proveedores suelen ser feas): si la dejás vacía o tocás «Investigar y Recrear IA», la IA recrea el producto exacto en estudio limpio.
+                      </span>
                       {entryProductImageInput && (
-                        <div className="flex items-center gap-2 pt-1">
+                        <div className="flex items-center gap-2.5 pt-1">
                           <img
                             src={entryProductImageInput}
                             alt="Vista previa producto gancho"
                             referrerPolicy="no-referrer"
-                            className="w-10 h-10 rounded-lg object-cover border border-white/15"
+                            className="w-12 h-12 rounded-lg object-cover border border-white/15"
                           />
-                          <span className="text-[11px] text-zinc-400">Imagen lista</span>
+                          <span className="text-[11px] text-zinc-300">
+                            {entryRecreatedImage
+                              ? 'Imagen recreada en estudio IA (producto exacto limpio)'
+                              : 'Imagen de referencia cargada (la IA la recreará en limpio para la página y anuncios)'}
+                          </span>
                         </div>
                       )}
                     </div>

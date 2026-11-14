@@ -152,6 +152,8 @@ import {
 import {
   analyzeQuickCreatorStrategy,
   generateUniversalVisualProductPage,
+  recreateExactProductStudioImage,
+  researchProductDeeplyWithAI,
   scrapeEntryProductUrlInfo
 } from './server/visualLandingGenerator.ts';
 
@@ -9351,12 +9353,97 @@ setTimeout(()=>window.close(),5000);
               res.setHeader('Content-Type', 'application/json');
               try {
                 const parsed = JSON.parse(body || '{}');
-                const scraped = await scrapeEntryProductUrlInfo(String(parsed?.url || ''));
-                res.statusCode = scraped.ok ? 200 : 400;
-                res.end(JSON.stringify({ success: scraped.ok, ...scraped }));
+                const hookUrl = String(parsed?.url || '').trim();
+                const productName = String(parsed?.productName || '').trim();
+                const rawDescription = String(parsed?.rawDescription || '').trim();
+                const referenceImageInput = String(parsed?.referenceImageInput || '').trim();
+                const shouldRecreateImage = parsed?.recreateImage !== false;
+
+                if (!hookUrl && !productName && !rawDescription) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error: 'Ingresá la URL del proveedor, el nombre del producto o una descripción inicial para investigar.'
+                    })
+                  );
+                  return;
+                }
+
+                const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+                if (!openRouterApiKey) {
+                  if (hookUrl) {
+                    const scraped = await scrapeEntryProductUrlInfo(hookUrl);
+                    res.statusCode = scraped.ok ? 200 : 400;
+                    res.end(JSON.stringify({ success: scraped.ok, researched: false, recreatedImage: false, ...scraped }));
+                    return;
+                  }
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error: 'Falta OPENROUTER_API_KEY configurada para investigar online y recrear la imagen del producto.'
+                    })
+                  );
+                  return;
+                }
+
+                const referer = getOpenRouterReferer(req);
+                const researched = await researchProductDeeplyWithAI({
+                  openRouterApiKey,
+                  url: hookUrl || undefined,
+                  productName: productName || undefined,
+                  rawDescription: rawDescription || undefined,
+                  referenceImageInput: referenceImageInput || undefined,
+                  role: 'entry_hook',
+                  referer
+                });
+
+                if (!researched.ok) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ success: false, error: researched.error || 'No se pudo investigar el producto.' }));
+                  return;
+                }
+
+                let recreatedImageUrl = '';
+                if (shouldRecreateImage && researched.exactVisualBlueprint) {
+                  try {
+                    const slugBase = (researched.researchedName || productName || 'hook')
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, '-')
+                      .slice(0, 18);
+                    recreatedImageUrl = await recreateExactProductStudioImage({
+                      openRouterApiKey,
+                      productName: researched.researchedName || productName || 'Producto',
+                      exactVisualBlueprint: researched.exactVisualBlueprint,
+                      verifiedSpecs: researched.verifiedSpecs,
+                      filePrefix: `entry_studio_${slugBase || 'item'}`,
+                      referer
+                    });
+                  } catch {}
+                }
+
+                const rawRefImg = researched.scrapedImageUrl || researched.discoveredReferenceImageUrl || '';
+                res.statusCode = 200;
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    ok: true,
+                    researched: true,
+                    recreatedImage: Boolean(recreatedImageUrl),
+                    usedWebSearch: researched.usedWebSearch,
+                    title: researched.researchedName,
+                    description: researched.researchedDescription,
+                    verifiedSpecs: researched.verifiedSpecs,
+                    usageSummary: researched.usageSummary,
+                    exactVisualBlueprint: researched.exactVisualBlueprint,
+                    imageUrl: recreatedImageUrl || rawRefImg,
+                    rawScrapedImageUrl: rawRefImg
+                  })
+                );
               } catch (err: any) {
                 res.statusCode = 400;
-                res.end(JSON.stringify({ success: false, error: err?.message }));
+                res.end(JSON.stringify({ success: false, error: err?.message || 'Error investigando producto.' }));
               }
             });
             return;
@@ -9477,6 +9564,11 @@ setTimeout(()=>window.close(),5000);
                   entryDeliveryFeeGs: Number(incoming.entryDeliveryFeeGs) || 40000,
                   entryProductImageInput: String(incoming.entryProductImageInput || '').trim(),
                   entrySourceUrl: String(incoming.entrySourceUrl || '').trim() || undefined,
+                  entryResearched: Boolean(incoming.entryResearched),
+                  entryVisualBlueprint: String(incoming.entryVisualBlueprint || '').trim() || undefined,
+                  entryVerifiedSpecs: Array.isArray(incoming.entryVerifiedSpecs)
+                    ? incoming.entryVerifiedSpecs.map((x: any) => String(x || '').trim()).filter(Boolean)
+                    : undefined,
                   instantDiscountPercent: Number(incoming.instantDiscountPercent) || 12,
                   eventDurationHours: Number(incoming.eventDurationHours) || 6,
                   slotsTotal: Number(incoming.slotsTotal) || 10,

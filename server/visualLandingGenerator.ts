@@ -32,45 +32,156 @@ export function slugifyProductName(raw: string): string {
   );
 }
 
-export async function scrapeEntryProductUrlInfo(rawUrl: string): Promise<{
+export async function scrapeEntryProductUrlInfo(
+  rawUrl: string,
+  fetchImpl?: typeof fetch
+): Promise<{
   ok: boolean;
   title?: string;
   description?: string;
   imageUrl?: string;
+  specsText?: string;
+  imageCandidates?: string[];
+  jsonLdInfo?: string;
   error?: string;
 }> {
   const cleanUrl = String(rawUrl || '').trim();
   if (!/^https?:\/\//i.test(cleanUrl)) {
     return { ok: false, error: 'Ingresá una URL válida que empiece con https:// o http://.' };
   }
+  const f = fetchImpl || fetch;
   try {
-    const res = await fetch(cleanUrl, {
+    const res = await f(cleanUrl, {
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       },
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(12000)
     });
     if (!res.ok) {
       return { ok: false, error: `No se pudo leer la página (${res.status}).` };
     }
     const html = await res.text();
+    const decodeBasicEntities = (s: string) =>
+      s
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;|&apos;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
     const pickMeta = (prop: string) => {
       const m =
         html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i')) ||
         html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'));
-      return m ? m[1].trim() : '';
+      return m ? decodeBasicEntities(m[1]) : '';
     };
-    const titleTag = (html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || '').trim();
-    const title = pickMeta('og:title') || pickMeta('twitter:title') || titleTag;
-    const description = pickMeta('og:description') || pickMeta('description') || pickMeta('twitter:description');
-    let imageUrl = pickMeta('og:image') || pickMeta('twitter:image');
-    if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
+
+    const resolveAbsUrl = (candidate: string) => {
+      const raw = String(candidate || '').trim();
+      if (!raw || raw.startsWith('data:')) return '';
+      if (/^https?:\/\//i.test(raw)) return raw;
       try {
-        imageUrl = new URL(imageUrl, cleanUrl).toString();
+        return new URL(raw, cleanUrl).toString();
+      } catch {
+        return '';
+      }
+    };
+
+    const titleTag = decodeBasicEntities(html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || '');
+    const h1Text = decodeBasicEntities(
+      (html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || '').replace(/<[^>]+>/g, ' ')
+    );
+    const title = pickMeta('og:title') || pickMeta('twitter:title') || h1Text || titleTag;
+    const description =
+      pickMeta('og:description') || pickMeta('description') || pickMeta('twitter:description');
+
+    // JSON-LD structured product extraction
+    const jsonLdChunks: string[] = [];
+    const candidateImagesSet = new Set<string>();
+    const addImgCandidate = (u: string) => {
+      const abs = resolveAbsUrl(u);
+      if (abs && !/sprite|icon|logo|favicon|pixel|1x1|blank/i.test(abs)) {
+        candidateImagesSet.add(abs);
+      }
+    };
+
+    const ogImg = pickMeta('og:image');
+    const twImg = pickMeta('twitter:image');
+    if (ogImg) addImgCandidate(ogImg);
+    if (twImg) addImgCandidate(twImg);
+
+    const ldMatches = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+    for (const m of ldMatches) {
+      try {
+        const parsed = JSON.parse(String(m[1] || '').trim());
+        const nodes = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed?.['@graph'])
+            ? parsed['@graph']
+            : [parsed];
+        for (const node of nodes) {
+          if (!node || typeof node !== 'object') continue;
+          const t = String(node['@type'] || '').toLowerCase();
+          if (t.includes('product') || node.name || node.description) {
+            const parts: string[] = [];
+            if (node.name) parts.push(`Nombre LD: ${String(node.name).trim()}`);
+            if (node.brand?.name) parts.push(`Marca: ${String(node.brand.name).trim()}`);
+            if (node.description) parts.push(`Desc LD: ${String(node.description).trim().slice(0, 600)}`);
+            if (parts.length > 0) jsonLdChunks.push(parts.join(' | '));
+            const imgs = Array.isArray(node.image) ? node.image : node.image ? [node.image] : [];
+            for (const im of imgs) {
+              if (typeof im === 'string') addImgCandidate(im);
+              else if (im?.url) addImgCandidate(String(im.url));
+            }
+          }
+        }
       } catch {}
     }
-    return { ok: true, title, description, imageUrl };
+
+    const imgTagMatches = html.matchAll(/<img[^>]+(?:src|data-src|data-lazy-src)=["']([^"']+)["'][^>]*>/gi);
+    let imgCount = 0;
+    for (const m of imgTagMatches) {
+      if (imgCount >= 8) break;
+      addImgCandidate(m[1]);
+      imgCount++;
+    }
+
+    // Clean body text for specs & features (never raw HTML tags)
+    const strippedBody = decodeBasicEntities(
+      html
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+        .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
+        .replace(/<header[\s\S]*?<\/header>/gi, ' ')
+        .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
+        .replace(/<(?:br|p|li|h1|h2|h3|h4|tr|div)[^>]*>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+    )
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter((l) => l.length >= 18)
+      .slice(0, 45)
+      .join(' | ')
+      .slice(0, 3200);
+
+    const imageCandidates = Array.from(candidateImagesSet);
+    const imageUrl = imageCandidates[0] || resolveAbsUrl(ogImg || twImg);
+
+    return {
+      ok: true,
+      title,
+      description,
+      imageUrl,
+      specsText: strippedBody || undefined,
+      imageCandidates,
+      jsonLdInfo: jsonLdChunks.join('\n').slice(0, 1200) || undefined
+    };
   } catch (err: any) {
     return { ok: false, error: err?.message || 'Error leyendo URL del producto.' };
   }
@@ -103,10 +214,307 @@ export async function saveImageInputLocally(rawInput: string, prefix: string): P
   return src;
 }
 
+export interface DeepProductResearchInput {
+  openRouterApiKey: string;
+  url?: string;
+  productName?: string;
+  rawDescription?: string;
+  referenceImageInput?: string;
+  role?: 'entry_hook' | 'principal';
+  referer?: string;
+  fetchImpl?: typeof fetch;
+}
+
+export interface DeepProductResearchResult {
+  ok: boolean;
+  researchedName: string;
+  researchedDescription: string;
+  verifiedSpecs: string[];
+  usageSummary: string;
+  exactVisualBlueprint: string;
+  discoveredReferenceImageUrl?: string;
+  scrapedTitle?: string;
+  scrapedDescription?: string;
+  scrapedImageUrl?: string;
+  usedWebSearch: boolean;
+  error?: string;
+}
+
+function resolveVisionSafeImageUrl(raw: string): string {
+  const src = String(raw || '').trim();
+  if (!src) return '';
+  if (src.startsWith('data:image/')) return src;
+  if (/^https?:\/\//i.test(src) && !src.includes('localhost') && !src.includes('127.0.0.1')) {
+    return src;
+  }
+  if (src.startsWith('/assets/')) {
+    try {
+      const abs = path.resolve(process.cwd(), 'public', src.replace(/^\//, ''));
+      if (fs.existsSync(abs)) {
+        const ext = abs.toLowerCase().endsWith('.png')
+          ? 'image/png'
+          : abs.toLowerCase().endsWith('.webp')
+            ? 'image/webp'
+            : 'image/jpeg';
+        const b64 = fs.readFileSync(abs).toString('base64');
+        return `data:${ext};base64,${b64}`;
+      }
+    } catch {}
+  }
+  return '';
+}
+
+export async function researchProductDeeplyWithAI(
+  input: DeepProductResearchInput
+): Promise<DeepProductResearchResult> {
+  const cleanUrl = String(input.url || '').trim();
+  const rawName = String(input.productName || '').trim();
+  const rawDesc = String(input.rawDescription || '').trim();
+  const hasUrl = /^https?:\/\//i.test(cleanUrl);
+
+  if (!hasUrl && !rawName && !rawDesc) {
+    return {
+      ok: false,
+      researchedName: '',
+      researchedDescription: '',
+      verifiedSpecs: [],
+      usageSummary: '',
+      exactVisualBlueprint: '',
+      usedWebSearch: false,
+      error: 'Ingresá al menos el link del producto, el nombre o una nota inicial para investigar.'
+    };
+  }
+
+  const f = input.fetchImpl || fetch;
+  const scraped = hasUrl ? await scrapeEntryProductUrlInfo(cleanUrl, f) : null;
+
+  const fallbackName = rawName || scraped?.title || 'Producto';
+  const fallbackDesc = scraped?.description || rawDesc || fallbackName;
+  const scrapedImg = scraped?.imageUrl || '';
+
+  if (!String(input.openRouterApiKey || '').trim()) {
+    return {
+      ok: Boolean(scraped?.ok || rawName || rawDesc),
+      researchedName: fallbackName,
+      researchedDescription: fallbackDesc,
+      verifiedSpecs: [],
+      usageSummary: fallbackDesc,
+      exactVisualBlueprint: `Clean studio product photograph of ${fallbackName}, 3/4 commercial angle`,
+      discoveredReferenceImageUrl: scrapedImg || undefined,
+      scrapedTitle: scraped?.title,
+      scrapedDescription: scraped?.description,
+      scrapedImageUrl: scrapedImg || undefined,
+      usedWebSearch: false
+    };
+  }
+
+  const refImageCandidate = String(input.referenceImageInput || '').trim() || scrapedImg;
+  const visionImageUrl = resolveVisionSafeImageUrl(refImageCandidate);
+
+  const researchSystemPrompt = `Eres el Cerebro de Investigación Real de Productos E-commerce y Director Visual Senior.
+TU MISIÓN CRÍTICA:
+1. REGLA ANTI COPIA-PEGA: JAMÁS copies y pegues textualmente el texto en crudo que escribió o pegó el usuario o el proveedor chino/mayorista. Úsalo únicamente como pista inicial.
+2. INVESTIGACIÓN REAL: Investigá online (usando búsqueda web si está disponible, el link si fue provisto, y tu conocimiento técnico verificado por nombre exacto del producto) para descubrir qué producto físico es exactamente, cómo funciona, sus materiales reales, dimensiones/capacidades típicas, beneficios verdaderos y ventajas competitivas reales.
+3. REDACCIÓN COMERCIAL PROPIA: Redactá un nombre comercial limpio en español paraguayo sobrio ("researchedName", sin códigos SKU ni relleno spam) y una ficha comercial sintetizada y persuasiva desde cero ("researchedDescription", 25-48 palabras claras con lo que incluye y resuelve sin rogar compra ni usar estrellitas).
+4. INGENIERÍA VISUAL EXACTA ("exactVisualBlueprint" en INGLÉS): Analizá la foto de referencia (si fue adjuntada) y/o el diseño físico real del producto investigado en la web, y describí con precisión quirúrgica ESA MISMA PIEZA FÍSICA (silueta exacta, número de piezas/cabezales/cables, materiales reales, acabado, colores exactos, botones/pantallas, proporciones), indicando un ángulo comercial 3/4 superior limpio en estudio. Prohibido incluir collages chinos, textos superpuestos, marcas de agua, precios o fondos feos de proveedor.`;
+
+  const researchTextPayload = `INVESTIGÁ ESTE PRODUCTO (${input.role === 'principal' ? 'PRODUCTO PRINCIPAL' : 'ARTÍCULO GANCHO DE ENTRADA'}):
+- URL del proveedor (si existe): ${hasUrl ? cleanUrl : 'No ingresada — investigar por nombre/referencia'}
+- Nombre borrador ingresado: ${rawName || 'No ingresado todavía'}
+- Notas / texto en crudo del proveedor (SOLO COMO PISTA — PROHIBIDO COPIAR Y PEGAR LITERAL): ${rawDesc || 'Sin notas'}
+${
+  scraped?.ok
+    ? `- Título extraído de URL: ${scraped.title || 'N/A'}
+- Meta descripción URL: ${scraped.description || 'N/A'}
+- Datos estructurados / JSON-LD URL: ${scraped.jsonLdInfo || 'N/A'}
+- Extracto técnico del cuerpo de la página: ${scraped.specsText || 'N/A'}`
+    : ''
+}
+
+Devolvé EXCLUSIVAMENTE este JSON válido:
+{
+  "researchedName": "Nombre comercial limpio en español (sin SKU ni ruido de proveedor)",
+  "researchedDescription": "Síntesis comercial propia escrita desde cero tras investigar qué incluye, cómo funciona y qué problema resuelve (25-48 palabras, CERO copia-pega del borrador en crudo).",
+  "verifiedSpecs": [
+    "Dato técnico o material real verificado 1",
+    "Capacidad, medida o modo de uso real 2",
+    "Qué incluye exactamente en el paquete 3"
+  ],
+  "usageSummary": "Explicación corta y natural de cómo se usa en la vida diaria en Paraguay.",
+  "exactVisualBlueprint": "Hyper-specific English physical description of THIS EXACT product (shape, dimensions feel, parts, surface materials, exact color palette, controls/connectors, accessories in frame) staged cleanly from an elevated 3/4 studio hero camera angle with zero text, zero watermarks, zero collage.",
+  "discoveredReferenceImageUrl": "Si encontraste una URL HTTPS limpia de foto real del producto en tu búsqueda web, inclúyela aquí; si no, cadena vacía."
+}`;
+
+  const callResearchLlm = async (modelId: string, withWebPlugin: boolean, includeVision: boolean) => {
+    const userContent: any =
+      includeVision && visionImageUrl
+        ? [
+            { type: 'text', text: researchTextPayload },
+            { type: 'image_url', image_url: { url: visionImageUrl } }
+          ]
+        : researchTextPayload;
+
+    const payload: Record<string, any> = {
+      model: modelId,
+      temperature: 0.35,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: researchSystemPrompt },
+        { role: 'user', content: userContent }
+      ]
+    };
+    if (withWebPlugin) {
+      payload.plugins = [{ id: 'web', max_results: 5 }];
+    }
+
+    return f('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.openRouterApiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': input.referer || 'https://noelux.shop',
+        'X-Title': 'Noelux Deep Product Research AI'
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(45000)
+    });
+  };
+
+  let usedWebSearch = false;
+  let llmRes = await callResearchLlm('openai/gpt-4o:online', true, Boolean(visionImageUrl));
+  if (llmRes.ok) {
+    usedWebSearch = true;
+  } else {
+    // Fallback limpio a gpt-4o estándar (y sin imagen si una URL externa falló)
+    llmRes = await callResearchLlm(VISUAL_CREATOR_TEXT_MODEL, false, Boolean(visionImageUrl));
+    if (!llmRes.ok && visionImageUrl) {
+      llmRes = await callResearchLlm(VISUAL_CREATOR_TEXT_MODEL, false, false);
+    }
+  }
+
+  if (!llmRes.ok) {
+    const errTxt = await llmRes.text().catch(() => '');
+    return {
+      ok: Boolean(scraped?.ok || rawName),
+      researchedName: fallbackName,
+      researchedDescription: fallbackDesc,
+      verifiedSpecs: [],
+      usageSummary: fallbackDesc,
+      exactVisualBlueprint: `Clean 3/4 commercial studio product photograph of ${fallbackName}`,
+      discoveredReferenceImageUrl: scrapedImg || undefined,
+      scrapedTitle: scraped?.title,
+      scrapedDescription: scraped?.description,
+      scrapedImageUrl: scrapedImg || undefined,
+      usedWebSearch: false,
+      error: `Investigación IA no disponible (${llmRes.status}): ${errTxt.slice(0, 140)}`
+    };
+  }
+
+  try {
+    const llmJson: any = await llmRes.json();
+    const content = String(llmJson?.choices?.[0]?.message?.content || '').trim();
+    const parsed = JSON.parse(content);
+
+    const hasResearchPayload = Boolean(
+      String(parsed?.researchedDescription || '').trim() ||
+        String(parsed?.exactVisualBlueprint || '').trim()
+    );
+
+    if (!hasResearchPayload) {
+      return {
+        ok: true,
+        researchedName: fallbackName,
+        researchedDescription: fallbackDesc,
+        verifiedSpecs: [],
+        usageSummary: fallbackDesc,
+        exactVisualBlueprint: '',
+        discoveredReferenceImageUrl: scrapedImg || undefined,
+        scrapedTitle: scraped?.title,
+        scrapedDescription: scraped?.description,
+        scrapedImageUrl: scrapedImg || undefined,
+        usedWebSearch
+      };
+    }
+
+    const cleanResName = String(parsed?.researchedName || fallbackName)
+      .replace(/\btripwire\b/gi, fallbackName)
+      .trim();
+    const cleanResDesc = String(parsed?.researchedDescription || fallbackDesc)
+      .replace(/\btripwire\b/gi, cleanResName)
+      .trim();
+    const specs: string[] = Array.isArray(parsed?.verifiedSpecs)
+      ? parsed.verifiedSpecs.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 6)
+      : [];
+    const blueprint = String(
+      parsed?.exactVisualBlueprint ||
+        `Clean 3/4 studio hero commercial photography of the exact physical ${cleanResName}`
+    ).trim();
+    const discovered = /^https?:\/\//i.test(String(parsed?.discoveredReferenceImageUrl || '').trim())
+      ? String(parsed.discoveredReferenceImageUrl).trim()
+      : scrapedImg || undefined;
+
+    return {
+      ok: true,
+      researchedName: cleanResName,
+      researchedDescription: cleanResDesc,
+      verifiedSpecs: specs,
+      usageSummary: String(parsed?.usageSummary || cleanResDesc).trim(),
+      exactVisualBlueprint: blueprint,
+      discoveredReferenceImageUrl: discovered,
+      scrapedTitle: scraped?.title,
+      scrapedDescription: scraped?.description,
+      scrapedImageUrl: scrapedImg || undefined,
+      usedWebSearch
+    };
+  } catch (err: any) {
+    return {
+      ok: Boolean(scraped?.ok || rawName),
+      researchedName: fallbackName,
+      researchedDescription: fallbackDesc,
+      verifiedSpecs: [],
+      usageSummary: fallbackDesc,
+      exactVisualBlueprint: '',
+      discoveredReferenceImageUrl: scrapedImg || undefined,
+      scrapedTitle: scraped?.title,
+      scrapedDescription: scraped?.description,
+      scrapedImageUrl: scrapedImg || undefined,
+      usedWebSearch: false,
+      error: err?.message
+    };
+  }
+}
+
+export async function recreateExactProductStudioImage(params: {
+  openRouterApiKey: string;
+  productName: string;
+  exactVisualBlueprint: string;
+  verifiedSpecs?: string[];
+  filePrefix: string;
+  referer?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<string> {
+  const f = params.fetchImpl || fetch;
+  const specsClause =
+    Array.isArray(params.verifiedSpecs) && params.verifiedSpecs.length > 0
+      ? ` Key real details: ${params.verifiedSpecs.slice(0, 3).join('; ')}.`
+      : '';
+
+  const studioPrompt = `High-end flagship commercial studio product photography (recreating the EXACT physical product cleanly from a flattering elevated 3/4 hero angle): ${params.productName}. Faithful physical specification of the exact product: ${params.exactVisualBlueprint}.${specsClause} Placed cleanly centered on a sleek dark obsidian and brushed warm mineral pedestal with crisp architectural rim lighting, ultra-sharp surface realism, ZERO text, ZERO watermarks, ZERO Chinese badges, ZERO collage frames, ZERO supplier clutter, pure studio product photograph.`;
+
+  return generateSingleVisualSheetImage({
+    openRouterApiKey: params.openRouterApiKey,
+    prompt: studioPrompt,
+    aspectRatio: '1:1',
+    filePrefix: params.filePrefix,
+    referer: params.referer,
+    fetchImpl: f
+  });
+}
+
 async function generateSingleVisualSheetImage(params: {
   openRouterApiKey: string;
   prompt: string;
-  aspectRatio?: '3:4' | '2:3';
+  aspectRatio?: '3:4' | '2:3' | '1:1';
   filePrefix: string;
   referer?: string;
   fetchImpl?: typeof fetch;
@@ -280,6 +688,9 @@ export interface QuickCreateVisualProductInput {
   entryDeliveryFeeGs?: number;
   entryProductImageInput?: string;
   entrySourceUrl?: string;
+  entryResearched?: boolean;
+  entryVisualBlueprint?: string;
+  entryVerifiedSpecs?: string[];
   instantDiscountPercent?: number;
   eventDurationHours?: number;
   slotsTotal?: number;
@@ -503,9 +914,12 @@ export async function generateUniversalVisualProductPage(
   const price3 = Number(input.price3Gs) || Math.round(price1 * 2.65);
   const normalPrice = Number(input.normalPriceGs) || Math.round(price1 * 1.32);
 
-  const safeEntryName = String(input.entryProductName || '').trim() || 'Artículo Complementario';
+  let safeEntryName = String(input.entryProductName || '').trim() || 'Artículo Complementario';
   const entryPrice = Math.max(5000, Number(input.entryPriceGs) || 20000);
-  const entryNormal = Number(input.entryNormalPriceGs) || Math.round(entryPrice * 2.2);
+  const entryNormal =
+    input.entryNormalPriceGs && Number(input.entryNormalPriceGs) > entryPrice
+      ? Number(input.entryNormalPriceGs)
+      : undefined;
   const deliveryFee = Math.max(15000, Number(input.entryDeliveryFeeGs) || 40000);
   const instantDiscountPct = Math.max(5, Math.min(40, Number(input.instantDiscountPercent) || 12));
   const eventDurationHours = Math.max(2, Math.min(12, Number(input.eventDurationHours) || 6));
@@ -513,18 +927,63 @@ export async function generateUniversalVisualProductPage(
 
   let resolvedEntryDesc = String(input.entryProductDescription || '').trim();
   let resolvedEntryImgInput = String(input.entryProductImageInput || '').trim();
-  if (!isPrincipalOnly && input.entrySourceUrl && (!resolvedEntryDesc || !resolvedEntryImgInput)) {
-    const scraped = await scrapeEntryProductUrlInfo(input.entrySourceUrl);
-    if (scraped.ok) {
-      if (!resolvedEntryDesc && scraped.description) resolvedEntryDesc = scraped.description;
-      if (!resolvedEntryImgInput && scraped.imageUrl) resolvedEntryImgInput = scraped.imageUrl;
+  let resolvedEntryVisualBlueprint = String(input.entryVisualBlueprint || '').trim();
+  let resolvedEntrySpecs = Array.isArray(input.entryVerifiedSpecs) ? input.entryVerifiedSpecs : [];
+
+  // Investigación profunda automática del Gancho Tripwire (anti copia-pega + recreación de imagen de estudio exacta)
+  if (!isPrincipalOnly && !input.entryResearched) {
+    const deepHook = await researchProductDeeplyWithAI({
+      openRouterApiKey: input.openRouterApiKey,
+      url: input.entrySourceUrl,
+      productName: safeEntryName,
+      rawDescription: resolvedEntryDesc,
+      referenceImageInput: resolvedEntryImgInput,
+      role: 'entry_hook',
+      referer: input.referer,
+      fetchImpl: f
+    });
+    if (deepHook.ok) {
+      if (deepHook.researchedName && !input.entryProductName?.trim()) {
+        safeEntryName = deepHook.researchedName;
+      }
+      if (deepHook.researchedDescription) {
+        resolvedEntryDesc = deepHook.researchedDescription;
+      }
+      if (deepHook.exactVisualBlueprint) {
+        resolvedEntryVisualBlueprint = deepHook.exactVisualBlueprint;
+      }
+      if (deepHook.verifiedSpecs?.length) {
+        resolvedEntrySpecs = deepHook.verifiedSpecs;
+      }
+      if (!resolvedEntryImgInput && (deepHook.scrapedImageUrl || deepHook.discoveredReferenceImageUrl)) {
+        resolvedEntryImgInput = deepHook.scrapedImageUrl || deepHook.discoveredReferenceImageUrl || '';
+      }
     }
+  }
+
+  const isAlreadyStudioRecreated =
+    resolvedEntryImgInput.includes('/assets/visual-pages/entry_studio_') ||
+    resolvedEntryImgInput.includes('entry_studio_');
+
+  let recreatedEntryStudioImg = '';
+  if (!isPrincipalOnly && !isAlreadyStudioRecreated && resolvedEntryVisualBlueprint) {
+    try {
+      recreatedEntryStudioImg = await recreateExactProductStudioImage({
+        openRouterApiKey: input.openRouterApiKey,
+        productName: safeEntryName,
+        exactVisualBlueprint: resolvedEntryVisualBlueprint,
+        verifiedSpecs: resolvedEntrySpecs,
+        filePrefix: `entry_studio_${slugifyProductName(safeEntryName).slice(0, 16)}`,
+        referer: input.referer,
+        fetchImpl: f
+      });
+    } catch {}
   }
 
   const savedPrincipalImg = await saveImageInputLocally(input.productImageInput || '', 'prod_main');
   const savedEntryImg = isPrincipalOnly
     ? ''
-    : await saveImageInputLocally(resolvedEntryImgInput, 'prod_entry');
+    : recreatedEntryStudioImg || (await saveImageInputLocally(resolvedEntryImgInput, 'prod_entry'));
 
   const cleanAngleInput = String(input.winnerAngle || '').trim();
   const visualDirectionInput = String(input.visualDirection || '').trim();
@@ -579,6 +1038,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
 {
   "strategySummary": "Explicación breve interna del enfoque principal de venta directa.",
   "recommendedAudioPreset": "warm_ambient",
+  "researchedProductDescription": "Ficha comercial limpia, verificada y redactada desde cero en español (NUNCA copia-pega literal del borrador del usuario).",
   "sobrietyHeadline": "Titular sobrio y elegante de alto impacto racional (máx 10 palabras).",
   "subheadline": "Bajada clara explicando qué resuelve en el hogar/vida del cliente en Paraguay (máx 22 palabras).",
   "winnerAngleHeadline": "Ángulo de valor clave del producto principal (máx 12 palabras).",
@@ -626,10 +1086,11 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
 ${visualDirectionInput ? `- Dirección visual asignada: ${visualDirectionInput}` : ''}
 
 ARTÍCULO COMPLEMENTARIO DE ENTRADA (BLOQUE 1 DE LA MISMA PÁGINA):
-- Nombre real: ${safeEntryName}
-- Qué hace: ${resolvedEntryDesc || safeEntryName}
-- Precio Normal comparativo: Gs. ${formatParaguayGs(entryNormal)}
-- Precio Promo Entrada: Gs. ${formatParaguayGs(entryPrice)} (ARRIBA en la Lámina 1 está PROHIBIDO hablar de envío — ni gratis ni pago — para que solicite sin fricción. Recién ABAJO en el BOOM de la Lámina 3 se exhibe en grande **ENVÍO GRATUITO** exclusivo para el Producto Principal junto al ${safeEntryName} DE REGALO, transparentando que llevar solo ${safeEntryName} abona delivery Gs. ${formatParaguayGs(deliveryFee)} para que el propio usuario decida pedir el Producto Principal).
+- Nombre real investigado: ${safeEntryName}
+- Síntesis investigada de qué hace / incluye (NO copiar textos de proveedor literalmente): ${resolvedEntryDesc || safeEntryName}
+${resolvedEntrySpecs.length > 0 ? `- Especificaciones verificadas: ${resolvedEntrySpecs.join(' | ')}` : ''}
+${resolvedEntryVisualBlueprint ? `- Blueprint visual exacto del producto físico a retratar en estudio limpio (OBLIGATORIO RESPETAR ESTE OBJETO EXACTO en un ángulo editorial impecable): ${resolvedEntryVisualBlueprint}` : ''}
+- Precio ÚNICO cerrado (1 unidad solamente, sin packs 2x/3x ni normal tachado): Gs. ${formatParaguayGs(entryPrice)} (ARRIBA en la Lámina 1 está PROHIBIDO hablar de envío — ni gratis ni pago — para que solicite sin fricción. Recién ABAJO en el BOOM de la Lámina 3 se exhibe en grande **ENVÍO GRATUITO** exclusivo para el Producto Principal junto al ${safeEntryName} DE REGALO, transparentando que llevar solo ${safeEntryName} abona delivery Gs. ${formatParaguayGs(deliveryFee)} para que el propio usuario decida pedir el Producto Principal).
 - REGLA TRANSPARENTE: Si lleva el Producto Principal (${input.productName}), este complemento "${safeEntryName}" que vino a buscar del anuncio le va TOTALMENTE DE REGALO + ENVÍO GRATUITO exhibido en grande.
 
 CANTIDAD DE LÁMINAS A DISEÑAR: ${sheetCountMode === 'auto' ? `Decidí automáticamente entre 2 o 3 láminas según la complejidad de la oferta dual (sugerido: ${requestedSheetCount})` : requestedSheetCount}
@@ -638,12 +1099,14 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
 {
   "strategySummary": "Explicación breve interna de la congruencia psicológica usada.",
   "recommendedAudioPreset": "warm_ambient",
+  "researchedProductDescription": "Ficha comercial limpia, verificada y redactada desde cero en español para ${input.productName} (cero copia-pega crudo).",
+  "researchedEntryDescription": "Ficha comercial propia de ${safeEntryName} redactada limpiamente desde investigación (NUNCA copia-pega crudo del proveedor).",
   "sobrietyHeadline": "Titular sobrio y elegante que NO ruega compra (máx 10 palabras).",
   "subheadline": "Bajada clara explicando qué cambia en la casa/vida del cliente en Paraguay (máx 22 palabras).",
   "winnerAngleHeadline": "Titular del ángulo diferente con el que se presenta el Producto Ganador en esta misma página (máx 12 palabras).",
   "winnerAngleDescription": "Explicación persuasiva y sobria del ángulo diferente por el cual el Producto Ganador resuelve el problema completo mejor que el artículo individual (máx 32 palabras).",
   "reversePsychologyHook": "Frase de psicología inversa elegante donde el cliente nota que llevar el producto completo incluye el complemento totalmente gratis y además desbloquea envío sin costo.",
-  "entryButtonLabel": "Elegir solo ${safeEntryName} (Gs. ${formatParaguayGs(entryPrice)})",
+  "entryButtonLabel": "Solicitar ${safeEntryName} — 1 unidad (Gs. ${formatParaguayGs(entryPrice)})",
   "entryDisclaimer": "Solo incluye 1x ${safeEntryName}. NO incluye ${input.productName} ni envío gratuito.",
   "bundleButtonLabel": "Llevar ${input.productName} + ${safeEntryName} GRATIS (Gs. ${formatParaguayGs(price1)})",
   "bundleDisclaimer": "Incluye ${input.productName} completo + ${safeEntryName} DE REGALO + Envío GRATIS sin lista de espera.",
@@ -652,7 +1115,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "role": "hero_presentation",
       "title": "Oferta de entrada ${safeEntryName}",
       "caption": "Primera impresión exclusiva del artículo de entrada",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial hero poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: CRITICAL COMPOSITION RULE — show and mention EXCLUSIVELY '${safeEntryName}' at Gs. ${formatParaguayGs(entryPrice)}. DO NOT depict, name, or spoil '${input.productName}' anywhere on this first poster. DO NOT write 'Envío Gratis' or any delivery charge. Studio-lit luxury macro product photography in ${visualDirectionInput || 'a moody architectural editorial lighting setup'}, effortless magnetic appeal and calm non-needy authority headline so the visitor wants to request it immediately without feeling sold to, edge-to-edge artwork with zero white frame."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial hero poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: CRITICAL COMPOSITION RULE — show and mention EXCLUSIVELY '${safeEntryName}' at Gs. ${formatParaguayGs(entryPrice)} (single unit, ZERO crossed-out normal price).${resolvedEntryVisualBlueprint ? ` Depict this EXACT researched physical item cleanly from a crisp 3/4 editorial studio angle: ${resolvedEntryVisualBlueprint}.` : ''} DO NOT depict, name, or spoil '${input.productName}' anywhere on this first poster. DO NOT write 'Envío Gratis' or any delivery charge. Studio-lit luxury macro product photography in ${visualDirectionInput || 'a moody architectural editorial lighting setup'}, effortless magnetic appeal and calm non-needy authority headline so the visitor wants to request it immediately without feeling sold to, edge-to-edge artwork with zero white frame."
     },
     {
       "role": "comparison_need",
@@ -733,7 +1196,12 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
     const s = rawSheets[i];
     const extraVisualContext = [
       String(s.imagePrompt || ''),
-      savedPrincipalImg && !savedPrincipalImg.startsWith('/') ? `Reference product style: ${input.productName}.` : '',
+      !isPrincipalOnly && i === 0 && resolvedEntryVisualBlueprint
+        ? `Exact physical entry product geometry & clean studio appearance: ${resolvedEntryVisualBlueprint}.`
+        : '',
+      (isPrincipalOnly || i >= 2) && savedPrincipalImg && !savedPrincipalImg.startsWith('/')
+        ? `Reference product style: ${input.productName}.`
+        : '',
       'Ultra sharp typography in Spanish, NO English typos, clean modern e-commerce graphic sheet layout filling the entire 3:4 canvas edge-to-edge.'
     ]
       .filter(Boolean)
@@ -768,18 +1236,25 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
 
   const resolvedEntryImage = isPrincipalOnly
     ? ''
-    : savedEntryImg || generatedSheets[1]?.imageUrl || generatedSheets[0]?.imageUrl || '';
+    : savedEntryImg || generatedSheets[0]?.imageUrl || '';
+
+  const finalSynthesizedEntryDesc = cleanPublicText(
+    String(parsed?.researchedEntryDescription || resolvedEntryDesc || safeEntryName)
+  );
+  const finalSynthesizedProductDesc = cleanPublicText(
+    String(parsed?.researchedProductDescription || input.productDescription)
+  );
 
   const tripwireConfig: ProductTripwireOfferConfig | undefined = isPrincipalOnly
     ? undefined
     : {
         enabled: true,
         entryProductName: cleanPublicText(safeEntryName),
-        entryProductDescription: cleanPublicText(resolvedEntryDesc || safeEntryName),
+        entryProductDescription: finalSynthesizedEntryDesc,
         entryProductImage: resolvedEntryImage,
         entryImageUrl: resolvedEntryImage,
         entryPriceGs: entryPrice,
-        entryNormalPriceGs: entryNormal,
+        ...(entryNormal ? { entryNormalPriceGs: entryNormal } : {}),
         deliveryFeeGs: deliveryFee,
         instantDiscountPercent: instantDiscountPct,
         eventDurationHours,
@@ -802,13 +1277,13 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
     generatorModel: VISUAL_CREATOR_IMAGE_MODEL,
     sheets: generatedSheets,
     sobrietyHeadline: cleanPublicText(parsed?.sobrietyHeadline || input.productName),
-    subheadline: cleanPublicText(parsed?.subheadline || input.productDescription),
+    subheadline: cleanPublicText(parsed?.subheadline || finalSynthesizedProductDesc),
     winnerAngleHeadline: cleanPublicText(parsed?.winnerAngleHeadline || resolvedWinnerAngle),
-    winnerAngleDescription: cleanPublicText(parsed?.winnerAngleDescription || input.productDescription),
+    winnerAngleDescription: cleanPublicText(parsed?.winnerAngleDescription || finalSynthesizedProductDesc),
     reversePsychologyHook: isPrincipalOnly ? '' : cleanPublicText(parsed?.reversePsychologyHook || ''),
     entryButtonLabel: isPrincipalOnly
       ? undefined
-      : cleanPublicText(parsed?.entryButtonLabel || `Pedir solo ${safeEntryName} (${formatParaguayGs(entryPrice)})`),
+      : cleanPublicText(parsed?.entryButtonLabel || `Solicitar ${safeEntryName} — 1 unidad (${formatParaguayGs(entryPrice)})`),
     entryDisclaimer: isPrincipalOnly
       ? undefined
       : cleanPublicText(
@@ -835,7 +1310,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   const product: ProductPage = {
     id: prodId,
     nombre: input.productName.trim(),
-    descripcion: input.productDescription.trim(),
+    descripcion: finalSynthesizedProductDesc,
     imagen: savedPrincipalImg || generatedSheets[0]?.imageUrl || '',
     slug: prodSlug,
     precioNormal: normalPrice,
