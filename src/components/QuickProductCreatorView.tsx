@@ -805,13 +805,13 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       };
     }
     return {
-      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (2 Partes + 2 Botones)',
+      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (2 Partes Alta Gama)',
       whatYouDo:
-        'La IA arma una página limpia sin HTML innecesario ni formularios abiertos infinitos: Lámina 1 directa y rápida del Gancho + Botón #1 (que fluctúa hasta el fin de la 1ª imagen y abre el formulario al clic), luego ruptura chocante ("¡ESPERÁ!...") y Lámina 2 brutalmente persuasiva y diferente del Producto Estrella con ENVÍO GRATUITO + Botón #2.',
+        'Ambas imágenes se generan en calidad Alta Gama con estéticas totalmente distintas para no mezclar los productos: Imagen 1 presenta el Gancho e indica tocar el Botón #1; justo después, Imagen 2 ya arranca dentro del arte con la entrada brusca ("¡ESPERÁ!...") y la Oferta Principal con Envío Gratuito hacia el Botón #2.',
       whyItMatters:
-        'El visitante nunca ve los dos productos mezclados ni un muro de texto: tiene exactamente 2 botones claros y el formulario únicamente aparece al tocar un botón.',
+        'Cero descripciones ni muros HTML alrededor de los botones: cada botón es limpio y directo, y al tocarlo se abre el formulario en modal.',
       unlockHint:
-        'Tocá "Lanzar Página Tripwire" para generar ambas partes en GPT-2.6 y publicar tu página.'
+        'Tocá "Lanzar Página Tripwire" para generar ambas partes Alta Gama en GPT-2.6 y publicar tu página.'
     };
   }, [
     wizardStep,
@@ -837,8 +837,8 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       ]
     : [
         'Recabando ficha investigada del Gancho y Producto Principal...',
-        'Diseñando Imagen 1 directa + Botón #1 → Freno chocante "¡ESPERÁ!" → Imagen 2 brutal y diferente + Botón #2...',
-        'Configurando formulario popup limpio al hacer clic y llave de Envío Gratis en el chat...'
+        'Diseñando Imagen 1 Alta Gama + Botón #1 → Imagen 2 Alta Gama distinta con entrada brusca integrada + Botón #2...',
+        'Configurando botones limpios sin texto extra y formulario en modal...'
       ];
 
   return (

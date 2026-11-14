@@ -522,6 +522,7 @@ async function generateSingleVisualSheetImage(params: {
   const f = params.fetchImpl || fetch;
   const maxAttempts = 6;
   let lastError = '';
+  let activeAspectRatio: '3:4' | '2:3' | '1:1' = params.aspectRatio || '3:4';
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -536,7 +537,7 @@ async function generateSingleVisualSheetImage(params: {
         body: JSON.stringify({
           model: VISUAL_CREATOR_IMAGE_MODEL,
           prompt: params.prompt,
-          aspect_ratio: params.aspectRatio || '3:4',
+          aspect_ratio: activeAspectRatio,
           quality: 'high',
           output_format: 'jpeg',
           n: 1
@@ -546,6 +547,11 @@ async function generateSingleVisualSheetImage(params: {
 
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
+        if (res.status === 400 && activeAspectRatio === '2:3' && attempt < maxAttempts) {
+          activeAspectRatio = '3:4';
+          lastError = `OpenRouter Images HTTP 400 with 2:3; falling back to 3:4`;
+          continue;
+        }
         const retryable = res.status === 429 || res.status === 402 || res.status >= 500;
         lastError = `OpenRouter Images HTTP ${res.status}: ${txt.slice(0, 220)}`;
         if (retryable && attempt < maxAttempts) {
@@ -736,18 +742,17 @@ REGLAS ESTRICTAS:
 3. Para cada opción, TÚ decides automáticamente "recommendedSheetCount" (2 para ofertas claras y directas de impulso rápido; 3 cuando el producto requiere más prueba técnica/contenido de caja/confianza) y "recommendedAudioPreset" ('warm_ambient', 'soft_lounge' o 'commercial_pulse'), más "visualDirection" detallando iluminación, paleta y composición editorial para GPT-2.6.
 4. Precios siempre en Guaraníes ("Gs."). Español natural paraguayo/rioplatense comercial sobrio, cero estrellitas ni humo de infoproducto.
 5. Si el usuario hace una pregunta o pide un giro específico ("userQuestion"), respondé de forma directa y útil en "assistantReply" y regenerá 3 opciones ajustadas exactamente a lo que pidió.`
-    : `Eres el Estratega Jefe de Embudos Duales de Ruptura de Patrón (COD Paraguay) y Director Creativo GPT-2.6 para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
-TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES sin tener que diseñar nada ni elegir estructura manual.
-PSICOLOGÍA DEL EMBUDO DUAL QUE DOMINÁS (OBLIGATORIO):
-1. DIRECTO AL GRANO ARRIBA + CONTRASTE BRUTAL ABAJO (CERO ROGAR COMPRA): Cuando el cliente siente que intentan venderle de entrada con drama excesivo, desconfía. Arriba va directo ("bim bam bum"); abajo frenamos en seco y despertamos deseo puro para que el cliente solicite el Producto Ganador por convicción.
-2. ARQUITECTURA DE RUPTURA EN 2 LÁMINAS VISUALMENTE OPUESTAS (POR DEFECTO 2 LÁMINAS):
-   - LÁMINA 1 (Al aterrizar / parte superior — GANCHO DIRECTO): 100% "${safeEntryName}" ÚNICAMENTE (${formatParaguayGs(Number(input.entryPriceGs || 20000))}). Entrada limpia, foto nítida, titular claro, 2-3 beneficios prácticos y precio único. PROHIBIDO exagerar espectacularidad, PROHIBIDO nombrar a "${input.productName}" y PROHIBIDO hablar de envío en la cabecera.
-   - RUPTURA CHOCANTE + LÁMINA 2 (Abajo — ESTÉTICA COMPLETAMENTE DIFERENTE + PERSUASIÓN BRUTAL): Justo debajo del botón del gancho frenamos al cliente con choque visual ("¡ESPERÁ UN RATITO! Estás a punto de llevar solo ${safeEntryName}...") y explotamos con un mundo visual totalmente distinto presentando "${input.productName}" como la solución definitiva superior, exhibiendo EN GRANDE **ENVÍO GRATUITO EN TODO PARAGUAY** + **${safeEntryName} TOTALMENTE DE REGALO** (contrastando de forma transparente que pedir solo el gancho abona envío, para que decida llevar el Producto Estrella).
-3. REGLA CRÍTICA DE MONEDA Y ENVÍO: Nunca dupliques "Gs. Gs." (escribí exactamente "Gs. 189.000"). Arriba NO se menciona el envío; abajo se exhibe en grande ENVÍO GRATUITO para el Producto Principal.
-4. NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
+    : `Eres el Estratega Jefe de Embudos Duales y Director Creativo de E-Commerce de Altísimo Impacto (COD Paraguay) para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
+TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES y ambas partes luzcan como piezas gráficas de e-commerce de altísimo nivel.
+REGLA VISUAL Y DE CONVERSIÓN (OBLIGATORIO):
+1. AMBAS PARTES SON E-COMMERCE DE ALTO IMPACTO, CON PALETAS DE COLOR TOTALMENTE DISTINTAS:
+   - LÁMINA 1 (Arriba — E-COMMERCE DIRECTO ALTO IMPACTO EN PALETA CLARA / AZUL COBALTO-BLANCO): 100% "${safeEntryName}" ÚNICAMENTE (${formatParaguayGs(Number(input.entryPriceGs || 20000))}). Visual publicitario e-commerce de primer nivel con fotografía limpia del producto, título gigante legible, 3 tarjetas de características reales con íconos, precio claro e indicación hacia el botón de abajo ("Dale clic al botón de abajo"). SIN tono persuasivo agresivo, SIN nombrar a "${input.productName}" y SIN hablar de envío.
+   - LÁMINA 2 (Abajo — E-COMMERCE DE LOCURA ALTÍSIMO NIVEL EN PALETA OSCURA OPUESTA / OBSIDIANA-ESMERALDA-ORO): Diseño visual completamente distinto en color e intensidad al de arriba. Arranca en la parte superior DENTRO DE LA PROPIA IMAGEN con la entrada brusca ("¡ESPERÁ UN RATITO! Estás a punto de pedir solo ${safeEntryName}..."), y despliega una pieza gráfica descomunal presentando "${input.productName}" como la solución definitiva, exhibiendo EN GRANDE **ENVÍO GRATUITO EN TODO PARAGUAY** + **${safeEntryName} TOTALMENTE DE REGALO** + indicación hacia el botón de abajo.
+2. REGLA CRÍTICA DE MONEDA Y BOTONES: Nunca dupliques "Gs. Gs." (escribí exactamente "Gs. 189.000"). Los botones en página son limpios de una sola línea sin descripciones HTML extra.
+3. NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
 REGLAS ESTRICTAS:
 - Si existe PÁGINA CLONADA, primero diagnosticá qué ángulo y estética visual usaba la página original ("currentPageDiagnosis") y proponé 3 opciones frescas distintas.
-- En modo Tripwire recomendá "recommendedSheetCount": 2 por defecto (Lámina 1 Gancho Directo → Botón 1 → Ruptura chocante + Lámina 2 Explosión Principal → Botón 2), y decidí "recommendedAudioPreset" + "visualDirection" contrastada para la Parte 2.
+- En modo Tripwire recomendá "recommendedSheetCount": 2 por defecto (Lámina 1 E-Commerce Directo Gancho → Botón 1 → Lámina 2 E-Commerce de Locura con Ruptura Brusca + Principal → Botón 2), y decidí "recommendedAudioPreset" + "visualDirection" contrastada para la Parte 2.
 - Si el usuario conversa o pide otro enfoque ("userQuestion"), respondé con claridad ejecutiva en "assistantReply" y entregá 3 opciones nuevas alineadas a su pedido.`;
 
   const cloneContextBlock = cloneCtx?.sourceProductName
@@ -1017,17 +1022,19 @@ Diseñas páginas gráficas verticales 100% visuales (cero bloques HTML intermed
 REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
 - JAMÁS escribas la palabra "tripwire", "gancho trampa" ni menciones artículos secundarios inexistentes.
 - Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
-- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña Apple / Dyson / Bang & Olufsen adaptada a hogar/consumo real en Paraguay), iluminación cinematográfica de estudio con profundidad 3D, materiales táctiles ultra nítidos, tipografía editorial española impecable sin errores ni letras cortadas, ocupación total borde a borde (edge-to-edge 3:4 sin marcos blancos), CERO estrellas chillonas, CERO stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`
-    : `Eres el Director Creativo Senior de Respuesta Directa y Psicología de Ruptura de Patrón en Paraguay.
-Diseñas páginas gráficas verticales 100% visuales (sin HTML intermedio: 1ª imagen para el producto gancho + botón, luego choque brusco de ruptura de patrón y 2ª imagen completamente distinta para el Producto Principal + botón final):
-- LÁMINA 1 (GANCHO DIRECTO "BIM BAM BUM" — ARRIBA): Entrada directa, limpia y sin exagerar espectacularidad ni textos largos para convencer. El visitante llegó por el precio bajo del anuncio y ya quiere separarlo: foto comercial nítida del producto exacto "${safeEntryName}", titular limpio, 2-3 beneficios prácticos concretos y precio único (${formatParaguayGs(entryPrice)}). PROHIBIDO nombrar o insinuar a "${input.productName}", PROHIBIDO hablar de envío.
-- RUPTURA CHOCANTE + LÁMINA 2 (CONTRASTE BRUTAL Y VISUALMENTE OPUESTO — ABAJO): Justo debajo del botón del gancho cambia radicalmente el tono, la paleta y la intensidad visual (diseño COMPLETAMENTE DIFERENTE a la Lámina 1 para no mezclar jamás ambos productos). Arranca frenando en seco ("¡ESPERÁ UN RATITO! Estás a punto de llevar solo ${safeEntryName}... Aguardá y leé esto primero") y entra con persuasión brutal de alto impacto presentando "${input.productName}" como la solución definitiva superior, exhibiendo EN GRANDE **ENVÍO GRATUITO EN TODO PARAGUAY** + **${safeEntryName} TOTALMENTE DE REGALO**.
+- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña Apple / Dyson / Bang & Olufsen adaptada a hogar/consumo real en Paraguay), iluminación cinematográfica de estudio con profundidad 3D, materiales táctiles ultra nítidos, tipografía editorial española impecable sin errores ni letras cortadas, ocupación total borde a borde (edge-to-edge 2:3 sin marcos blancos), CERO estrellas chillonas, CERO stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`
+    : `Eres el Director Creativo Senior de Piezas Gráficas E-Commerce de Altísimo Impacto en Paraguay (estilo gráficas verticales de conversión MercadoLibre Platinum / Shopify Flagship / Direct Response).
+REGLA MAESTRA DE COMPOSICIÓN PARA openai/gpt-image-2.6-sunburst (VERTICAL 2:3):
+- PROHIBIDO diseñar afiches abstractos de piedra/mármol vacíos o letras minúsculas ilegibles. Usá diseño gráfico E-COMMERCE DE ALTÍSIMO IMPACTO con: titular gigante perfectamente legible, render heroico fotorealista del producto en primer plano ocupando gran parte de la lámina, tarjetas ordenadas con íconos vectoriales limpios y especificaciones cortas de 2-4 palabras, y bloque claro de precio/CTA.
+- AMBAS LÁMINAS SON E-COMMERCE DE ALTÍSIMO NIVEL, CON DIFERENCIACIÓN CROMÁTICA INMEDIATA:
+  1. LÁMINA 1 (GANCHO DIRECTO NO PERSUASIVO — PALETA CLARA/AZUL COBALTO & ÁMBAR): Diseño gráfico e-commerce vibrante y nítido (fondo estudio luminoso en blanco perla + degradado azul eléctrico/cobalto profesional) mostrando EXCLUSIVAMENTE "${safeEntryName}". Estilo informativo directo de alto impacto SIN textos persuasivos ni drama: titular claro del producto, foto real impactante, 3 tarjetas limpias con íconos y datos concretos, precio único destacado (${formatParaguayGs(entryPrice)}) y al pie indicación clara hacia abajo: "Tocá el botón de abajo ↓". PROHIBIDO mencionar a "${input.productName}" y PROHIBIDO hablar de envío.
+  2. LÁMINA 2 (PRODUCTO ESTRELLA DE LOCURA — PALETA OSCURA OPUESTA OBSIDIANA-CRIMSON-ORO + ENTRADA BRUSCA EN LA IMAGEN): Cambio visual radical e imposible de confundir respecto a Lámina 1 (fondo oscuro obsidiana profundo con iluminación neón esmeralda/oro y alerta carmesí superior). En el 20% superior DE LA PROPIA IMAGEN va la entrada brusca ("¡ESPERÁ UN RATITO! Estás a punto de pedir solo ${safeEntryName}..."), seguida por una presentación e-commerce de altísimo nivel de "${input.productName}" en escena real espectacular, 3-4 tarjetas de beneficios contundentes con íconos, sello gigante **ENVÍO GRATUITO EN TODO PARAGUAY** + **${safeEntryName} DE REGALO**, contraste honesto de delivery al pie y flecha inferior: "Dale clic al botón de abajo ↓".
 
-REGLA INQUEBRANTABLE DE TONO, MONEDA Y CALIDAD GPT-2.6:
+REGLA INQUEBRANTABLE DE TONO, TEXTOS Y MONEDA PARA GPT-2.6:
+- TEXTOS CORTOS Y EXACTOS EN ESPAÑOL: Dentro de "imagePrompt" escribí textos en español MUY CORTOS y entre comillas exactas (máx 4-5 palabras por titular y 2-3 palabras por tarjeta) para que GPT-2.6 los renderice 100% nítidos sin faltas ortográficas.
 - MONEDA EXACTA PARAGUAY: Escribí los precios exactamente como se te entregan (ej. "Gs. 189.000"). PROHIBIDO repetir "Gs. Gs." ni usar "$"/USD.
-- CERO ROGAR COMPRA: Persuasión firme, chocante y magnética de contraste directo para que el cliente desee pedirlo por convicción.
 - JAMÁS escribas la palabra "tripwire", "gancho trampa" ni jerga técnica. Refiérete siempre al artículo de entrada por su nombre real: "${safeEntryName}".
-- Ocupación total borde a borde (edge-to-edge 3:4 sin marcos blancos), tipografía española nítida sin faltas ni palabras duplicadas, CERO estrellas chillonas ni stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`;
+- Ocupación total borde a borde (edge-to-edge 2:3 vertical sin marcos blancos), CERO estrellas chillonas baratas ni textos amontonados.${visualDirectionBlock}${cloneDirectiveBlock}`;
 
   const promptUserContent = isPrincipalOnly
     ? `PRODUCTO GANADOR ÚNICO (PÁGINA DIRECTA SIN ARTÍCULO SECUNDARIO):
@@ -1050,20 +1057,20 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   "subheadline": "Bajada clara explicando qué resuelve en el hogar/vida del cliente en Paraguay (máx 22 palabras).",
   "winnerAngleHeadline": "Ángulo de valor clave del producto principal (máx 12 palabras).",
   "winnerAngleDescription": "Explicación clara y honesta de beneficios reales del producto principal (máx 32 palabras).",
-  "bundleButtonLabel": "Pedir ${input.productName} — Envío Gratis (${formatParaguayGs(price1)})",
+  "bundleButtonLabel": "SOLICITAR ${input.productName} · ${formatParaguayGs(price1)}",
   "bundleDisclaimer": "Incluye ${input.productName} original + Envío GRATIS en Paraguay + Pago contra entrega en efectivo o QR.",
   "sheetPrompts": [
     {
       "role": "hero_presentation",
       "title": "Presentación del producto principal",
       "caption": "Pie corto sobrio",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero showcase of ${input.productName} (${cleanAngleInput || 'superior result'}) in ${visualDirectionInput || 'dramatic modern architectural lighting'}, razor-sharp bold editorial Spanish headline integrated harmoniously, clean pricing callout '${formatParaguayGs(price1)} · Envío Gratis · Pagás al Recibir' (never duplicate 'Gs.'), luxury tactile realism, edge-to-edge artwork with zero outer frame."
+      "imagePrompt": "Flagship full-bleed 2:3 vertical high-impact e-commerce design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero showcase of ${input.productName} (${cleanAngleInput || 'superior result'}) in ${visualDirectionInput || 'dramatic modern high-contrast lighting'}, razor-sharp giant bold Spanish headline integrated cleanly, clean pricing callout '${formatParaguayGs(price1)} · Envío Gratis · Pagás al Recibir' (never duplicate 'Gs.'), edge-to-edge artwork with zero outer frame."
     },
     {
       "role": "comparison_need",
       "title": "Beneficios y packs disponibles",
       "caption": "Comparativa clara de packs",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial infographic poster for openai/gpt-image-2.6-sunburst in crisp Spanish: macro visual breakdown of ${input.productName} key benefits and real materials, clean side-by-side comparison of 1 Unidad (${formatParaguayGs(price1)}) and Pack 2x Ahorro (${formatParaguayGs(price2)}) with 'Envío Gratis Paraguay', high-contrast studio typography, zero cheap stickers, edge-to-edge composition."
+      "imagePrompt": "Flagship full-bleed 2:3 vertical high-impact e-commerce infographic poster for openai/gpt-image-2.6-sunburst in crisp Spanish: macro visual breakdown of ${input.productName} key benefits with structured icon cards, clean side-by-side comparison of 1 Unidad (${formatParaguayGs(price1)}) and Pack 2x Ahorro (${formatParaguayGs(price2)}) with 'Envío Gratis Paraguay', plus clean bottom directional arrow cue 'Dale clic al botón de abajo', high-contrast studio typography, edge-to-edge composition."
     }${
       requestedSheetCount === 3 || sheetCountMode === 'auto'
         ? `,
@@ -1071,7 +1078,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "role": "social_trust_specs",
       "title": "Garantía y contenido real en caja",
       "caption": "Lo que recibís en tu puerta",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial studio poster for openai/gpt-image-2.6-sunburst in crisp Spanish: clean overhead unboxing composition showing exact box contents of ${input.productName}, subtle refined emblem 'Garantía Escrita 7 Días · Pago Efectivo o QR al Recibir en Paraguay', architectural dark/warm studio aesthetic, edge-to-edge."
+      "imagePrompt": "Flagship full-bleed 2:3 vertical commercial studio poster for openai/gpt-image-2.6-sunburst in crisp Spanish: clean overhead unboxing composition showing exact box contents of ${input.productName}, subtle refined emblem 'Garantía Escrita 7 Días · Pago Efectivo o QR al Recibir en Paraguay', plus bottom cue 'Dale clic al botón de abajo', edge-to-edge."
     }`
         : ''
     }
@@ -1112,37 +1119,37 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   "winnerAngleHeadline": "Titular chocante y brutal para ${input.productName} debajo de la ruptura de patrón (máx 12 palabras).",
   "winnerAngleDescription": "Contraste directo y persuasivo que explica por qué dar el salto a ${input.productName} resuelve el problema definitivo hoy (máx 32 palabras).",
   "reversePsychologyHook": "¡Esperá un ratito antes de confirmar! Llevando ${input.productName} te llevás ${safeEntryName} GRATIS y activás Envío Gratuito.",
-  "entryButtonLabel": "SEPARAR ${safeEntryName} — 1 UNIDAD",
+  "entryButtonLabel": "Separar ahora · ${formatParaguayGs(entryPrice)}",
   "entryDisclaimer": "Solo incluye 1x ${safeEntryName}. NO incluye ${input.productName} ni envío gratuito.",
-  "bundleButtonLabel": "LLEVAR ${input.productName} + ${safeEntryName} GRATIS",
+  "bundleButtonLabel": "Solicitar oferta completa · ${formatParaguayGs(price1)}",
   "bundleDisclaimer": "Incluye ${input.productName} completo + ${safeEntryName} DE REGALO + ENVÍO GRATUITO en todo Paraguay.",
   "sheetPrompts": [
     {
       "role": "hero_presentation",
-      "title": "Oferta directa ${safeEntryName}",
-      "caption": "Entrada rápida directa sin relleno",
-      "imagePrompt": "Clean direct fast-action 3:4 commercial product sheet for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: CRITICAL COMPOSITION RULE — show EXCLUSIVELY '${safeEntryName}' at exact single price '${formatParaguayGs(entryPrice)}' (never write 'Gs. Gs.' twice, ZERO crossed-out normal price).${resolvedEntryVisualBlueprint ? ` Depict this EXACT researched physical item cleanly on a crisp minimalist clean light/neutral product showcase background: ${resolvedEntryVisualBlueprint}.` : ''} Bim-bam-bum fast clarity: clear product title, 2 to 3 crisp practical specs icons/lines, bold single price '${formatParaguayGs(entryPrice)}'. DO NOT over-dramatize with excessive dark gala clutter, DO NOT mention '${input.productName}', DO NOT mention shipping or delivery anywhere. Edge-to-edge clean 3:4 layout."
+      "title": "Presentación E-Commerce ${safeEntryName}",
+      "caption": "Lámina 1 E-Commerce Alto Impacto (Paleta Clara/Azul)",
+      "imagePrompt": "High-impact flagship 2:3 vertical e-commerce product graphic for openai/gpt-image-2.6-sunburst in razor-sharp Paraguayan Spanish (bright clean studio aesthetic — crisp pearl-white & vibrant royal cobalt-blue backdrop with warm amber highlights, COMPLETELY DIFFERENT color palette from Sheet 2): TOP ZONE big bold ultra-legible commercial headline for '${safeEntryName}' (short crisp Spanish title, max 5 words); CENTER HERO huge ultra-detailed studio photograph of ONLY '${safeEntryName}'${resolvedEntryVisualBlueprint ? ` (${resolvedEntryVisualBlueprint})` : ''} with crisp studio lighting and vivid real depth; LOWER-SIDE ZONE 3 clean structured rounded icon-cards with concise 2-to-3-word real factual specs (${resolvedEntrySpecs.slice(0, 3).join(' / ') || 'Uso práctico / Alta calidad / Listo para usar'}); BOTTOM ZONE bold clean single price badge '${formatParaguayGs(entryPrice)}' and clean downward arrow cue 'Tocá el botón de abajo'. Direct informative e-commerce style (NO persuasive sales drama). NEVER write 'Gs. Gs.', DO NOT mention '${input.productName}', DO NOT mention shipping. Full-bleed edge-to-edge 2:3."
     }${
       requestedSheetCount === 3
         ? `,
     {
       "role": "comparison_need",
-      "title": "¡ESPERÁ UN RATITO! Antes de separarlo, leé esto",
-      "caption": "Ruptura visual chocante antes del producto principal",
-      "imagePrompt": "Stark shocking high-contrast pattern-interrupt 3:4 poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish — COMPLETELY DIFFERENT dark obsidian & sharp crimson/amber visual atmosphere from Sheet 1 (zero festive clutter): giant arresting top headline '¡ESPERÁ UN RATITO! ANTES DE CONFIRMAR TU PEDIDO...', bold stark message 'Estás a punto de llevar solo ${safeEntryName}. Aguardá 10 segundos y mirá lo que te estás perdiendo:', sharp high-impact comparison exposing how incomplete the small hook is alone vs stepping up to '${input.productName}', intense direct-response typography, edge-to-edge."
+      "title": "¡ESPERÁ UN RATITO! Entrada brusca en imagen",
+      "caption": "Ruptura visual brusca dentro de la imagen",
+      "imagePrompt": "High-impact 2:3 vertical direct-response e-commerce graphic for openai/gpt-image-2.6-sunburst in razor-sharp Spanish — COMPLETELY DIFFERENT dark obsidian & sharp crimson-gold palette from Sheet 1: TOP crimson alert bar '¡ESPERÁ UN RATITO!', bold contrast statement showing only '${safeEntryName}' vs the complete upgrade to '${input.productName}', structured icon comparison boxes, razor-sharp readable Spanish typography, edge-to-edge 2:3."
     },
     {
       "role": "social_trust_specs",
-      "title": "Solución Definitiva: ${input.productName} + ${safeEntryName} GRATIS + ENVÍO GRATUITO",
-      "caption": "Explosión brutal del Producto Principal",
-      "imagePrompt": "Ultra-persuasive dark-obsidian and metallic gold flagship 3:4 direct-response climax poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish — COMPLETELY DIFFERENT luxury dark visual aesthetic from Sheet 1: dominating center-stage studio photography of '${input.productName}' (${cleanAngleInput || 'solución definitiva'}) priced cleanly at '${formatParaguayGs(price1)}' (write '${formatParaguayGs(price1)}' ONCE, never 'Gs. Gs.'), PROMINENT GIANT CALLOUT 'ENVÍO GRATUITO EN TODO PARAGUAY', unmissable seal 'Llevás ${safeEntryName} TOTALMENTE DE REGALO', and stark bottom contrast showing standalone '${safeEntryName}' pays delivery (${formatParaguayGs(deliveryFee)}) while '${input.productName}' ships 100% FREE, razor-sharp Spanish typography with zero spelling mistakes, edge-to-edge."
+      "title": "Oferta Estrella de Locura: ${input.productName} + ${safeEntryName} GRATIS",
+      "caption": "E-Commerce Altísimo Nivel con Envío Gratuito",
+      "imagePrompt": "Mind-blowing ultra high-impact flagship 2:3 vertical e-commerce conversion poster for openai/gpt-image-2.6-sunburst in razor-sharp Paraguayan Spanish — COMPLETELY DIFFERENT deep obsidian dark, glowing emerald & burnished gold aesthetic from Sheet 1: giant bold dramatic Spanish headline for '${input.productName}' (${cleanAngleInput || 'solución definitiva'}), huge photorealistic center-stage hero showcase of '${input.productName}' transforming a real modern home environment, 4 crisp structured dark-glass icon feature badges, unmissable emerald-gold banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + '${safeEntryName} DE REGALO', clear price '${formatParaguayGs(price1)}' (write ONCE, never 'Gs. Gs.'), transparent note 'Solo ${safeEntryName} paga delivery ${formatParaguayGs(deliveryFee)}', and bottom downward arrow cue 'Dale clic al botón de abajo'. Edge-to-edge 2:3."
     }`
         : `,
     {
       "role": "social_trust_specs",
       "title": "¡ESPERÁ! ${input.productName} + ${safeEntryName} GRATIS + ENVÍO GRATUITO",
-      "caption": "Choque brutal + Oferta Principal con Envío Gratuito",
-      "imagePrompt": "Stark shocking pattern-interrupt + brutal high-impact 3:4 direct-response poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish — COMPLETELY DIFFERENT dark obsidian, crimson-alert & metallic gold visual world from Sheet 1 (zero mixing with Sheet 1 colors): TOP 25% arresting visual shock banner '¡ESPERÁ UN RATITO! Estás a punto de llevar solo ${safeEntryName}... Aguardá y leé esto primero:', MAIN 75% devastating persuasive reveal of '${input.productName}' (${cleanAngleInput || 'la solución definitiva superior'}) as the overwhelming complete transformation at clean price '${formatParaguayGs(price1)}' (exact text '${formatParaguayGs(price1)}', NEVER write 'Gs. Gs.'), PROMINENT UNMISSABLE CALLOUT 'ENVÍO GRATUITO EN TODO PARAGUAY' + '${safeEntryName} TOTALMENTE DE REGALO', plus honest bottom contrast bar showing solo '${safeEntryName}' abona delivery '${formatParaguayGs(deliveryFee)}' vs Paquete Estrella ENVÍO GRATIS, razor-sharp crisp Spanish typography with zero text typos, edge-to-edge."
+      "caption": "Entrada brusca integrada + Oferta Estrella de Locura",
+      "imagePrompt": "Mind-blowing ultra high-impact flagship 2:3 vertical e-commerce conversion poster for openai/gpt-image-2.6-sunburst in razor-sharp Paraguayan Spanish — COMPLETELY DIFFERENT deep obsidian dark, crimson-alert, glowing emerald & metallic gold aesthetic from Sheet 1: TOP 18% sharp crimson-amber interrupt header integrated directly inside the artwork '¡ESPERÁ UN RATITO!' + 'Estás por pedir solo ${safeEntryName}... Mirá esto antes:'; MIDDLE 58% spectacular photorealistic hero showcase of '${input.productName}' (${cleanAngleInput || 'solución definitiva'}) in dramatic real-world action with giant bold Spanish headline and 3 crisp structured dark-glass icon feature cards; LOWER 16% high-impact emerald-gold offer bar 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'Llevás ${safeEntryName} DE REGALO' + clean price '${formatParaguayGs(price1)}' (never write 'Gs. Gs.') + transparent delivery note 'Solo ${safeEntryName}: delivery ${formatParaguayGs(deliveryFee)}'; BOTTOM 8% clean downward arrow cue 'Dale clic al botón de abajo'. Ultra-crisp legible Spanish typography, zero garbled text, full-bleed edge-to-edge 2:3."
     }`
     }
   ],
@@ -1214,7 +1221,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       (isPrincipalOnly || i >= 1) && savedPrincipalImg && !savedPrincipalImg.startsWith('/')
         ? `Reference product style: ${input.productName}.`
         : '',
-      'Ultra sharp typography in Spanish, NO English typos, clean modern e-commerce graphic sheet layout filling the entire 3:4 canvas edge-to-edge.'
+      'Ultra sharp high-contrast legible Spanish e-commerce typography, crisp vector feature icons, NO garbled words, full-bleed edge-to-edge 2:3 vertical layout with zero white margins.'
     ]
       .filter(Boolean)
       .join(' ');
@@ -1222,7 +1229,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
     const imgUrl = await generateSingleVisualSheetImage({
       openRouterApiKey: input.openRouterApiKey,
       prompt: extraVisualContext,
-      aspectRatio: '3:4',
+      aspectRatio: '2:3',
       filePrefix: `vis_${slugifyProductName(input.productName).slice(0, 18)}_s${i + 1}`,
       referer: input.referer,
       fetchImpl: f
@@ -1295,7 +1302,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
     reversePsychologyHook: isPrincipalOnly ? '' : cleanPublicText(parsed?.reversePsychologyHook || ''),
     entryButtonLabel: isPrincipalOnly
       ? undefined
-      : cleanPublicText(parsed?.entryButtonLabel || `Solicitar ${safeEntryName} — 1 unidad (${formatParaguayGs(entryPrice)})`),
+      : cleanPublicText(parsed?.entryButtonLabel || `Separar ahora · ${formatParaguayGs(entryPrice)}`),
     entryDisclaimer: isPrincipalOnly
       ? undefined
       : cleanPublicText(
@@ -1305,8 +1312,8 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
     bundleButtonLabel: cleanPublicText(
       parsed?.bundleButtonLabel ||
         (isPrincipalOnly
-          ? `Pedir ${input.productName} — Envío Gratis (${formatParaguayGs(price1)})`
-          : `Pedir ${input.productName} + ${safeEntryName} DE REGALO (${formatParaguayGs(price1)})`)
+          ? `Solicitar ahora · ${formatParaguayGs(price1)}`
+          : `Solicitar oferta completa · ${formatParaguayGs(price1)}`)
     ),
     bundleDisclaimer: cleanPublicText(
       parsed?.bundleDisclaimer ||

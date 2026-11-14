@@ -1,16 +1,18 @@
 import React from 'react';
-import { ArrowDown, ArrowRight, ShieldCheck } from 'lucide-react';
+import { MousePointerClick, ShoppingBag } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatGs } from '../config';
 import { OrderForm } from './OrderForm';
 
 /**
- * Página Visual Limpia (Cero HTML innecesario, cero formulario infinito abierto):
+ * Página Visual Pura E-Commerce:
+ * - Cero bloques HTML intermedios ni descripciones debajo o dentro de los botones.
  * - Modo Tripwire + Principal:
- *   1. Lámina 1 (Gancho rápido directo) + Botón #1 que fluctúa con la primera imagen hasta su final.
- *   2. Freno chocante de ruptura de patrón ("¡ESPERÁ UN RATITO! Estás a punto de llevar...").
- *   3. Lámina 2+ (Oferta Principal brutalmente persuasiva y diferente) + Botón #2 al final.
- * - Modo Estándar: Láminas centradas + 1 Botón principal que abre el formulario en modal al hacer clic.
+ *   1. Imagen 1 (E-Commerce Alto Impacto directo en paleta clara/azul-ámbar)
+ *      + Botón #1 táctil 3D limpio (fluctúa mientras ves Imagen 1 y se detiene al final).
+ *   2. Imagen 2+ (E-Commerce Alta Gama paleta oscura opuesta con ruptura brusca generada en la imagen)
+ *      + Botón #2 táctil 3D limpio al final.
+ * - Modo Estándar: Imágenes generadas + 1 Botón táctil 3D limpio.
  */
 export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = () => {
   const {
@@ -40,6 +42,10 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ()
   const firstSheet = vis.sheets[0];
   const secondPartSheets = vis.sheets.length > 1 ? vis.sheets.slice(1) : [];
 
+  const button1Text = `Separar ahora · ${formatGs(entryPrice)}`;
+  const button2Text = `Solicitar oferta completa · ${formatGs(activeBundlePrice)}`;
+  const standardButtonText = `Solicitar ahora · ${formatGs(activeBundlePrice)}`;
+
   return (
     <div
       data-testid="visual-product-landing"
@@ -48,9 +54,7 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ()
       <div className="w-full max-w-[560px] mx-auto bg-[#06080d] shadow-[0_0_80px_rgba(0,0,0,0.9)]">
         {hasEntryHook ? (
           <>
-            {/* ═════════════════════════════════════════════════════════════ */}
-            {/* BLOQUE 1: IMAGEN 1 DIRECTA + BOTÓN #1 (FLUCTÚA HASTA EL FINAL) */}
-            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* BLOQUE 1: IMAGEN 1 E-COMMERCE ALTO IMPACTO + BOTÓN #1 TÁCTIL LIMPIO */}
             <section data-testid="landing-hook-section" className="relative w-full">
               <img
                 src={firstSheet.imageUrl}
@@ -60,56 +64,22 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ()
                 className="w-full h-auto block object-cover"
               />
 
-              {/* ÚNICO BOTÓN #1 (Tripwire): sticky dentro del bloque para fluctuar solo durante la Imagen 1 */}
-              <div className="sticky bottom-3 z-30 px-3 py-3 bg-gradient-to-t from-[#06080d] via-[#06080d]/95 to-transparent">
+              <div className="sticky bottom-3 z-30 px-4 py-3 flex justify-center pointer-events-none">
                 <button
                   type="button"
                   data-testid="landing-btn-entry-only"
                   onClick={() => openPurchaseOrderForm('entry_only', 1)}
-                  className="w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-[#f2cf7e] via-[#e5c88b] to-[#f4dfb0] hover:brightness-105 active:scale-[0.99] text-[#090b10] border-2 border-[#fff3d1] shadow-[0_10px_35px_rgba(229,200,139,0.45)] cursor-pointer transition-all flex items-center justify-between gap-3 animate-pulse"
-                  style={{ animationDuration: '2.4s' }}
+                  className="pointer-events-auto w-full py-4 px-4 sm:px-6 rounded-2xl bg-gradient-to-b from-[#ffbe2e] via-[#f59e0b] to-[#d97706] hover:from-[#ffc94d] hover:to-[#e08106] text-[#1c1000] border border-[#fde68a] shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_6px_0_#92400e,0_16px_32px_rgba(245,158,11,0.42)] active:translate-y-1 active:shadow-[0_2px_0_#92400e] cursor-pointer transition-all duration-150 flex items-center justify-center gap-2.5"
                 >
-                  <div className="min-w-0 text-left">
-                    <div className="text-sm sm:text-base font-black leading-tight uppercase tracking-tight">
-                      {vis.entryButtonLabel || `SEPARAR ${entryName} AHORA`}
-                    </div>
-                    <div className="text-xs font-bold text-[#090b10]/80 mt-0.5 flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                      <span>1 unidad · Pagás recién al recibir en mano</span>
-                    </div>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1.5 bg-[#090b10] text-[#f4dfb0] px-3 py-2 rounded-xl font-mono tabular-nums font-black text-sm sm:text-base">
-                    <span>{formatGs(entryPrice)}</span>
-                    <ArrowRight className="w-4 h-4 shrink-0" />
-                  </div>
+                  <MousePointerClick className="w-5 h-5 shrink-0 stroke-[2.5]" />
+                  <span className="text-[15px] sm:text-[17px] font-black tracking-tight whitespace-nowrap font-mono tabular-nums">
+                    {button1Text}
+                  </span>
                 </button>
               </div>
             </section>
 
-            {/* ═════════════════════════════════════════════════════════════ */}
-            {/* RUPTURA CHOCANTE DE PATRÓN (DETIENE ANTES DE LA PARTE 2)      */}
-            {/* ═════════════════════════════════════════════════════════════ */}
-            <div
-              data-testid="landing-pattern-interrupt"
-              className="w-full bg-[#120608] border-y-2 border-red-500/80 px-5 py-7 text-center space-y-2.5"
-            >
-              <div className="text-[11px] sm:text-xs font-mono font-black uppercase tracking-[0.2em] text-red-400">
-                ¡ESPERÁ UN SEGUNDO! · NO CONFIRMES TODAVÍA
-              </div>
-              <h2 className="text-lg sm:text-2xl font-black text-white leading-tight text-balance">
-                Estás a punto de pedir únicamente «{entryName}»…
-              </h2>
-              <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed max-w-md mx-auto">
-                Aguardame un ratito antes de dar clic y separarlo. Leé esto que viene ahora: va a cambiar por completo tu decisión.
-              </p>
-              <div className="pt-1 flex justify-center text-red-400">
-                <ArrowDown className="w-5 h-5 animate-bounce" />
-              </div>
-            </div>
-
-            {/* ═════════════════════════════════════════════════════════════ */}
-            {/* BLOQUE 2: IMAGEN PRINCIPAL PERSUASIVA + BOTÓN #2 AL FINAL      */}
-            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* BLOQUE 2: IMAGEN 2+ E-COMMERCE ALTÍSIMO NIVEL (CON RUPTURA GENERADA) + BOTÓN #2 TÁCTIL LIMPIO */}
             <section data-testid="landing-principal-section" className="relative w-full">
               {secondPartSheets.map((sheet, idx) => (
                 <img
@@ -122,34 +92,23 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ()
                 />
               ))}
 
-              {/* ÚNICO BOTÓN #2 (Oferta Principal + Regalo + Envío Gratuito): al final de la segunda imagen */}
-              <div className="sticky bottom-3 z-30 px-3 py-4 bg-gradient-to-t from-[#06080d] via-[#06080d]/95 to-transparent">
+              <div className="sticky bottom-3 z-30 px-4 py-3 flex justify-center pointer-events-none">
                 <button
                   type="button"
                   data-testid="landing-btn-principal-bundle"
                   onClick={() => openPurchaseOrderForm('principal_bundle', 1)}
-                  className="w-full py-4 sm:py-5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-500 hover:brightness-105 active:scale-[0.99] text-[#031910] border-2 border-emerald-200 shadow-[0_12px_40px_rgba(16,185,129,0.45)] cursor-pointer transition-all flex items-center justify-between gap-3"
+                  className="pointer-events-auto w-full py-4 px-4 sm:px-6 rounded-2xl bg-gradient-to-b from-[#22c55e] via-[#16a34a] to-[#15803d] hover:from-[#34d399] hover:to-[#16a34a] text-white border border-[#86efac]/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_6px_0_#064e3b,0_18px_36px_rgba(22,163,74,0.48)] active:translate-y-1 active:shadow-[0_2px_0_#064e3b] cursor-pointer transition-all duration-150 flex items-center justify-center gap-2.5"
                 >
-                  <div className="min-w-0 text-left space-y-0.5">
-                    <div className="text-[11px] sm:text-xs font-black uppercase tracking-wide text-[#022416]">
-                      ENVÍO GRATUITO + {entryName.toUpperCase()} DE REGALO
-                    </div>
-                    <div className="text-sm sm:text-base font-black leading-tight">
-                      {vis.bundleButtonLabel || `SOLICITAR ${currentProductPage.nombre}`}
-                    </div>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1.5 bg-[#031910] text-emerald-300 px-3.5 py-2.5 rounded-xl font-mono tabular-nums font-black text-sm sm:text-base">
-                    <span>{formatGs(activeBundlePrice)}</span>
-                    <ArrowRight className="w-4 h-4 shrink-0" />
-                  </div>
+                  <ShoppingBag className="w-5 h-5 shrink-0 stroke-[2.5]" />
+                  <span className="text-[15px] sm:text-[17px] font-black tracking-tight whitespace-nowrap font-mono tabular-nums drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]">
+                    {button2Text}
+                  </span>
                 </button>
               </div>
             </section>
           </>
         ) : (
-          /* ═════════════════════════════════════════════════════════════ */
-          /* MODO ESTÁNDAR (UN SOLO PRODUCTO): LÁMINAS + 1 BOTÓN MODAL     */
-          /* ═════════════════════════════════════════════════════════════ */
+          /* MODO ESTÁNDAR: LÁMINAS E-COMMERCE + 1 BOTÓN TÁCTIL LIMPIO */
           <section className="relative w-full">
             {vis.sheets.map((sheet, idx) => (
               <img
@@ -162,32 +121,24 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ()
               />
             ))}
 
-            <div className="sticky bottom-3 z-30 px-3 py-4 bg-gradient-to-t from-[#06080d] via-[#06080d]/95 to-transparent">
+            <div className="sticky bottom-3 z-30 px-4 py-3 flex justify-center pointer-events-none">
               <button
                 type="button"
                 data-testid="landing-btn-principal-bundle"
                 onClick={() => openPurchaseOrderForm('principal_bundle', 1)}
-                className="w-full py-4 sm:py-5 px-5 rounded-2xl bg-gradient-to-r from-[#f2cf7e] via-[#e5c88b] to-[#f4dfb0] hover:brightness-105 active:scale-[0.99] text-[#090b10] border-2 border-[#fff3d1] shadow-[0_10px_35px_rgba(229,200,139,0.45)] cursor-pointer transition-all flex items-center justify-between gap-3"
+                className="pointer-events-auto w-full py-4 px-4 sm:px-6 rounded-2xl bg-gradient-to-b from-[#ffbe2e] via-[#f59e0b] to-[#d97706] hover:from-[#ffc94d] hover:to-[#e08106] text-[#1c1000] border border-[#fde68a] shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_6px_0_#92400e,0_16px_32px_rgba(245,158,11,0.42)] active:translate-y-1 active:shadow-[0_2px_0_#92400e] cursor-pointer transition-all duration-150 flex items-center justify-center gap-2.5"
               >
-                <div className="min-w-0 text-left space-y-0.5">
-                  <div className="text-sm sm:text-base font-black leading-tight">
-                    {vis.bundleButtonLabel || `SOLICITAR ${currentProductPage.nombre}`}
-                  </div>
-                  <div className="text-xs font-bold text-[#090b10]/80">
-                    Envío Gratis a todo Paraguay · Pagás recién al recibir
-                  </div>
-                </div>
-                <div className="shrink-0 flex items-center gap-1.5 bg-[#090b10] text-[#f4dfb0] px-3.5 py-2.5 rounded-xl font-mono tabular-nums font-black text-sm sm:text-base">
-                  <span>{formatGs(activeBundlePrice)}</span>
-                  <ArrowRight className="w-4 h-4 shrink-0" />
-                </div>
+                <ShoppingBag className="w-5 h-5 shrink-0 stroke-[2.5]" />
+                <span className="text-[15px] sm:text-[17px] font-black tracking-tight whitespace-nowrap font-mono tabular-nums">
+                  {standardButtonText}
+                </span>
               </button>
             </div>
           </section>
         )}
       </div>
 
-      {/* FORMULARIO: CERO HTML ABIERTO EN PANTALLA — SOLO SE ABRE EN MODAL AL TOCAR UN BOTÓN */}
+      {/* FORMULARIO: SOLO EN MODAL AL TOCAR UN BOTÓN */}
       <OrderForm
         expressDirectMode
         modalOnly

@@ -1016,15 +1016,16 @@ test('dual_tripwire_winner ordena 2 láminas opuestas: Lámina 1 gancho directo 
 
     assert.equal(res.product.visualLanding?.sheets.length, 2);
     const blueprintPayload = capturedChatPayloads.find((p) =>
-      String(p?.messages?.[0]?.content || '').includes('CERO ROGAR COMPRA')
+      String(p?.messages?.[0]?.content || '').includes('E-COMMERCE DE ALTÍSIMO IMPACTO')
     );
     const sysPrompt = String(blueprintPayload?.messages?.[0]?.content || '');
     const userPrompt = String(blueprintPayload?.messages?.[1]?.content || '');
-    assert.ok(sysPrompt.includes('CERO ROGAR COMPRA'), 'Debe exigir autoridad y prohibir rogar compra');
-    assert.ok(sysPrompt.includes('LÁMINA 1 (GANCHO DIRECTO "BIM BAM BUM"'), 'Debe exigir Lámina 1 directa rápida arriba');
-    assert.ok(sysPrompt.includes('RUPTURA CHOCANTE + LÁMINA 2'), 'Debe exigir ruptura chocante y estética opuesta en Lámina 2');
+    assert.ok(sysPrompt.includes('E-COMMERCE DE ALTÍSIMO IMPACTO'), 'Debe exigir diseño e-commerce de altísimo nivel');
+    assert.ok(sysPrompt.includes('DIFERENCIACIÓN CROMÁTICA INMEDIATA'), 'Debe diferenciar claramente el color y estética entre ambas láminas');
+    assert.ok(sysPrompt.includes('LÁMINA 2 (PRODUCTO ESTRELLA DE LOCURA — PALETA OSCURA OPUESTA'), 'Debe exigir paleta oscura opuesta + entrada brusca en la imagen 2');
     assert.ok(userPrompt.includes("DO NOT mention 'Proyector Láser Pro'"), 'Lámina 1 debe prohibir mencionar el producto principal');
-    assert.ok(userPrompt.includes('DO NOT mention shipping or delivery anywhere'), 'Lámina 1 no debe prometer envío gratis ni recargo');
+    assert.ok(userPrompt.includes('Tocá el botón de abajo'), 'Lámina 1 debe incluir indicación visual hacia el botón de abajo');
+    assert.ok(userPrompt.includes('Dale clic al botón de abajo'), 'Lámina 2 debe incluir indicación visual hacia el botón de abajo');
     assert.ok(userPrompt.includes('ENVÍO GRATUITO EN TODO PARAGUAY'), 'Lámina 2 debe exhibir en grande ENVÍO GRATUITO');
     assert.equal(/Gs\.\s+Gs\.\s*\d/.test(userPrompt), false, 'No debe duplicar nunca Gs. Gs. antes de un monto en el prompt');
     assert.equal(/Gs\.\s+Gs\.\s*\d/.test(sysPrompt), false, 'No debe duplicar Gs. Gs. antes de un monto en el prompt de sistema');
