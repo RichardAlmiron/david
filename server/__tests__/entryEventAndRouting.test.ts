@@ -6,6 +6,8 @@ import path from 'node:path';
 import {
   applyEntryChoiceToOrder,
   buildEntryAttemptSpeech,
+  buildEntryEventBrainPrompt,
+  buildEntryEventConversationalFallback,
   buildEntryPollDefinition,
   buildFinalDispatchSpeech,
   buildInitialEntryEventState,
@@ -15,6 +17,7 @@ import {
   isEntryOnlyOrderWithConfig,
   mixVoiceWithBackgroundMusic
 } from '../entryEventEngine.ts';
+import { extractCustomerShippingSummaryForVisual } from '../waStageCommercialRenderer.ts';
 import {
   replacePublishedAdInMeta,
   resolveCreativeTargetLandingUrl
@@ -952,7 +955,7 @@ test('generateUniversalVisualProductPage soporta sheetCount auto y aplica visual
   }
 });
 
-test('dual_tripwire_winner genera 4 imágenes de Carta de Venta: Imagen 1 envolvente de alto impacto para el Tripwire + Imágenes 2, 3 y 4 como 3 secciones exclusivas del Producto Principal con cero fallas de escritura', async () => {
+test('dual_tripwire_winner genera 7 imágenes 100% visuales: Entrada con tarjeta azul marino/dorado y guía GPS + 6 secciones Ganador sin caja roja ni texto cruel', async () => {
   const createdTempFiles: string[] = [];
   const capturedChatPayloads: any[] = [];
   const capturedImgPrompts: string[] = [];
@@ -968,21 +971,24 @@ test('dual_tripwire_winner genera 4 imágenes de Carta de Venta: Imagen 1 envolv
             {
               message: {
                 content: JSON.stringify({
-                  strategySummary: 'Carta de Venta Visual de 4 imágenes: 1 Gancho Envolvente + 3 Secciones Producto Principal',
+                  strategySummary: 'Carta de Venta Visual de 7 imágenes: 1 Entrada Realista + 6 Secciones Producto Ganador',
                   recommendedAudioPreset: 'warm_ambient',
-                  sobrietyHeadline: 'Brillo envolvente al instante',
-                  subheadline: 'Diseño magnético de alto impacto para tu entrada.',
+                  sobrietyHeadline: 'Brillo cálido en segundos',
+                  subheadline: 'Diseño magnético real para tu hogar.',
                   winnerAngleHeadline: 'La transformación nocturna definitiva para toda tu casa',
-                  winnerAngleDescription: 'Pensado para quien busca el resultado definitivo y desea solicitarlo por convicción.',
-                  reversePsychologyHook: '¡Esperá un segundo! Llevando la solución completa, el artículo de entrada va gratis y activás envío gratuito.',
-                  entryButtonLabel: 'SEPARAR GUIRNALDA LED — 1 UNIDAD',
-                  bundleButtonLabel: 'LLEVAR PROYECTOR + GUIRNALDA GRATIS',
+                  winnerAngleDescription: 'Pensado para quien busca el resultado definitivo a todo color y desea solicitarlo por convicción.',
+                  reversePsychologyHook: '¡Esperá! ¿Me regalás un segundo? Llevando la solución completa, la guirnalda va gratis y activás envío gratuito.',
+                  entryButtonLabel: '¡PEDIR AHORA!',
+                  bundleButtonLabel: '¡PEDIR AHORA!',
                   bundleDisclaimer: 'Incluye Proyector completo + Guirnalda DE REGALO + ENVÍO GRATUITO.',
                   sheetPrompts: [
-                    { role: 'hero_presentation', title: 'Lámina 1 · Guirnalda Envolvente', caption: 'Diseño Envolvente 360°', imagePrompt: 'Spectacular wrap-around hook item' },
-                    { role: 'comparison_need', title: 'Lámina 2 · Sección 1 Principal', caption: 'Ruptura + Gran Promesa', imagePrompt: 'Section 1 pattern interrupt + principal hero reveal' },
-                    { role: 'authority_transformation', title: 'Lámina 3 · Sección 2 Principal', caption: 'Poder y Transformación', imagePrompt: 'Section 2 principal power and anatomy' },
-                    { role: 'social_trust_specs', title: 'Lámina 4 · Sección 3 Principal', caption: 'Cierre + Regalo + Envío Gratis', imagePrompt: 'Section 3 full bundle + free shippingGs. Gs. 189.000' }
+                    { role: 'hero_presentation', title: 'Lámina 1 · Guirnalda LED', caption: 'Avatar, tarjeta azul marino y guía ¡PEDIR AHORA!', imagePrompt: 'Realistic DSLR lifestyle hook item with navy gold plaque SOLO ARTÍCULO SUELTO: DELIVERY Gs. 40.000' },
+                    { role: 'comparison_need', title: 'Lámina 2 · Sección 1 ¡ESPERÁ!', caption: 'Ruptura + Demo a todo color', imagePrompt: 'Section 1 pattern interrupt + vibrant multicolor house projection' },
+                    { role: 'comparison_need', title: 'Lámina 3 · Sección 2 Familia Real', caption: 'Transformación cotidiana', imagePrompt: 'Section 2 real family home transformation' },
+                    { role: 'authority_transformation', title: 'Lámina 4 · Sección 3 Manos y Macro', caption: 'Manos reales 85mm', imagePrompt: 'Section 3 real hands + 85mm macro build' },
+                    { role: 'social_trust_specs', title: 'Lámina 5 · Sección 4 Confianza Paraguay', caption: 'Miles de envíos Asunción CDE', imagePrompt: 'Section 4 Paraguayan buyer doorway verification Asunción CDE' },
+                    { role: 'authority_transformation', title: 'Lámina 6 · Sección 5 Comparación Valor', caption: 'Por separado vs Paquete Completo', imagePrompt: 'Section 5 side-by-side comparison vs complete winning bundle VIGENTE HASTA MAÑANA SI NO CERRÁS ESTA PÁGINA' },
+                    { role: 'social_trust_specs', title: 'Lámina 7 · Sección 6 Cierre Vendedor', caption: 'Regalo + Envío Gratis + Guía ¡PEDIR AHORA!', imagePrompt: 'Section 6 closing bundle + free shipping Gs. Gs. 189.000 + GPS button guide' }
                   ],
                   faq: [{ q: '¿Cómo solicito?', a: 'Tocando el botón de tu opción.' }],
                   agentContext: 'Precios exactos.'
@@ -1019,48 +1025,59 @@ test('dual_tripwire_winner genera 4 imágenes de Carta de Venta: Imagen 1 envolv
       }
     }
 
-    assert.equal(res.product.visualLanding?.mode, 'sober_graphic_4sheet');
-    assert.equal(res.product.visualLanding?.sheets.length, 4, 'Debe generar exactamente 4 imágenes por página');
+    assert.equal(res.product.visualLanding?.mode, 'sober_graphic_7sheet');
+    assert.equal(res.product.visualLanding?.sheets.length, 7, 'Debe generar 7 imágenes por página en modo Dual');
     assert.equal(res.product.visualLanding?.sheets[0]?.role, 'hero_presentation');
-    assert.equal(res.product.visualLanding?.sheets[1]?.role, 'comparison_need');
-    assert.equal(res.product.visualLanding?.sheets[2]?.role, 'authority_transformation');
-    assert.equal(res.product.visualLanding?.sheets[3]?.role, 'social_trust_specs');
+    assert.equal(res.product.visualLanding?.sheets[6]?.role, 'social_trust_specs');
+
+    assert.equal(res.product.visualLanding?.entryButtonLabel, '¡PEDIR AHORA!');
+    assert.equal(res.product.visualLanding?.bundleButtonLabel, '¡PEDIR AHORA!');
+    assert.equal(res.product.visualLanding?.entryButtonColorName, 'VERDE Y DORADO');
+    assert.equal(res.product.visualLanding?.bundleButtonColorName, 'VERDE Y DORADO');
 
     const blueprintPayload = capturedChatPayloads.find((p) =>
-      String(p?.messages?.[0]?.content || '').includes('CARTA DE VENTA')
+      String(p?.messages?.[0]?.content || '').includes('IMAGEN 1')
     );
     const sysPrompt = String(blueprintPayload?.messages?.[0]?.content || '');
     const userPrompt = String(blueprintPayload?.messages?.[1]?.content || '');
-    assert.ok(sysPrompt.includes('AVATAR REALISTA'), 'Imagen 1 del Tripwire debe exigir fotografía realista con avatar realista en entorno real');
-    assert.ok(sysPrompt.includes('LAS 3 SECCIONES DE CARTA DE VENTA EXCLUSIVAS DEL PRODUCTO PRINCIPAL'), 'Imágenes 2, 3 y 4 deben ser 3 secciones diferentes exclusivas del Producto Principal');
-    assert.ok(sysPrompt.includes('PROHIBIDO EL COPIA Y PEGA'), 'Debe prohibir el copia y pega literal y exigir Carta de Venta persuasiva');
-    assert.ok(sysPrompt.includes('PROHIBIDO EL DIBUJO ANIMADO'), 'Debe prohibir explícitamente dibujo animado, CGI flotante y barullo neón');
-    assert.ok(sysPrompt.includes('REGLA INQUEBRANTABLE CONTRA FALLAS DE ESCRITURA'), 'Debe exigir frases cortas en mayúsculas para cero fallas de escritura');
+    assert.ok(sysPrompt.includes('AVATAR'), 'Imagen 1 debe exigir fotografía realista con avatar humano');
+    assert.ok(sysPrompt.includes('subrayado amarillo'), 'Debe exigir ¡ESPERÁ! rojo con subrayado amarillo');
+    assert.ok(sysPrompt.includes('PROHIBIDO ROJO'), 'Debe exigir tarjeta contenedora de precio lujosa y prohibir rojo plano');
+    assert.ok(sysPrompt.includes('SOLO ARTÍCULO SUELTO'), 'Debe prohibir explícitamente la frase cruel SOLO ARTÍCULO SUELTO');
+    assert.ok(sysPrompt.includes('PROHIBIDO EL COPIA Y PEGA'), 'Debe prohibir el copia y pega literal');
+    assert.ok(sysPrompt.includes('PROHIBIDO DIBUJO ANIMADO'), 'Debe prohibir explícitamente dibujo animado y CGI neón');
+    assert.ok(sysPrompt.includes('¡PEDIR AHORA!'), 'System prompt debe guiar al botón oficial ¡PEDIR AHORA!');
     assert.ok(userPrompt.includes("DO NOT mention 'Proyector Láser Pro'"), 'Lámina 1 debe prohibir mencionar el producto principal');
-    assert.ok(userPrompt.includes('Tocá el botón de abajo'), 'Lámina 1 debe incluir indicación visual hacia el botón de abajo');
-    assert.ok(userPrompt.includes('Dale clic al botón de abajo'), 'Lámina 4 debe incluir indicación visual hacia el botón final');
-    assert.ok(userPrompt.includes('ENVÍO GRATUITO EN TODO PARAGUAY'), 'El cierre de la Carta de Venta debe exhibir en grande ENVÍO GRATUITO');
+    assert.ok(userPrompt.includes('TOCÁ EL BOTÓN ¡PEDIR AHORA! ABAJO'), 'Lámina 1 debe señalar el botón ¡PEDIR AHORA! y GPS');
+    assert.ok(userPrompt.includes('COMPLETÁ TUS DATOS PARA RECIBIR EN CASA'), 'Lámina final debe ser congruente con el texto del botón ¡PEDIR AHORA!');
+    assert.ok(userPrompt.includes('NO PAGÁS ENVÍO'), 'El cierre de la Carta de Venta debe explicar que no pagás envío ni regalo');
+    assert.ok(userPrompt.includes('VIGENTE HASTA MAÑANA'), 'Debe incluir urgencia estática sin reloj digital');
     assert.equal(/Gs\.\s+Gs\.\s*\d/.test(userPrompt), false, 'No debe duplicar nunca Gs. Gs. antes de un monto en el prompt');
     assert.equal(/Gs\.\s+Gs\.\s*\d/.test(sysPrompt), false, 'No debe duplicar Gs. Gs. antes de un monto en el prompt de sistema');
     assert.ok(
       capturedImgPrompts[0]?.includes('realistic Latin American human avatar') &&
-        capturedImgPrompts[0]?.includes('STRICT REALISM & ZERO-CARTOON RULE'),
-      'El prompt final enviado al generador de imagen para la Lámina 1 debe exigir avatar realista y fotografía DSLR sin dibujo animado'
+        capturedImgPrompts[0]?.includes('¡PEDIR AHORA!') &&
+        capturedImgPrompts[0]?.includes('#0B132B') &&
+        capturedImgPrompts[0]?.includes('STRICTLY FORBIDDEN red, crimson, or maroon backgrounds') &&
+        capturedImgPrompts[0]?.includes('BOTÓN DE GPS'),
+      'El prompt final enviado al generador de imagen para la Lámina 1 debe exigir avatar realista, tarjeta azul marino/dorado sin rojo y guía al botón ¡PEDIR AHORA! + GPS'
     );
     assert.ok(
-      !capturedImgPrompts[0]?.includes('360-degree wrap-around') &&
-        !capturedImgPrompts[0]?.includes('floating 3D') &&
-        !capturedImgPrompts[0]?.includes('neon rim light'),
-      'El sanitizador debe limpiar cualquier trigger de render 3D/neón/dibujo animado'
+      capturedImgPrompts[6]?.includes('¡PEDIR AHORA!') &&
+        capturedImgPrompts[6]?.includes('7 DÍAS DE GARANTÍA') &&
+        capturedImgPrompts[6]?.includes('NO PAGÁS ENVÍO') &&
+        capturedImgPrompts[6]?.includes('BOTÓN DE GPS') &&
+        capturedImgPrompts[6]?.includes('FULL vibrant authentic real-world colors'),
+      'La lámina 7 final debe exigir colores reales vibrantes, tarjeta esmeralda/dorada y guía paso a paso congruente al botón ¡PEDIR AHORA! + GPS'
     );
     assert.ok(
-      capturedImgPrompts.every((p) => p.includes('STRICT SPANISH ORTHOGRAPHY & ZERO-TYPO RULE') && !p.includes('Gs. Gs.')),
-      'Todas las 4 imágenes deben llevar la regla estricta anti-fallas de escritura y limpiar Gs. Gs.'
-    );
-    assert.equal(
-      String(res.product.visualLanding?.entryButtonLabel || '').includes('Gs. Gs.'),
-      false,
-      'Botón de entrada no debe tener Gs. Gs.'
+      capturedImgPrompts.every(
+        (p) =>
+          p.includes('STRICT DESIGN & SPANISH ORTHOGRAPHY RULE') &&
+          !p.includes('Gs. Gs.') &&
+          !/SOLO ART[ÍI]CULO SUELTO:/i.test(p)
+      ),
+      'Todas las 7 imágenes deben llevar la regla estricta anti-fallas, limpiar Gs. Gs. y purgar SOLO ARTÍCULO SUELTO:'
     );
     assert.ok(
       res.product.visualLanding?.entryDisclaimer?.toLowerCase().includes('no incluye'),
@@ -1297,6 +1314,93 @@ test('Tripwire precio único + anti copia-pega + recreación automática de imag
     }
   }
 });
+
+test('Separación completa entry_only vs principal_bundle en Formulario, API, Tarjeta WA y Cerebro IA', () => {
+  const entryState = buildInitialEntryEventState(
+    { reservaid: 'NX-888', celular: '595981555666', purchasePath: 'entry_only', monto: 20000 },
+    PRODUCT_WITH_ENTRY
+  );
+
+  // 1. Cerebro del Evento de Entrada conoce ambos productos, precios exactos y no filtra "tripwire"
+  const brainPrompt = buildEntryEventBrainPrompt({
+    customerFirstName: 'Carlos',
+    matchedProduct: PRODUCT_WITH_ENTRY,
+    state: entryState,
+    contextoIA: 'Proyector de exterior resistente a lluvia.'
+  });
+  assert.ok(brainPrompt.includes(PRODUCT_WITH_ENTRY.tripwireConfig.entryProductName));
+  assert.ok(brainPrompt.includes(PRODUCT_WITH_ENTRY.nombre));
+  assert.ok(brainPrompt.includes('UPGRADE_PRINCIPAL'));
+  assert.ok(brainPrompt.includes('ENROLL_WAITLIST'));
+  assert.ok(brainPrompt.includes('60.000 guaraníes')); // 20.000 + 40.000 delivery
+  assert.equal(/tripwire/i.test(brainPrompt.replace('jamás digas la palabra prohibida "tripwire"', '')), false);
+
+  const fallbackSpeech = buildEntryEventConversationalFallback({
+    customerFirstName: 'Carlos',
+    matchedProduct: PRODUCT_WITH_ENTRY,
+    state: entryState
+  });
+  assert.ok(fallbackSpeech.includes(PRODUCT_WITH_ENTRY.tripwireConfig.entryProductName));
+  assert.ok(fallbackSpeech.includes(PRODUCT_WITH_ENTRY.nombre));
+  assert.ok(fallbackSpeech.includes('60.000 guaraníes'));
+  assert.equal(/tripwire/i.test(fallbackSpeech), false);
+
+  // 2. Renderizado visual de tarjeta WA respeta imagen y nombre exacto según purchasePath
+  const productWithEntryImg = {
+    ...PRODUCT_WITH_ENTRY,
+    imagen: '/assets/principal.jpg',
+    tripwireConfig: {
+      ...PRODUCT_WITH_ENTRY.tripwireConfig,
+      entryProductImage: '/assets/entry_led.jpg'
+    }
+  };
+  const entryVisualSummary = extractCustomerShippingSummaryForVisual(
+    {
+      reservaid: 'NX-888',
+      nombre: 'Carlos López',
+      celular: '0981555666',
+      productoId: PRODUCT_WITH_ENTRY.id,
+      producto: PRODUCT_WITH_ENTRY.tripwireConfig.entryProductName,
+      purchasePath: 'entry_only',
+      cantidad: 1,
+      monto: 20000
+    },
+    productWithEntryImg
+  );
+  assert.equal(entryVisualSummary.productName, PRODUCT_WITH_ENTRY.tripwireConfig.entryProductName);
+  assert.equal(entryVisualSummary.productImgRef, '/assets/entry_led.jpg');
+  assert.equal(entryVisualSummary.packQty, 1);
+
+  const bundleVisualSummary = extractCustomerShippingSummaryForVisual(
+    {
+      reservaid: 'NX-889',
+      nombre: 'María Gómez',
+      celular: '0981777888',
+      productoId: PRODUCT_WITH_ENTRY.id,
+      producto: PRODUCT_WITH_ENTRY.nombre,
+      purchasePath: 'principal_bundle',
+      cantidad: 1,
+      monto: 189000
+    },
+    productWithEntryImg
+  );
+  assert.equal(bundleVisualSummary.productName, PRODUCT_WITH_ENTRY.nombre);
+  assert.equal(bundleVisualSummary.productImgRef, '/assets/principal.jpg');
+  assert.equal(bundleVisualSummary.packQty, 1);
+
+  // 3. Integridad estructural: OrderForm, POST /api/pedidos y whatsappEngine conectan ambos caminos sin desconexión
+  const orderFormSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/OrderForm.tsx'), 'utf8');
+  assert.ok(orderFormSrc.includes('producto: orderSubmittedProductName'));
+  assert.ok(orderFormSrc.includes('data-testid="orderform-dual-path-clarification"'));
+
+  const viteSrc = fs.readFileSync(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8');
+  assert.ok(viteSrc.includes("if (pedido.purchasePath === 'entry_only')"));
+
+  const waEngineSrc = fs.readFileSync(path.resolve(process.cwd(), 'server/whatsappEngine.ts'), 'utf8');
+  assert.ok(waEngineSrc.includes('isEntryEventActiveNow'));
+  assert.ok(waEngineSrc.includes('isMasterBundleOrder'));
+});
+
 
 
 

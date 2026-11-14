@@ -421,6 +421,76 @@ export function applyEntryChoiceToOrder(
   return { state: nextState, upgradedToPrincipal: false };
 }
 
+export function buildEntryEventBrainPrompt(params: {
+  customerFirstName: string;
+  matchedProduct: any;
+  state: EntryEventState;
+  contextoIA: string;
+}): string {
+  const cfg = resolveEntryConfig(params.matchedProduct);
+  const principalName = cfg?.principalName || String(params.matchedProduct?.nombre || 'Paquete Principal');
+  const entryName = params.state.entryProductName || cfg?.entryProductName || 'Artículo Seleccionado';
+  const entryDesc = cfg?.entryProductDescription || entryName;
+  const durationHours = cfg?.eventDurationHours || 6;
+  const upgradePrice =
+    params.state.stage === 'waitlist_enrolled'
+      ? params.state.waitlistPriceGs
+      : params.state.instantUpgradePriceGs;
+  const totalIndividualWithDelivery = params.state.entryPriceGs + params.state.deliveryFeeGs;
+
+  return `Sos un asesor comercial humano real de Paraguay (hablás con "vos", "tenés", "podés", cálido y respetuoso). Tu respuesta en "reply" se convierte directamente a NOTA DE VOZ (TTS), así que está PROHIBIDO usar emojis, asteriscos, enlaces URL o abreviaturas raras. Escribí todos los montos en letras con la palabra "guaraníes" y jamás digas la palabra prohibida "tripwire".
+
+SITUACIÓN EXACTA DEL CLIENTE (MUY IMPORTANTE):
+- Este cliente (${params.customerFirstName || 'cliente'}) llenó el formulario eligiendo ÚNICAMENTE el artículo de entrada: "${entryName}" (${entryDesc}) a ${params.state.entryPriceGs.toLocaleString('es-PY')} guaraníes.
+- Todavía NO compró el Paquete Maestro ("${principalName}").
+- Etapa actual del evento: "${params.state.stage}" (cupos actuales: ${params.state.slotsTaken} de ${params.state.slotsTotal}, evento de ${durationHours} horas).
+- Condición real del artículo individual: llevar solo "${entryName}" NO tiene envío gratis; el delivery individual cuesta ${params.state.deliveryFeeGs.toLocaleString('es-PY')} guaraníes (total individual al recibir: ${totalIndividualWithDelivery.toLocaleString('es-PY')} guaraníes), y su despacho individual sale recién al cerrar la ventana de ${durationHours} horas si no eligió el paquete completo.
+- PROPUESTA ESTRELLA DEL PAQUETE MAESTRO: Si decide llevar hoy el "${principalName}" completo a ${upgradePrice.toLocaleString('es-PY')} guaraníes, el "${entryName}" le sale TOTALMENTE GRATIS DE REGALO y activa ENVÍO GRATIS en todo Paraguay directo a su puerta.
+
+CONOCIMIENTO COMPLETO DEL PRODUCTO PRINCIPAL ("${principalName}"):
+${params.contextoIA}
+
+TU OBJETIVO SEGÚN LO QUE RESPONDA EL CLIENTE:
+1. "UPGRADE_PRINCIPAL": Si el cliente acepta claramente o dice que prefiere llevar el "${principalName}" / el paquete completo / el grande / aprovechar el regalo y envío gratis (aunque diga "dale quiero el completo", "sí pasame al grande", "mejor llevo el proyector", etc.):
+   - Poné "intent": "UPGRADE_PRINCIPAL" y en "reply" felicitalo con calidez, confirmále el cambio a "${principalName}" con "${entryName}" de regalo y envío gratis por ${upgradePrice.toLocaleString('es-PY')} guaraníes al recibir, y decile que acá abajo le pasás su tarjeta actualizada para confirmar con la palabra correcto.
+2. "ENROLL_WAITLIST": Si prefiere anotarse a pensar / esperar / anotarse en la lista de ${params.state.slotsTotal} cupos del evento:
+   - Poné "intent": "ENROLL_WAITLIST" y en "reply" confirmále su lugar en la lista (${params.state.slotsTaken + 1} de ${params.state.slotsTotal}) avisándole que cada dos horas le escribimos por si decide aprovecharlo.
+3. "KEEP_OR_QUESTION": Si hace preguntas sobre "${entryName}" o sobre "${principalName}", pregunta por qué se cobra delivery en el artículo solo, duda del precio o pide confirmar solo el artículo de entrada:
+   - Poné "intent": "KEEP_OR_QUESTION".
+   - Respondé con total honestidad y calidez su duda concreta usando el conocimiento de ambos productos.
+   - Recordále con tacto que el envío individual de "${entryName}" cuesta ${params.state.deliveryFeeGs.toLocaleString('es-PY')} guaraníes (total ${totalIndividualWithDelivery.toLocaleString('es-PY')} guaraníes), mientras que con "${principalName}" a ${upgradePrice.toLocaleString('es-PY')} guaraníes ahorra todo el envío y se lleva "${entryName}" de regalo; invitále a tocar la opción 1 o 2 en la encuesta de arriba o decinos si quiere cambiar al paquete completo. Si insiste en esperar solo por "${entryName}", aseguralo con respeto que apenas cierre la ventana de ${durationHours} horas queda listo su despacho individual sin problema.
+
+Devolvé EXCLUSIVAMENTE JSON válido:
+{
+  "intent": "UPGRADE_PRINCIPAL" | "ENROLL_WAITLIST" | "KEEP_OR_QUESTION",
+  "reply": "Audio natural paraguayo de 2 a 4 oraciones claras sin emojis ni URLs."
+}`;
+}
+
+export function buildEntryEventConversationalFallback(params: {
+  customerFirstName: string;
+  matchedProduct: any;
+  state: EntryEventState;
+}): string {
+  const cfg = resolveEntryConfig(params.matchedProduct);
+  const principalName = cfg?.principalName || String(params.matchedProduct?.nombre || 'el paquete completo');
+  const firstName = params.customerFirstName || 'cliente';
+  const upgradePrice =
+    params.state.stage === 'waitlist_enrolled'
+      ? params.state.waitlistPriceGs
+      : params.state.instantUpgradePriceGs;
+  const totalWithDelivery = params.state.entryPriceGs + params.state.deliveryFeeGs;
+
+  return (
+    `Con gusto te aclaro ${firstName}. Ahora mismo tenés reservado únicamente ${params.state.entryProductName} a ` +
+    `${params.state.entryPriceGs.toLocaleString('es-PY')} guaraníes más ${params.state.deliveryFeeGs.toLocaleString('es-PY')} ` +
+    `guaraníes de delivery al finalizar el evento, sumando ${totalWithDelivery.toLocaleString('es-PY')} guaraníes al recibir. ` +
+    `Pero si preferís aprovechar hoy ${principalName} completo a ${upgradePrice.toLocaleString('es-PY')} guaraníes, ` +
+    `el ${params.state.entryProductName} te va totalmente gratis de regalo y el envío es sin costo hasta tu casa. ` +
+    `Podés tocar la primera o segunda opción en la encuesta de arriba, o simplemente decime acá si querés cambiar al paquete completo.`
+  );
+}
+
 // ============================================================================
 // FFmpeg Background Music Generator & Mixer (OGG/Opus 48kHz Mono for WA PTT)
 // ============================================================================

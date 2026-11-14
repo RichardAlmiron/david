@@ -51,7 +51,7 @@ interface AiAngleOption {
   archetype: string;
   winnerAngle: string;
   visualDirection: string;
-  recommendedSheetCount: 2 | 3 | 4;
+  recommendedSheetCount: 2 | 3 | 4 | 5 | 6 | 7;
   recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
   whyItConverts: string;
   tripwireBridgeNote?: string;
@@ -60,7 +60,7 @@ interface AiAngleOption {
 interface AiStrategyState {
   currentPageDiagnosis: string;
   assistantReply: string;
-  recommendedSheetCount: 2 | 3 | 4;
+  recommendedSheetCount: 2 | 3 | 4 | 5 | 6 | 7;
   recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
   options: AiAngleOption[];
   recommendedOptionId: string;
@@ -179,7 +179,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
   const [strategyError, setStrategyError] = useState<string | null>(null);
   const [aiChatHistory, setAiChatHistory] = useState<AiChatEntry[]>([]);
   const [showManualOverrides, setShowManualOverrides] = useState(false);
-  const [sheetCount, setSheetCount] = useState<2 | 3 | 4>(4);
+  const [sheetCount, setSheetCount] = useState<2 | 3 | 4 | 5 | 6 | 7>(7);
   const [manualOverrideUsed, setManualOverrideUsed] = useState(false);
 
   const lastAnalyzedSignatureRef = useRef<string>('');
@@ -285,11 +285,11 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
     return aiStrategy.options.find((o) => o.id === selectedOptionId) || aiStrategy.options[0];
   }, [aiStrategy, selectedOptionId]);
 
-  const effectiveSheetCount: 2 | 3 | 4 = manualOverrideUsed
+  const effectiveSheetCount: 2 | 3 | 4 | 5 | 6 | 7 = manualOverrideUsed
     ? sheetCount
     : selectedAiOption?.recommendedSheetCount ||
       aiStrategy?.recommendedSheetCount ||
-      4;
+      (isTripwireMode ? 7 : 6);
 
   const effectiveAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none' =
     manualOverrideUsed
@@ -390,6 +390,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
 
   const handleSelectMode = (mode: 'dual_tripwire_winner' | 'principal_only') => {
     setPageCreationMode(mode);
+    setSheetCount(mode === 'dual_tripwire_winner' ? 7 : 6);
     // Reset origen e info previa de IA al cambiar de arquitectura para evitar cruces
     setStartOrigin(null);
     setClonedFrom(null);
@@ -397,7 +398,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
     setSelectedOptionId('');
     setAiChatHistory([]);
     lastAnalyzedSignatureRef.current = '';
-    setShowPrincipalEditInTripwire(mode === 'dual_tripwire_winner' ? false : false);
+    setShowPrincipalEditInTripwire(false);
     if (mode === 'principal_only') {
       setEntryProductName('');
       setEntryProductDescription('');
@@ -808,23 +809,23 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
     // Step 4
     if (isStandardMode) {
       return {
-        title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Estándar',
+        title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Estándar (6 Láminas Realistas)',
         whatYouDo:
-          'La IA analiza toda la información de tu producto y prepara 3 ángulos listos (el mejor ya viene elegido). Revisá el resumen y usá uno de los 2 botones de abajo: Editar o Lanzar.',
+          'La IA prepara una Carta de Venta 100% visual de 6 láminas fotográficas reales con avatares, momentos cotidianos a todo color, prueba social en Paraguay, tarjeta de precio lujosa azul marino y dorado, y guía paso a paso hacia el botón verde y dorado "¡PEDIR AHORA!" de abajo.',
         whyItMatters:
-          'Si clonaste una página, te aseguramos un ángulo y láminas totalmente diferentes a la anterior. Si querés retocar precio, packs o algún bono antes de publicar, tocás "Editar precios, paquetes o datos".',
+          'Cero muros ni botones HTML: debajo va directamente tu botón gráfico "¡PEDIR AHORA!" con vibración periódica tipo terremoto y los emblemas de garantía, envío a todo Paraguay y pago contra entrega para abrir el formulario con GPS.',
         unlockHint:
-          'Tocá "Lanzar Página Estándar" cuando estés listo para generar las láminas GPT-2.6 y publicar.'
+          'Tocá "Lanzar Página Estándar" cuando estés listo para generar las 6 láminas GPT-2.6 y publicar.'
       };
     }
     return {
-      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (4 Láminas Realistas COD)',
+      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (7 Láminas Realistas COD)',
       whatYouDo:
-        'Se generan 4 imágenes fotográficas reales con avatares humanos, momentos cotidianos y entornos reales (sin estilo animado ni barullo): Lámina 1 en ambiente claro presenta el Gancho hacia el Botón #1; Láminas 2, 3 y 4 muestran la ruptura limpia ("¡ESPERÁ UN SEGUNDO!") y la Oferta Principal con Envío Gratuito hacia el Botón #2.',
+        'Se generan 7 imágenes fotográficas reales con avatares humanos, momentos cotidianos y resultado real a todo color: Lámina 1 presenta tu artículo de entrada con tarjeta azul marino/dorado y guía hacia el botón "¡PEDIR AHORA!" + GPS; luego frena dentro del diseño con "¡ESPERÁ!" en rojo subrayado amarillo y despliega 6 secciones de Carta de Venta profesional hacia el botón "¡PEDIR AHORA!" final.',
       whyItMatters:
-        'Cero descripciones ni muros HTML alrededor de los botones: cada botón es limpio y directo, y al tocarlo se abre el formulario en modal.',
+        'Cero bloques ni botones HTML: toda la persuasión, comparación de valor de vendedor profesional, urgencia vigente hasta mañana y guía paso a paso con GPS viven dentro de las láminas, y en ambos puntos actúa tu botón oficial "¡PEDIR AHORA!" con vibración periódica tipo terremoto.',
       unlockHint:
-        'Tocá "Lanzar Página Tripwire" para generar las 4 láminas realistas en GPT-2.6 y publicar tu página.'
+        'Tocá "Lanzar Página Tripwire" para generar las 7 láminas realistas en GPT-2.6 y publicar tu página.'
     };
   }, [
     wizardStep,
@@ -845,13 +846,13 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
   const studyStagesText = isStandardMode
     ? [
         'Recabando ficha técnica, precios y paquetes de tu producto...',
-        'Estudiando el ángulo actual para proponer un enfoque inédito...',
-        'Preparando opciones de lanzamiento para tu Página Estándar...'
+        'Diseñando 6 láminas fotográficas reales a todo color con tarjeta de precio lujosa...',
+        'Integrando guía de vendedor profesional, GPS y botón oficial ¡PEDIR AHORA!...'
       ]
     : [
-        'Recabando ficha investigada del Gancho y Producto Principal...',
-        'Diseñando 4 láminas fotográficas reales con avatares, momentos y lugares reales...',
-        'Configurando botones limpios sin texto extra y formulario en modal...'
+        'Recabando ficha investigada del artículo de entrada y Producto Ganador...',
+        'Diseñando 7 láminas fotográficas reales con avatares, momentos y demo a todo color...',
+        'Integrando tarjetas lujosas, ¡ESPERÁ! visual y botones oficiales ¡PEDIR AHORA!...'
       ];
 
   return (
@@ -2284,8 +2285,8 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                     <div className="flex flex-wrap items-center gap-2 font-mono tabular-nums text-[11px]">
                       <span className="text-[#e5c88b]">Carta de Venta IA:</span>
                       <span>
-                        {effectiveSheetCount === 4 && isTripwireMode
-                          ? '4 imágenes (1 Gancho Envolvente + 3 Secciones Producto Principal)'
+                        {isTripwireMode && effectiveSheetCount >= 4
+                          ? `${effectiveSheetCount} imágenes (1 Gancho + ${effectiveSheetCount - 1} Secciones Producto Principal)`
                           : `${effectiveSheetCount} imágenes de alto impacto (GPT-2.6)`}
                       </span>
                       <span aria-hidden="true">·</span>
@@ -2308,8 +2309,8 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                         <label className="text-xs font-medium text-zinc-300 block">
                           Cantidad de imágenes generadas
                         </label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {([4, 3, 2] as const).map((n) => (
+                        <div className="grid grid-cols-6 gap-1.5">
+                          {([7, 6, 5, 4, 3, 2] as const).map((n) => (
                             <button
                               key={n}
                               type="button"
@@ -2317,13 +2318,13 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                                 setManualOverrideUsed(true);
                                 setSheetCount(n);
                               }}
-                              className={`px-3 py-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+                              className={`px-2 py-2 rounded-lg border text-xs font-semibold cursor-pointer ${
                                 effectiveSheetCount === n
                                   ? 'bg-white/[0.08] border-[#e5c88b] text-white'
                                   : 'bg-[#0b0e16] border-white/10 text-zinc-400'
                               }`}
                             >
-                              {n === 4 ? '4 Imágenes (Carta)' : `${n} Imágenes`}
+                              {n} Img
                             </button>
                           ))}
                         </div>
@@ -2456,7 +2457,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {createdResult.product.visualLanding?.sheets.map((sh, idx) => (
                 <div key={sh.id} className="rounded-xl bg-[#07090f] border border-white/10 overflow-hidden">
                   <img

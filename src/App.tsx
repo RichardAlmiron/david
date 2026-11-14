@@ -34,7 +34,9 @@ export const AppContent: React.FC = () => {
     productPages,
     config
   } = useStore();
-  const pageBgClass = currentProductPage?.themeConfig?.pageBg || 'bg-stone-50';
+  const pageBgClass = currentProductPage?.visualLanding?.enabled
+    ? 'bg-white'
+    : currentProductPage?.themeConfig?.pageBg || 'bg-stone-50';
 
   // Disparo automático de Eventos Meta Pixel + Servidor CAPI (PageView, ViewContent, Tiempo en Página y Scroll Profundo)
   useEffect(() => {

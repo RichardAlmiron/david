@@ -214,10 +214,16 @@ export const OrderForm: React.FC<{
   const total = isEntryOnly
     ? Number(entryOfferCfg?.entryPriceGs || 20000)
     : principalTotal;
+  const entryProductDisplayName = String(
+    entryOfferCfg?.entryProductName || targetProductName
+  ).trim();
+  const orderSubmittedProductName = isEntryOnly
+    ? entryProductDisplayName
+    : targetProductName;
   const activeOfferTitle = isEntryOnly
-    ? String(entryOfferCfg?.entryProductName || targetProductName)
+    ? entryProductDisplayName
     : hasEntryHook
-    ? `${targetProductName} + ${entryOfferCfg?.entryProductName} DE REGALO`
+    ? `${targetProductName} + ${entryProductDisplayName} DE REGALO`
     : targetProductName;
 
   const gpsLink =
@@ -899,10 +905,12 @@ export const OrderForm: React.FC<{
           ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${effectiveLat.toFixed(6)},${effectiveLng.toFixed(6)}`
           : '';
 
+      const effectiveOrderQuantity = isEntryOnly ? 1 : finalPack;
+
       // FUNCIÓN 2 DEL BOTÓN DUAL: Enviar los datos escritos por el cliente + el enlace del mapa GPS viajando JUNTOS
       const order = await addOrder({
         productoId: targetProductId,
-        producto: targetProductName,
+        producto: orderSubmittedProductName,
         waVendedor: formatWaPhone(currentProductPage?.wa || ''),
         nombre: nombre.trim(),
         celular: celular.trim(),
@@ -912,7 +920,7 @@ export const OrderForm: React.FC<{
         calle: finalCalle,
         direccion: finalDireccion,
         detalle: pago,
-        cantidad: isEntryOnly ? 1 : finalPack,
+        cantidad: effectiveOrderQuantity,
         monto: total,
         ...(hasEntryHook
           ? {
@@ -950,7 +958,7 @@ export const OrderForm: React.FC<{
         eventName: 'Lead',
         product: currentProductPage,
         globalPixelId: config.pixelId,
-        packQuantity: finalPack,
+        packQuantity: effectiveOrderQuantity,
         valueGs: total,
         orderId: order.reservaid,
         userData: {
@@ -967,7 +975,7 @@ export const OrderForm: React.FC<{
           eventName: 'OrderReservedCOD',
           product: currentProductPage,
           globalPixelId: config.pixelId,
-          packQuantity: finalPack,
+          packQuantity: effectiveOrderQuantity,
           valueGs: total,
           orderId: order.reservaid,
           userData: {
@@ -1002,8 +1010,9 @@ export const OrderForm: React.FC<{
     }
   };
 
-  const confirmedPackCount = orderComplete?.cantidad || effectivePack;
-  const confirmedProductTitle = orderComplete?.producto || targetProductName;
+  const confirmedPackCount = orderComplete?.cantidad || (isEntryOnly ? 1 : effectivePack);
+  const confirmedProductTitle =
+    orderComplete?.purchaseOfferTitle || orderComplete?.producto || orderSubmittedProductName;
   const confirmedTotalAmount = orderComplete?.monto || total;
   const confirmedClientPhone = orderComplete?.celular || celular;
   const confirmedGpsLink = orderComplete?.gpsLink || gpsLink;
@@ -1126,36 +1135,73 @@ export const OrderForm: React.FC<{
             </div>
           )}
 
-          {/* ═══ AVISO TRANSPARENTE DE OPCIÓN ELEGIDA (SOLO COMPLEMENTO VS EQUIPO COMPLETO) ═══ */}
-          {!orderComplete && hasEntryHook && entryOfferCfg && !hidePrincipalUpgradeHint && (
+          {/* ═══ RESUMEN EXACTO DE LA OPCIÓN SELECCIONADA (SOLO ARTÍCULO DE ENTRADA VS PAQUETE MAESTRO) ═══ */}
+          {!orderComplete && hasEntryHook && entryOfferCfg && (
             <div
               data-testid="orderform-dual-path-clarification"
-              className={`rounded-2xl border-2 p-3.5 text-xs sm:text-sm space-y-2 ${
+              className={`rounded-2xl border-2 p-3.5 text-xs sm:text-sm space-y-2.5 ${
                 isEntryOnly
-                  ? 'bg-amber-50 border-amber-400 text-stone-900'
+                  ? 'bg-[#0B132B] border-[#D4AF37] text-white'
                   : 'bg-emerald-50 border-emerald-500 text-stone-900'
               }`}
             >
-              <div className="font-black">
-                {isEntryOnly
-                  ? `Opción seleccionada: SOLO ${entryOfferCfg.entryProductName} (${formatGs(entryOfferCfg.entryPriceGs)})`
-                  : `ENVÍO GRATUITO · ${targetProductName} + ${entryOfferCfg.entryProductName} DE REGALO`}
-              </div>
-              <p className="text-stone-700 leading-snug">
-                {isEntryOnly
-                  ? `Aclaración transparente: pedir solo 1x ${entryOfferCfg.entryProductName} NO incluye ${targetProductName} ni envío gratuito (abona delivery de ${formatGs(entryOfferCfg.deliveryFeeGs || 40000)}). Con el paquete completo el envío es 100% GRATUITO.`
-                  : `Incluye ${targetProductName} completo + ${entryOfferCfg.entryProductName} DE REGALO + ENVÍO GRATUITO en todo Paraguay (sin lista de espera).`}
-              </p>
-              <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                {isEntryOnly ? (
-                  <button
-                    type="button"
-                    onClick={() => setPurchasePath('principal_bundle')}
-                    className="text-xs font-black text-[#062319] underline cursor-pointer"
+              <div className="flex items-center gap-3">
+                {(isEntryOnly ? entryOfferCfg.entryProductImage || currentProductPage?.imagen : currentProductPage?.imagen) && (
+                  <img
+                    src={
+                      isEntryOnly
+                        ? entryOfferCfg.entryProductImage || currentProductPage?.imagen
+                        : currentProductPage?.imagen
+                    }
+                    alt={activeOfferTitle}
+                    className="w-14 h-14 rounded-xl object-cover border-2 border-[#D4AF37] shrink-0 bg-white"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <span
+                    className={`inline-block text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-1 ${
+                      isEntryOnly
+                        ? 'bg-[#D4AF37] text-[#0B132B]'
+                        : 'bg-[#065f46] text-[#ffd778]'
+                    }`}
                   >
-                    Cambiar al Producto Estrella con ENVÍO GRATUITO + {entryOfferCfg.entryProductName} DE REGALO
-                  </button>
-                ) : (
+                    {isEntryOnly
+                      ? 'Solicitud Individual · 1 Unidad'
+                      : 'Paquete Maestro Completo · Envío Gratis'}
+                  </span>
+                  <div className={`font-black text-sm sm:text-base leading-snug ${isEntryOnly ? 'text-white' : 'text-[#062319]'}`}>
+                    {isEntryOnly
+                      ? `${entryOfferCfg.entryProductName} · ${formatGs(entryOfferCfg.entryPriceGs)}`
+                      : `${targetProductName} + ${entryOfferCfg.entryProductName} DE REGALO`}
+                  </div>
+                </div>
+              </div>
+
+              {!isEntryOnly && (
+                <p className="text-stone-700 leading-snug">
+                  Incluye <b>{targetProductName}</b> completo + <b>{entryOfferCfg.entryProductName} DE REGALO</b> + <b>ENVÍO GRATUITO</b> en todo Paraguay (sin lista de espera).
+                </p>
+              )}
+
+              {isEntryOnly && !hidePrincipalUpgradeHint && (
+                <>
+                  <p className="text-slate-200 leading-snug">
+                    Aclaración transparente: pedir solo 1x {entryOfferCfg.entryProductName} NO incluye {targetProductName} ni envío gratuito (abona delivery de {formatGs(entryOfferCfg.deliveryFeeGs || 40000)}). Con el paquete completo el envío es 100% GRATUITO.
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setPurchasePath('principal_bundle')}
+                      className="text-xs font-black text-[#ffd778] underline cursor-pointer"
+                    >
+                      Cambiar al Producto Estrella con ENVÍO GRATUITO + {entryOfferCfg.entryProductName} DE REGALO
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {!isEntryOnly && !hidePrincipalUpgradeHint && (
+                <div className="flex items-center gap-2 flex-wrap pt-0.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -1166,8 +1212,8 @@ export const OrderForm: React.FC<{
                   >
                     Preferir pedir solo {entryOfferCfg.entryProductName} ({formatGs(entryOfferCfg.entryPriceGs)} + delivery {formatGs(entryOfferCfg.deliveryFeeGs || 40000)})
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 

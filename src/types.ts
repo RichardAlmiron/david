@@ -730,7 +730,13 @@ export interface ProductVisualLandingSheet {
 
 export interface ProductVisualLandingConfig {
   enabled: boolean;
-  mode?: 'sober_graphic_2sheet' | 'sober_graphic_3sheet' | 'sober_graphic_4sheet';
+  mode?:
+    | 'sober_graphic_2sheet'
+    | 'sober_graphic_3sheet'
+    | 'sober_graphic_4sheet'
+    | 'sober_graphic_5sheet'
+    | 'sober_graphic_6sheet'
+    | 'sober_graphic_7sheet';
   generatorModel?: string;
   topNoticeText?: string;
   sobrietyHeadline?: string;
@@ -741,9 +747,18 @@ export interface ProductVisualLandingConfig {
   winnerAngleDescription?: string;
   entryCtaLabel?: string;
   entryButtonLabel?: string;
+  entryButtonColorName?: string;
+  entryGuideHeadline?: string;
+  entryGuideCopy?: string;
   entryDisclaimer?: string;
+  interruptHeadline?: string;
+  interruptCopy?: string;
   principalCtaLabel?: string;
   bundleButtonLabel?: string;
+  bundleButtonColorName?: string;
+  bundleGuideHeadline?: string;
+  bundleIncludedItems?: string[];
+  bundleGuideCopy?: string;
   bundleDisclaimer?: string;
   sheets: ProductVisualLandingSheet[];
   generatedAt?: string;

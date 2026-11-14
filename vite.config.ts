@@ -1040,6 +1040,27 @@ function registerApiServerMiddlewares(server: any) {
                   if (!pedido.productoId && resolvedMatchedProd?.id) {
                     pedido.productoId = resolvedMatchedProd.id;
                   }
+                  const entryCfg = resolvedMatchedProd?.tripwireConfig;
+                  if (entryCfg?.enabled && entryCfg?.entryProductName) {
+                    if (pedido.purchasePath === 'entry_only') {
+                      const entryName = String(entryCfg.entryProductName).trim();
+                      pedido.purchasePath = 'entry_only';
+                      pedido.producto = entryName;
+                      pedido.purchaseOfferTitle = String(pedido.purchaseOfferTitle || entryName).trim();
+                      pedido.cantidad = 1;
+                      pedido.monto = Math.max(
+                        5000,
+                        Number(pedido.monto || entryCfg.entryPriceGs || 20000)
+                      );
+                    } else {
+                      const principalName = String(resolvedMatchedProd.nombre || pedido.producto || '').trim();
+                      pedido.purchasePath = 'principal_bundle';
+                      if (principalName) pedido.producto = principalName;
+                      pedido.purchaseOfferTitle = String(
+                        pedido.purchaseOfferTitle || `${principalName} + ${entryCfg.entryProductName} DE REGALO`
+                      ).trim();
+                    }
+                  }
                 } catch {}
 
                 // Leer cookies de primera parte para enriquecer atribución conjunta

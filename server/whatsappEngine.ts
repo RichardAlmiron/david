@@ -65,6 +65,8 @@ import {
   decodeEntryPollVoteSelection,
   evaluateEntryEventTick,
   applyEntryChoiceToOrder,
+  buildEntryEventBrainPrompt,
+  buildEntryEventConversationalFallback,
   mixVoiceWithBackgroundMusic,
   resolveEntryConfig
 } from './entryEventEngine';
@@ -3183,7 +3185,6 @@ export async function handleNewOrderAutomation(ord: any) {
       const targetOrd = pedidosList.find((p) => rid && p.reservaid === rid) || ord;
       if (!targetOrd.tripwireEventState) {
         targetOrd.tripwireEventState = buildInitialEntryEventState(targetOrd, matchedProduct);
-        targetOrd.atendidoPorIA = true;
       }
       const firstName = String(targetOrd.nombre || '').trim().split(/\s+/)[0] || '';
       const attempt1Speech = buildEntryAttemptSpeech({
@@ -3192,6 +3193,9 @@ export async function handleNewOrderAutomation(ord: any) {
         state: targetOrd.tripwireEventState,
         attemptNumber: 1
       });
+      targetOrd.convStep = 3;
+      targetOrd.atendidoPorIA = true;
+      targetOrd.ultimoMensajeIA = attempt1Speech;
       await dispatchEntryEventTurn({
         cleanPhone,
         ord: targetOrd,
@@ -5288,8 +5292,12 @@ export async function buildInitialOrderAiMessage(
           ? 'el pack de tres unidades'
           : `el paquete de ${qty} unidades`;
   const matchedProd = productOverride || resolveMatchedProductPageForOrder(order);
+  const entryCfg = resolveEntryConfig(matchedProd);
+  const isFinalEntryOnly = isEntryOnlyOrderWithConfig(order, matchedProd);
   const resolvedPackPrice = resolveOrderCommercialPackAndPrice(order, matchedProd);
-  const rawMontoNum = Number(String(order?.monto || '').replace(/\D/g, '')) || resolvedPackPrice.officialPriceGs;
+  const rawMontoNum = isFinalEntryOnly && entryCfg
+    ? entryCfg.entryPriceGs + entryCfg.deliveryFeeGs
+    : Number(String(order?.monto || '').replace(/\D/g, '')) || resolvedPackPrice.officialPriceGs;
   const montoSpeech = formatGuaraniesSpeech(rawMontoNum);
 
   if (order?.direccion && /\[GPS:|google\.com\/maps|maps\.google\.com/i.test(String(order.direccion))) {
@@ -5300,8 +5308,14 @@ export async function buildInitialOrderAiMessage(
     ? `del ${shortProduct.replace(/^el\s+/i, '')}`
     : `de ${shortProduct}`;
 
+  const bundleGiftPhrase =
+    !isFinalEntryOnly && entryCfg && order?.purchasePath === 'principal_bundle'
+      ? ` con tu ${entryCfg.entryProductName} de regalo`
+      : '';
+  const shippingPhrase = isFinalEntryOnly ? 'con delivery incluido' : 'con envío gratis';
+
   // Audio Paso 1: Saludo personalizado conciso y cálido (sale primero; la imagen sale 5 segundos después abajo)
-  const expressGreetingAudio = `¡Hola ${displayFirstName}, qué tal! Te hablo del área de envíos de Noelux para confirmar ${packPhrase} ${productDePhrase} a nombre de ${fullDisplayName}, por ${montoSpeech} con envío gratis al recibir. Acá te voy a pasar la imagen abajo con tu celular ${phone433}, tu ciudad, tu barrio y tu dirección. Quiero que mires y me confirmes con la palabra CORRECTO para confirmar tu envío.`;
+  const expressGreetingAudio = `¡Hola ${displayFirstName}, qué tal! Te hablo del área de envíos de Noelux para confirmar ${packPhrase} ${productDePhrase}${bundleGiftPhrase} a nombre de ${fullDisplayName}, por ${montoSpeech} ${shippingPhrase} al recibir. Acá te voy a pasar la imagen abajo con tu celular ${phone433}, tu ciudad, tu barrio y tu dirección. Quiero que mires y me confirmes con la palabra CORRECTO para confirmar tu envío.`;
 
   return {
     text: normalizeParaguayanPhonesInText(expressGreetingAudio),
@@ -5324,14 +5338,22 @@ export function buildConfirmationSuccessAudioText(order: any, productOverride?: 
           ? 'tu pack de tres unidades'
           : `tu pack de ${packQty} unidades`;
   const matchedProd = productOverride || resolveMatchedProductPageForOrder(order);
+  const entryCfg = resolveEntryConfig(matchedProd);
+  const isFinalEntryOnly = isEntryOnlyOrderWithConfig(order, matchedProd);
   const resolvedPackPrice = resolveOrderCommercialPackAndPrice(order, matchedProd);
-  const rawMontoNum = Number(String(order?.monto || '').replace(/\D/g, '')) || resolvedPackPrice.officialPriceGs;
+  const rawMontoNum = isFinalEntryOnly && entryCfg
+    ? entryCfg.entryPriceGs + entryCfg.deliveryFeeGs
+    : Number(String(order?.monto || '').replace(/\D/g, '')) || resolvedPackPrice.officialPriceGs;
   const montoSpeech = formatGuaraniesSpeech(rawMontoNum);
   const productDePhrase = /^el\s+/i.test(shortProduct)
     ? `del ${shortProduct.replace(/^el\s+/i, '')}`
     : `de ${shortProduct}`;
+  const bundleGiftPhrase =
+    !isFinalEntryOnly && entryCfg && order?.purchasePath === 'principal_bundle'
+      ? ` con tu ${entryCfg.entryProductName} de regalo incluido`
+      : '';
 
-  return `Excelente, ${displayFirstName}, muchísimas gracias por tu confirmación. Tu pedido de ${packSpeech} ${productDePhrase} por un total de ${montoSpeech} al recibir ya está totalmente confirmado y pasa directo a empaquetado a tu nombre.`;
+  return `Excelente, ${displayFirstName}, muchísimas gracias por tu confirmación. Tu pedido de ${packSpeech} ${productDePhrase}${bundleGiftPhrase} por un total de ${montoSpeech} al recibir ya está totalmente confirmado y pasa directo a empaquetado a tu nombre.`;
 }
 
 // Get or initialize current step (1..5) for a phone/order
@@ -5703,6 +5725,38 @@ export async function triggerAiConfirmationForOrder(
     console.log(
       `[AI Context Guard] Conversación de ${cleanPhone} ya va por ${currentStep >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'} (sin mensaje pendiente del cliente). Se evita autodisparo/reinicio.`
     );
+    return;
+  }
+
+  // 1.5 Si el pedido es SOLO Artículo de Entrada (entry_only), disparar la secuencia exclusiva del Evento de Entrada
+  const matchedProdForTrigger = resolveMatchedProductPageForOrder(matchedOrder);
+  if (
+    isEntryOnlyOrderWithConfig(matchedOrder, matchedProdForTrigger) &&
+    (forceRestart || !matchedOrder.tripwireEventState)
+  ) {
+    matchedOrder.tripwireEventState = buildInitialEntryEventState(matchedOrder, matchedProdForTrigger);
+    const firstName = getNaturalFirstName(String(matchedOrder.nombre || ''));
+    const attempt1Speech = buildEntryAttemptSpeech({
+      customerFirstName: firstName,
+      matchedProduct: matchedProdForTrigger,
+      state: matchedOrder.tripwireEventState,
+      attemptNumber: 1
+    });
+    matchedOrder.modoIA = 'automatico';
+    matchedOrder.canalIA = 'texto';
+    matchedOrder.convStep = 3;
+    matchedOrder.atendidoPorIA = true;
+    matchedOrder.ultimoMensajeIA = attempt1Speech;
+    await dispatchEntryEventTurn({
+      cleanPhone,
+      ord: matchedOrder,
+      matchedProduct: matchedProdForTrigger,
+      speechText: attempt1Speech,
+      includeCardImage: true,
+      includePoll: true
+    });
+    savePedidos(pedidos);
+    syncOrderUpdateToCloud(matchedOrder).catch(() => {});
     return;
   }
 
@@ -6410,8 +6464,52 @@ async function executeStartOrAdvanceVoiceCallSerial(
     };
   }
 
-  // 2. If starting the call/audio for the first time or resetting -> Imagen Única del Pack + Audio #1 + Tarjeta de Ciudad/Barrio/GPS
+  // 2. If starting the call/audio for the first time or resetting -> Rama entry_only vs Paquete Principal
   if (resetCall || !anyVoiceOrAudioSent) {
+    const matchedProdForCall = resolveMatchedProductPageForOrder(matchedOrder);
+    if (
+      isEntryOnlyOrderWithConfig(matchedOrder, matchedProdForCall) &&
+      (resetCall || !matchedOrder.tripwireEventState)
+    ) {
+      matchedOrder.tripwireEventState = buildInitialEntryEventState(matchedOrder, matchedProdForCall);
+      const firstName = getNaturalFirstName(String(matchedOrder.nombre || ''));
+      const attempt1Speech = buildEntryAttemptSpeech({
+        customerFirstName: firstName,
+        matchedProduct: matchedProdForCall,
+        state: matchedOrder.tripwireEventState,
+        attemptNumber: 1
+      });
+      matchedOrder.modoIA = 'automatico';
+      matchedOrder.canalIA = cleanChannel;
+      matchedOrder.vozAgente = activeVoice.id;
+      matchedOrder.vozAgenteNombre = activeVoice.name;
+      matchedOrder.convStep = 3;
+      matchedOrder.atendidoPorIA = true;
+      matchedOrder.ultimoMensajeIA = attempt1Speech;
+      await dispatchEntryEventTurn({
+        cleanPhone,
+        ord: matchedOrder,
+        matchedProduct: matchedProdForCall,
+        speechText: attempt1Speech,
+        includeCardImage: true,
+        includePoll: true
+      });
+      savePedidos(pedidos);
+      syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+      const lastHistMsg = getChatHistory(cleanPhone).messages.slice(-1)[0] || ({} as WaChatMessage);
+      return {
+        reply: attempt1Speech,
+        audioDataUrl: lastHistMsg?.audioDataUrl || null,
+        convStep: 3,
+        voiceEngine: activeVoice.name,
+        matchedOrder,
+        message: lastHistMsg,
+        sentViaSocket: Boolean(lastHistMsg?.id),
+        channel: cleanChannel,
+        callRung: true
+      };
+    }
+
     const initRes = await buildInitialOrderAiMessage(matchedOrder);
     const initialSpoken = initRes?.text || 'Hola, ¿qué tal? Te hablo del área de envíos por tu pedido.';
     const initialLocCard = initRes?.locationTextConfirmation || '';
@@ -7838,6 +7936,149 @@ export async function generateContextualAiReply(
   }
 
   // =========================================================================
+  // RAMA CEREBRO EXCLUSIVA PARA PEDIDOS DE SOLO ARTÍCULO DE ENTRADA (entry_only)
+  // Mientras no haya pasado a Paquete Maestro ni haya cerrado la ventana final,
+  // el Cerebro entiende 100% qué eligió el cliente, responde preguntas de ambos
+  // productos, persuade al Paquete Maestro y jamás confirma erróneamente con "CORRECTO".
+  // =========================================================================
+  const matchedProdEarly = resolveMatchedProductPageForOrder(matchedOrder);
+  const entryCfgEarly = resolveEntryConfig(matchedProdEarly);
+  const isEntryEventActiveNow =
+    isEntryOnlyOrderWithConfig(matchedOrder, matchedProdEarly) &&
+    matchedOrder?.tripwireEventState?.stage !== 'instant_upgraded' &&
+    matchedOrder?.tripwireEventState?.stage !== 'final_dispatched';
+
+  if (isEntryEventActiveNow && entryCfgEarly) {
+    if (!matchedOrder.tripwireEventState) {
+      matchedOrder.tripwireEventState = buildInitialEntryEventState(matchedOrder, matchedProdEarly);
+    }
+    const evState = matchedOrder.tripwireEventState;
+    const rawCustomerNameEntry = String(matchedOrder?.nombre || '').trim();
+    const firstNameEntry = getNaturalFirstName(rawCustomerNameEntry);
+    const displayFirstEntry =
+      firstNameEntry && firstNameEntry !== 'qué tal' ? firstNameEntry : 'cliente';
+
+    let brainIntent: 'UPGRADE_PRINCIPAL' | 'ENROLL_WAITLIST' | 'KEEP_OR_QUESTION' = 'KEEP_OR_QUESTION';
+    let brainReply = '';
+
+    if (deepgramKey) {
+      try {
+        const entryBrainPrompt = buildEntryEventBrainPrompt({
+          customerFirstName: displayFirstEntry,
+          matchedProduct: matchedProdEarly,
+          state: evState,
+          contextoIA
+        });
+        const rawBrainOut = await callDeepgramAgentLLM(
+          entryBrainPrompt,
+          conversationHistory,
+          taggedUserMessage,
+          true,
+          false
+        );
+        if (rawBrainOut) {
+          const cleanedBrainJson = rawBrainOut
+            .replace(/^```json\s*/i, '')
+            .replace(/^```\s*/i, '')
+            .replace(/\s*```$/, '')
+            .trim();
+          const parsedBrain = JSON.parse(cleanedBrainJson);
+          const rawIntent = String(parsedBrain.intent || '').trim().toUpperCase();
+          if (rawIntent === 'UPGRADE_PRINCIPAL' || rawIntent === 'ENROLL_WAITLIST') {
+            brainIntent = rawIntent;
+          }
+          brainReply = String(parsedBrain.reply || '').trim();
+        }
+      } catch (brainErr: any) {
+        console.warn('[EntryEvent Brain LLM Warning]:', brainErr?.message || brainErr);
+      }
+    }
+
+    if (brainIntent === 'UPGRADE_PRINCIPAL') {
+      const { state: upgradedState } = applyEntryChoiceToOrder(
+        matchedOrder,
+        matchedProdEarly,
+        'option_1_instant'
+      );
+      matchedOrder.waCommercialSentStages = {
+        ...(matchedOrder.waCommercialSentStages || {}),
+        stage1_welcome: false,
+        stage3_confirmed: false
+      };
+      if (orderKeyForStage) {
+        sentWelcomeStageByOrderId.delete(orderKeyForStage);
+        sentConfirmedStageByOrderId.delete(orderKeyForStage);
+      }
+      const confirmUpgradeSpeech =
+        brainReply ||
+        `Excelente elección ${displayFirstEntry}, ya actualizamos tu pedido a ${entryCfgEarly.principalName} completo con ${upgradedState.entryProductName} totalmente gratis y envío sin costo hasta tu puerta por ${upgradedState.instantUpgradePriceGs.toLocaleString('es-PY')} guaraníes al recibir. Acá abajo te paso la imagen con tus datos para que me confirmes con la palabra correcto.`;
+      setOrderConvStep(cleanPhone, matchedOrder, 3);
+      matchedOrder.convStep = 3;
+      matchedOrder.atendidoPorIA = true;
+      matchedOrder.ultimoMensajeIA = confirmUpgradeSpeech;
+      matchedOrder.actualizado_en = new Date().toISOString();
+      savePedidos(pedidos);
+      syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+      return {
+        reply: normalizeParaguayanPhonesInText(confirmUpgradeSpeech),
+        matchedOrder,
+        convStep: 3,
+        forceAudioReply: true,
+        regenerateWelcomeImage: true,
+        error: apiWarning || undefined
+      };
+    }
+
+    if (brainIntent === 'ENROLL_WAITLIST') {
+      const { state: waitState } = applyEntryChoiceToOrder(
+        matchedOrder,
+        matchedProdEarly,
+        'option_2_waitlist'
+      );
+      const waitReply =
+        brainReply ||
+        `Perfecto ${displayFirstEntry}, ya quedaste anotado en el cupo ${waitState.slotsTaken} de ${waitState.slotsTotal} de nuestro evento especial. Cada dos horas te aviso cómo avanza por si decidís llevar el paquete completo antes del cierre.`;
+      setOrderConvStep(cleanPhone, matchedOrder, 3);
+      matchedOrder.convStep = 3;
+      matchedOrder.atendidoPorIA = true;
+      matchedOrder.ultimoMensajeIA = waitReply;
+      matchedOrder.actualizado_en = new Date().toISOString();
+      savePedidos(pedidos);
+      syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+      return {
+        reply: normalizeParaguayanPhonesInText(waitReply),
+        matchedOrder,
+        convStep: 3,
+        forceAudioReply: true,
+        error: apiWarning || undefined
+      };
+    }
+
+    const finalEntryReply = normalizeParaguayanPhonesInText(
+      brainReply ||
+        buildEntryEventConversationalFallback({
+          customerFirstName: displayFirstEntry,
+          matchedProduct: matchedProdEarly,
+          state: evState
+        })
+    );
+    setOrderConvStep(cleanPhone, matchedOrder, 3);
+    matchedOrder.convStep = 3;
+    matchedOrder.atendidoPorIA = true;
+    matchedOrder.ultimoMensajeIA = finalEntryReply;
+    matchedOrder.actualizado_en = new Date().toISOString();
+    savePedidos(pedidos);
+    syncOrderUpdateToCloud(matchedOrder).catch(() => {});
+    return {
+      reply: finalEntryReply,
+      matchedOrder,
+      convStep: 3,
+      forceAudioReply: true,
+      error: apiWarning || undefined
+    };
+  }
+
+  // =========================================================================
   // FLUJO DE CONFIRMACIÓN EXPRESS EN 1 PASO ("CORRECTO" / "ESTÁ BIEN" / GPS)
   // Audio #1: Pedido Totalmente Confirmado y en Empaquetado
   // =========================================================================
@@ -7979,13 +8220,24 @@ export async function generateContextualAiReply(
   let correctedPackQty = 0;
 
   const matchedProdForPricing = resolveMatchedProductPageForOrder(matchedOrder);
+  const entryCfgForExpress = resolveEntryConfig(matchedProdForPricing);
+  const isMasterBundleOrder =
+    Boolean(entryCfgForExpress) && matchedOrder?.purchasePath === 'principal_bundle';
+  const isFinalEntryDispatchOrder =
+    Boolean(entryCfgForExpress) && isEntryOnlyOrderWithConfig(matchedOrder, matchedProdForPricing);
   const catalogPrices = getCatalogPackPrices(matchedProdForPricing);
 
   if (deepgramKey) {
     try {
+      const bundleOrEntryContextNote = isMasterBundleOrder && entryCfgForExpress
+        ? `\nIMPORTANTE (TIPO DE PEDIDO): Este cliente YA ADQUIRIÓ EL PAQUETE MAESTRO COMPLETO ("${matchedProdForPricing?.nombre}" + "${entryCfgForExpress.entryProductName}" TOTALMENTE GRATIS DE REGALO + ENVÍO GRATIS). JAMÁS le ofrezcas cambiar ni le trates como pedido individual; confirmále con seguridad su paquete completo y regalo incluido.`
+        : isFinalEntryDispatchOrder && entryCfgForExpress
+          ? `\nIMPORTANTE (TIPO DE PEDIDO): Este cliente eligió despacho individual únicamente de "${entryCfgForExpress.entryProductName}" abonando delivery (${formatGuaraniesSpeech(entryCfgForExpress.entryPriceGs + entryCfgForExpress.deliveryFeeGs)} en total al recibir). NUNCA digas envío gratis ni cambies de precio.`
+          : '';
+
       const expressSystemPrompt = `Sos un ejecutivo humano real, cálido y muy eficiente del área de confirmación de envíos de Noelux en Paraguay. Hablás español paraguayo natural (usás "vos", "tenés", "podés").
 Tu respuesta en "reply" se convierte directamente a VOZ (Nota de Audio TTS), por lo que ESTÁ PROHIBIDO usar emojis, asteriscos, enlaces URL, y ESTÁ PROHIBIDO pronunciar el nombre de la calle, barrio o ciudad en el audio.
-REGLA DE MONEDA: Siempre escribí los montos en letras seguidos de la palabra "guaraníes" (ej. "${formatGuaraniesSpeech(matchedOrder?.monto || catalogPrices[1])}").
+REGLA DE MONEDA: Siempre escribí los montos en letras seguidos de la palabra "guaraníes" (ej. "${formatGuaraniesSpeech(matchedOrder?.monto || catalogPrices[1])}").${bundleOrEntryContextNote}
 
 CONTEXTO DE CONFIRMACIÓN EXPRESS CON IMAGEN DINÁMICA PERSONALIZADA:
 - Ya le enviamos al cliente nuestro Audio #1 pidiendo que mire la imagen de abajo que le acabamos de enviar, seguido 5 segundos después por su Imagen #1 VIP generada dinámicamente con TODOS sus datos de entrega (${packSpeech} de ${shortProduct}, monto ${formatGuaraniesSpeech(matchedOrder?.monto || catalogPrices[1])}, nombre ${rawCustomerName}, teléfono ${formatPhoneForSpeech(matchedOrder?.celular || cleanPhone)}, ciudad ${matchedOrder?.ciudad || ''}, barrio/dirección ${cleanStreetAddressText(matchedOrder?.direccion || '')}) SIN enlaces GPS.

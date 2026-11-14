@@ -11,6 +11,10 @@ import { uploadImageToCloudinary } from './cloudinaryStore';
 
 export const VISUAL_CREATOR_TEXT_MODEL = 'openai/gpt-4o';
 export const VISUAL_CREATOR_IMAGE_MODEL = 'openai/gpt-image-2.6-sunburst';
+export const ENTRY_BUTTON_COLOR_NAME = 'VERDE Y DORADO';
+export const BUNDLE_BUTTON_COLOR_NAME = 'VERDE Y DORADO';
+export const STANDARD_BUTTON_COLOR_NAME = 'VERDE Y DORADO';
+export const CTA_IMAGE_BUTTON_LABEL = '¡PEDIR AHORA!';
 
 const VISUAL_PAGES_DIR = path.resolve(process.cwd(), 'public', 'assets', 'visual-pages');
 
@@ -641,7 +645,7 @@ export interface QuickCreatorAngleOption {
   archetype: string;
   winnerAngle: string;
   visualDirection: string;
-  recommendedSheetCount: 2 | 3 | 4;
+  recommendedSheetCount: 2 | 3 | 4 | 5 | 6 | 7;
   recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
   whyItConverts: string;
   tripwireBridgeNote?: string;
@@ -669,7 +673,7 @@ export interface QuickCreatorAiStrategyInput {
 export interface QuickCreatorAiStrategyResult {
   currentPageDiagnosis: string;
   assistantReply: string;
-  recommendedSheetCount: 2 | 3 | 4;
+  recommendedSheetCount: 2 | 3 | 4 | 5 | 6 | 7;
   recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
   options: QuickCreatorAngleOption[];
   recommendedOptionId: string;
@@ -701,7 +705,7 @@ export interface QuickCreateVisualProductInput {
   eventDurationHours?: number;
   slotsTotal?: number;
   backgroundMusicPreset?: 'auto' | 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
-  sheetCount?: 'auto' | 2 | 3 | 4;
+  sheetCount?: 'auto' | 2 | 3 | 4 | 5 | 6 | 7;
   waNumber?: string;
   referer?: string;
   clonedFromContext?: {
@@ -724,21 +728,29 @@ export interface QuickCreateVisualProductInput {
 export function sanitizeAndEnforceSalesLetterImagePrompt(
   rawPrompt: string,
   sheetIndex: number,
-  isPrincipalOnly: boolean
+  isPrincipalOnly: boolean,
+  totalSheets?: number
 ): string {
   const cleaned = String(rawPrompt || '')
     .replace(/Gs\.\s*Gs\./gi, 'Gs.')
     .replace(/\btripwire\b/gi, '')
+    .replace(/SOLO ART[ÍI]CULO SUELTO\s*:?\s*(?:DELIVERY\s*)?(?:Gs\.?\s*[\d.]+|[^'"\n.,]*)/gi, '')
     .replace(/\b(?:360-degree wrap-around|wrap-around|floating 3D|3D glassmorphic|glassmorphic|volumetric light beams|glowing cyan rim light|electric sapphire-cobalt|crimson neon|molten gold|radiant emerald neon|glowing pointer lines)\b/gi, 'clean editorial photography')
     .replace(/\s+/g, ' ')
     .trim();
 
+  const isClosingSheet = Boolean(totalSheets && sheetIndex === totalSheets - 1);
+
   const sectionPhotographyDirection = !isPrincipalOnly && sheetIndex === 0
-    ? 'AUTHENTIC HIGH-LEVEL COD E-COMMERCE PHOTOGRAPHY (BRIGHT REAL-HOME DAYLIGHT EDITORIAL): Real 50mm DSLR lifestyle photograph featuring a relatable realistic Latin American human avatar holding or naturally using the exact physical product in a genuine bright sunlit home environment (authentic skin texture, real room furniture, natural daylight shadows), framed inside a structured, high-converting light editorial e-commerce layout with crisp typography and clean minimal spec badges.'
-    : `AUTHENTIC HIGH-LEVEL COD E-COMMERCE PHOTOGRAPHY SECTION #${isPrincipalOnly ? sheetIndex + 1 : sheetIndex} (REALISTIC HUMAN AVATAR, REAL MOMENTS & REAL ENVIRONMENTS): Real 50mm/85mm DSLR lifestyle and editorial photograph with realistic people in genuine everyday home or outdoor settings living real moments with the product, paired with polished, well-spaced charcoal-slate and warm-ivory e-commerce layout bands, clean feature modules, and authentic material detail — substantial and persuasive with zero clutter.`;
+    ? `AUTHENTIC HIGH-LEVEL COD E-COMMERCE PHOTOGRAPHY (BRIGHT REAL-HOME DAYLIGHT EDITORIAL): Real 50mm DSLR lifestyle photograph featuring a relatable realistic Latin American human avatar holding or naturally using the exact physical product in a genuine bright sunlit home environment (authentic skin texture, real room furniture, natural daylight shadows), framed inside a structured light editorial layout. PRICE CONTAINER DESIGN: Deep midnight sapphire navy (#0B132B) and champagne brushed-gold metallic framed architectural price showcase plaque (STRICTLY FORBIDDEN red, crimson, or maroon backgrounds on any price box!). Clean integrated step-by-step graphic footer band with icons guiding the user directly toward the green-and-gold "¡PEDIR AHORA!" button image directly below ("TOCÁ EL BOTÓN '¡PEDIR AHORA!' ABAJO -> COMPLETÁ TUS DATOS Y ENVIÁ TU UBICACIÓN CON EL BOTÓN DE GPS ↓").`
+    : `AUTHENTIC HIGH-LEVEL COD E-COMMERCE PHOTOGRAPHY SECTION #${isPrincipalOnly ? sheetIndex + 1 : sheetIndex} (REALISTIC HUMAN AVATAR, REAL MOMENTS, FULL VIBRANT PRODUCT PERFORMANCE & REAL ENVIRONMENTS): Real 50mm/85mm DSLR lifestyle and editorial photograph with realistic Paraguayan/Latin American people in genuine everyday home or outdoor settings living real moments with the product showing its FULL vibrant authentic real-world colors and effects (never washed-out monochrome), paired with polished charcoal-slate, warm-ivory and deep emerald-gold e-commerce layout bands, luxury brushed-gold price framing (STRICTLY FORBIDDEN flat red backgrounds on price boxes), clean feature modules, and authentic material detail — substantial and persuasive with zero clutter.${
+        isClosingSheet
+          ? ` CLOSING HAND-HOLDING DESIGN: Include a luxury emerald-obsidian & brushed-gold price showcase plaque ("NO PAGÁS ENVÍO · NO PAGÁS REGALO · UN SOLO PRECIO FIJO") plus a crystal-clear 3-step visual guide box with icons pointing directly down to the green-and-gold "¡PEDIR AHORA!" button image below (which displays "Completa tus datos y recibe tu pedido en casa", "7 DÍAS DE GARANTÍA", "ENVÍO A TODO PARAGUAY" y "PAGO CONTRA ENTREGA"): "1. TOCÁ EL BOTÓN '¡PEDIR AHORA!' ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓".`
+          : ''
+      }`;
 
   const antiCartoonAndOrthographyRule =
-    'STRICT REALISM & ZERO-CARTOON RULE: Strictly genuine live-action commercial photography ONLY — NEVER cartoon, NEVER illustration, NEVER 3D CGI render, NEVER gamer neon, NEVER floating products in mid-air, NEVER glowing laser beams, NEVER noisy explosion of graphics. STRICT SPANISH ORTHOGRAPHY & ZERO-TYPO RULE: Render ONLY 2 to 3 short, punchy ALL-CAPS Spanish headlines/callouts (strictly 2 to 4 words per text block) in crisp bold geometric sans-serif typography with generous breathing room. NEVER render long sentences, paragraphs, or small body text inside the image. Verify letter-by-letter that every Spanish word is spelled 100% accurately with zero garbled, merged, or misspelled characters.';
+    'STRICT REALISM & ZERO-CARTOON RULE: Strictly genuine live-action commercial photography ONLY — NEVER cartoon, NEVER illustration, NEVER 3D CGI render, NEVER gamer neon, NEVER floating products in mid-air, NEVER glowing laser beams, NEVER noisy explosion of graphics. STRICT DESIGN & SPANISH ORTHOGRAPHY RULE: Render crisp, well-spaced ALL-CAPS Spanish headlines, price plaques, and concise icon-guided step callouts inside structured editorial graphic panels with generous breathing room and high contrast. NEVER write long dense prose paragraphs or cruel "SOLO ARTÍCULO SUELTO" text, and NEVER draw a digital ticking countdown timer clock. Verify letter-by-letter that every Spanish word is spelled 100% accurately with zero garbled or misspelled characters.';
 
   return `${cleaned} ${sectionPhotographyDirection} ${antiCartoonAndOrthographyRule}`;
 }
@@ -755,34 +767,38 @@ export async function analyzeQuickCreatorStrategy(
   const cloneCtx = input.clonedFromContext;
   const safeEntryName = String(input.entryProductName || '').trim() || 'Artículo de Entrada';
 
+  const defaultRecommendedSheets: 6 | 7 = isPrincipalOnly ? 6 : 7;
   const systemPrompt = isPrincipalOnly
     ? `Eres el Estratega Jefe de Conversión Directa (COD Paraguay), Redactor Maestro de Cartas de Venta y Director de Fotografía E-Commerce Realista GPT-2.6 para páginas de PRODUCTO GANADOR ÚNICO (Estándar).
-TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES con una CARTA DE VENTA VISUAL E-COMMERCE PROFESIONAL DE ALTO NIVEL dividida en 4 IMÁGENES FOTOGRÁFICAS REALES (con avatares humanos realistas, momentos reales y entornos/lugares reales).
+TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES con una CARTA DE VENTA VISUAL E-COMMERCE PROFESIONAL DE ALTO NIVEL dividida en **6 IMÁGENES FOTOGRÁFICAS REALES** (todas las descripciones, tarjetas de precio lujosas y la guía paso a paso hacia el formulario + GPS van diseñadas DENTRO de las imágenes mismas; cero muros HTML afuera).
 REGLAS ESTRICTAS:
-1. Modo ESTÁNDAR (Producto Ganador Único): JAMÁS sugieras artículos secundarios ni menciones "tripwire" en textos públicos. Las 4 secciones combinan fotografía comercial realista DSLR + avatares reales en hogares/lugares cotidianos + diseño editorial e-commerce limpio y sustancioso (ni dibujo animado/neón recargado, ni plano/aburrido): (1. Avatar realista + Gran Promesa en entorno real; 2. Momento real de uso cotidiano resolviendo el problema; 3. Manos reales + detalle macro constructivo con 3 módulos limpios; 4. Cierre COD de entrega real en puerta/mesa + Packs + Envío Gratis + Pago al recibir).
-2. CERO ESTÉTICA DE DIBUJO ANIMADO O CGI NEÓN: Prohibido proponer "renders 3D flotantes", "rayos neón", "explosiones gráficas" o "barullo". Todo debe sentirse como una marca COD real seria donde el cliente ve personas reales, lugares reales y el producto físico auténtico.
-3. PROHIBIDO EL COPIA Y PEGA: Jamás repitas literalmente las frases crudas del usuario o del proveedor. Redactá ángulos persuasivos de Carta de Venta con psicología real de deseo y transformación.
-4. Si existe PÁGINA CLONADA, primero diagnosticá con precisión qué ángulo, promesa y estética visual está usando la página anterior ("currentPageDiagnosis"), y luego proponé 3 opciones CLARAMENTE DISTINTAS.
-5. Para cada opción recomendá "recommendedSheetCount": 4 y "recommendedAudioPreset" ('warm_ambient', 'soft_lounge' o 'commercial_pulse'), más "visualDirection" detallando qué tipo de avatar realista, momento real, lugar real y paleta editorial limpia usará GPT-2.6.
-6. Precios siempre en Guaraníes ("Gs."). Español paraguayo/rioplatense persuasivo de alto impacto.
-7. Si el usuario hace una pregunta o pide un giro específico ("userQuestion"), respondé de forma directa y útil en "assistantReply" y regenerá 3 opciones ajustadas exactamente a lo que pidió.`
-    : `Eres el Estratega Jefe de Embudos Duales, Redactor Maestro de Cartas de Venta (Direct-Response Copywriter) y Director de Fotografía E-Commerce COD de Alto Nivel (Paraguay) para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
-TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES creando una página de 4 IMÁGENES E-COMMERCE DE ALTO NIVEL BASADAS EN FOTOGRAFÍA REALISTA, AVATARES HUMANOS REALES, MOMENTOS REALES Y LUGARES REALES (1 imagen editorial clara para el Artículo de Entrada + 3 imágenes de Carta de Venta en atmósfera sobria contrastante para el Producto Principal).
-REGLA VISUAL Y DE CARTA DE VENTA (OBLIGATORIO — 4 LÁMINAS FOTOGRÁFICAS REALISTAS, CERO BARULLO ANIMADO):
-1. PROHIBIDO EL DIBUJO ANIMADO, CGI FLOTANTE Y BARULLO NEÓN: El comprador COD desconfía de los pósters cargados de luces neón y renders 3D falsos. Todas las imágenes deben verse como fotografía DSLR real (50mm/85mm) con avatares humanos realistas, entornos reales (sala, cocina, patio, galería, entrada de casa), momentos reales de uso/entrega y diseño editorial limpio y estructurado (ni sobrecargado ni demasiado simple).
-2. PROHIBIDO EL COPIA Y PEGA: Jamás copies y pegues en crudo el título o la descripción pegada por el usuario. Creá promesas persuasivas de Carta de Venta real.
-3. ARQUITECTURA DE 4 IMÁGENES CON CONTRASTE EDITORIAL LIMPIO Y CREDIBILIDAD COD:
-   - IMAGEN 1 (EL ARTÍCULO DE ENTRADA — FOTOGRAFÍA EDITORIAL LUMINOSA EN ENTORNO REAL + AVATAR REALISTA — PALETA CLARA MARFIL / PIEDRA / AZUL MARINO SOBRIO): Dedicada 100% a "${safeEntryName}" (${formatParaguayGs(Number(input.entryPriceGs || 20000))}). Avatar humano realista sosteniendo o usando el producto físico en un ambiente hogareño luminoso real + estructura e-commerce limpia: titular corto, 2-3 módulos minimalistas ordenados, precio único claro e indicación inferior ("Tocá el botón de abajo ↓"). SIN nombrar a "${input.productName}" y SIN hablar de envío.
-   - IMÁGENES 2, 3 Y 4 (LAS 3 SECCIONES DE CARTA DE VENTA DEL PRODUCTO PRINCIPAL "${input.productName}" — PALETA EDITORIAL CONTRASTANTE GRAFITO / CARBÓN CÁLIDO / ESMERALDA SOBRIO / MARFIL):
-     * IMAGEN 2 (Sección 1 Principal — Ruptura Limpia + Avatar en Momento Real de Transformación): Arriba en banda editorial limpia abre con "¡ESPERÁ UN SEGUNDO!" / "MIRÁ ESTO ANTES", y debajo muestra a un avatar realista en su casa o lugar real viviendo el momento exacto de uso y resultado de "${input.productName}", con titular persuasivo de 3-4 palabras y 2 beneficios limpios bien espaciados.
-     * IMAGEN 3 (Sección 2 Principal — Demostración Manos Reales + Entorno Cotidiano + Detalle Macro Real): Muestra manos/persona real operando "${input.productName}" en un espacio real + toma macro fotográfica de sus materiales reales + 3 bloques editoriales limpios (2-3 palabras c/u) con aire visual.
-     * IMAGEN 4 (Sección 3 Principal — Cierre COD Confiable en Puerta/Mesa Real + Bono Gratis + ENVÍO GRATUITO): Muestra a un avatar sonriente recibiendo o abriendo en una mesa/entrada real de casa el paquete completo de "${input.productName}" junto a "${safeEntryName}" + insignia clara **${safeEntryName} GRATIS DE REGALO** + banner limpio **ENVÍO GRATUITO EN TODO PARAGUAY** + **PAGO AL RECIBIR** + contraste honesto de delivery e indicación hacia el botón final.
-4. REGLA CRÍTICA DE MONEDA Y ORTOGRAFÍA: Nunca dupliques "Gs. Gs." (escribí exactamente "Gs. 189.000"). En las imágenes solo van frases cortas de 2 a 4 palabras en mayúsculas perfectas para garantizar CERO fallas en la escritura.
-5. NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
+1. Modo ESTÁNDAR (Producto Ganador Único): JAMÁS sugieras artículos secundarios ni menciones "tripwire". Las 6 secciones combinan fotografía comercial realista DSLR + avatares reales + diseño editorial profesional:
+   - Imagen 1: Avatar realista + Gran Promesa en entorno real + Tarjeta de Precio Lujosa Dorada y Azul Marino (NUNCA roja).
+   - Imagen 2: Momento real de uso cotidiano a TODO COLOR real resolviendo el problema en el hogar/fachada.
+   - Imagen 3: Transformación familiar real antes/después en hogar paraguayo.
+   - Imagen 4: Manos reales operando el producto + detalle macro 85mm de materiales y calidad constructiva.
+   - Imagen 5: Prueba social real ("MILES DE PEDIDOS EN ASUNCIÓN, CDE Y PARAGUAY") + confianza COD ("REVISÁS ANTES DE PAGAR").
+    - Imagen 6: Cierre de Vendedor Profesional en hogar real + Oferta vigente hasta mañana si no cerrás esta página (sin reloj digital) + Tarjeta de Precio Lujosa + guía visual 3 pasos hacia el botón verde y dorado "¡PEDIR AHORA!" de abajo ("1. TOCÁ EL BOTÓN '¡PEDIR AHORA!' ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓"), en sintonía con los emblemas del botón (7 días de garantía, envío a todo Paraguay, pago contra entrega).
+2. CERO ESTÉTICA DE DIBUJO ANIMADO O CGI NEÓN: Todo debe sentirse como marca COD real seria.
+3. PROHIBIDO EL COPIA Y PEGA: Jamás repitas literalmente frases crudas del usuario.
+4. Recomendá "recommendedSheetCount": 6 (o 7 si amerita demostración extra) y "recommendedAudioPreset" ('warm_ambient', 'soft_lounge' o 'commercial_pulse').`
+    : `Eres el Estratega Jefe de Embudos Duales, Redactor Maestro de Cartas de Venta (Direct-Response Copywriter) y Director de Fotografía E-Commerce COD de Alto Nivel (Paraguay) para páginas de ARTÍCULO DE ENTRADA + PRODUCTO GANADOR EN LA MISMA PÁGINA.
+TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES creando una página **100% VISUAL DE 7 IMÁGENES FOTOGRÁFICAS REALES** (toda la persuasión, comparación de valor, urgencia sin cronómetro, tarjetas de precio lujosas, ruptura "¡ESPERÁ!" y la guía paso a paso hacia el botón gráfico verde y dorado **"¡PEDIR AHORA!"** van DISEÑADAS DENTRO DE LAS IMÁGENES; debajo de Imagen 1 e Imagen 7 va exactamente la imagen oficial del botón "¡PEDIR AHORA!").
+REGLA VISUAL Y DE CARTA DE VENTA (OBLIGATORIO — 7 LÁMINAS FOTOGRÁFICAS REALISTAS):
+1. PROHIBIDO EL DIBUJO ANIMADO, CGI FLOTANTE, BARULLO NEÓN Y CAJAS DE PRECIO ROJAS PLANAS.
+2. PROHIBIDO EL COPIA Y PEGA Y PROHIBIDO DECIR FRASES CRUELES COMO "SOLO ARTÍCULO SUELTO: DELIVERY...".
+3. ARQUITECTURA DE 7 IMÁGENES:
+   - IMAGEN 1 (ENTRADA LUMINOSA CON AVATAR REALISTA + TARJETA LUJOSA + GUÍA AL BOTÓN "¡PEDIR AHORA!" Y GPS): Dedicada 100% a "${safeEntryName}" (${formatParaguayGs(Number(input.entryPriceGs || 20000))}). Avatar humano realista en hogar luminoso + **Tarjeta de Precio Lujosa Azul Marino y Dorado Cepillado (NUNCA roja)** + guía gráfica paso a paso apuntando al botón verde y dorado **"¡PEDIR AHORA!"** que está justo abajo ("TOCÁ EL BOTÓN '¡PEDIR AHORA!' DE ABAJO · COMPLETÁ TUS DATOS PARA RECIBIR EN CASA Y ENVIÁ TU GPS ↓"). SIN nombrar a "${input.productName}".
+   - IMAGEN 2 (SEC. 1 PRINCIPAL — RUPTURA ¡ESPERÁ! ROJO CON SUBRAYADO AMARILLO + DEMO A TODO COLOR): Abre arriba dentro del diseño con **¡ESPERÁ!** en rojo intenso con **subrayado amarillo** + **"¿ME REGALÁS UN SEGUNDO?"** + avatar realista disfrutando el efecto a TODO COLOR real de "${input.productName}".
+   - IMAGEN 3 (SEC. 2 PRINCIPAL — TRANSFORMACIÓN FAMILIAR EN LUGAR REAL): Familia/pareja real viviendo el cambio real en casa a todo color.
+   - IMAGEN 4 (SEC. 3 PRINCIPAL — MANOS REALES + MACRO 85mm): Manos operando "${input.productName}" + detalle macro real de construcción.
+   - IMAGEN 5 (SEC. 4 PRINCIPAL — PRUEBA SOCIAL PARAGUAY Y CONFIANZA COD): "MILES DE ENVÍOS EN ASUNCIÓN, CIUDAD DEL ESTE Y TODO PARAGUAY" + "REVISÁS ANTES DE PAGAR".
+   - IMAGEN 6 (SEC. 5 PRINCIPAL — COMPARACIÓN PREMIUM DE VALOR + URGENCIA REAL): Comparación elegante (por separado "${safeEntryName}" + envío suma ~${formatParaguayGs(Number(input.entryPriceGs || 20000) + Number(input.entryDeliveryFeeGs || 40000))} vs. llevando el **PAQUETE COMPLETO CON NUESTRO PRODUCTO GANADOR "${input.productName}"**: **${safeEntryName.toUpperCase()} SALE GRATIS DE REGALO + ENVÍO GRATIS**). Aviso elegante (sin reloj digital): "VIGENTE HASTA MAÑANA SI NO CERRÁS ESTA PÁGINA".
+   - IMAGEN 7 (SEC. 6 PRINCIPAL — CIERRE VENDEDOR PROFESIONAL + TARJETA LUJOSA + GUÍA HACIA "¡PEDIR AHORA!" Y GPS): Avatar sonriente con el paquete completo + **Tarjeta Esmeralda-Dorada Lujosa** ("NO PAGÁS ENVÍO · NO PAGÁS REGALO · UN SOLO PRECIO FIJO") + guía visual paso a paso hacia el botón verde y dorado **"¡PEDIR AHORA!"** de abajo ("1. TOCÁ EL BOTÓN '¡PEDIR AHORA!' ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓"), congruente con sus emblemas de **7 DÍAS DE GARANTÍA**, **ENVÍO A TODO PARAGUAY** y **PAGO CONTRA ENTREGA**.
+4. MONEDA EXACTA: "Gs. 189.000". JAMÁS uses "tripwire" ni "Solo artículo suelto".
 REGLAS ESTRICTAS:
-- Si existe PÁGINA CLONADA, primero diagnosticá qué ángulo y estética visual usaba la página original ("currentPageDiagnosis") y proponé 3 opciones frescas distintas.
-- Recomendá "recommendedSheetCount": 4 por defecto.
-- Si el usuario conversa o pide otro enfoque ("userQuestion"), respondé con claridad ejecutiva en "assistantReply" y entregá 3 opciones nuevas alineadas a su pedido.`;
+- Recomendá "recommendedSheetCount": ${defaultRecommendedSheets} por defecto.
+- Si existe PÁGINA CLONADA, diagnosticá el enfoque previo y proponé 3 opciones nuevas.`;
 
   const cloneContextBlock = cloneCtx?.sourceProductName
     ? `\nPÁGINA CLONADA COMO REFERENCIA BASE:
@@ -802,26 +818,26 @@ ${cloneCtx.sourceContextoIA ? `- Contexto comercial heredado:\n${cloneCtx.source
         .join('\n')}`
     : '';
 
-  const userPrompt = `ANALIZÁ ESTE PRODUCTO Y GENERÁ LA ESTRATEGIA DE CARTA DE VENTA VISUAL COD DE ALTO NIVEL (4 IMÁGENES REALISTAS CON AVATARES Y ENTORNOS REALES) 100% MANOS LIBRES:
-- Modo seleccionado: ${isPrincipalOnly ? 'Producto Ganador Único (Estándar — 4 Secciones Realistas de Carta de Venta)' : 'Tripwire + Producto Ganador (1 Imagen Realista Luminosa de Entrada + 3 Secciones Realistas Sobrias del Producto Principal)'}
-- Producto Principal: ${input.productName}
-- Descripción base (NO copiar y pegar literal; transformar en Carta de Venta persuasiva): ${input.productDescription}
-- Ángulo borrador ingresado (si existe): ${input.winnerAngle || 'Ninguno aún — proponé los mejores ángulos persuasivos'}
+  const userPrompt = `ANALIZÁ ESTE PRODUCTO Y GENERÁ LA ESTRATEGIA DE CARTA DE VENTA VISUAL COD DE ALTO NIVEL (${defaultRecommendedSheets} IMÁGENES REALISTAS CON GUÍA PASO A PASO Y GPS INTEGRADOS EN EL DISEÑO):
+- Modo seleccionado: ${isPrincipalOnly ? 'Producto Ganador Único (Estándar — 6 Secciones Realistas de Carta de Venta)' : 'Entrada + Producto Ganador (1 Imagen Entrada con Guía GPS + 6 Secciones Completas del Producto Ganador)'}
+- Producto Ganador Principal: ${input.productName}
+- Descripción base (NO copiar literal): ${input.productDescription}
+- Ángulo borrador ingresado: ${input.winnerAngle || 'Proponé los 3 mejores ángulos persuasivos'}
 - Precio Principal 1x: ${formatParaguayGs(Number(input.price1Gs || 189000))} (Normal: ${formatParaguayGs(Number(input.normalPriceGs || 249000))})
 ${
   !isPrincipalOnly
-    ? `- Artículo de Entrada (Imagen 1 Realista en Entorno Luminoso): ${safeEntryName}
+    ? `- Artículo de Entrada (Imagen 1): ${safeEntryName}
 - Descripción entrada: ${input.entryProductDescription || safeEntryName}
-- Precio Entrada: ${formatParaguayGs(Number(input.entryPriceGs || 20000))} (sin mencionar envío en Imagen 1; delivery ${formatParaguayGs(Number(input.entryDeliveryFeeGs || 40000))} contrastado en el cierre de la Carta de Venta Principal)`
+- Precio Entrada: ${formatParaguayGs(Number(input.entryPriceGs || 20000))} (delivery referencia ${formatParaguayGs(Number(input.entryDeliveryFeeGs || 40000))} contrastado profesionalmente recién en el cierre de valor como paquete completo donde sale GRATIS)`
     : ''
 }${cloneContextBlock}${historyText}
-${input.userQuestion ? `\nPREGUNTA O INSTRUCCIÓN ACTUAL DEL OPERADOR: "${input.userQuestion}"` : '\nGENERÁ EL DIAGNÓSTICO INICIAL Y LAS 3 MEJORES OPCIONES DE CARTA DE VENTA REALISTA LISTAS PARA 1 CLIC.'}
+${input.userQuestion ? `\nPREGUNTA O INSTRUCCIÓN ACTUAL DEL OPERADOR: "${input.userQuestion}"` : '\nGENERÁ EL DIAGNÓSTICO INICIAL Y LAS 3 MEJORES OPCIONES LISTAS PARA 1 CLIC.'}
 
 Devolvé EXCLUSIVAMENTE este JSON válido:
 {
-  "currentPageDiagnosis": "${cloneCtx?.sourceProductName ? 'Explicación clara de qué ángulo, promesa y estilo visual usa actualmente la página clonada, para superarlo con una Carta de Venta nueva realista.' : 'Diagnóstico breve de cómo estructuraremos esta Carta de Venta fotográfica realista de 4 imágenes con avatares, momentos y lugares reales en Paraguay.'}",
-  "assistantReply": "Respuesta directa y clara al operador (2-3 oraciones) explicando por qué la Opción 1 es la recomendación principal o respondiendo a su pregunta.",
-  "recommendedSheetCount": 4,
+  "currentPageDiagnosis": "${cloneCtx?.sourceProductName ? 'Explicación clara de qué ángulo y estética visual usa la página clonada, para superarlo con una Carta de Venta nueva realista.' : `Diagnóstico breve de cómo estructuraremos esta Carta de Venta fotográfica realista de ${defaultRecommendedSheets} imágenes con guía GPS integrada en el diseño.`}",
+  "assistantReply": "Respuesta directa y clara al operador (2-3 oraciones) explicando por qué la Opción 1 es la recomendación principal.",
+  "recommendedSheetCount": ${defaultRecommendedSheets},
   "recommendedAudioPreset": "warm_ambient",
   "recommendedOptionId": "opt_1",
   "options": [
@@ -829,12 +845,12 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
       "id": "opt_1",
       "title": "Nombre corto del ángulo persuasivo (máx 6 palabras)",
       "archetype": "Recomendada por IA",
-      "winnerAngle": "Promesa persuasiva de Carta de Venta lista para convertir (máx 12 palabras, cero copia-pega)",
-      "visualDirection": "Fotografía DSLR real con avatar humano latinoamericano, momento real de uso y entorno hogareño/cotidiano auténtico + diseño editorial limpio sin barullo para las 4 láminas en GPT-2.6",
-      "recommendedSheetCount": 4,
+      "winnerAngle": "Promesa persuasiva de Carta de Venta lista para convertir (máx 12 palabras)",
+      "visualDirection": "Fotografía DSLR real con avatar humano, resultado a todo color, tarjeta lujosa azul marino/dorado y guía 3 pasos con GPS integrada en las ${defaultRecommendedSheets} láminas GPT-2.6",
+      "recommendedSheetCount": ${defaultRecommendedSheets},
       "recommendedAudioPreset": "warm_ambient",
-      "whyItConverts": "Por qué esta Carta de Venta realista de 4 secciones genera confianza COD inmediata.",
-      "tripwireBridgeNote": "${isPrincipalOnly ? '' : 'Cómo la Imagen 1 luminosa con avatar real captura la atención y las Imágenes 2, 3 y 4 muestran personas y momentos reales con el Producto Principal.'}"
+      "whyItConverts": "Por qué esta Carta de Venta visual pura de ${defaultRecommendedSheets} láminas con guía GPS integrada convierte al instante.",
+      "tripwireBridgeNote": "${isPrincipalOnly ? '' : 'Cómo la Imagen 1 guía al botón ¡PEDIR AHORA! con GPS, Imagen 2 frena con ¡ESPERÁ! y las Imágenes 3-7 cierran hacia el botón ¡PEDIR AHORA! final con garantía y pago contra entrega en Paraguay.'}"
     },
     {
       "id": "opt_2",
@@ -842,7 +858,7 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
       "archetype": "Deseo y Transformación",
       "winnerAngle": "...",
       "visualDirection": "...",
-      "recommendedSheetCount": 4,
+      "recommendedSheetCount": ${defaultRecommendedSheets},
       "recommendedAudioPreset": "soft_lounge",
       "whyItConverts": "...",
       "tripwireBridgeNote": "${isPrincipalOnly ? '' : '...'}"
@@ -853,7 +869,7 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
       "archetype": "Superioridad y Ahorro Total",
       "winnerAngle": "...",
       "visualDirection": "...",
-      "recommendedSheetCount": 4,
+      "recommendedSheetCount": ${defaultRecommendedSheets},
       "recommendedAudioPreset": "commercial_pulse",
       "whyItConverts": "...",
       "tripwireBridgeNote": "${isPrincipalOnly ? '' : '...'}"
@@ -893,9 +909,12 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
   const normalizeAudio = (val: any): 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none' =>
     val === 'soft_lounge' || val === 'commercial_pulse' || val === 'none' ? val : 'warm_ambient';
 
-  const normalizeSheetCount = (val: any, fallback: 2 | 3 | 4 = 4): 2 | 3 | 4 => {
+  const normalizeSheetCount = (
+    val: any,
+    fallback: 2 | 3 | 4 | 5 | 6 | 7 = defaultRecommendedSheets
+  ): 2 | 3 | 4 | 5 | 6 | 7 => {
     const n = Number(val);
-    return n === 2 || n === 3 || n === 4 ? n : fallback;
+    return n === 2 || n === 3 || n === 4 || n === 5 || n === 6 || n === 7 ? n : fallback;
   };
 
   const rawOptions: any[] = Array.isArray(parsed?.options) ? parsed.options : [];
@@ -905,7 +924,7 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
     archetype: String(o?.archetype || (idx === 0 ? 'Recomendada por IA' : `Enfoque ${idx + 1}`)).trim(),
     winnerAngle: String(o?.winnerAngle || input.winnerAngle || input.productName).trim(),
     visualDirection: String(o?.visualDirection || '').trim(),
-    recommendedSheetCount: normalizeSheetCount(o?.recommendedSheetCount, 4),
+    recommendedSheetCount: normalizeSheetCount(o?.recommendedSheetCount, defaultRecommendedSheets),
     recommendedAudioPreset: normalizeAudio(o?.recommendedAudioPreset),
     whyItConverts: String(o?.whyItConverts || '').trim(),
     tripwireBridgeNote: !isPrincipalOnly && o?.tripwireBridgeNote ? String(o.tripwireBridgeNote).trim() : undefined
@@ -923,7 +942,7 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
     assistantReply: String(parsed?.assistantReply || '').trim(),
     recommendedSheetCount: normalizeSheetCount(
       matchedRec.recommendedSheetCount ?? parsed?.recommendedSheetCount,
-      4
+      defaultRecommendedSheets
     ),
     recommendedAudioPreset: normalizeAudio(parsed?.recommendedAudioPreset || matchedRec.recommendedAudioPreset),
     options,
@@ -945,10 +964,19 @@ export async function generateUniversalVisualProductPage(
   const pageCreationMode: 'dual_tripwire_winner' | 'principal_only' =
     input.pageCreationMode === 'principal_only' ? 'principal_only' : 'dual_tripwire_winner';
   const isPrincipalOnly = pageCreationMode === 'principal_only';
-  const sheetCountMode: 'auto' | 2 | 3 | 4 =
-    input.sheetCount === 2 ? 2 : input.sheetCount === 3 ? 3 : input.sheetCount === 4 ? 4 : 'auto';
-  const requestedSheetCount: 2 | 3 | 4 =
-    sheetCountMode === 'auto' ? 4 : sheetCountMode;
+  const rawSheetNum = Number(input.sheetCount);
+  const sheetCountMode: 'auto' | 2 | 3 | 4 | 5 | 6 | 7 =
+    rawSheetNum === 2 ||
+    rawSheetNum === 3 ||
+    rawSheetNum === 4 ||
+    rawSheetNum === 5 ||
+    rawSheetNum === 6 ||
+    rawSheetNum === 7
+      ? (rawSheetNum as 2 | 3 | 4 | 5 | 6 | 7)
+      : 'auto';
+  const defaultAutoSheetCount: 6 | 7 = isPrincipalOnly ? 6 : 7;
+  const requestedSheetCount: 2 | 3 | 4 | 5 | 6 | 7 =
+    sheetCountMode === 'auto' ? defaultAutoSheetCount : sheetCountMode;
   const price1 = Math.max(35000, Number(input.price1Gs) || 189000);
   const price2 = Number(input.price2Gs) || Math.round(price1 * 1.85);
   const price3 = Number(input.price3Gs) || Math.round(price1 * 2.65);
@@ -961,6 +989,7 @@ export async function generateUniversalVisualProductPage(
       ? Number(input.entryNormalPriceGs)
       : undefined;
   const deliveryFee = Math.max(15000, Number(input.entryDeliveryFeeGs) || 40000);
+  const separateTotalGs = entryPrice + deliveryFee;
   const instantDiscountPct = Math.max(5, Math.min(40, Number(input.instantDiscountPercent) || 12));
   const eventDurationHours = Math.max(2, Math.min(12, Number(input.eventDurationHours) || 6));
   const slotsTotal = Math.max(5, Math.min(20, Number(input.slotsTotal) || 10));
@@ -1043,88 +1072,116 @@ ${cloneCtx.differentiationNote ? `- NUEVA DIRECCIÓN VISUAL / ÁNGULO SOLICITADO
     : '';
 
   const promptSystemContent = isPrincipalOnly
-    ? `Eres el Redactor Maestro de Cartas de Venta de Respuesta Directa (COD Paraguay) y Director de Fotografía E-Commerce de Alto Nivel.
-Diseñas páginas gráficas verticales 100% visuales estructuradas como una CARTA DE VENTA VISUAL DE 4 SECCIONES E-COMMERCE PROFESIONAL para UN ÚNICO PRODUCTO GANADOR.
+    ? `Eres el Vendedor Profesional Número 1 de Respuesta Directa (COD Paraguay) y Director de Fotografía E-Commerce de Alto Nivel.
+Diseñas páginas gráficas 100% VISUALES de ${requestedSheetCount} SECCIONES para UN ÚNICO PRODUCTO GANADOR (toda la descripción, prueba social, tarjeta de precio lujosa y guía paso a paso hacia el formulario + botón GPS van DISEÑADOS DENTRO de las imágenes).
 
-REGLA DE ORO VISUAL (REALISMO COD CON AVATARES, MOMENTOS Y LUGARES REALES — CERO DIBUJO ANIMADO, CERO BARULLO):
-- FOTOGRAFÍA COMERCIAL REALISTA + AVATARES HUMANOS REALES: El comprador contra entrega confía cuando ve personas reales (avatares realistas latinoamericanos/paraguayos), momentos reales de uso/entrega y entornos reales (sala, patio, cocina, escritorio, entrada de casa).
-- EQUILIBRIO EDITORIAL DE ALTO NIVEL (NI BARULLO NI DEMASIADO SIMPLE): Cada lámina debe combinar una fotografía DSLR (50mm/85mm) nítida y auténtica con un diseño e-commerce bien estructurado y profesional: bandas tipográficas limpias con contraste legítimo, 2 a 3 módulos ordenados de beneficios o especificaciones con aire visual, y jerarquía comercial seria digna de marca top mundial.
-- PROHIBIDO EL ESTILO ANIMADO / CGI NEÓN: Prohibido pedir "render 3D flotante", "rayos de luz neón", "cápsulas 3D brillantes", "explosiones visuales" o "dibujos animados". Todo producto debe respetar gravedad física, contacto real sobre superficies o en manos reales, piel natural y luz creíble.
+REGLAS CLAVE DE CONVERSIÓN Y DISEÑO VISUAL:
+1. FOTOGRAFÍA COMERCIAL REALISTA + AVATARES HUMANOS REALES + RESULTADO REAL A TODO COLOR: Mostrá personas reales, momentos reales y entornos reales mostrando el PRODUCTO EN ACCIÓN CON TODO SU COLOR Y RESULTADO REAL.
+2. TARJETA DE PRECIO LUJOSA (PROHIBIDO FONDO ROJO PLANO): Siempre usá tarjetas arquitectónicas azul marino/esmeralda profundo con bisel metálico dorado cepillado.
+3. PRUEBA SOCIAL EN PARAGUAY Y URGENCIA SIN CRONÓMETRO: Incluí prueba social real ("MILES DE ENVÍOS EN ASUNCIÓN, CIUDAD DEL ESTE Y TODO PARAGUAY") y aviso estático elegante ("VIGENTE HASTA MAÑANA SI NO CERRÁS ESTA PÁGINA — AL CERRARLA TERMINA"; nunca reloj digital corriendo).
+4. GUÍA DE LA MANO + GPS DENTRO DE LA ÚLTIMA IMAGEN: El botón gráfico debajo de la página es de color verde y dorado y dice **"¡PEDIR AHORA!"** ("Completa tus datos y recibe tu pedido en casa", junto a los emblemas "7 DÍAS DE GARANTÍA", "ENVÍO A TODO PARAGUAY" y "PAGO CONTRA ENTREGA"). Dentro de la última imagen diseñá una guía clara de 3 pasos con íconos: "1. TOCÁ EL BOTÓN '¡PEDIR AHORA!' ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓".
+5. PROHIBIDO DIBUJO ANIMADO / CGI NEÓN / COPIAR Y PEGAR / "tripwire" / "Gs. Gs.".${visualDirectionBlock}${cloneDirectiveBlock}`
+    : `Eres el Vendedor Profesional Número 1 de Respuesta Directa (COD Paraguay) y Director de Fotografía E-Commerce de Alto Nivel.
+REGLA MAESTRA PARA openai/gpt-image-2.6-sunburst (VERTICAL 2:3 — ${requestedSheetCount} IMÁGENES 100% VISUALES):
+- CERO MUROS HTML DEBAJO DE LAS IMÁGENES: TODA la presentación, tarjeta de precio lujosa, ruptura "¡ESPERÁ!", comparación de valor y guía paso a paso hacia el botón gráfico oficial verde y dorado **"¡PEDIR AHORA!"** ("Completa tus datos y recibe tu pedido en casa · 7 Días de Garantía · Envío a todo Paraguay · Pago Contra Entrega") van DISEÑADAS DENTRO DE LAS IMÁGENES MISMAS.
+- PROHIBIDO DIBUJO ANIMADO, CGI NEÓN, FONDOS ROJOS DE PRECIO Y FRASES CRUELES COMO "SOLO ARTÍCULO SUELTO: DELIVERY...".
+- ARQUITECTURA DE ${requestedSheetCount} IMÁGENES:
+  1. IMAGEN 1 (ENTRADA LUMINOSA CON AVATAR + TARJETA LUJOSA + GUÍA HACIA "¡PEDIR AHORA!" Y GPS):
+     - Centrada 100% en "${safeEntryName}": fotografía DSLR 50mm real con avatar humano sosteniendo/usando "${safeEntryName}" en hogar luminoso real.
+     - Abajo dentro del diseño: **TARJETA DE PRECIO LUJOSA AZUL MARINO Y DORADO CEPILLADO (PROHIBIDO ROJO)** exhibiendo ${formatParaguayGs(entryPrice)} + guía gráfica paso a paso apuntando al botón verde y dorado **"¡PEDIR AHORA!"** justo debajo: "ESTE ES TU ${safeEntryName.toUpperCase()} · HOY SOLO ${formatParaguayGs(entryPrice)}", "TOCÁ EL BOTÓN '¡PEDIR AHORA!' ABAJO → COMPLETÁ TUS DATOS Y ENVIÁ TU GPS ↓". PROHIBIDO nombrar "${input.productName}".
+  2. IMÁGENES DEL PRODUCTO GANADOR "${input.productName}" (LAS ${Math.max(1, requestedSheetCount - 1)} SECCIONES COMPLETAS):
+     - IMAGEN 2 (SEC. 1 — RUPTURA ¡ESPERÁ! + DEMO REAL A TODO COLOR): Banda superior con **¡ESPERÁ!** en rojo intenso y **subrayado amarillo brillante** + **"¿ME REGALÁS UN SEGUNDO?"** + "MIRÁ ESTO ANTES DE PEDIR". Abajo: avatar realista y lugar real mostrando el resultado ESPECTACULAR A TODO COLOR real de "${input.productName}".
+     - IMAGEN 3 (SEC. 2 — TRANSFORMACIÓN FAMILIAR EN LUGAR REAL): Familia/pareja real disfrutando el cambio real antes/después en su hogar a todo color.
+     - IMAGEN 4 (SEC. 3 — MANOS REALES + DETALLE MACRO 85mm): Manos reales operando "${input.productName}" + toma macro 85mm de materiales reales.
+     - IMAGEN 5 (SEC. 4 — PRUEBA SOCIAL PARAGUAY Y CONFIANZA COD): Comprador feliz en puerta ("MILES DE PEDIDOS EN ASUNCIÓN, CIUDAD DEL ESTE Y TODO PARAGUAY", "REVISÁS ANTES DE PAGAR").
+     - IMAGEN 6 (SEC. 5 — COMPARACIÓN DE VALOR PREMIUM + URGENCIA REAL): Comparación elegante: llevar "${safeEntryName}" aparte + envío saldría ~${formatParaguayGs(separateTotalGs)} vs. elegir el **PAQUETE COMPLETO CON NUESTRO PRODUCTO GANADOR "${input.productName}"**: **"${safeEntryName.toUpperCase()} GRATIS DE REGALO"**, **"ENVÍO GRATUITO TODO PARAGUAY"**, y aviso estático elegante (SIN cronómetro digital): **"VIGENTE HASTA MAÑANA SI NO CERRÁS ESTA PÁGINA — AL CERRARLA TERMINA"**.
+     - IMAGEN ${requestedSheetCount} (SEC. FINAL — CIERRE VENDEDOR PROFESIONAL + TARJETA LUJOSA + GUÍA HACIA "¡PEDIR AHORA!" Y GPS): Avatar sonriente en su mesa con "${input.productName}" + "${safeEntryName}" + **Tarjeta Esmeralda-Dorada Lujosa (NUNCA roja)** con **"NO PAGÁS ENVÍO · NO PAGÁS REGALO · UN SOLO PRECIO FIJO"** y precio gigante ${formatParaguayGs(price1)} + guía visual clara 3 pasos con íconos apuntando exactamente al botón verde y dorado **"¡PEDIR AHORA!"** que está justo abajo (con emblemas 7 Días de Garantía, Envío a Todo Paraguay y Pago Contra Entrega): **"1. TOCÁ EL BOTÓN '¡PEDIR AHORA!' ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓"**.
 
-REGLA INQUEBRANTABLE ANTI COPIA-PEGA Y DE ORTOGRAFÍA PERFECTA EN GPT-2.6:
-- PROHIBIDO COPIAR Y PEGAR: Jamás copies y pegues en crudo el nombre largo o la descripción del usuario dentro de la imagen. Creá titulares persuasivos de Carta de Venta que despierten deseo inmediato.
-- CERO FALLAS EN LA ESCRITURA: Dentro de cada "imagePrompt", exigí que el texto impreso en la imagen consista ÚNICAMENTE en 2 a 3 frases ultra cortas en MAYÚSCULAS SÓLIDAS (de 2 a 4 palabras máximo por línea, ej. "POTENCIA REAL EN CASA", "ENVÍO GRATIS PARAGUAY", "PAGÁS AL RECIBIR"). Prohibido incluir párrafos o frases largas que deformen las letras.
-- Precios obligatorios en Guaraníes de Paraguay ("Gs."), jamás duplicar "Gs. Gs." y jamás mencionar la palabra "tripwire".${visualDirectionBlock}${cloneDirectiveBlock}`
-    : `Eres el Redactor Maestro de Cartas de Venta (Direct-Response Sales Letter Copywriter) y Director de Fotografía E-Commerce COD de Alto Nivel en Paraguay.
-REGLA MAESTRA DE COMPOSICIÓN Y CARTA DE VENTA REALISTA PARA openai/gpt-image-2.6-sunburst (VERTICAL 2:3 — 4 IMÁGENES GENERADAS):
-- PROHIBIDO EL DIBUJO ANIMADO, CGI FLOTANTE Y BARULLO DESESPERANTE: El cliente COD quiere ver un producto verdadero en manos de personas reales (avatares realistas), momentos reales y entornos/lugares reales — con diseño e-commerce editorial estructurado y sustancioso (no demasiado simple ni vacío, pero 100% libre de explosiones neón, renders 3D falsos o saturación caótica).
-- PROHIBIDO EL COPIA Y PEGA: Jamás copies textualmente el borrador crudo del usuario. Toda la página funciona como una CARTA DE VENTA VISUAL DE ALTO NIVEL dividida en 4 IMÁGENES FOTOGRÁFICAS REALES:
-  1. IMAGEN 1 (ARTÍCULO DE ENTRADA — FOTOGRAFÍA EDITORIAL LUMINOSA EN ENTORNO REAL CON AVATAR REALISTA — PALETA CLARA MARFIL / PIEDRA / AZUL MARINO SOBRIO):
-     - Centrada 100% en "${safeEntryName}": fotografía DSLR 50mm real con un avatar humano latinoamericano realista (sonrisa natural, vestimenta casual cotidiana) sosteniendo o usando "${safeEntryName}" en un espacio real luminoso de hogar/oficina (luz natural de ventana, sombras físicas reales, cero neón).
-     - Diseño e-commerce rico y limpio (no simple): banda superior limpia con titular magnético corto en mayúsculas (3-4 palabras), 2-3 módulos minimalistas ordenados con beneficios reales de 2-3 palabras, sello limpio de precio único (${formatParaguayGs(entryPrice)}) e indicación discreta al pie: "Tocá el botón de abajo ↓". PROHIBIDO mencionar a "${input.productName}" y PROHIBIDO hablar de envío.
-  2. IMÁGENES 2, 3 Y 4 (LAS 3 SECCIONES DE CARTA DE VENTA EXCLUSIVAS DEL PRODUCTO PRINCIPAL "${input.productName}" — CONTRASTE EDITORIAL SOBRIO EN GRAFITO MATE / CARBÓN CÁLIDO / MARFIL / ESMERALDA SERIO):
-     - IMAGEN 2 (SECCIÓN 1 DEL PRODUCTO PRINCIPAL — RUPTURA LIMPIA + AVATAR EN MOMENTO REAL DE TRANSFORMACIÓN): Cambio claro de atmósfera luminosa a tonos editoriales grafito mate, acento borgoña/ámbar sobrio y marfil (sin neón ni ruido visual). Arriba en banda editorial nítida abre con "¡ESPERÁ UN SEGUNDO!" / "MIRÁ ESTO ANTES", y debajo muestra a un avatar realista (persona o pareja paraguaya/latinoamericana real) viviendo el momento real de uso y resultado de "${input.productName}" en un entorno real auténtico (living, patio, cocina o habitación real), con titular persuasivo de 3-4 palabras y 2 módulos de beneficios limpios.
-     - IMAGEN 3 (SECCIÓN 2 DEL PRODUCTO PRINCIPAL — DEMOSTRACIÓN EN USO REAL + MANOS REALES + CALIDAD CONSTRUCTIVA): Composición editorial estructurada de alto nivel: escena real de persona/manos operando "${input.productName}" en su lugar cotidiano + fotografía macro real de sus materiales y terminaciones físicas apoyadas en superficie real + 3 módulos sobrios de prueba técnica (2-3 palabras cada uno) con aire visual.
-     - IMAGEN 4 (SECCIÓN 3 DEL PRODUCTO PRINCIPAL — CIERRE COD DE CONFIANZA EN CASA/PUERTA REAL + REGALO GRATIS + ENVÍO GRATUITO): Clímax realista de confianza COD: muestra a un avatar realista sonriente en la entrada o mesa real de su hogar recibiendo/abriendo el conjunto completo de "${input.productName}" junto a "${safeEntryName}" apoyados físicamente en una mesa real + insignia limpia **"${safeEntryName.toUpperCase()} DE REGALO"** + banner esmeralda/marfil serio **"ENVÍO GRATUITO EN TODO PARAGUAY"** + **"PAGO AL RECIBIR"** + precio claro (${formatParaguayGs(price1)}), nota transparente corta de delivery suelto (${formatParaguayGs(deliveryFee)}) e indicación inferior: "Dale clic al botón de abajo ↓".
-
-REGLA INQUEBRANTABLE CONTRA FALLAS DE ESCRITURA EN GPT-2.6:
-- TEXTOS ULTRA CORTOS Y EN MAYÚSCULAS EXACTAS: Para evitar cualquier falla en la escritura, cada frase a renderizar dentro de "imagePrompt" debe tener MÁXIMO 2 A 4 PALABRAS en MAYÚSCULAS SÓLIDAS entre comillas. Prohibido meter oraciones largas o párrafos dentro del arte.
-- MONEDA EXACTA PARAGUAY: Escribí los precios exactamente como se te entregan (ej. "Gs. 189.000"). PROHIBIDO repetir "Gs. Gs." ni usar "$"/USD.
-- JAMÁS escribas la palabra "tripwire" ni "gancho trampa".${visualDirectionBlock}${cloneDirectiveBlock}`;
+REGLA INQUEBRANTABLE CONTRA FALLAS DE ESCRITURA Y COPY:
+- PROHIBIDO EL COPIA Y PEGAR y PROHIBIDO "tripwire" / "Gs. Gs." / "Solo artículo suelto".
+- Frases en español 100% exacto dentro de bloques gráficos aireados y ordenados.${visualDirectionBlock}${cloneDirectiveBlock}`;
 
   const promptUserContent = isPrincipalOnly
-    ? `PRODUCTO GANADOR ÚNICO (CARTA DE VENTA VISUAL COD DE ALTO NIVEL EN ${requestedSheetCount} SECCIONES FOTOGRÁFICAS REALES CON AVATARES Y ENTORNOS REALES):
+    ? `PRODUCTO GANADOR ÚNICO (CARTA DE VENTA VISUAL COD EN ${requestedSheetCount} SECCIONES FOTOGRÁFICAS REALES + GUÍA GPS INTEGRADA):
 - Nombre: ${input.productName}
 - Enfoque / ángulo principal: ${cleanAngleInput || input.productDescription}
-- Qué hace / descripción base (transformar en copy persuasivo, NO copiar literal): ${input.productDescription}
-- Precio Normal tachado: ${formatParaguayGs(normalPrice)}
-- Precio 1x: ${formatParaguayGs(price1)} (Pack 2x: ${formatParaguayGs(price2)}, Pack 3x: ${formatParaguayGs(price3)})
-- Envío Producto Principal: ENVÍO GRATIS en todo Paraguay + Pago en mano al recibir.
+- Qué hace / descripción base (NO copiar literal): ${input.productDescription}
+- Precio Normal: ${formatParaguayGs(normalPrice)} | Precio 1x: ${formatParaguayGs(price1)} (Pack 2x: ${formatParaguayGs(price2)}, Pack 3x: ${formatParaguayGs(price3)})
+- Botón gráfico inferior oficial: Verde y Dorado con emblemas ("¡PEDIR AHORA! — Completa tus datos y recibe tu pedido en casa" · 7 Días de Garantía · Envío a Todo Paraguay · Pago Contra Entrega)
+- Envío Producto Principal: ENVÍO GRATIS en todo Paraguay + Pago al recibir.
 ${visualDirectionInput ? `- Dirección visual asignada: ${visualDirectionInput}` : ''}
-
-CANTIDAD DE LÁMINAS A DISEÑAR: ${requestedSheetCount} secciones diferentes de Carta de Venta E-Commerce realista de alto nivel (cero dibujo animado, cero neón).
 
 Devuelve EXCLUSIVAMENTE este JSON válido:
 {
-  "strategySummary": "Explicación breve interna del arco persuasivo de Carta de Venta realista en ${requestedSheetCount} secciones.",
+  "strategySummary": "Explicación breve del arco persuasivo en ${requestedSheetCount} secciones hacia el botón oficial ¡PEDIR AHORA! con guía GPS integrada.",
   "recommendedAudioPreset": "warm_ambient",
-  "researchedProductDescription": "Ficha comercial persuasiva redactada desde cero en español (NUNCA copia-pega literal del borrador del usuario).",
-  "sobrietyHeadline": "Titular persuasivo de Carta de Venta de alto impacto (máx 9 palabras).",
-  "subheadline": "Bajada persuasiva explicando la transformación real en la vida del cliente en Paraguay (máx 20 palabras).",
-  "winnerAngleHeadline": "Gran promesa central del producto principal (máx 10 palabras).",
-  "winnerAngleDescription": "Argumento persuasivo de beneficios reales del producto principal (máx 30 palabras).",
-  "bundleButtonLabel": "Solicitar ahora · ${formatParaguayGs(price1)}",
-  "bundleDisclaimer": "Incluye ${input.productName} original + Envío GRATIS en Paraguay + Pago contra entrega en efectivo o QR.",
+  "researchedProductDescription": "Ficha comercial persuasiva redactada desde cero en español (NUNCA copia-pega literal).",
+  "sobrietyHeadline": "Titular persuasivo de Carta de Venta (máx 9 palabras).",
+  "subheadline": "Bajada persuasiva en Paraguay (máx 20 palabras).",
+  "winnerAngleHeadline": "Gran promesa central del producto ganador (máx 10 palabras).",
+  "winnerAngleDescription": "Argumento persuasivo real (máx 30 palabras).",
+  "bundleButtonLabel": "¡PEDIR AHORA!",
+  "bundleDisclaimer": "Incluye ${input.productName} original + Envío GRATIS en Paraguay + Pago contra entrega.",
   "sheetPrompts": [
     {
       "role": "hero_presentation",
-      "title": "Sección 1 · Avatar Real y Gran Promesa",
-      "caption": "Apertura de Carta de Venta en entorno real",
-      "imagePrompt": "High-converting 2:3 vertical real-life COD e-commerce editorial photograph for openai/gpt-image-2.6-sunburst: shot on 50mm DSLR, realistic Latin American human avatar naturally holding or demonstrating ${input.productName} (${cleanAngleInput || 'resultado real en casa'}) inside an authentic modern home setting (${visualDirectionInput || 'natural warm daylight, real interior textures, clean matte editorial framing'}), crisp bold ALL-CAPS Spanish headline (3-4 persuasive words, zero typos), 2-3 sleek minimal benefit pills (2-3 words each), clear price '${formatParaguayGs(price1)}' (never duplicate 'Gs.'), zero cartoon/CGI/neon, full-bleed edge-to-edge 2:3."
+      "title": "Sección 1 · Avatar Real y Tarjeta Lujosa de Precio",
+      "caption": "Apertura con avatar realista y tarjeta azul marino y dorado",
+      "imagePrompt": "High-converting 2:3 vertical real-life COD e-commerce editorial photograph for openai/gpt-image-2.6-sunburst: shot on 50mm DSLR, realistic Latin American human avatar naturally holding or demonstrating ${input.productName} in full vibrant authentic real-world colors (${cleanAngleInput || 'resultado real en casa'}) inside a real sunlit home setting (${visualDirectionInput || 'natural daylight, clean matte editorial framing'}), crisp bold ALL-CAPS Spanish headline (3-4 persuasive words), 3 clean spec modules, deep midnight navy & brushed champagne-gold architectural price plaque '${formatParaguayGs(price1)}' (STRICTLY FORBIDDEN red backgrounds on any price box), zero cartoon/CGI/neon, full-bleed edge-to-edge 2:3."
     },
     {
       "role": "comparison_need",
-      "title": "Sección 2 · Momento Real de Uso y Transformación",
-      "caption": "Personas y momentos cotidianos reales",
-      "imagePrompt": "High-level 2:3 vertical real-world lifestyle COD e-commerce visual sales letter section 2 for openai/gpt-image-2.6-sunburst: candid 50mm DSLR photograph of a realistic person or family experiencing a genuine everyday moment using ${input.productName} in a real Paraguayan home room/patio with authentic natural lighting and physical realism, clean editorial top ALL-CAPS Spanish headline (max 4 words, 100% exact spelling), 2 structured clean callout strips (2-3 words each) showing real transformation, zero CGI/neon clutter, full-bleed 2:3."
+      "title": "Sección 2 · Momento Real de Uso a Todo Color",
+      "caption": "Demostración viva en hogar real",
+      "imagePrompt": "High-level 2:3 vertical real-world lifestyle COD e-commerce visual sales letter section 2 for openai/gpt-image-2.6-sunburst: candid 50mm DSLR photograph of a realistic person or family experiencing a genuine everyday moment using ${input.productName} showing its full vivid real-world multi-color results and impact in a real Paraguayan home room/facade/patio, crisp ALL-CAPS Spanish headline, 2 clean transformation callout strips, zero CGI/neon clutter, full-bleed 2:3."
     }${
       requestedSheetCount >= 3
         ? `,
     {
       "role": "authority_transformation",
-      "title": "Sección 3 · Manos Reales y Calidad Constructiva",
-      "caption": "Uso tangible y detalle fotográfico real",
-      "imagePrompt": "Editorial 2:3 vertical e-commerce proof section 3 for openai/gpt-image-2.6-sunburst: clean split real photography layout showing real human hands operating ${input.productName} in an authentic real place paired with a sharp 85mm macro DSLR close-up of its genuine physical build quality resting on a real table surface, crisp ALL-CAPS Spanish authority headline (max 4 words, zero typos), 3 structured clean matte-slate feature modules with 2-to-3-word uppercase labels, zero 3D render/neon, full-bleed 2:3."
+      "title": "Sección 3 · Manos Reales y Calidad Macro",
+      "caption": "Uso tangible y materiales constructivos",
+      "imagePrompt": "Editorial 2:3 vertical e-commerce proof section 3 for openai/gpt-image-2.6-sunburst: real human hands operating ${input.productName} in an authentic real place paired with an 85mm macro DSLR close-up of its genuine build quality on a wooden table, crisp ALL-CAPS Spanish authority headline, 3 structured clean matte-slate feature modules, zero 3D render/neon, full-bleed 2:3."
     }`
         : ''
     }${
       requestedSheetCount >= 4
         ? `,
     {
+      "role": "comparison_need",
+      "title": "Sección 4 · Transformación en Familia",
+      "caption": "Contraste real en entorno cotidiano",
+      "imagePrompt": "Authentic 2:3 vertical COD e-commerce lifestyle section 4 for openai/gpt-image-2.6-sunburst: smiling Paraguayan family or couple enjoying '${input.productName}' transforming their real home environment vs ordinary dull ambiance, crisp ALL-CAPS headline 'CAMBIO REAL INMEDIATO', clean visual comparison strips, zero cartoon/neon, full-bleed 2:3."
+    }`
+        : ''
+    }${
+      requestedSheetCount >= 5
+        ? `,
+    {
       "role": "social_trust_specs",
-      "title": "Sección 4 · Entrega Real COD y Envío Gratis",
-      "caption": "Cierre de Carta de Venta en hogar real",
-      "imagePrompt": "Trust-building 2:3 vertical COD e-commerce closing photograph (Section 4) for openai/gpt-image-2.6-sunburst: realistic smiling buyer at home doorway or dining table unboxing the complete physical ${input.productName} package in real warm natural light, crisp emerald-and-ivory editorial trust banner 'ENVÍO GRATIS EN PARAGUAY' + 'PAGO AL RECIBIR', clear pack pricing 1x '${formatParaguayGs(price1)}' vs 2x '${formatParaguayGs(price2)}' (never write 'Gs. Gs.'), 'GARANTÍA 7 DÍAS', and clean bottom cue 'Dale clic al botón de abajo'. Crisp ALL-CAPS Spanish lettering, zero cartoon/neon clutter, full-bleed 2:3."
+      "title": "Sección 5 · Prueba Social en Asunción, CDE y Paraguay",
+      "caption": "Confianza total contra entrega en puerta",
+      "imagePrompt": "High-trust 2:3 vertical COD proof section 5 for openai/gpt-image-2.6-sunburst: realistic Paraguayan homeowner at home doorway verifying '${input.productName}' before paying, clean editorial badge 'MILES DE ENVÍOS EN ASUNCIÓN, CDE Y PARAGUAY', 'REVISÁS ANTES DE PAGAR', 'EFECTIVO O QR AL RECIBIR', zero cartoon/neon, full-bleed 2:3."
+    }`
+        : ''
+    }${
+      requestedSheetCount >= 6
+        ? `,
+    {
+      "role": "social_trust_specs",
+      "title": "Sección ${requestedSheetCount} · Cierre Vendedor Profesional y Guía GPS",
+      "caption": "Tarjeta lujosa de precio y 3 pasos al botón ¡PEDIR AHORA!",
+      "imagePrompt": "Closing 2:3 vertical COD e-commerce sales banner for openai/gpt-image-2.6-sunburst: smiling buyer unboxing complete '${input.productName}' kit at wooden table with full vivid product results glowing cleanly in home behind, static urgency ribbon 'VIGENTE HASTA MAÑANA SI NO CERRÁS ESTA PÁGINA' (NO digital timer clock), luxury midnight navy & brushed-gold layered price container plaque 'ENVÍO GRATIS · UN SOLO PRECIO FIJO' '${formatParaguayGs(price1)}' (STRICTLY FORBIDDEN red background), and crisp bottom 3-step icon guide box '1. TOCÁ EL BOTÓN ¡PEDIR AHORA! ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓', zero cartoon/CGI/neon, full-bleed 2:3."
+    }`
+        : ''
+    }${
+      requestedSheetCount >= 7
+        ? `,
+    {
+      "role": "social_trust_specs",
+      "title": "Sección 7 · Garantía y Despacho Hoy Mismo",
+      "caption": "Confirmación rápida hacia el botón ¡PEDIR AHORA!",
+      "imagePrompt": "Final reassurance 2:3 vertical COD banner for '${input.productName}': real friendly courier handing sealed box at sunny Paraguayan home porch, clean banner '7 DÍAS DE GARANTÍA' + 'PAGO CONTRA ENTREGA', luxury brushed-gold price card '${formatParaguayGs(price1)}' and crisp downward cue 'TOCÁ EL BOTÓN VERDE Y DORADO ¡PEDIR AHORA! ABAJO ↓', full-bleed 2:3."
     }`
         : ''
     }
@@ -1136,103 +1193,126 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   ],
   "agentContext": "Resumen completo para el agente WhatsApp y de Comentarios con precios exactos en Gs. de ${input.productName} (1x, 2x, 3x), Envío Gratis en todo Paraguay y pago al recibir."
 }`
-    : `CARTA DE VENTA VISUAL EN ${requestedSheetCount} IMÁGENES FOTOGRÁFICAS REALES DE ALTO NIVEL COD (IMAGEN 1 = ENTRADA EN ENTORNO REAL LUMINOSO CON AVATAR REALISTA; IMÁGENES 2, 3 Y 4 = 3 SECCIONES REALISTAS CONTRASTANTES DEL PRODUCTO PRINCIPAL CON AVATARES, MOMENTOS Y LUGARES REALES):
+    : `CARTA DE VENTA VISUAL EN ${requestedSheetCount} IMÁGENES 100% VISUALES CON GUÍA DE VENDEDOR PROFESIONAL HACIA EL BOTÓN OFICIAL "¡PEDIR AHORA!" Y GPS:
 
-PRODUCTO PRINCIPAL EXCLUSIVO (IMÁGENES 2, 3 Y 4 — 3 SECCIONES DE CARTA DE VENTA E-COMMERCE REALISTA SIN BARULLO):
-- Nombre: ${input.productName}
-- Ángulo persuasivo central: ${cleanAngleInput || `Solución definitiva completa muy superior al artículo inicial (${input.productDescription})`}
-- Información base (PROHIBIDO COPIAR Y PEGAR LITERAL; redactar como Carta de Venta persuasiva): ${input.productDescription}
-- Precio Normal tachado: ${formatParaguayGs(normalPrice)}
-- Precio 1x: ${formatParaguayGs(price1)} (Pack 2x: ${formatParaguayGs(price2)}, Pack 3x: ${formatParaguayGs(price3)})
-- Beneficio estrella en Cierre: ENVÍO GRATUITO EN TODO PARAGUAY + ${safeEntryName} GRATIS DE REGALO + Pago al recibir.
-${visualDirectionInput ? `- Dirección visual asignada para el Producto Principal: ${visualDirectionInput}` : ''}
+PRODUCTO GANADOR PRINCIPAL (IMÁGENES 2 A ${requestedSheetCount}):
+- Nombre Producto Ganador: ${input.productName}
+- Ángulo persuasivo central: ${cleanAngleInput || `Nuestro producto ganador definitivo superior (${input.productDescription})`}
+- Base técnica (NO copiar literal): ${input.productDescription}
+- Precio Normal: ${formatParaguayGs(normalPrice)} | Precio 1x: ${formatParaguayGs(price1)} (Pack 2x: ${formatParaguayGs(price2)}, Pack 3x: ${formatParaguayGs(price3)})
+- Botón gráfico #2 debajo de Imagen Final: Verde y Dorado con emblemas (**"¡PEDIR AHORA! — Completa tus datos y recibe tu pedido en casa"** + **7 DÍAS DE GARANTÍA** + **ENVÍO A TODO PARAGUAY** + **PAGO CONTRA ENTREGA**).
+${visualDirectionInput ? `- Dirección visual asignada: ${visualDirectionInput}` : ''}
 
-ARTÍCULO DE ENTRADA (IMAGEN 1 — FOTOGRAFÍA REAL EN HOGAR LUMINOSO CON AVATAR REALISTA):
+ARTÍCULO DE ENTRADA (IMAGEN 1 — GUÍA GPS INTEGRADA + TARJETA AZUL MARINO Y DORADO):
 - Nombre real investigado: ${safeEntryName}
-- Síntesis investigada (NO copiar textos en crudo): ${resolvedEntryDesc || safeEntryName}
+- Síntesis investigada: ${resolvedEntryDesc || safeEntryName}
 ${resolvedEntrySpecs.length > 0 ? `- Especificaciones reales clave: ${resolvedEntrySpecs.join(' | ')}` : ''}
-${resolvedEntryVisualBlueprint ? `- Blueprint visual exacto del producto físico real en Imagen 1: ${resolvedEntryVisualBlueprint}` : ''}
-- Precio ÚNICO cerrado (1 unidad): ${formatParaguayGs(entryPrice)} (En Imagen 1 está PROHIBIDO mencionar a "${input.productName}" y PROHIBIDO hablar de envío. Imagen 1 debe mostrar fotografía DSLR realista con un avatar humano real sosteniendo o usando "${safeEntryName}" en un ambiente claro y luminoso real — paleta marfil/piedra/azul marino sobrio, diseño editorial limpio pero estructurado, CERO neón y CERO dibujo animado).
-
-CANTIDAD DE IMÁGENES A GENERAR: ${requestedSheetCount} (${
-        requestedSheetCount === 4
-          ? 'Imagen 1 = Entrada Fotografía Real Luminosa con Avatar; Imagen 2 = Sección 1 Producto Principal: Ruptura limpia ¡ESPERÁ! + Avatar en Momento Real; Imagen 3 = Sección 2 Producto Principal: Demostración con Manos/Entorno Real + Detalle Macro Real; Imagen 4 = Sección 3 Producto Principal: Cierre COD en Hogar/Puerta Real + Regalo Gratis + ENVÍO GRATUITO'
-          : requestedSheetCount === 3
-            ? 'Imagen 1 = Entrada Realista Luminosa con Avatar; Imagen 2 = Sección 1 Principal Ruptura Limpia + Momento Real; Imagen 3 = Sección 2 Principal Cierre COD + Regalo + Envío Gratuito'
-            : 'Imagen 1 = Entrada Realista Luminosa con Avatar; Imagen 2 = Carta de Venta Principal Realista con Ruptura + Envío Gratuito'
-      })
+${resolvedEntryVisualBlueprint ? `- Blueprint visual exacto: ${resolvedEntryVisualBlueprint}` : ''}
+- Botón gráfico #1 debajo de Imagen 1: Verde y Dorado con emblemas (**"¡PEDIR AHORA! — Completa tus datos y recibe tu pedido en casa"**).
+- Precio ÚNICO cerrado: ${formatParaguayGs(entryPrice)} (En Imagen 1 PROHIBIDO nombrar "${input.productName}". Precio dentro de TARJETA ARQUITECTÓNICA AZUL MARINO Y DORADO — JAMÁS roja).
 
 Devuelve EXCLUSIVAMENTE este JSON válido:
 {
-  "strategySummary": "Explicación breve interna de la Carta de Venta realista de ${requestedSheetCount} imágenes (Imagen 1 clara con avatar real + ${Math.max(1, requestedSheetCount - 1)} secciones sobrias con avatares y entornos reales del Producto Principal).",
+  "strategySummary": "Carta de venta 100% visual de ${requestedSheetCount} imágenes con tarjetas de precio lujosas y guía paso a paso hacia el botón oficial ¡PEDIR AHORA! y GPS.",
   "recommendedAudioPreset": "warm_ambient",
-  "researchedProductDescription": "Carta de venta sintetizada, persuasiva y redactada desde cero en español para ${input.productName} (cero copia-pega crudo).",
-  "researchedEntryDescription": "Ficha comercial atractiva de ${safeEntryName} redactada desde cero (cero copia-pega crudo).",
-  "sobrietyHeadline": "Titular magnético de alto impacto para ${safeEntryName} (máx 6 palabras).",
+  "researchedProductDescription": "Carta de venta redactada desde cero en español para ${input.productName}.",
+  "researchedEntryDescription": "Ficha comercial redactada desde cero para ${safeEntryName}.",
+  "sobrietyHeadline": "Titular magnético para ${safeEntryName} (máx 6 palabras).",
   "subheadline": "Beneficio directo en la vida diaria de ${safeEntryName} (máx 14 palabras).",
-  "winnerAngleHeadline": "Gran titular persuasivo de Carta de Venta para ${input.productName} (máx 10 palabras, cero copia-pega).",
-  "winnerAngleDescription": "Argumento persuasivo contundente que demuestra por qué ${input.productName} es la solución definitiva (máx 28 palabras).",
-  "reversePsychologyHook": "¡Esperá un segundo! Llevando ${input.productName} recibís ${safeEntryName} GRATIS y activás Envío Gratuito en todo Paraguay.",
-  "entryButtonLabel": "Separar ahora · ${formatParaguayGs(entryPrice)}",
-  "entryDisclaimer": "Solo incluye 1x ${safeEntryName}. NO incluye ${input.productName} ni envío gratuito.",
-  "bundleButtonLabel": "Solicitar oferta completa · ${formatParaguayGs(price1)}",
+  "winnerAngleHeadline": "Gran titular persuasivo para ${input.productName} (máx 10 palabras).",
+  "winnerAngleDescription": "Argumento persuasivo contundente para ${input.productName} (máx 28 palabras).",
+  "reversePsychologyHook": "¡Esperá! ¿Me regalás un segundo antes de pedir? Llevando ${input.productName} recibís ${safeEntryName} GRATIS y activás Envío Gratuito en todo Paraguay.",
+  "entryButtonLabel": "¡PEDIR AHORA!",
+  "entryButtonColorName": "${ENTRY_BUTTON_COLOR_NAME}",
+  "bundleButtonLabel": "¡PEDIR AHORA!",
+  "bundleButtonColorName": "${BUNDLE_BUTTON_COLOR_NAME}",
   "bundleDisclaimer": "Incluye ${input.productName} completo + ${safeEntryName} DE REGALO + ENVÍO GRATUITO en todo Paraguay.",
   "sheetPrompts": [
     {
       "role": "hero_presentation",
-      "title": "Lámina 1 · ${safeEntryName} (Avatar y Entorno Real)",
-      "caption": "Presentación Realista Editorial COD",
-      "imagePrompt": "High-level 2:3 vertical realistic COD e-commerce lifestyle photograph for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish (bright sunlit real home aesthetic — warm ivory, soft limestone & deep navy accents, COMPLETELY DIFFERENT bright clean daylight palette from the darker editorial sheets below): TOP ZONE clean subtle editorial header with bold 3-to-4-word ALL-CAPS Spanish hook headline for '${safeEntryName}' (zero copy-paste clutter); CENTER HERO candid 50mm DSLR photograph of a relatable realistic Latin American human avatar naturally holding or using ONLY the real physical '${safeEntryName}'${resolvedEntryVisualBlueprint ? ` (${resolvedEntryVisualBlueprint})` : ''} inside a genuine sunlit home room/table setting (real natural skin, real physical gravity, authentic daylight shadows, ZERO CGI/cartoon/neon); LOWER-MID ZONE 3 neat, minimal flat editorial spec pills with 2-to-3-word uppercase Spanish benefit labels (${resolvedEntrySpecs.slice(0, 3).join(' / ') || 'USO PRÁCTICO / CALIDAD REAL / LISTO PARA USAR'}); BOTTOM ZONE crisp clean price badge '${formatParaguayGs(entryPrice)}' and subtle directional cue 'Tocá el botón de abajo'. NEVER write 'Gs. Gs.', DO NOT mention '${input.productName}', DO NOT mention shipping. Full-bleed edge-to-edge 2:3."
+      "title": "Lámina 1 · ${safeEntryName} (Avatar, Tarjeta Lujosa y Guía ¡PEDIR AHORA!)",
+      "caption": "Entrada realista con tarjeta azul marino/dorado y guía al botón ¡PEDIR AHORA!",
+      "imagePrompt": "High-level 2:3 vertical realistic COD e-commerce lifestyle photograph for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish (bright sunlit real home aesthetic — warm ivory & deep midnight navy #0B132B + champagne brushed-gold #D4AF37): TOP ZONE crisp ALL-CAPS Spanish headline 'TU ${safeEntryName.toUpperCase()} HOY'; CENTER HERO candid 50mm DSLR photo of a relatable realistic Latin American human avatar holding/using ONLY '${safeEntryName}'${resolvedEntryVisualBlueprint ? ` (${resolvedEntryVisualBlueprint})` : ''} inside a real sunlit home room + 3 neat minimal spec tags (${resolvedEntrySpecs.slice(0, 3).join(' / ') || 'CALIDAD REAL / FÁCIL USO / LISTO HOY'}); LOWER DESIGN LUXURY DEEP SAPPHIRE-NAVY & BRUSHED CHAMPAGNE-GOLD ARCHITECTURAL PRICE CONTAINER CARD (STRICTLY FORBIDDEN red, crimson or maroon background!) displaying '${formatParaguayGs(entryPrice)}' paired with clean integrated 3-step icon footer bar: 'TOCÁ EL BOTÓN ¡PEDIR AHORA! ABAJO · COMPLETÁ TUS DATOS Y ENVIÁ TU GPS ↓'. NEVER write 'Gs. Gs.', DO NOT mention '${input.productName}', DO NOT mention free shipping. Full-bleed edge-to-edge 2:3."
     }${
-      requestedSheetCount === 4
+      requestedSheetCount >= 4
         ? `,
     {
       "role": "comparison_need",
-      "title": "Lámina 2 · Sección 1 Producto Principal: ¡Esperá! Momento Real",
-      "caption": "Ruptura editorial limpia + Avatar en momento real",
-      "imagePrompt": "High-converting 2:3 vertical realistic COD e-commerce Visual Sales Letter Section 1 exclusively for '${input.productName}' for openai/gpt-image-2.6-sunburst — COMPLETELY DIFFERENT rich matte charcoal-slate, warm espresso & refined ivory-amber editorial palette (zero neon chaos): TOP 16% clean sharp pattern-interrupt editorial bar integrated inside the layout with flawless ALL-CAPS Spanish text '¡ESPERÁ UN SEGUNDO!' + short 3-word sub-hook 'MIRÁ ESTO ANTES'; CENTER-BOTTOM 84% authentic 50mm DSLR lifestyle photograph of a realistic Paraguayan/Latin American person or couple in a genuine real home/outdoor environment experiencing a real everyday moment of relief and satisfaction using '${input.productName}', paired with a bold clean 3-to-4-word ALL-CAPS persuasive Spanish headline (zero typos) and 2 structured dark-matte benefit callouts with ample breathing room. Zero cartoon, zero floating CGI, full-bleed edge-to-edge 2:3."
+      "title": "Lámina 2 · Sección 1 Producto Ganador: ¡ESPERÁ! Demostración Real",
+      "caption": "Ruptura rojo subrayado amarillo + Resultado real a todo color",
+      "imagePrompt": "High-converting 2:3 vertical realistic COD e-commerce Visual Sales Letter Section 1 exclusively for '${input.productName}' for openai/gpt-image-2.6-sunburst — rich matte charcoal-slate & warm ivory palette: TOP 20% pattern-interrupt header inside layout with bold crimson-red word '¡ESPERÁ!' having a thick bright-yellow underline + crisp subheadline '¿ME REGALÁS UN SEGUNDO?' + 'ANTES DE PEDIR MIRÁ ESTO'; LOWER 80% candid 50mm DSLR lifestyle photo of a realistic Paraguayan person/couple at home experiencing '${input.productName}' showing its FULL VIBRANT MULTI-COLOR REAL-WORLD PERFORMANCE AND RESULTS (never monochrome), paired with bold 3-word ALL-CAPS headline and 2 clean dark-slate benefit pills. Zero cartoon/CGI, full-bleed 2:3."
     },
     {
+      "role": "comparison_need",
+      "title": "Lámina 3 · Sección 2 Producto Ganador: Transformación en Familia",
+      "caption": "Contraste real en hogar cotidiano a todo color",
+      "imagePrompt": "Authentic 2:3 vertical realistic COD Visual Sales Letter Section 2 exclusively for '${input.productName}' for openai/gpt-image-2.6-sunburst: candid 50mm DSLR photo of a happy Paraguayan family enjoying '${input.productName}' at full vivid color capacity transforming their real home environment vs ordinary dull ambiance, bold ALL-CAPS headline 'CAMBIO REAL INMEDIATO' and 2 structured contrast strips, zero cartoon/neon, full-bleed 2:3."
+    }${
+      requestedSheetCount >= 5
+        ? `,
+    {
       "role": "authority_transformation",
-      "title": "Lámina 3 · Sección 2 Producto Principal: Uso y Lugar Real",
-      "caption": "Demostración real con manos y detalle macro",
-      "imagePrompt": "Polished 2:3 vertical realistic COD e-commerce Visual Sales Letter Section 2 exclusively for '${input.productName}' for openai/gpt-image-2.6-sunburst — warm dark charcoal, brushed bronze & clean ivory editorial aesthetic: TOP bold 3-to-4-word ALL-CAPS persuasive Spanish headline on how '${input.productName}' works in real life; CENTER split real-world photography showing real human hands operating '${input.productName}' in an authentic everyday location alongside an 85mm macro DSLR close-up of its genuine physical build and materials resting on a real surface; LOWER 3 crisp, well-spaced matte editorial proof strips with 2-to-3-word ALL-CAPS Spanish benefit labels (flawless orthography, zero 3D cartoon badges, zero small clutter). Full-bleed edge-to-edge 2:3."
+      "title": "Lámina 4 · Sección 3 Producto Ganador: Manos Reales y Macro 85mm",
+      "caption": "Detalle constructivo real al tacto",
+      "imagePrompt": "Polished 2:3 vertical realistic COD Visual Sales Letter Section 3 exclusively for '${input.productName}': real human hands operating '${input.productName}' in an authentic home location alongside an 85mm macro DSLR close-up of its genuine build materials resting on real wood, bold ALL-CAPS headline 'CALIDAD SUPERIOR REAL' and 3 crisp matte feature modules, zero CGI, full-bleed 2:3."
+    }`
+        : ''
+    }${
+      requestedSheetCount >= 6
+        ? `,
+    {
+      "role": "social_trust_specs",
+      "title": "Lámina 5 · Sección 4 Producto Ganador: Miles de Envíos en Paraguay",
+      "caption": "Prueba social Asunción, Ciudad del Este y todo el país",
+      "imagePrompt": "High-credibility 2:3 vertical COD trust section 4 exclusively for '${input.productName}': realistic smiling Paraguayan homeowner at their doorway inspecting '${input.productName}' before paying, crisp editorial trust seals 'MILES DE ENVÍOS EN ASUNCIÓN, CDE Y PARAGUAY', 'REVISÁS ANTES DE PAGAR', 'EFECTIVO O QR AL RECIBIR', zero cartoon/neon, full-bleed 2:3."
+    }`
+        : ''
+    }${
+      requestedSheetCount >= 7
+        ? `,
+    {
+      "role": "authority_transformation",
+      "title": "Lámina 6 · Sección 5: Comparación Premium de Valor y Regalo Gratis",
+      "caption": "Por separado vs. Paquete Completo con Producto Ganador",
+      "imagePrompt": "High-persuasion 2:3 vertical editorial value comparison sheet exclusively crafted like a top salesperson for openai/gpt-image-2.6-sunburst (matte obsidian, emerald & champagne gold, STRICTLY NO cruel 'SOLO ARTÍCULO SUELTO' text, NO digital ticking timer clock): clean side-by-side graphic layout showing '${safeEntryName}' + envío por separado (${formatParaguayGs(separateTotalGs)}) versus elegir hoy el 'PAQUETE COMPLETO PRODUCTO GANADOR ${input.productName.toUpperCase()}' que incluye '${safeEntryName.toUpperCase()} GRATIS DE REGALO' + 'ENVÍO GRATUITO TODO PARAGUAY' + badge 'ÉXITO EN ASUNCIÓN Y CDE', plus clean static urgency banner at bottom 'VIGENTE HASTA MAÑANA SI NO CERRÁS ESTA PÁGINA', full-bleed 2:3."
+    }`
+        : ''
     },
     {
       "role": "social_trust_specs",
-      "title": "Lámina 4 · Sección 3 Producto Principal: Cierre COD en Casa Real",
-      "caption": "Entrega real, regalo incluido y envío gratuito",
-      "imagePrompt": "High-trust 2:3 vertical COD e-commerce Visual Sales Letter Section 3 exclusively for '${input.productName}' for openai/gpt-image-2.6-sunburst — deep warm slate, natural emerald-green trust seal & crisp ivory aesthetic: TOP clean ALL-CAPS Spanish closing headline 'OFERTA COMPLETA EXCLUSIVA'; CENTER authentic 50mm DSLR photograph of a realistic smiling buyer in a genuine home living room or doorway holding/unboxing the real physical '${input.productName}' alongside '${safeEntryName}' together on a real wooden/stone table + clean gold-ivory badge 'LLEVÁS ${safeEntryName.toUpperCase()} GRATIS'; LOWER unmissable clean emerald-and-ivory trust banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'PAGO AL RECIBIR' + bold price '${formatParaguayGs(price1)}' (write ONCE, never 'Gs. Gs.') + transparent note 'Solo artículo suelto: delivery ${formatParaguayGs(deliveryFee)}'; BOTTOM clean cue 'Dale clic al botón de abajo'. 100% flawless uppercase Spanish spelling, zero cartoon/CGI/neon clutter, full-bleed edge-to-edge 2:3."
+      "title": "Lámina ${requestedSheetCount} · Cierre Vendedor Profesional y Guía ¡PEDIR AHORA!",
+      "caption": "Un solo precio fijo + 3 pasos hacia el botón ¡PEDIR AHORA! y GPS",
+      "imagePrompt": "Ultimate high-trust 2:3 vertical COD closing sales sheet exclusively for '${input.productName}' for openai/gpt-image-2.6-sunburst — deep emerald-obsidian, warm wood table & brushed champagne-gold (STRICTLY FORBIDDEN red price boxes, NO 'SOLO ARTÍCULO SUELTO', NO digital timer): TOP 42% candid 50mm DSLR photo of a smiling Paraguayan buyer unboxing '${input.productName}' + '${safeEntryName}' together on a real wooden home table with vivid colorful product effect shining cleanly behind; MIDDLE 32% LUXURY LAYERED EMERALD-NAVY & BRUSHED CHAMPAGNE-GOLD PRICE CONTAINER PLAQUE showing 'NO PAGÁS ENVÍO · NO PAGÁS REGALO · UN SOLO PRECIO FIJO' and giant metallic gold numerals '${formatParaguayGs(price1)}' (write ONCE) + gold ribbon '${safeEntryName.toUpperCase()} GRATIS'; BOTTOM 26% CLEAR 3-STEP ICON HAND-HOLDING FOOTER CARD '1. TOCÁ EL BOTÓN ¡PEDIR AHORA! ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓'. Ultra-crisp flawless Spanish spelling, zero cartoon/CGI/neon, full-bleed 2:3."
     }`
         : requestedSheetCount === 3
           ? `,
     {
       "role": "comparison_need",
-      "title": "Lámina 2 · ¡ESPERÁ UN SEGUNDO! Momento Real Principal",
-      "caption": "Ruptura limpia + Avatar en entorno real",
-      "imagePrompt": "High-converting 2:3 vertical realistic COD e-commerce Visual Sales Letter Section 1 for '${input.productName}' for openai/gpt-image-2.6-sunburst — COMPLETELY DIFFERENT rich matte charcoal & warm ivory palette from Sheet 1: TOP clean editorial alert bar '¡ESPERÁ UN SEGUNDO!', authentic 50mm DSLR photograph of a realistic person using '${input.productName}' in a real home environment with a short 3-to-4-word ALL-CAPS persuasive Spanish headline and 3 clean flat spec callouts, razor-sharp flawless Spanish typography, zero cartoon/CGI, edge-to-edge 2:3."
+      "title": "Lámina 2 · ¡ESPERÁ! Demostración Real a Todo Color",
+      "caption": "Ruptura rojo subrayado amarillo + Resultado real",
+      "imagePrompt": "High-converting 2:3 vertical realistic COD Visual Sales Letter Section 1 for '${input.productName}': TOP crimson alert bar '¡ESPERÁ!' with bright-yellow underline + '¿ME REGALÁS UN SEGUNDO?', candid 50mm DSLR photo of realistic person enjoying '${input.productName}' at full vivid color in a real home setting, bold ALL-CAPS Spanish headline, 3 clean feature callouts, zero cartoon/CGI, edge-to-edge 2:3."
     },
     {
       "role": "social_trust_specs",
-      "title": "Lámina 3 · Cierre COD Real: ${input.productName} + ${safeEntryName} GRATIS",
-      "caption": "Entrega real en hogar con Envío Gratuito",
-      "imagePrompt": "High-trust 2:3 vertical COD e-commerce conversion photograph for openai/gpt-image-2.6-sunburst in razor-sharp ALL-CAPS Paraguayan Spanish — COMPLETELY DIFFERENT matte charcoal, natural emerald & warm ivory aesthetic from Sheet 1: crisp 3-to-4-word Spanish headline for '${input.productName}', authentic 50mm DSLR photo of a realistic smiling homeowner unboxing '${input.productName}' with '${safeEntryName}' on a real home table, 3 clean minimal feature pills, clear emerald-ivory banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + '${safeEntryName} DE REGALO', clear price '${formatParaguayGs(price1)}' (write ONCE, never 'Gs. Gs.'), transparent note 'Solo ${safeEntryName} paga delivery ${formatParaguayGs(deliveryFee)}', and bottom cue 'Dale clic al botón de abajo'. Zero cartoon/neon, edge-to-edge 2:3."
+      "title": "Lámina 3 · Cierre Vendedor Profesional y Guía ¡PEDIR AHORA!",
+      "caption": "Paquete Completo + Regalo Gratis + Guía Botón ¡PEDIR AHORA! y GPS",
+      "imagePrompt": "High-trust 2:3 vertical COD closing sales photograph for '${input.productName}' + '${safeEntryName}' (NO red price box, NO 'SOLO ARTÍCULO SUELTO'): smiling buyer unboxing '${input.productName}' + '${safeEntryName} GRATIS' on real home table, badge 'MILES DE ENVÍOS ASUNCIÓN, CDE Y PARAGUAY', luxury emerald-gold price card 'NO PAGÁS ENVÍO · UN SOLO PRECIO FIJO' '${formatParaguayGs(price1)}', static ribbon 'VIGENTE HASTA MAÑANA SI NO CERRÁS', and 3-step icon guide '1. TOCÁ EL BOTÓN ¡PEDIR AHORA! ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓', full-bleed 2:3."
     }`
           : `,
     {
       "role": "social_trust_specs",
-      "title": "¡ESPERÁ! ${input.productName} + ${safeEntryName} GRATIS + ENVÍO GRATUITO",
-      "caption": "Ruptura limpia + Avatar y entrega real COD",
-      "imagePrompt": "High-trust 2:3 vertical COD e-commerce conversion photograph for openai/gpt-image-2.6-sunburst in razor-sharp Paraguayan Spanish — COMPLETELY DIFFERENT matte charcoal, warm ivory & natural emerald aesthetic from Sheet 1: TOP 16% crisp pattern-interrupt editorial bar '¡ESPERÁ UN RATITO!' + 'MIRÁ LA OFERTA COMPLETA'; MIDDLE 58% authentic 50mm DSLR photograph of a realistic person naturally using '${input.productName}' in a real home setting with clean bold 3-to-4-word ALL-CAPS Spanish headline and 3 clean flat feature strips; LOWER 18% clean emerald-ivory offer bar 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'LLEVÁS ${safeEntryName.toUpperCase()} DE REGALO' + clean price '${formatParaguayGs(price1)}' (never write 'Gs. Gs.') + transparent delivery note 'Solo ${safeEntryName}: delivery ${formatParaguayGs(deliveryFee)}'; BOTTOM 8% clean cue 'Dale clic al botón de abajo'. Ultra-crisp legible Spanish typography, zero cartoon/CGI/neon, full-bleed edge-to-edge 2:3."
+      "title": "¡ESPERÁ! ${input.productName} + ${safeEntryName} GRATIS + GUÍA ¡PEDIR AHORA!",
+      "caption": "Ruptura rojo/amarillo + Cierre Vendedor Profesional",
+      "imagePrompt": "High-trust 2:3 vertical COD closing photograph for '${input.productName}' + '${safeEntryName}' (NO red price box, NO 'SOLO ARTÍCULO SUELTO'): TOP crimson '¡ESPERÁ!' with bright-yellow underline + '¿ME REGALÁS UN SEGUNDO?'; MIDDLE candid 50mm DSLR photo of realistic buyer using '${input.productName}' in full vivid color + '${safeEntryName} GRATIS' + 'MILES DE ENVÍOS ASUNCIÓN, CDE Y PARAGUAY'; LOWER luxury emerald-gold price plaque 'NO PAGÁS ENVÍO · UN SOLO PRECIO FIJO' '${formatParaguayGs(price1)}' + 3-step icon guide '1. TOCÁ EL BOTÓN ¡PEDIR AHORA! ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓', full-bleed 2:3."
     }`
     }
   ],
   "faq": [
     { "q": "Pregunta clave 1 sobre qué incluye cada opción", "a": "Respuesta transparente en guaraníes sin jerga" },
-    { "q": "Pregunta clave 2 sobre el pago al recibir y entrega", "a": "Respuesta clara Paraguay" },
+    { "q": "Pregunta clave 2 sobre el pago al recibir y GPS", "a": "Respuesta clara Paraguay" },
     { "q": "Pregunta clave 3 sobre garantía y uso real", "a": "Respuesta honesta" }
   ],
-  "agentContext": "Resumen completo para el agente WhatsApp y de Comentarios con precios exactos en Gs., qué incluye la caja y la regla de las dos opciones (sin decir nunca tripwire)."
+  "agentContext": "Resumen completo para el agente WhatsApp y de Comentarios con precios exactos en Gs., qué incluye la caja y envío gratis en el paquete completo (sin decir nunca tripwire)."
 }`;
 
   // 1. Cerebro OpenRouter GPT-4o: Arquitectura de Carta de Venta Visual + prompts de láminas gráficas
@@ -1269,15 +1349,15 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
     throw new Error('OpenRouter GPT-4o no devolvió las láminas gráficas completas.');
   }
 
-  // Si se pidieron explícitamente 4 láminas (o GPT-4o devolvió menos de 4 cuando sheetCount === 4), completar las 3 secciones del Producto Principal
-  if (sheetCountMode === 4 && rawSheets.length < 4) {
+  const targetMinSheets = sheetCountMode !== 'auto' ? sheetCountMode : 0;
+  if (targetMinSheets >= 4 && rawSheets.length < targetMinSheets) {
     const fallbackPrincipalSections = isPrincipalOnly
       ? [
           {
             role: 'comparison_need',
             title: `Sección 2 · Momento Real de Uso de ${input.productName}`,
-            caption: 'Uso cotidiano en entorno real',
-            imagePrompt: `Realistic 2:3 vertical COD e-commerce lifestyle photograph section 2 for '${input.productName}': candid 50mm DSLR scene of a realistic person using '${input.productName}' in an authentic home room, bold 3-word ALL-CAPS Spanish headline 'RESULTADO REAL HOY', 3 clean minimal benefit strips with 2-word uppercase labels, full-bleed 2:3.`
+            caption: 'Uso cotidiano en entorno real a todo color',
+            imagePrompt: `Realistic 2:3 vertical COD e-commerce lifestyle photograph section 2 for '${input.productName}': candid 50mm DSLR scene of a realistic person using '${input.productName}' showing full vibrant authentic real-world colors and performance in an authentic home room, bold 3-word ALL-CAPS Spanish headline 'RESULTADO REAL HOY', 3 clean minimal benefit strips with 2-word uppercase labels, full-bleed 2:3.`
           },
           {
             role: 'authority_transformation',
@@ -1287,45 +1367,87 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
           },
           {
             role: 'social_trust_specs',
-            title: `Sección 4 · Entrega Real COD con Envío Gratis`,
+            title: `Sección 4 · Confianza Real y Prueba en Paraguay`,
+            caption: 'Verificación en puerta antes de pagar',
+            imagePrompt: `High-credibility 2:3 vertical COD e-commerce proof photograph for '${input.productName}': realistic smiling customer at home entrance verifying physical package before paying, bold 3-word ALL-CAPS Spanish headline 'REVISÁS ANTES DE PAGAR', clean emerald trust badges, full-bleed 2:3.`
+          },
+          {
+            role: 'social_trust_specs',
+            title: `Sección 5 · Entrega Real COD con Envío Gratis`,
             caption: 'Cierre de Carta de Venta en hogar real',
-            imagePrompt: `Trust-building 2:3 vertical COD e-commerce closing photograph for '${input.productName}': realistic smiling buyer unboxing '${input.productName}' on a real home table, clean emerald-ivory banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'PAGO AL RECIBIR', price '${formatParaguayGs(price1)}', bottom cue 'Dale clic al botón de abajo', full-bleed 2:3.`
+            imagePrompt: `Trust-building 2:3 vertical COD e-commerce proof photograph for '${input.productName}': realistic smiling customer at home entrance verifying physical package before paying, banner 'MILES DE ENVÍOS EN ASUNCIÓN, CDE Y PARAGUAY', clean emerald trust badges, full-bleed 2:3.`
+          },
+          {
+            role: 'social_trust_specs',
+            title: `Sección 6 · Cierre Vendedor Profesional y Guía ¡PEDIR AHORA!`,
+            caption: 'Tarjeta lujosa de precio y guía hacia el botón ¡PEDIR AHORA!',
+            imagePrompt: `Closing 2:3 vertical COD e-commerce photograph for '${input.productName}': happy homeowner unboxing '${input.productName}' at real wooden table with vivid product results behind, static urgency ribbon 'VIGENTE HASTA MAÑANA SI NO CERRÁS ESTA PÁGINA', luxury navy & brushed-gold price card 'UN SOLO PRECIO FIJO' '${formatParaguayGs(price1)}' (NO red price box), and 3-step icon guide '1. TOCÁ EL BOTÓN ¡PEDIR AHORA! ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓', full-bleed 2:3.`
+          },
+          {
+            role: 'social_trust_specs',
+            title: `Sección 7 · Garantía y Despacho Hoy Mismo`,
+            caption: 'Confirmación rápida en puerta',
+            imagePrompt: `Final reassurance 2:3 vertical COD photograph for '${input.productName}': courier handing package at sunny home porch, luxury brushed-gold price card '${formatParaguayGs(price1)}', bottom cue 'TOCÁ EL BOTÓN VERDE Y DORADO ¡PEDIR AHORA! ABAJO ↓', full-bleed 2:3.`
           }
         ]
       : [
           {
             role: 'comparison_need',
-            title: `Lámina 2 · Sección 1 Principal: ¡Esperá un Segundo!`,
-            caption: 'Ruptura editorial limpia + Avatar en momento real',
-            imagePrompt: `Realistic 2:3 vertical COD e-commerce Visual Sales Letter Section 1 for '${input.productName}' in matte charcoal, warm espresso & ivory: clean top bar '¡ESPERÁ UN SEGUNDO!', authentic 50mm DSLR lifestyle photo of a realistic Latin American person experiencing '${input.productName}' in a real home setting with bold 3-word ALL-CAPS Spanish headline 'SOLUCIÓN DEFINITIVA REAL', full-bleed 2:3.`
+            title: `Lámina 2 · Sección 1 Producto Ganador: ¡ESPERÁ! Demostración Real`,
+            caption: 'Ruptura rojo subrayado amarillo + Resultado real a todo color',
+            imagePrompt: `Realistic 2:3 vertical COD e-commerce Visual Sales Letter Section 1 for '${input.productName}' in matte charcoal & ivory: crimson alert badge '¡ESPERÁ!' with bright-yellow underline + '¿ME REGALÁS UN SEGUNDO?', authentic 50mm DSLR lifestyle photo of a realistic Paraguayan person experiencing '${input.productName}' showing full vibrant multi-color real-world performance in a real home setting, full-bleed 2:3.`
+          },
+          {
+            role: 'comparison_need',
+            title: `Lámina 3 · Sección 2 Producto Ganador: Transformación Familiar Real`,
+            caption: 'Contraste antes/después en hogar real',
+            imagePrompt: `Authentic 2:3 vertical COD e-commerce Visual Sales Letter Section 2 exclusively for '${input.productName}': realistic Paraguayan family in real home living the full colorful transformation of '${input.productName}', bold ALL-CAPS Spanish headline 'CAMBIO REAL INMEDIATO', full-bleed 2:3.`
           },
           {
             role: 'authority_transformation',
-            title: `Lámina 3 · Sección 2 Principal: Uso en Lugar Real`,
-            caption: 'Demostración tangible con manos reales y macro',
-            imagePrompt: `Polished 2:3 vertical COD e-commerce Visual Sales Letter Section 2 exclusively for '${input.productName}' in matte slate & warm ivory: real human hands operating '${input.productName}' in a real room + 85mm macro detail of physical quality, bold 3-word ALL-CAPS Spanish headline 'USO FÁCIL DIARIO' and 3 clean flat spec strips, full-bleed 2:3.`
+            title: `Lámina 4 · Sección 3 Producto Ganador: Manos Reales y Macro`,
+            caption: 'Demostración tangible con manos reales y macro 85mm',
+            imagePrompt: `Polished 2:3 vertical COD e-commerce Visual Sales Letter Section 3 exclusively for '${input.productName}': real human hands operating '${input.productName}' in a real room + 85mm macro detail of physical quality on real wood, bold ALL-CAPS headline 'CALIDAD SUPERIOR REAL', full-bleed 2:3.`
           },
           {
             role: 'social_trust_specs',
-            title: `Lámina 4 · Sección 3 Principal: Entrega Real + Envío Gratis`,
-            caption: 'Cierre COD en hogar real con Regalo y Envío Gratuito',
-            imagePrompt: `High-trust 2:3 vertical COD e-commerce Visual Sales Letter Section 3 exclusively for '${input.productName}' in matte slate, natural emerald & ivory: realistic smiling buyer at home table with complete '${input.productName}' + '${safeEntryName.toUpperCase()} DE REGALO' + clean banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'PAGO AL RECIBIR' + price '${formatParaguayGs(price1)}' + bottom cue 'Dale clic al botón de abajo', full-bleed 2:3.`
+            title: `Lámina 5 · Sección 4 Producto Ganador: Miles de Envíos en Paraguay`,
+            caption: 'Asunción, Ciudad del Este y todo Paraguay',
+            imagePrompt: `High-credibility 2:3 vertical COD trust proof section for '${input.productName}': realistic smiling customer at home porch verifying package before paying, crisp ALL-CAPS seals 'MILES DE ENVÍOS EN ASUNCIÓN, CDE Y PARAGUAY', 'REVISÁS ANTES DE PAGAR', full-bleed 2:3.`
+          },
+          {
+            role: 'authority_transformation',
+            title: `Lámina 6 · Sección 5: Comparación Premium de Valor y Regalo Gratis`,
+            caption: 'Por separado vs. Paquete Completo con Producto Ganador',
+            imagePrompt: `High-persuasion 2:3 vertical value comparison card for '${input.productName}' (STRICTLY NO red price box, NO 'SOLO ARTÍCULO SUELTO', NO digital timer): side-by-side layout contrasting '${safeEntryName}' + envío por separado (${formatParaguayGs(separateTotalGs)}) versus 'PAQUETE COMPLETO PRODUCTO GANADOR ${input.productName.toUpperCase()}' including '${safeEntryName.toUpperCase()} GRATIS' + 'ENVÍO GRATUITO TODO PARAGUAY' + static banner 'VIGENTE HASTA MAÑANA SI NO CERRÁS ESTA PÁGINA', full-bleed 2:3.`
+          },
+          {
+            role: 'social_trust_specs',
+            title: `Lámina ${targetMinSheets} · Cierre Vendedor Profesional y Guía ¡PEDIR AHORA!`,
+            caption: 'Tarjeta lujosa de precio + 3 pasos hacia botón ¡PEDIR AHORA! y GPS',
+            imagePrompt: `Ultimate high-trust 2:3 vertical COD closing section exclusively for '${input.productName}' in emerald-obsidian & brushed champagne-gold (STRICTLY FORBIDDEN red price boxes, NO 'SOLO ARTÍCULO SUELTO'): realistic smiling buyer at home table unboxing '${input.productName}' + '${safeEntryName} GRATIS', luxury emerald-navy brushed-gold price plaque 'NO PAGÁS ENVÍO · NO PAGÁS REGALO · UN SOLO PRECIO FIJO' '${formatParaguayGs(price1)}', and clean 3-step icon footer card '1. TOCÁ EL BOTÓN ¡PEDIR AHORA! ABAJO · 2. COMPLETÁ TUS DATOS PARA RECIBIR EN CASA · 3. TOCÁ EL BOTÓN DE GPS ↓', full-bleed 2:3.`
           }
         ];
 
-    while (rawSheets.length < 4) {
+    while (rawSheets.length < targetMinSheets) {
       const nextIdx = rawSheets.length - 1;
       rawSheets.push(fallbackPrincipalSections[Math.min(nextIdx, fallbackPrincipalSections.length - 1)]);
     }
   }
 
-  const finalSheetCount: 2 | 3 | 4 =
+  const finalSheetCount: 2 | 3 | 4 | 5 | 6 | 7 =
     sheetCountMode === 'auto'
-      ? rawSheets.length >= 4
-        ? 4
-        : rawSheets.length === 3
-          ? 3
-          : 2
+      ? rawSheets.length >= 7
+        ? 7
+        : rawSheets.length === 6
+          ? 6
+          : rawSheets.length === 5
+            ? 5
+            : rawSheets.length === 4
+              ? 4
+              : rawSheets.length === 3
+                ? 3
+                : 2
       : sheetCountMode;
 
   const resolvedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none' =
@@ -1337,14 +1459,16 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
         ? parsed.recommendedAudioPreset
         : 'warm_ambient';
 
-  // 2. Generar las láminas verticales reales (por defecto 4: 1 Tripwire Envolvente + 3 Secciones Producto Principal)
+  // 2. Generar las láminas verticales reales (por defecto 7 en Dual y 6 en Estándar)
+  const effectiveRenderCount = Math.min(finalSheetCount, rawSheets.length);
   const generatedSheets: ProductVisualLandingSheet[] = [];
-  for (let i = 0; i < Math.min(finalSheetCount, rawSheets.length); i++) {
+  for (let i = 0; i < effectiveRenderCount; i++) {
     const s = rawSheets[i];
     const sanitizedPrompt = sanitizeAndEnforceSalesLetterImagePrompt(
       String(s.imagePrompt || ''),
       i,
-      isPrincipalOnly
+      isPrincipalOnly,
+      effectiveRenderCount
     );
     const extraVisualContext = [
       sanitizedPrompt,
@@ -1372,9 +1496,11 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
         ? 'hero_presentation'
         : i === 1
           ? 'comparison_need'
-          : i === 2 && finalSheetCount === 4
-            ? 'authority_transformation'
-            : 'social_trust_specs';
+          : i === effectiveRenderCount - 1
+            ? 'social_trust_specs'
+            : i % 2 === 0
+              ? 'authority_transformation'
+              : 'comparison_need';
 
     generatedSheets.push({
       id: `sheet_${i + 1}`,
@@ -1432,14 +1558,24 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       `Solución completa superior para ${input.productName.trim()}`
   );
 
+  const parsedIncludedItems = Array.isArray(parsed?.bundleIncludedItems)
+    ? parsed.bundleIncludedItems.map((item: any) => cleanPublicText(String(item || ''))).filter(Boolean).slice(0, 5)
+    : [];
+
   const visualLanding: ProductVisualLandingConfig = {
     enabled: true,
     mode:
-      finalSheetCount === 4
-        ? 'sober_graphic_4sheet'
-        : finalSheetCount === 3
-          ? 'sober_graphic_3sheet'
-          : 'sober_graphic_2sheet',
+      finalSheetCount === 7
+        ? 'sober_graphic_7sheet'
+        : finalSheetCount === 6
+          ? 'sober_graphic_6sheet'
+          : finalSheetCount === 5
+            ? 'sober_graphic_5sheet'
+            : finalSheetCount === 4
+              ? 'sober_graphic_4sheet'
+              : finalSheetCount === 3
+                ? 'sober_graphic_3sheet'
+                : 'sober_graphic_2sheet',
     generatorModel: VISUAL_CREATOR_IMAGE_MODEL,
     sheets: generatedSheets,
     sobrietyHeadline: cleanPublicText(parsed?.sobrietyHeadline || input.productName),
@@ -1449,18 +1585,64 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
     reversePsychologyHook: isPrincipalOnly ? '' : cleanPublicText(parsed?.reversePsychologyHook || ''),
     entryButtonLabel: isPrincipalOnly
       ? undefined
-      : cleanPublicText(parsed?.entryButtonLabel || `Separar ahora · ${formatParaguayGs(entryPrice)}`),
+      : cleanPublicText(parsed?.entryButtonLabel || CTA_IMAGE_BUTTON_LABEL),
+    entryButtonColorName: isPrincipalOnly ? undefined : ENTRY_BUTTON_COLOR_NAME,
+    entryGuideHeadline: isPrincipalOnly
+      ? undefined
+      : cleanPublicText(
+          parsed?.entryGuideHeadline || `ESTE ES TU ${safeEntryName.toUpperCase()} · PRECIO DE HOY`
+        ),
+    entryGuideCopy: isPrincipalOnly
+      ? undefined
+      : cleanPublicText(
+          parsed?.entryGuideCopy ||
+            `Este es tu ${safeEntryName}. Hoy lo estás llevando por solamente ${formatParaguayGs(entryPrice)}. Para adquirirlo ahora mismo, tocá el botón ${ENTRY_BUTTON_COLOR_NAME} de abajo que dice "¡PEDIR AHORA!": completá tus datos y enviá tu ubicación para recibir tu pedido en casa.`
+        ),
     entryDisclaimer: isPrincipalOnly
       ? undefined
       : cleanPublicText(
           parsed?.entryDisclaimer ||
             `Atención: esta solicitud envía únicamente 1x ${safeEntryName}. No incluye ${input.productName} ni envío gratuito.`
         ),
-    bundleButtonLabel: cleanPublicText(
-      parsed?.bundleButtonLabel ||
+    interruptHeadline: isPrincipalOnly
+      ? undefined
+      : cleanPublicText(
+          parsed?.interruptHeadline || '¿ME REGALÁS UN SEGUNDO ANTES DE LLENAR TUS DATOS?'
+        ),
+    interruptCopy: isPrincipalOnly
+      ? undefined
+      : cleanPublicText(
+          parsed?.interruptCopy ||
+            `Antes de darle clic al botón para cargar tus datos y que empaquetemos tu envío: mirá esto porque va directo con lo que estás por llevar y te puede cambiar por completo la compra.`
+        ),
+    bundleButtonLabel: cleanPublicText(parsed?.bundleButtonLabel || CTA_IMAGE_BUTTON_LABEL),
+    bundleButtonColorName: isPrincipalOnly ? STANDARD_BUTTON_COLOR_NAME : BUNDLE_BUTTON_COLOR_NAME,
+    bundleGuideHeadline: cleanPublicText(
+      parsed?.bundleGuideHeadline ||
         (isPrincipalOnly
-          ? `Solicitar ahora · ${formatParaguayGs(price1)}`
-          : `Solicitar oferta completa · ${formatParaguayGs(price1)}`)
+          ? `LLEVATE TU ${input.productName.toUpperCase()} HOY CON ENVÍO GRATIS`
+          : `TODO LO QUE TE LLEVÁS HOY ANTES QUE SE AGOTE PARA SIEMPRE`)
+    ),
+    bundleIncludedItems:
+      parsedIncludedItems.length > 0
+        ? parsedIncludedItems
+        : isPrincipalOnly
+          ? [
+              `1x ${input.productName.trim()} original completo listo para usar`,
+              `ENVÍO GRATUITO directo a tu puerta en todo Paraguay`,
+              `Pagás en efectivo o QR recién cuando lo tenés en tus manos`
+            ]
+          : [
+              `1x ${input.productName.trim()} original completo`,
+              `1x ${safeEntryName} totalmente GRATIS DE REGALO incluido en tu paquete`,
+              `ENVÍO GRATUITO puerta a puerta en todo Paraguay`,
+              `Pagás recién al recibir en tus manos (Efectivo o QR) con 7 días de garantía`
+            ],
+    bundleGuideCopy: cleanPublicText(
+      parsed?.bundleGuideCopy ||
+        (isPrincipalOnly
+          ? `No dejes pasar esta oportunidad hoy: llevás ${input.productName} completo con Envío Gratis hasta tu puerta y pagás recién al recibir. Tocá el botón ${STANDARD_BUTTON_COLOR_NAME} de abajo que dice "¡PEDIR AHORA!" para completar tus datos, enviar tu ubicación por GPS y asegurar el tuyo.`
+          : `Pensalo bien antes de irte: si dejás pasar esto hoy, perdés para siempre llevar el ${safeEntryName} totalmente GRATIS y el Envío Gratuito hasta la puerta de tu casa. Tocá ahora mismo el botón ${BUNDLE_BUTTON_COLOR_NAME} de abajo que dice "¡PEDIR AHORA!": completá tus datos, tocá el botón de GPS y recibí tu paquete completo en casa.`)
     ),
     bundleDisclaimer: cleanPublicText(
       parsed?.bundleDisclaimer ||

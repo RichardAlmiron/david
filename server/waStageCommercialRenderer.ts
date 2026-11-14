@@ -759,9 +759,22 @@ export function buildPackVisualDirective(packQty: number): {
 
 export function extractCustomerShippingSummaryForVisual(
   orderInput: Partial<Order> & Record<string, any>,
-  productInput?: (MinimalProductPricingInput & { descripcion?: string; categoria?: string }) | null
+  productInput?:
+    | (MinimalProductPricingInput & {
+        descripcion?: string;
+        categoria?: string;
+        tripwireConfig?: {
+          enabled?: boolean;
+          entryProductName?: string;
+          entryProductImage?: string;
+          entryPriceGs?: number;
+        };
+      })
+    | null
 ) {
   const order = orderInput || {};
+  const isEntryOnlyOrder =
+    order.purchasePath === 'entry_only' && Boolean(productInput?.tripwireConfig?.enabled);
   const resolved = resolveOrderCommercialPackAndPrice(order, productInput || undefined);
   const reservaid = String(order.reservaid || 'NX-PEDIDO').trim().toUpperCase();
   const fullName = sanitizePersonalizedDeliveryText(String(order.nombre || '')) || 'Cliente VIP Noelux';
@@ -802,17 +815,23 @@ export function extractCustomerShippingSummaryForVisual(
   const buildingSummary = isBuilding ? buildingParts.join(' · ') : '';
 
   const houseRef = sanitizePersonalizedDeliveryText(String(order.referenciaCasa || ''));
-  const productName =
-    sanitizePersonalizedDeliveryText(String(order.producto || productInput?.nombre || '')) ||
-    'Noelux™ Proyector Navideño 12 Diseños';
-  const packQty = resolved.unitCount;
+  const entryProdName = String(productInput?.tripwireConfig?.entryProductName || '').trim();
+  const productName = isEntryOnlyOrder && entryProdName
+    ? sanitizePersonalizedDeliveryText(entryProdName)
+    : sanitizePersonalizedDeliveryText(String(order.producto || productInput?.nombre || '')) ||
+      'Noelux™ Proyector Navideño 12 Diseños';
+  const packQty = isEntryOnlyOrder ? 1 : resolved.unitCount;
   const totalGsNum = resolved.officialPriceGs;
   const totalGsFormatted = `Gs. ${totalGsNum.toLocaleString('es-PY')}`;
-  const rawProductImg = String(productInput?.imagen || '').trim();
+  const rawProductImg =
+    isEntryOnlyOrder && String(productInput?.tripwireConfig?.entryProductImage || '').trim()
+      ? String(productInput?.tripwireConfig?.entryProductImage || '').trim()
+      : String(productInput?.imagen || '').trim();
   const isNoeluxProjectorProduct =
-    /noelux|proyector/i.test(String(productInput?.id || '')) ||
-    /noelux|proyector/i.test(productName) ||
-    /galeria-1\.jpg|noelux_/i.test(rawProductImg);
+    !isEntryOnlyOrder &&
+    (/noelux|proyector/i.test(String(productInput?.id || '')) ||
+      /noelux|proyector/i.test(productName) ||
+      /galeria-1\.jpg|noelux_/i.test(rawProductImg));
   const productImgRef =
     isNoeluxProjectorProduct && packQty === 2
       ? STUDIO_ASSETS.noeluxPack2
