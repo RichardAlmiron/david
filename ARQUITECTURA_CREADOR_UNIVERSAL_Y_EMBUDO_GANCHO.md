@@ -108,3 +108,26 @@ flowchart TD
   - `option_1_instant` → **`instant_upgraded`**: Actualiza inmediatamente el pedido a `purchasePath = 'principal_bundle'`, recalcula `producto`, `monto` (`instantUpgradePriceGs`) y pasa al flujo normal de confirmación/empaquetado con nota de voz musicalizada.
   - `option_2_waitlist` → **`waitlist_enrolled`**: Registra su lugar en la lista de 10 cupos y envía **actualizaciones breves cada 2 horas** (`buildWaitlistUpdateSpeech`) indicando cupos restantes y tiempo faltante.
   - Cierre automático al cumplir `eventEndsAt` (5–6 horas) → **`final_dispatched`**: Tanto para `waitlist_enrolled` como para `silenced_until_end`, envía la confirmación final honesta informando el despacho individual: **`Gs. 20.000 + Gs. 40.000 de delivery = Gs. 60.000 al recibir`**, dejando abierta con cortesía la puerta a cambiar al paquete principal antes de que salga el móvil.
+
+---
+
+## 7. Pilar 5 — Evolución a Carta de Venta Visual de 4 Imágenes (`sober_graphic_4sheet`), Investigación Profunda Anti Copia-Pega, Recreación de Estudio 3/4 y Tarjetas Enterizas VIP
+
+> **Documentación algorítmica completa:** Ver [`ALGORITMO_CARTA_DE_VENTA_VISUAL_4_IMAGENES_E_INVESTIGACION_IA.md`](./ALGORITMO_CARTA_DE_VENTA_VISUAL_4_IMAGENES_E_INVESTIGACION_IA.md).
+
+1. **Clasificación Tripartita y Tarjetas Enterizas VIP en 1 Sola Pieza (`src/utils/productPageClassifier.ts`, `src/views/AdminView.tsx`, `src/components/QuickProductCreatorView.tsx`):**
+   - Diferenciación visual y estructural absoluta entre **`PÁGINA ANTIGUA`**, **`CREADOR RÁPIDO · ESTÁNDAR`** y **`CREADOR RÁPIDO · TRIPWIRE`** con filtros y contadores en vivo tanto en **Páginas & Ventas** como en el **Selector de Oferta Principal / Clonaje del Creador Rápido**.
+   - Diseño de **una sola pieza enteriza (`50% menos de altura`, `px-3 py-2`)** sin cajas internas anidadas ("cero 2 tarjetas en 1"), mostrando en las páginas Tripwire el flujo `1. GANCHO -> 2. ESTRELLA` en una única barra horizontal VIP.
+2. **Investigación Profunda Anti Copia-Pega y Recreación de Estudio `3:4` (`server/visualLandingGenerator.ts`):**
+   - `scrapeEntryProductUrlInfo()` extrae metadatos OpenGraph, JSON-LD, galería e información comercial desde cualquier URL de producto o imagen.
+   - `researchProductDeeplyWithAI()` analiza multimodalmente el producto con `openai/gpt-4o` (anatomía física en inglés para el prompt visual, transformación emocional, dolores resueltos, encaje en Paraguay y hooks de carta de venta), prohibiendo el copia-pega literal.
+   - `recreateExactProductStudioImage()` recrea con `openai/gpt-image-2.6-sunburst` la fotografía del producto en estudio comercial `3:4` de alta gama y la aloja en Cloudinary.
+3. **Carta de Venta Visual E-Commerce de 4 Imágenes de Altísimo Impacto (`sober_graphic_4sheet`):**
+   - **Imagen 1 (`entry_offer` — Tripwire con Diseño Envolvente 360°):** Dedicada al artículo de entrada con estética inmersiva de estudio (Azul Zafiro Eléctrico + Cian + Ámbar Dorado) e indicación en la propia imagen apuntando al Botón #1.
+   - **Imagen 2 (`principal_section_1_hook` — Producto Principal Sección 1/3):** Ruptura cromática (Negro Obsidiana + Rojo Carmesí Imperial + Oro Real) con titular impreso **`"¡ESPERÁ UN SEGUNDO!"`** y revelación heroica del Producto Principal.
+   - **Imagen 3 (`principal_section_2_proof` — Producto Principal Sección 2/3):** Demostración de poder en uso real + 3 callouts macro de ingeniería y materiales.
+   - **Imagen 4 (`principal_section_3_offer` — Producto Principal Sección 3/3):** Cierre de Carta de Venta con el Producto Principal + Artículo Gancho con sello **`"GRATIS DE REGALO"`** + insignia gigante **`"ENVÍO GRATUITO EN TODO PARAGUAY"`**.
+4. **Blindaje Ortográfico (`sanitizeAndEnforceSalesLetterImagePrompt`) y Revelación al Fondo del Botón #2 (`VisualProductLanding.tsx`):**
+   - Regla `ZERO-TYPO` que limita el texto renderizado dentro de cada imagen a 2–3 insignias cortas en mayúsculas geométricas (2 a 4 palabras) y limpia duplicaciones `Gs. Gs.`, con fallback automático de aspect ratio `2:3 -> 3:4`.
+   - **Botón #1 VIP** inmediatamente debajo de la Imagen 1 (sin texto HTML alrededor) y **Botón #2 VIP** oculto mientras el usuario navega arriba, revelándose únicamente cuando hace scroll profundo hasta el final de la 4ª imagen (`bottomSentinelRef`).
+

@@ -71,6 +71,9 @@ Diseñada desde cero como una aplicación nativa Android con estética monocrom�
 - 📲 **[`ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md`](./ARQUITECTURA_REPORTES_VENDEDOR_Y_SINCRONIZACION_BD.md)**: Especificación de Reportes Ejecutivos al Vendedor, hidratación autoritativa sobre Supabase sin depender de JSON local, persistencia conjunta `pedidos` (`cantidad`, `monto`, `producto_id`) + `order_attribution` (`pedido_id`) y ejes logísticos del Circuito B.
 - 🗄️ **[`database/autoads_v2_additive_migration.sql`](./database/autoads_v2_additive_migration.sql)** y **[`database/noelux_admin_schema.sql`](./database/noelux_admin_schema.sql)**: Esquemas SQL oficiales (**migración aditiva v2 ejecutada y verificada en Supabase**: 11 tablas nuevas + 25 columnas en `pedidos`).
 - 🎯 **[`GUIA_CONFIGURACION_META_ADS.md`](./GUIA_CONFIGURACION_META_ADS.md)**: Guía operativa de Meta Ads, OAuth en 1 clic, preflight `OUTCOME_LEADS` / moneda real PYG vs USD y despliegue en Railway.
+- 🚀 **[`ARQUITECTURA_CREADOR_UNIVERSAL_Y_EMBUDO_GANCHO.md`](./ARQUITECTURA_CREADOR_UNIVERSAL_Y_EMBUDO_GANCHO.md)**: Arquitectura oficial del Creador Rápido Universal, Embudo de Oferta de Entrada (`?modo=entrada`), AutoAds Híbrido y Evento WhatsApp con Encuesta Nativa + Música de Fondo.
+- 🎨 **[`ALGORITMO_CARTA_DE_VENTA_VISUAL_4_IMAGENES_E_INVESTIGACION_IA.md`](./ALGORITMO_CARTA_DE_VENTA_VISUAL_4_IMAGENES_E_INVESTIGACION_IA.md)**: Especificación algorítmica completa de la Carta de Venta Visual E-Commerce en 4 Imágenes (`sober_graphic_4sheet`), Investigación Profunda Anti Copia-Pega, Recreación de Estudio `3:4`, Blindaje Ortográfico en Imágenes IA, Tarjetas Enterizas VIP (`50% menos altura`) y Revelación al Fondo del Botón #2.
+
 
 
 
