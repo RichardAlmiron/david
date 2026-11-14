@@ -31,6 +31,13 @@ import {
   isProductCloneable,
   type QuickCreatorCloneContext
 } from '../utils/quickCreatorCloner';
+import {
+  classifyProductPageType,
+  countProductPageCategories,
+  getProductPageCategoryMeta,
+  matchesProductPageCategoryFilter,
+  type ProductPageCategoryFilter
+} from '../utils/productPageClassifier';
 
 interface QuickProductCreatorViewProps {
   defaultWaNumber: string;
@@ -98,15 +105,19 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
     [productPages]
   );
 
-  // Ordenar productos estándar primero cuando se va a elegir Producto Principal para un Tripwire
+  // Ordenar páginas Estándar del Creador Rápido primero, luego Antiguas, luego Tripwire
   const orderedPagesForTripwire = useMemo(() => {
-    return [...cloneablePages].sort((a, b) => {
-      const aIsTw = Boolean(a.tripwireConfig?.enabled && a.tripwireConfig?.entryProductName);
-      const bIsTw = Boolean(b.tripwireConfig?.enabled && b.tripwireConfig?.entryProductName);
-      if (aIsTw === bIsTw) return 0;
-      return aIsTw ? 1 : -1;
-    });
+    const rank = (cat: ReturnType<typeof classifyProductPageType>) =>
+      cat === 'quick_standard' ? 0 : cat === 'legacy' ? 1 : 2;
+    return [...cloneablePages].sort(
+      (a, b) => rank(classifyProductPageType(a)) - rank(classifyProductPageType(b))
+    );
   }, [cloneablePages]);
+
+  const cloneCategoryCounts = useMemo(
+    () => countProductPageCategories(cloneablePages),
+    [cloneablePages]
+  );
 
   // 4-step Mode-Pure Wizard:
   // 1 = Tipo (Estándar vs Tripwire)
@@ -125,6 +136,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
 
   // Referencia clonada (Estándar) o Producto Principal Estándar importado (Tripwire)
   const [clonedFrom, setClonedFrom] = useState<QuickCreatorCloneContext | null>(null);
+  const [cloneCategoryFilter, setCloneCategoryFilter] = useState<ProductPageCategoryFilter>('todas');
   const [cloneFilterQuery, setCloneFilterQuery] = useState('');
   const [differentiationNote, setDifferentiationNote] = useState('');
 
@@ -183,14 +195,15 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
 
   const displayedCatalogPages = useMemo(() => {
     const base = isTripwireMode ? orderedPagesForTripwire : cloneablePages;
+    const byCat = base.filter((p) => matchesProductPageCategoryFilter(p, cloneCategoryFilter));
     const q = cloneFilterQuery.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter(
+    if (!q) return byCat;
+    return byCat.filter(
       (p) =>
         String(p.nombre || '').toLowerCase().includes(q) ||
         String(p.slug || '').toLowerCase().includes(q)
     );
-  }, [isTripwireMode, orderedPagesForTripwire, cloneablePages, cloneFilterQuery]);
+  }, [isTripwireMode, orderedPagesForTripwire, cloneablePages, cloneCategoryFilter, cloneFilterQuery]);
 
   // Validaciones por paso
   const isStep1Complete = Boolean(pageCreationMode);
@@ -1227,6 +1240,57 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                     </div>
                   )}
 
+                  {/* FILTRO DIFERENCIADOR DENTRO DEL SELECTOR: TODAS / ANTIGUAS / ESTÁNDAR / TRIPWIRE */}
+                  <div
+                    data-testid="quick-creator-clone-category-filter"
+                    className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-xl bg-[#07090f]/90 border border-white/10"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setCloneCategoryFilter('todas')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                        cloneCategoryFilter === 'todas'
+                          ? 'bg-white/[0.14] text-white border border-white/30'
+                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      Todas <span className="font-mono tabular-nums opacity-85">({cloneCategoryCounts.todas})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCloneCategoryFilter('antiguas')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                        cloneCategoryFilter === 'antiguas'
+                          ? 'bg-zinc-600/40 text-zinc-100 border border-zinc-400/60'
+                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      Páginas Antiguas <span className="font-mono tabular-nums opacity-85">({cloneCategoryCounts.antiguas})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCloneCategoryFilter('nuevas_estandar')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                        cloneCategoryFilter === 'nuevas_estandar'
+                          ? 'bg-[#e5c88b] text-[#140e04] border border-[#f4dfb0]'
+                          : 'text-[#e5c88b] hover:bg-[#e5c88b]/12'
+                      }`}
+                    >
+                      Creador Rápido · Estándar <span className="font-mono tabular-nums opacity-90">({cloneCategoryCounts.nuevas_estandar})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCloneCategoryFilter('nuevas_tripwire')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                        cloneCategoryFilter === 'nuevas_tripwire'
+                          ? 'bg-emerald-500 text-[#03150e] border border-emerald-300'
+                          : 'text-emerald-300 hover:bg-emerald-500/15'
+                      }`}
+                    >
+                      Creador Rápido · Tripwire <span className="font-mono tabular-nums opacity-90">({cloneCategoryCounts.nuevas_tripwire})</span>
+                    </button>
+                  </div>
+
                   {cloneablePages.length > 4 && (
                     <input
                       type="text"
@@ -1237,55 +1301,258 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                     />
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {displayedCatalogPages.map((p) => {
-                      const isSelectedClone = clonedFrom?.sourceProductId === p.id;
-                      const isTwSource = Boolean(
-                        p.tripwireConfig?.enabled && p.tripwireConfig?.entryProductName
-                      );
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          data-testid={`clone-source-${p.id}`}
-                          onClick={() => handleSelectSourceProduct(p)}
-                          className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${
-                            isSelectedClone
-                              ? 'bg-white/[0.09] border-[#e5c88b]'
-                              : 'bg-[#07090f]/80 border-white/10 hover:border-white/25'
-                          }`}
-                        >
-                          {p.imagen ? (
-                            <img
-                              src={p.imagen}
-                              alt={p.nombre}
-                              referrerPolicy="no-referrer"
-                              className="w-11 h-11 rounded-lg object-cover border border-white/10 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-11 h-11 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center shrink-0">
-                              <Layers className="w-4 h-4 text-zinc-400" />
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1 space-y-0.5">
-                            <div className="text-xs font-semibold text-white truncate">{p.nombre}</div>
-                            <div className="text-[11px] text-zinc-400 truncate">
-                              {isStandardMode
-                                ? 'Producto Principal'
-                                : isTwSource
-                                  ? 'Base existente'
-                                  : 'Página Estándar'}
-                              {' · '}
-                              <span className="font-mono tabular-nums">
-                                {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))}
+                  {displayedCatalogPages.length === 0 ? (
+                    <div className="p-6 rounded-xl bg-[#07090f]/75 border border-white/10 text-center space-y-2">
+                      <p className="text-xs font-semibold text-zinc-200">
+                        No hay páginas en esta categoría o búsqueda.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCloneCategoryFilter('todas');
+                          setCloneFilterQuery('');
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-xs font-semibold text-white cursor-pointer"
+                      >
+                        Mostrar todas ({cloneCategoryCounts.todas})
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+                      {displayedCatalogPages.map((p) => {
+                        const isSelectedClone = clonedFrom?.sourceProductId === p.id;
+                        const pageCategory = classifyProductPageType(p);
+                        const pageCategoryMeta = getProductPageCategoryMeta(pageCategory);
+                        const isQuickStd = pageCategory === 'quick_standard';
+                        const isQuickTw = pageCategory === 'quick_tripwire';
+                        const primaryThumb =
+                          pageCategory !== 'legacy' && p.visualLanding?.sheets?.[0]?.imageUrl
+                            ? p.visualLanding.sheets[0].imageUrl
+                            : p.imagen || '';
+                        const hookThumb =
+                          p.tripwireConfig?.entryProductImage ||
+                          p.tripwireConfig?.entryImageUrl ||
+                          p.imagen ||
+                          '';
+                        const mainTwThumb =
+                          p.visualLanding?.sheets?.[1]?.imageUrl ||
+                          p.visualLanding?.sheets?.[0]?.imageUrl ||
+                          p.imagen ||
+                          '';
+                        const hookPrice = Number(
+                          p.tripwireConfig?.entryPriceGs ?? p.tripwireConfig?.entryProductPriceGs ?? 20000
+                        );
+
+                        if (isQuickTw) {
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              data-testid={`clone-source-${p.id}`}
+                              data-page-category={pageCategory}
+                              onClick={() => handleSelectSourceProduct(p)}
+                              className={`text-left rounded-3xl bg-[#051214] border overflow-hidden transition-all cursor-pointer ${
+                                isSelectedClone
+                                  ? 'border-emerald-300 ring-2 ring-emerald-400/55 shadow-[0_12px_30px_-14px_rgba(16,185,129,0.55)]'
+                                  : 'border-emerald-500/55 hover:border-emerald-400'
+                              }`}
+                            >
+                              <div className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-700 text-white flex items-center justify-between gap-2">
+                                <span className="text-sm sm:text-base font-black uppercase tracking-tight leading-none truncate">
+                                  {pageCategoryMeta.label}
+                                </span>
+                                {isSelectedClone && (
+                                  <span className="text-[11px] font-black uppercase bg-black/35 px-2 py-0.5 rounded text-emerald-200 shrink-0">
+                                    Elegida
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1.15fr] items-stretch divide-y sm:divide-y-0 sm:divide-x divide-white/10">
+                                <div className="flex items-center gap-2.5 bg-sky-950/35 p-3 min-w-0">
+                                  {hookThumb ? (
+                                    <img
+                                      src={hookThumb}
+                                      alt={p.tripwireConfig?.entryProductName || 'Gancho'}
+                                      referrerPolicy="no-referrer"
+                                      className="w-10 h-14 rounded-lg object-cover border border-sky-400/50 shrink-0 bg-[#07090f]"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-14 rounded-lg bg-sky-950/60 border border-sky-400/40 flex items-center justify-center shrink-0">
+                                      <Layers className="w-4 h-4 text-sky-300" />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <span className="block text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                                      Paso 1 · Gancho
+                                    </span>
+                                    <span className="block text-xs font-bold text-white truncate">
+                                      {p.tripwireConfig?.entryProductName || 'Gancho'}
+                                    </span>
+                                    <span className="block text-xs font-mono font-black tabular-nums text-sky-200">
+                                      {formatGs(hookPrice)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-center px-2 py-1 bg-black/25 text-emerald-300 font-black text-sm">
+                                  <span className="sm:hidden">↓</span>
+                                  <span className="hidden sm:inline">→</span>
+                                </div>
+
+                                <div className="flex items-center gap-2.5 bg-emerald-950/35 p-3 min-w-0">
+                                  {mainTwThumb ? (
+                                    <img
+                                      src={mainTwThumb}
+                                      alt={p.nombre}
+                                      referrerPolicy="no-referrer"
+                                      className="w-10 h-14 rounded-lg object-cover border border-emerald-400/50 shrink-0 bg-[#07090f]"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-14 rounded-lg bg-emerald-950/60 border border-emerald-400/40 flex items-center justify-center shrink-0">
+                                      <Layers className="w-4 h-4 text-emerald-300" />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                                      Paso 2 · Estrella
+                                    </span>
+                                    <span className="block text-xs sm:text-sm font-extrabold text-white truncate">
+                                      {p.nombre}
+                                    </span>
+                                    <span className="block text-xs font-mono font-black tabular-nums text-emerald-200">
+                                      {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        }
+
+                        if (isQuickStd) {
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              data-testid={`clone-source-${p.id}`}
+                              data-page-category={pageCategory}
+                              onClick={() => handleSelectSourceProduct(p)}
+                              className={`text-left rounded-2xl bg-[#130f08] border overflow-hidden transition-all cursor-pointer ${
+                                isSelectedClone
+                                  ? 'border-[#f4dfb0] ring-2 ring-[#e5c88b]/60 shadow-[0_12px_30px_-14px_rgba(229,200,139,0.55)]'
+                                  : 'border-[#e5c88b]/60 hover:border-[#f4dfb0]'
+                              }`}
+                            >
+                              <div className="px-3.5 py-2.5 bg-gradient-to-r from-[#e5c88b] via-[#edd49e] to-[#cfa85c] text-[#160f04] flex items-center justify-between gap-2">
+                                <span className="text-sm sm:text-base font-black uppercase tracking-tight leading-none truncate">
+                                  {pageCategoryMeta.label}
+                                </span>
+                                {isSelectedClone && (
+                                  <span className="text-[11px] font-black uppercase bg-[#160f04]/20 px-2 py-0.5 rounded text-[#160f04] shrink-0">
+                                    Elegida
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="p-3.5 flex items-center gap-3.5">
+                                {primaryThumb ? (
+                                  <img
+                                    src={primaryThumb}
+                                    alt={p.nombre}
+                                    referrerPolicy="no-referrer"
+                                    className="w-14 h-20 rounded-xl object-cover border-2 border-[#e5c88b]/60 shrink-0 bg-[#07090f]"
+                                  />
+                                ) : (
+                                  <div className="w-14 h-20 rounded-xl bg-white/[0.05] border border-[#e5c88b]/40 flex items-center justify-center shrink-0">
+                                    <Layers className="w-5 h-5 text-[#e5c88b]" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1 space-y-2">
+                                  <div>
+                                    <div className="text-sm sm:text-base font-extrabold text-white truncate">
+                                      {p.nombre}
+                                    </div>
+                                    <div className="text-[11px] font-mono text-zinc-400 truncate">
+                                      /?p={p.slug}
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-3 divide-x divide-[#e5c88b]/25 border-y border-[#e5c88b]/25 bg-black/30">
+                                    <div className="px-2 py-1">
+                                      <span className="block text-[9px] font-bold uppercase text-[#e5c88b]">1x</span>
+                                      <span className="text-[11px] font-mono font-bold tabular-nums text-white">
+                                        {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))}
+                                      </span>
+                                    </div>
+                                    <div className="px-2 py-1">
+                                      <span className="block text-[9px] font-bold uppercase text-zinc-400">2x</span>
+                                      <span className="text-[11px] font-mono font-bold tabular-nums text-zinc-200">
+                                        {formatGs(Number(p.precios?.[2] || Math.round((p.precios?.[1] || 189000) * 1.85)))}
+                                      </span>
+                                    </div>
+                                    <div className="px-2 py-1">
+                                      <span className="block text-[9px] font-bold uppercase text-zinc-400">3x</span>
+                                      <span className="text-[11px] font-mono font-bold tabular-nums text-zinc-200">
+                                        {formatGs(Number(p.precios?.[3] || Math.round((p.precios?.[1] || 189000) * 2.65)))}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        }
+
+                        // DISEÑO LEGACY (PÁGINA ANTIGUA COMPACTA DE ARCHIVO EN ACERO)
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            data-testid={`clone-source-${p.id}`}
+                            data-page-category={pageCategory}
+                            onClick={() => handleSelectSourceProduct(p)}
+                            className={`text-left rounded-lg bg-[#0a0c11] border overflow-hidden transition-all cursor-pointer ${
+                              isSelectedClone
+                                ? 'border-zinc-200 ring-2 ring-zinc-300/40'
+                                : 'border-zinc-700/70 hover:border-zinc-500'
+                            }`}
+                          >
+                            <div className="px-3.5 py-2 bg-zinc-900 border-b border-zinc-700/60 flex items-center justify-between gap-2">
+                              <span className="text-sm font-extrabold uppercase tracking-wider text-zinc-200 truncate">
+                                {pageCategoryMeta.label}
                               </span>
+                              {isSelectedClone && (
+                                <span className="text-[11px] font-bold uppercase text-white shrink-0">
+                                  Elegida
+                                </span>
+                              )}
                             </div>
-                            <div className="text-[10px] font-mono text-zinc-500 truncate">/?p={p.slug}</div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+
+                            <div className="p-3 flex items-center gap-3">
+                              {primaryThumb ? (
+                                <img
+                                  src={primaryThumb}
+                                  alt={p.nombre}
+                                  referrerPolicy="no-referrer"
+                                  className="w-11 h-11 rounded-md object-cover border border-zinc-600/60 shrink-0 opacity-85"
+                                />
+                              ) : (
+                                <div className="w-11 h-11 rounded-md bg-white/[0.04] border border-zinc-700 flex items-center justify-center shrink-0">
+                                  <Layers className="w-4 h-4 text-zinc-400" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                <div className="text-sm font-semibold text-zinc-200 truncate">{p.nombre}</div>
+                                <div className="text-xs font-mono tabular-nums text-zinc-400 truncate">
+                                  1x {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))} · /?p={p.slug}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </section>
               )}
 

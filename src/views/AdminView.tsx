@@ -2823,68 +2823,68 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               {/* SEGMENTADOR SIEMPRE ACTIVO: ANTIGUAS vs CREADOR RÁPIDO (ESTÁNDAR vs TRIPWIRE) */}
               <div
                 data-testid="product-category-filter-bar"
-                className="flex flex-wrap items-center justify-between gap-2 p-1.5 rounded-2xl bg-[#0b0e16]/85 backdrop-blur-md border border-white/10"
+                className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-2xl bg-[#0b0e16]/90 backdrop-blur-md border border-white/10"
               >
                 <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
                     data-testid="filter-category-todas"
                     onClick={() => setFilterProductCategory('todas')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors border whitespace-nowrap ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors border whitespace-nowrap ${
                       filterProductCategory === 'todas'
-                        ? 'bg-white/[0.12] text-white border-white/25'
+                        ? 'bg-white/[0.14] text-white border-white/30'
                         : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-white/[0.04]'
                     }`}
                   >
-                    Todas <span className="font-mono tabular-nums opacity-80">({productCategoryCounts.todas})</span>
+                    Todas <span className="font-mono tabular-nums opacity-85">({productCategoryCounts.todas})</span>
                   </button>
                   <button
                     type="button"
                     data-testid="filter-category-antiguas"
                     onClick={() => setFilterProductCategory('antiguas')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors border whitespace-nowrap ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors border whitespace-nowrap ${
                       filterProductCategory === 'antiguas'
-                        ? 'bg-zinc-600/25 text-zinc-100 border-zinc-400/45'
+                        ? 'bg-zinc-600/35 text-zinc-100 border-zinc-400/60'
                         : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-white/[0.04]'
                     }`}
                   >
-                    Antiguas <span className="font-mono tabular-nums opacity-80">({productCategoryCounts.antiguas})</span>
+                    Páginas Antiguas <span className="font-mono tabular-nums opacity-85">({productCategoryCounts.antiguas})</span>
                   </button>
                   <button
                     type="button"
                     data-testid="filter-category-nuevas"
                     onClick={() => setFilterProductCategory('nuevas')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors border whitespace-nowrap ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors border whitespace-nowrap ${
                       filterProductCategory === 'nuevas'
-                        ? 'bg-sky-500/15 text-sky-200 border-sky-400/45'
-                        : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-white/[0.04]'
+                        ? 'bg-sky-500/20 text-sky-200 border-sky-400/55'
+                        : 'bg-transparent text-sky-300/80 border-transparent hover:text-sky-200 hover:bg-sky-500/10'
                     }`}
                   >
-                    Creador Rápido <span className="font-mono tabular-nums opacity-80">({productCategoryCounts.nuevas})</span>
+                    Creador Rápido <span className="font-mono tabular-nums opacity-85">({productCategoryCounts.nuevas})</span>
                   </button>
                   <button
                     type="button"
                     data-testid="filter-category-estandar"
                     onClick={() => setFilterProductCategory('nuevas_estandar')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors border whitespace-nowrap ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors border whitespace-nowrap ${
                       filterProductCategory === 'nuevas_estandar'
-                        ? 'bg-[#e5c88b]/20 text-[#f4dfb0] border-[#e5c88b]/55'
-                        : 'bg-transparent text-[#e5c88b]/80 border-transparent hover:text-[#f4dfb0] hover:bg-[#e5c88b]/10'
+                        ? 'bg-[#e5c88b] text-[#140e04] border-[#f4dfb0]'
+                        : 'bg-transparent text-[#e5c88b] border-transparent hover:bg-[#e5c88b]/12'
                     }`}
                   >
-                    Estándar (Nueva) <span className="font-mono tabular-nums opacity-90">({productCategoryCounts.nuevas_estandar})</span>
+                    Creador Rápido · Estándar <span className="font-mono tabular-nums opacity-90">({productCategoryCounts.nuevas_estandar})</span>
                   </button>
                   <button
                     type="button"
                     data-testid="filter-category-tripwire"
                     onClick={() => setFilterProductCategory('nuevas_tripwire')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors border whitespace-nowrap ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors border whitespace-nowrap ${
                       filterProductCategory === 'nuevas_tripwire'
-                        ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/55'
-                        : 'bg-transparent text-emerald-300/80 border-transparent hover:text-emerald-200 hover:bg-emerald-500/10'
+                        ? 'bg-emerald-500 text-[#03150e] border-emerald-300'
+                        : 'bg-transparent text-emerald-300 border-transparent hover:bg-emerald-500/15'
                     }`}
                   >
-                    Tripwire (Nueva) <span className="font-mono tabular-nums opacity-90">({productCategoryCounts.nuevas_tripwire})</span>
+                    Creador Rápido · Tripwire <span className="font-mono tabular-nums opacity-90">({productCategoryCounts.nuevas_tripwire})</span>
                   </button>
                 </div>
 
@@ -3228,25 +3228,99 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     allFilteredIdsForProd.every(id => selectedOrderIds.includes(id));
 
                   const isJustCreated = recentlyCreatedProductId === prod.id;
+                  const mainSheetCount = prod.visualLanding?.sheets?.length || 2;
+                  const tripwireMainThumbUrl =
+                    prod.visualLanding?.sheets?.[1]?.imageUrl ||
+                    prod.visualLanding?.sheets?.[0]?.imageUrl ||
+                    prod.imagen ||
+                    '/assets/real/galeria-1.jpg';
+
+                  const renderCardActionsToolbar = (tone: 'legacy' | 'standard' | 'tripwire') => (
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                      {isExpanded && (
+                        <>
+                          <button type="button" data-testid={`toggle-pixel-config-${prod.id}`} onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'pixel'); }} className={`h-8 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='pixel' ? 'bg-white/[0.12] text-white border-[#e5c88b]/55' : 'bg-white/[0.04] text-zinc-300 border-white/10 hover:text-white'}`}>
+                            Píxel
+                          </button>
+                          <button type="button" onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'precios'); }} className={`h-8 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='precios' ? 'bg-white/[0.12] text-white border-[#e5c88b]/55' : 'bg-white/[0.04] text-zinc-300 border-white/10 hover:text-white'}`}>
+                            Precios
+                          </button>
+                          <button type="button" onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'voz'); }} className={`h-8 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='voz' ? 'bg-white/[0.12] text-white border-[#e5c88b]/55' : 'bg-white/[0.04] text-zinc-300 border-white/10 hover:text-white'}`}>
+                            Voz
+                          </button>
+                          <button type="button" data-testid={`quick-excel-confirmed-${prod.id}`} onClick={e => { e.stopPropagation(); const count = downloadConfirmedOrdersExcelCsv(prod, allProdOrders); showToast(count > 0 ? `Excel descargada (${count} pedidos).` : 'Sin pedidos para exportar.'); }} className="h-8 px-2.5 rounded-lg text-[11px] font-semibold bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-emerald-300 cursor-pointer transition-colors inline-flex items-center gap-1" title="Descargar Excel">
+                            <Download className="w-3 h-3" /> Excel
+                          </button>
+                          <div className="relative" onClick={e => e.stopPropagation()}>
+                            <button type="button" onClick={() => setShowAudioPopover(prev => prev === prod.id ? null : prod.id)} className={`h-8 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border inline-flex items-center gap-1 ${(autoCallOnOrder || autoChatOnOrder) ? 'bg-white/[0.08] text-[#e5c88b] border-[#e5c88b]/40' : 'bg-white/[0.04] text-zinc-300 border-white/10 hover:text-white'}`}>
+                              Audio <ChevronDown className="w-3 h-3" />
+                            </button>
+                            {showAudioPopover === prod.id && (
+                              <div className="absolute right-0 top-full mt-1 z-50 bg-[#0b0e16]/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-2 min-w-[140px] space-y-1">
+                                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider px-2 pb-1">Recepción</div>
+                                <button type="button" onClick={() => { handleToggleAutomationSetting('autoCallOnOrder', true); handleToggleAutomationSetting('autoChatOnOrder', true); setShowAudioPopover(null); }} className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${(autoCallOnOrder || autoChatOnOrder) ? 'bg-[#e5c88b]/15 text-[#e5c88b]' : 'text-zinc-300 hover:bg-white/[0.06]'}`}>
+                                  Automático
+                                </button>
+                                <button type="button" onClick={() => { handleToggleAutomationSetting('autoCallOnOrder', false); handleToggleAutomationSetting('autoChatOnOrder', false); setShowAudioPopover(null); }} className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${(!autoCallOnOrder && !autoChatOnOrder) ? 'bg-white/[0.1] text-white' : 'text-zinc-300 hover:bg-white/[0.06]'}`}>
+                                  Manual
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <button type="button" data-testid={`btn-manual-order-${prod.id}`} onClick={e => { e.stopPropagation(); openManualOrderModal(prod); }} className="h-8 px-2.5 rounded-lg text-[11px] font-bold bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] cursor-pointer transition-colors inline-flex items-center gap-1">
+                            <Plus className="w-3 h-3" /> Nuevo
+                          </button>
+                          <button type="button" data-testid={`toggle-order-filters-${prod.id}`} onClick={e => { e.stopPropagation(); setShowOrderFiltersBar(prev => !prev); }} className={`h-8 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border inline-flex items-center gap-1 ${(showOrderFiltersBar || filterOrderName || filterOrderPhone) ? 'bg-[#e5c88b]/15 text-[#e5c88b] border-[#e5c88b]/45' : 'bg-white/[0.04] text-zinc-300 border-white/10 hover:text-white'}`}>
+                            <Filter className="w-3 h-3" /> Filtrar
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); toggleProductExpand(prod); }}
+                        className={`h-8 px-3 rounded-lg text-xs font-bold transition-colors cursor-pointer border inline-flex items-center gap-1.5 font-mono tabular-nums whitespace-nowrap ${
+                          isExpanded
+                            ? 'bg-white/[0.15] text-white border-white/35'
+                            : tone === 'tripwire'
+                              ? 'bg-emerald-500 hover:bg-emerald-400 text-[#03150e] border-emerald-300'
+                              : tone === 'standard'
+                                ? 'bg-[#e5c88b] hover:bg-[#f2da9f] text-[#140e04] border-[#f4dfb0]'
+                                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-600'
+                        }`}
+                      >
+                        {isExpanded ? 'Cerrar' : `Abrir (${activeProdOrdersCount})`}
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+                      <button
+                        type="button"
+                        data-testid={`delete-product-btn-${prod.id}`}
+                        onClick={e => { e.stopPropagation(); openRedDeleteProductsModal([prod.id]); }}
+                        className="h-8 w-8 rounded-lg bg-white/[0.04] hover:bg-red-950/60 text-zinc-400 hover:text-red-400 border border-white/10 flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
 
                   const cardContainerClasses = isProductChecked
-                    ? 'rounded-2xl bg-[#0b0e16]/85 border-red-500/55 ring-1 ring-red-500/25'
+                    ? 'rounded-2xl bg-[#0b0e16]/90 border-red-500/70 ring-1 ring-red-500/35'
                     : isQuickTripwireCard
-                      ? `rounded-2xl bg-gradient-to-r from-[#061813]/95 via-[#09121a]/90 to-[#0b0e16]/95 ${
+                      ? `rounded-3xl bg-[#051214] ${
                           isJustCreated || isExpanded
-                            ? 'border-emerald-400/75 ring-1 ring-emerald-400/25'
-                            : 'border-emerald-400/45 hover:border-emerald-300/80 shadow-[0_8px_28px_-14px_rgba(16,185,129,0.28)]'
+                            ? 'border-emerald-400 ring-1 ring-emerald-400/30'
+                            : 'border-emerald-500/60 hover:border-emerald-400 shadow-[0_12px_32px_-16px_rgba(16,185,129,0.35)]'
                         }`
                       : isQuickStandardCard
-                        ? `rounded-2xl bg-gradient-to-r from-[#171209]/95 via-[#0c0f17]/90 to-[#0b0e16]/95 ${
+                        ? `rounded-2xl bg-[#130f08] ${
                             isJustCreated || isExpanded
-                              ? 'border-[#e5c88b]/75 ring-1 ring-[#e5c88b]/25'
-                              : 'border-[#e5c88b]/45 hover:border-[#e5c88b]/80 shadow-[0_8px_28px_-14px_rgba(229,200,139,0.24)]'
+                              ? 'border-[#e5c88b] ring-1 ring-[#e5c88b]/30'
+                              : 'border-[#e5c88b]/60 hover:border-[#f4dfb0] shadow-[0_12px_32px_-16px_rgba(229,200,139,0.3)]'
                           }`
-                        : `rounded-xl bg-[#080b11]/75 ${
+                        : `rounded-lg bg-[#0a0c11] ${
                             isExpanded
-                              ? 'border-zinc-500/70'
-                              : 'border-zinc-700/45 hover:border-zinc-500/65'
+                              ? 'border-zinc-500'
+                              : 'border-zinc-700/70 hover:border-zinc-500/80'
                           }`;
 
                   return (
@@ -3254,217 +3328,253 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       key={prod.id}
                       data-testid={`product-card-${prod.id}`}
                       data-page-category={pageCategory}
-                      className={`w-full backdrop-blur-md border transition-colors duration-150 overflow-hidden ${cardContainerClasses}`}
+                      className={`w-full border transition-colors duration-150 overflow-hidden ${cardContainerClasses}`}
                     >
-                      {/* Borde superior distintivo según versión/tipo de página */}
-                      {isQuickTripwireCard && (
-                        <div className="h-[2px] w-full bg-gradient-to-r from-emerald-500/20 via-emerald-400/90 to-teal-300/20" />
-                      )}
-                      {isQuickStandardCard && (
-                        <div className="h-[2px] w-full bg-gradient-to-r from-[#e5c88b]/20 via-[#e5c88b]/90 to-[#f4dfb0]/20" />
-                      )}
+                      {/* 3 ARQUITECTURAS DE TARJETA COMPLETAMENTE DIFERENTES */}
+                      {isQuickTripwireCard ? (
+                        /* DISEÑO 3: CREADOR RÁPIDO · TRIPWIRE (EMBUDO VISUAL EN 2 ETAPAS AZUL/ESMERALDA) */
+                        <div
+                          onClick={() => toggleProductExpand(prod)}
+                          className="cursor-pointer select-none"
+                        >
+                          {/* BANDA SUPERIOR GIGANTE DE IDENTIDAD TRIPWIRE */}
+                          <div className="px-4 py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-700 text-white flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <label
+                                onClick={e => e.stopPropagation()}
+                                className="inline-flex items-center justify-center cursor-pointer shrink-0 bg-black/25 p-1.5 rounded-md border border-white/25"
+                                title="Seleccionar esta página"
+                              >
+                                <input
+                                  type="checkbox"
+                                  data-testid={`select-product-checkbox-${prod.id}`}
+                                  checked={isProductChecked}
+                                  onChange={() => toggleSelectProductPage(prod.id)}
+                                  className="w-4 h-4 rounded accent-emerald-300 cursor-pointer"
+                                />
+                              </label>
+                              <div className="min-w-0">
+                                <span className="block text-base sm:text-lg md:text-xl font-black uppercase tracking-tight leading-none text-white">
+                                  {pageCategoryMeta.label}
+                                </span>
+                                <span className="block text-xs font-medium text-emerald-50/90 mt-1">
+                                  Embudo en 2 etapas dentro de la página · {mainSheetCount} láminas
+                                  {isJustCreated ? ' · Recién creada' : ''}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-white/95 whitespace-nowrap">
+                              {hasPixelConfigured
+                                ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
+                                : 'Sin Píxel'}
+                            </span>
+                          </div>
 
-                      {/* TARJETA DE PRODUCTO DIFERENCIADA */}
-                      <div
-                        onClick={() => toggleProductExpand(prod)}
-                        className="w-full px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-white/[0.03] transition-colors duration-150"
-                      >
-                        {/* IZQUIERDA: Checkbox + Visual Diferenciado + Nombre + Metadata */}
-                        <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
-                          <label
-                            onClick={e => e.stopPropagation()}
-                            className="inline-flex items-center justify-center cursor-pointer shrink-0"
-                            title="Seleccionar esta página de producto"
-                          >
-                            <input
-                              type="checkbox"
-                              data-testid={`select-product-checkbox-${prod.id}`}
-                              checked={isProductChecked}
-                              onChange={() => toggleSelectProductPage(prod.id)}
-                              className="w-3.5 h-3.5 rounded accent-[#e5c88b] cursor-pointer"
-                            />
-                          </label>
+                          {/* CUERPO DUAL EN 2 ETAPAS (GANCHO COBALTO -> ESTRELLA ESMERALDA) */}
+                          <div className="p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4 hover:bg-emerald-950/20 transition-colors">
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1.2fr] items-stretch flex-1 min-w-0 divide-y md:divide-y-0 md:divide-x divide-white/10 border-y border-white/10">
+                              {/* PASO 1: GANCHO */}
+                              <div className="flex items-center gap-3 bg-sky-950/35 px-3 py-2.5 min-w-0">
+                                <img
+                                  src={tripwireHookThumbUrl}
+                                  alt={prod.tripwireConfig?.entryProductName || 'Gancho'}
+                                  referrerPolicy="no-referrer"
+                                  className="w-12 h-16 rounded-lg object-cover border border-sky-400/50 shrink-0 bg-[#07090f]"
+                                />
+                                <div className="min-w-0">
+                                  <span className="block text-[11px] font-bold uppercase tracking-wider text-sky-300">
+                                    Paso 1 · Gancho Directo
+                                  </span>
+                                  <p className="text-sm font-bold text-white truncate mt-0.5" title={prod.tripwireConfig?.entryProductName}>
+                                    {prod.tripwireConfig?.entryProductName || 'Producto Gancho'}
+                                  </p>
+                                  <span className="text-sm font-mono font-black tabular-nums text-sky-200">
+                                    {formatGs(tripwireHookPrice)}
+                                  </span>
+                                </div>
+                              </div>
 
-                          {isQuickTripwireCard ? (
-                            <div className="relative shrink-0 w-12 h-14">
+                              {/* CONECTOR CENTRAL */}
+                              <div className="flex items-center justify-center px-3 py-1 bg-black/25 text-emerald-300 font-black text-base select-none">
+                                <span className="md:hidden">↓</span>
+                                <span className="hidden md:inline">→</span>
+                              </div>
+
+                              {/* PASO 2: PRODUCTO ESTRELLA */}
+                              <div className="flex items-center gap-3 bg-emerald-950/35 px-3 py-2.5 min-w-0">
+                                <img
+                                  src={tripwireMainThumbUrl}
+                                  alt={prod.nombre}
+                                  referrerPolicy="no-referrer"
+                                  className="w-12 h-16 rounded-lg object-cover border border-emerald-400/50 shrink-0 bg-[#07090f]"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <span className="block text-[11px] font-bold uppercase tracking-wider text-emerald-300">
+                                    Paso 2 · Producto Estrella + Regalo
+                                  </span>
+                                  <h3 className="text-sm sm:text-base font-extrabold text-white truncate mt-0.5" title={prod.nombre}>
+                                    {prod.nombre}
+                                  </h3>
+                                  <div className="flex items-center gap-2 text-xs font-mono tabular-nums mt-0.5">
+                                    <span className="font-black text-emerald-200">
+                                      {formatGs(prod.precios?.[1] || 189000)}
+                                    </span>
+                                    <span className="text-zinc-500">·</span>
+                                    <span className="text-zinc-400 truncate">/?p={prod.slug}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {renderCardActionsToolbar('tripwire')}
+                          </div>
+                        </div>
+                      ) : isQuickStandardCard ? (
+                        /* DISEÑO 2: CREADOR RÁPIDO · ESTÁNDAR (VITRINA DORADA DE UN SOLO PRODUCTO) */
+                        <div
+                          onClick={() => toggleProductExpand(prod)}
+                          className="cursor-pointer select-none"
+                        >
+                          {/* BANDA SUPERIOR DORADA DE GRAN FORMATO */}
+                          <div className="px-4 py-3 bg-gradient-to-r from-[#e5c88b] via-[#edd49e] to-[#cfa85c] text-[#160f04] flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <label
+                                onClick={e => e.stopPropagation()}
+                                className="inline-flex items-center justify-center cursor-pointer shrink-0 bg-[#160f04]/15 p-1.5 rounded-md border border-[#160f04]/25"
+                                title="Seleccionar esta página"
+                              >
+                                <input
+                                  type="checkbox"
+                                  data-testid={`select-product-checkbox-${prod.id}`}
+                                  checked={isProductChecked}
+                                  onChange={() => toggleSelectProductPage(prod.id)}
+                                  className="w-4 h-4 rounded accent-[#160f04] cursor-pointer"
+                                />
+                              </label>
+                              <div className="min-w-0">
+                                <span className="block text-base sm:text-lg md:text-xl font-black uppercase tracking-tight leading-none text-[#160f04]">
+                                  {pageCategoryMeta.label}
+                                </span>
+                                <span className="block text-xs font-bold text-[#2f2008] mt-1">
+                                  Página directa 100% enfocada en un solo producto · {mainSheetCount} láminas
+                                  {isJustCreated ? ' · Recién creada' : ''}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-xs font-mono font-extrabold text-[#160f04] whitespace-nowrap">
+                              {hasPixelConfigured
+                                ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
+                                : 'Sin Píxel'}
+                            </span>
+                          </div>
+
+                          {/* VITRINA DE PRODUCTO ÚNICO + TIRA DE 3 PACKS */}
+                          <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-[#e5c88b]/[0.05] transition-colors">
+                            <div className="flex items-center gap-4 min-w-0 flex-1">
                               <img
                                 src={primaryThumbUrl}
                                 alt={prod.nombre}
                                 referrerPolicy="no-referrer"
-                                className="w-11 h-14 rounded-xl object-cover border border-emerald-400/50 bg-[#07090f]"
+                                className="w-16 h-24 rounded-xl object-cover border-2 border-[#e5c88b]/60 shrink-0 bg-[#07090f] shadow-md"
                               />
-                              <img
-                                src={tripwireHookThumbUrl}
-                                alt={prod.tripwireConfig?.entryProductName || 'Gancho'}
-                                referrerPolicy="no-referrer"
-                                className="w-6 h-6 rounded-lg object-cover border-2 border-[#061813] ring-1 ring-emerald-400/80 absolute -bottom-1 -right-0.5 bg-[#07090f]"
-                                title={`Gancho: ${prod.tripwireConfig?.entryProductName}`}
-                              />
-                            </div>
-                          ) : isQuickStandardCard ? (
-                            <img
-                              src={primaryThumbUrl}
-                              alt={prod.nombre}
-                              referrerPolicy="no-referrer"
-                              className="w-11 h-14 rounded-xl object-cover border border-[#e5c88b]/50 shrink-0 bg-[#07090f]"
-                            />
-                          ) : (
-                            <img
-                              src={primaryThumbUrl}
-                              alt={prod.nombre}
-                              referrerPolicy="no-referrer"
-                              className="w-11 h-11 rounded-lg object-cover border border-zinc-600/45 shrink-0 bg-[#07090f] opacity-90"
-                            />
-                          )}
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <div>
+                                  <h3 className="text-base sm:text-lg font-extrabold text-white truncate" title={prod.nombre}>
+                                    {prod.nombre}
+                                  </h3>
+                                  <p className="text-xs font-mono text-zinc-400 truncate">
+                                    /?p={prod.slug} · {prod.freeShipping === false ? 'Envío Pagado' : 'Envío Gratis en Paraguay'}
+                                  </p>
+                                </div>
 
-                          <div className="min-w-0 flex-1">
-                            {/* Kicker limpio sin pills */}
-                            <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider mb-0.5 truncate">
-                              <span
-                                className={
-                                  isQuickTripwireCard
-                                    ? 'text-emerald-300 font-semibold'
-                                    : isQuickStandardCard
-                                      ? 'text-[#e5c88b] font-semibold'
-                                      : 'text-zinc-400 font-medium'
-                                }
-                              >
-                                {pageCategoryMeta.kicker}
-                              </span>
-                              {!isLegacyCard && (
-                                <span className="text-zinc-500 hidden sm:inline">
-                                  · {prod.visualLanding?.sheets?.length || 2} láminas
-                                </span>
-                              )}
-                              {isJustCreated && (
-                                <span className="text-[#f4dfb0]">· Recién creada</span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3
-                                className={`text-sm font-semibold truncate max-w-[200px] sm:max-w-[280px] md:max-w-[360px] xl:max-w-none ${
-                                  isLegacyCard ? 'text-zinc-200' : 'text-white'
-                                }`}
-                                title={prod.nombre}
-                              >
-                                {prod.nombre}
-                              </h3>
-                              <span
-                                className={`text-[10px] font-mono shrink-0 ${
-                                  hasPixelConfigured ? 'text-emerald-400' : 'text-zinc-500'
-                                }`}
-                              >
-                                {hasPixelConfigured
-                                  ? `· Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
-                                  : '· Sin Píxel'}
-                              </span>
-                            </div>
-
-                            {isQuickTripwireCard ? (
-                              <div className="flex items-center gap-2 text-[12px] text-zinc-400 mt-1 overflow-hidden">
-                                <span className="text-emerald-300 font-mono tabular-nums truncate max-w-[210px] sm:max-w-[280px]">
-                                  Gancho: {prod.tripwireConfig?.entryProductName} ({formatGs(tripwireHookPrice)})
-                                </span>
-                                <span className="text-zinc-600">→</span>
-                                <span className="text-zinc-100 font-mono tabular-nums whitespace-nowrap">
-                                  Principal: {formatGs(prod.precios?.[1] || 189000)}
-                                </span>
-                                <span className="hidden md:inline font-mono truncate max-w-[140px] text-zinc-500">
-                                  · /?p={prod.slug}
-                                </span>
+                                <div className="grid grid-cols-3 max-w-md divide-x divide-[#e5c88b]/25 border-y border-[#e5c88b]/25 bg-black/30">
+                                  <div className="px-3 py-1.5">
+                                    <span className="block text-[10px] font-bold uppercase text-[#e5c88b]">Pack 1x</span>
+                                    <span className="text-xs sm:text-sm font-mono font-bold tabular-nums text-white">
+                                      {formatGs(prod.precios?.[1] || 189000)}
+                                    </span>
+                                  </div>
+                                  <div className="px-3 py-1.5">
+                                    <span className="block text-[10px] font-bold uppercase text-zinc-400">Pack 2x</span>
+                                    <span className="text-xs sm:text-sm font-mono font-bold tabular-nums text-zinc-200">
+                                      {formatGs(prod.precios?.[2] || 358000)}
+                                    </span>
+                                  </div>
+                                  <div className="px-3 py-1.5">
+                                    <span className="block text-[10px] font-bold uppercase text-zinc-400">Pack 3x</span>
+                                    <span className="text-xs sm:text-sm font-mono font-bold tabular-nums text-zinc-200">
+                                      {formatGs(prod.precios?.[3] || 499000)}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            ) : (
-                              <div className="flex items-center gap-2 text-[12px] text-zinc-500 mt-1 overflow-hidden">
-                                <span className="font-mono truncate max-w-[130px] sm:max-w-[190px] text-zinc-400">
-                                  /?p={prod.slug}
-                                </span>
-                                <span className="text-zinc-700">·</span>
-                                <span className="text-zinc-200 font-mono tabular-nums whitespace-nowrap">
-                                  1x {formatGs(prod.precios?.[1] || 189000)}
-                                </span>
-                                <span
-                                  className={`hidden sm:inline font-mono tabular-nums whitespace-nowrap ${
-                                    isQuickStandardCard ? 'text-[#e5c88b]' : 'text-zinc-400'
-                                  }`}
-                                >
-                                  · 2x {formatGs(prod.precios?.[2] || 358000)}
-                                </span>
-                                <span className="hidden md:inline text-zinc-500 whitespace-nowrap">
-                                  · {prod.freeShipping === false ? 'Envío Pagado' : 'Envío Gratis'}
-                                </span>
-                              </div>
-                            )}
+                            </div>
+
+                            {renderCardActionsToolbar('standard')}
                           </div>
                         </div>
+                      ) : (
+                        /* DISEÑO 1: PÁGINA ANTIGUA (FICHA CLÁSICA COMPACTA DE ARCHIVO EN ACERO) */
+                        <div
+                          onClick={() => toggleProductExpand(prod)}
+                          className="cursor-pointer select-none"
+                        >
+                          {/* CABECERA CLÁSICA EN ACERO CON LETRA GRANDE */}
+                          <div className="px-4 py-2.5 bg-zinc-900 border-b border-zinc-700/60 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <label
+                                onClick={e => e.stopPropagation()}
+                                className="inline-flex items-center justify-center cursor-pointer shrink-0"
+                                title="Seleccionar esta página"
+                              >
+                                <input
+                                  type="checkbox"
+                                  data-testid={`select-product-checkbox-${prod.id}`}
+                                  checked={isProductChecked}
+                                  onChange={() => toggleSelectProductPage(prod.id)}
+                                  className="w-3.5 h-3.5 rounded accent-zinc-300 cursor-pointer"
+                                />
+                              </label>
+                              <span className="text-sm sm:text-base md:text-lg font-extrabold uppercase tracking-wider text-zinc-200">
+                                {pageCategoryMeta.label}
+                              </span>
+                              <span className="text-[11px] text-zinc-400 hidden sm:inline">
+                                · Versión clásica anterior
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-mono text-zinc-400">
+                              {hasPixelConfigured
+                                ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
+                                : 'Sin Píxel'}
+                            </span>
+                          </div>
 
-                        {/* DERECHA: Toolbar compacto */}
-                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                          {isExpanded && (
-                            <>
-                              <button type="button" data-testid={`toggle-pixel-config-${prod.id}`} onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'pixel'); }} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='pixel' ? 'bg-white/[0.1] text-white border-[#e5c88b]/50' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
-                                Píxel
-                              </button>
-                              <button type="button" onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'precios'); }} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='precios' ? 'bg-white/[0.1] text-white border-[#e5c88b]/50' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
-                                Precios
-                              </button>
-                              <button type="button" onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'voz'); }} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='voz' ? 'bg-white/[0.1] text-white border-[#e5c88b]/50' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
-                                Voz
-                              </button>
-                              <button type="button" data-testid={`quick-excel-confirmed-${prod.id}`} onClick={e => { e.stopPropagation(); const count = downloadConfirmedOrdersExcelCsv(prod, allProdOrders); showToast(count > 0 ? `Excel descargada (${count} pedidos).` : 'Sin pedidos para exportar.'); }} className="h-7 px-2.5 rounded-lg text-[11px] font-semibold bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-emerald-300 cursor-pointer transition-colors inline-flex items-center gap-1" title="Descargar Excel">
-                                <Download className="w-3 h-3" /> Excel
-                              </button>
-                              <div className="relative" onClick={e => e.stopPropagation()}>
-                                <button type="button" onClick={() => setShowAudioPopover(prev => prev === prod.id ? null : prod.id)} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border inline-flex items-center gap-1 ${(autoCallOnOrder || autoChatOnOrder) ? 'bg-white/[0.08] text-[#e5c88b] border-[#e5c88b]/40' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
-                                  Audio <ChevronDown className="w-3 h-3" />
-                                </button>
-                                {showAudioPopover === prod.id && (
-                                  <div className="absolute right-0 top-full mt-1 z-50 bg-[#0b0e16]/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-2 min-w-[140px] space-y-1">
-                                    <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider px-2 pb-1">Recepción</div>
-                                    <button type="button" onClick={() => { handleToggleAutomationSetting('autoCallOnOrder', true); handleToggleAutomationSetting('autoChatOnOrder', true); setShowAudioPopover(null); }} className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${(autoCallOnOrder || autoChatOnOrder) ? 'bg-[#e5c88b]/15 text-[#e5c88b]' : 'text-zinc-300 hover:bg-white/[0.06]'}`}>
-                                      Automático
-                                    </button>
-                                    <button type="button" onClick={() => { handleToggleAutomationSetting('autoCallOnOrder', false); handleToggleAutomationSetting('autoChatOnOrder', false); setShowAudioPopover(null); }} className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${(!autoCallOnOrder && !autoChatOnOrder) ? 'bg-white/[0.1] text-white' : 'text-zinc-300 hover:bg-white/[0.06]'}`}>
-                                      Manual
-                                    </button>
-                                  </div>
-                                )}
+                          {/* FILA COMPACTA TRADICIONAL */}
+                          <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <img
+                                src={primaryThumbUrl}
+                                alt={prod.nombre}
+                                referrerPolicy="no-referrer"
+                                className="w-11 h-11 rounded-md object-cover border border-zinc-600/60 shrink-0 bg-[#07090f] opacity-85"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <h3 className="text-sm font-semibold text-zinc-200 truncate" title={prod.nombre}>
+                                  {prod.nombre}
+                                </h3>
+                                <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono tabular-nums mt-0.5 truncate">
+                                  <span className="truncate">/?p={prod.slug}</span>
+                                  <span>·</span>
+                                  <span className="text-zinc-200 font-semibold">1x {formatGs(prod.precios?.[1] || 189000)}</span>
+                                  <span className="hidden md:inline">· {prod.freeShipping === false ? 'Envío Pagado' : 'Envío Gratis'}</span>
+                                </div>
                               </div>
-                              <button type="button" data-testid={`btn-manual-order-${prod.id}`} onClick={e => { e.stopPropagation(); openManualOrderModal(prod); }} className="h-7 px-2.5 rounded-lg text-[11px] font-bold bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] cursor-pointer transition-colors inline-flex items-center gap-1">
-                                <Plus className="w-3 h-3" /> Nuevo
-                              </button>
-                              <button type="button" data-testid={`toggle-order-filters-${prod.id}`} onClick={e => { e.stopPropagation(); setShowOrderFiltersBar(prev => !prev); }} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border inline-flex items-center gap-1 ${(showOrderFiltersBar || filterOrderName || filterOrderPhone) ? 'bg-[#e5c88b]/15 text-[#e5c88b] border-[#e5c88b]/45' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
-                                <Filter className="w-3 h-3" /> Filtrar
-                              </button>
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); toggleProductExpand(prod); }}
-                            className={`h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer border inline-flex items-center gap-1 font-mono tabular-nums ${
-                              isExpanded
-                                ? 'bg-white/[0.12] text-white border-[#e5c88b]/40'
-                                : isQuickTripwireCard
-                                  ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/25'
-                                  : isQuickStandardCard
-                                    ? 'bg-[#e5c88b]/12 text-[#f4dfb0] border-[#e5c88b]/40 hover:bg-[#e5c88b]/20'
-                                    : 'bg-white/[0.04] text-zinc-300 border-white/10 hover:bg-white/[0.08]'
-                            }`}
-                          >
-                            {isExpanded ? 'Cerrar' : `Abrir (${activeProdOrdersCount})`}
-                            <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                          </button>
-                          <button
-                            type="button"
-                            data-testid={`delete-product-btn-${prod.id}`}
-                            onClick={e => { e.stopPropagation(); openRedDeleteProductsModal([prod.id]); }}
-                            className="h-7 w-7 rounded-lg bg-white/[0.04] hover:bg-red-950/50 text-zinc-500 hover:text-red-400 border border-white/10 flex items-center justify-center cursor-pointer transition-colors shrink-0"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            </div>
+
+                            {renderCardActionsToolbar('legacy')}
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* CONTENIDO EXPANDIDO DEL PRODUCTO */}
                       {isExpanded && (
