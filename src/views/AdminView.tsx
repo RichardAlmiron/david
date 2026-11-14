@@ -3302,23 +3302,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   );
 
                   const cardContainerClasses = isProductChecked
-                    ? 'rounded-2xl bg-[#19121a] border-red-400/80 ring-1 ring-red-400/40 shadow-[0_12px_28px_rgba(0,0,0,0.5)]'
+                    ? 'rounded-xl bg-[#1f131a] border-red-400/80 ring-1 ring-red-400/40 shadow-[0_8px_20px_rgba(0,0,0,0.45)]'
                     : isQuickTripwireCard
-                      ? `rounded-2xl bg-gradient-to-r from-[#102534] via-[#13242b] to-[#102a22] ${
+                      ? `rounded-xl bg-gradient-to-r from-[#0e2736] via-[#10242b] to-[#0f2c22] ${
                           isJustCreated || isExpanded
-                            ? 'border-emerald-300 ring-1 ring-emerald-400/45 shadow-[0_16px_36px_-10px_rgba(16,185,129,0.38)]'
-                            : 'border-emerald-400/70 hover:border-emerald-300 shadow-[0_14px_30px_-10px_rgba(16,185,129,0.28)]'
+                            ? 'border-emerald-300 ring-1 ring-emerald-400/45 shadow-[0_12px_28px_-10px_rgba(16,185,129,0.4)]'
+                            : 'border-emerald-400/75 hover:border-emerald-300 shadow-[0_10px_24px_-10px_rgba(16,185,129,0.28)]'
                         }`
                       : isQuickStandardCard
-                        ? `rounded-2xl bg-gradient-to-r from-[#241d12] via-[#1c1a1c] to-[#171b28] ${
+                        ? `rounded-xl bg-gradient-to-r from-[#282014] via-[#1c1a1c] to-[#161923] ${
                             isJustCreated || isExpanded
-                              ? 'border-[#f4dfb0] ring-1 ring-[#e5c88b]/45 shadow-[0_16px_36px_-10px_rgba(229,200,139,0.36)]'
-                              : 'border-[#e5c88b]/70 hover:border-[#f4dfb0] shadow-[0_14px_30px_-10px_rgba(229,200,139,0.25)]'
+                              ? 'border-[#f4dfb0] ring-1 ring-[#e5c88b]/45 shadow-[0_12px_28px_-10px_rgba(229,200,139,0.38)]'
+                              : 'border-[#e5c88b]/75 hover:border-[#f4dfb0] shadow-[0_10px_24px_-10px_rgba(229,200,139,0.26)]'
                           }`
-                        : `rounded-xl bg-[#131722] ${
+                        : `rounded-lg bg-[#10131b] ${
                             isExpanded
                               ? 'border-zinc-400'
-                              : 'border-zinc-600/55 hover:border-zinc-400/80 shadow-[0_10px_24px_rgba(0,0,0,0.45)]'
+                              : 'border-zinc-700/65 hover:border-zinc-500/85'
                           }`;
 
                   return (
@@ -3328,108 +3328,84 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       data-page-category={pageCategory}
                       className={`w-full border transition-all duration-150 overflow-hidden ${cardContainerClasses}`}
                     >
-                      {/* 3 TARJETAS VIP COMPACTAS Y ELEVADAS (CERO BARULLO, CERO ALTURA INNECESARIA) */}
+                      {/* 3 TARJETAS ENTERIZAS VIP (50% MENOS ALTURA, CERO CAJAS DOBLES INTERNAS) */}
                       {isQuickTripwireCard ? (
-                        /* VIP 3: CREADOR RÁPIDO · TRIPWIRE (PASO 1 -> PASO 2 EN COMPACTO DE LUJO) */
                         <div
                           onClick={() => toggleProductExpand(prod)}
                           className="cursor-pointer select-none"
                         >
-                          <div className="h-[3px] w-full bg-gradient-to-r from-sky-400 via-teal-300 to-emerald-400" />
-                          <div className="px-4 py-3 flex flex-col gap-2.5">
-                            {/* LÍNEA SUPERIOR LIMPIA CON LETRA GRANDE */}
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <label
-                                  onClick={e => e.stopPropagation()}
-                                  className="inline-flex items-center justify-center cursor-pointer shrink-0"
-                                  title="Seleccionar esta página"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    data-testid={`select-product-checkbox-${prod.id}`}
-                                    checked={isProductChecked}
-                                    onChange={() => toggleSelectProductPage(prod.id)}
-                                    className="w-3.5 h-3.5 rounded accent-emerald-400 cursor-pointer"
-                                  />
-                                </label>
-                                <span className="text-sm sm:text-base font-black uppercase tracking-wide text-emerald-300 truncate">
-                                  {pageCategoryMeta.label}
-                                </span>
-                                {isJustCreated && (
-                                  <span className="text-[11px] font-bold text-[#f4dfb0] shrink-0">· Nueva</span>
-                                )}
-                              </div>
-                              <span className="text-[11px] font-mono text-zinc-300 whitespace-nowrap">
-                                {hasPixelConfigured
-                                  ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}`
-                                  : 'Sin Píxel'}
-                              </span>
-                            </div>
+                          <div className="h-[2px] w-full bg-gradient-to-r from-sky-400 via-teal-300 to-emerald-400" />
+                          <div className="px-4 py-2.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <label
+                                onClick={e => e.stopPropagation()}
+                                className="inline-flex items-center justify-center cursor-pointer shrink-0"
+                                title="Seleccionar esta página"
+                              >
+                                <input
+                                  type="checkbox"
+                                  data-testid={`select-product-checkbox-${prod.id}`}
+                                  checked={isProductChecked}
+                                  onChange={() => toggleSelectProductPage(prod.id)}
+                                  className="w-3.5 h-3.5 rounded accent-emerald-400 cursor-pointer"
+                                />
+                              </label>
 
-                            {/* FLUJO HORIZONTAL PASO 1 -> PASO 2 + ACCIONES */}
-                            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1 min-w-0">
-                                <div className="flex items-center gap-2.5 min-w-0 flex-1 bg-sky-950/55 border border-sky-400/35 rounded-xl px-2.5 py-1.5">
-                                  <img
-                                    src={tripwireHookThumbUrl}
-                                    alt={prod.tripwireConfig?.entryProductName || 'Gancho'}
-                                    referrerPolicy="no-referrer"
-                                    className="w-9 h-11 rounded-md object-cover border border-sky-400/60 shrink-0 bg-[#0b1220]"
-                                  />
-                                  <div className="min-w-0">
-                                    <span className="block text-[10px] font-black uppercase tracking-wider text-sky-300 leading-none">
-                                      Paso 1 · Gancho
-                                    </span>
-                                    <div className="flex items-baseline gap-2 mt-0.5 min-w-0">
-                                      <span className="text-xs sm:text-sm font-bold text-white truncate">
-                                        {prod.tripwireConfig?.entryProductName || 'Gancho'}
-                                      </span>
-                                      <span className="text-xs font-mono font-bold tabular-nums text-sky-200 shrink-0">
-                                        {formatGs(tripwireHookPrice)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <span className="hidden sm:inline text-emerald-300 font-black text-base shrink-0">→</span>
-
-                                <div className="flex items-center gap-2.5 min-w-0 flex-1 bg-emerald-950/55 border border-emerald-400/40 rounded-xl px-2.5 py-1.5">
-                                  <img
-                                    src={tripwireMainThumbUrl}
-                                    alt={prod.nombre}
-                                    referrerPolicy="no-referrer"
-                                    className="w-9 h-11 rounded-md object-cover border border-emerald-400/60 shrink-0 bg-[#0b1220]"
-                                  />
-                                  <div className="min-w-0">
-                                    <span className="block text-[10px] font-black uppercase tracking-wider text-emerald-300 leading-none">
-                                      Paso 2 · Estrella
-                                    </span>
-                                    <div className="flex items-baseline gap-2 mt-0.5 min-w-0">
-                                      <h3 className="text-xs sm:text-sm font-extrabold text-white truncate" title={prod.nombre}>
-                                        {prod.nombre}
-                                      </h3>
-                                      <span className="text-xs font-mono font-bold tabular-nums text-emerald-200 shrink-0">
-                                        {formatGs(prod.precios?.[1] || 189000)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
+                              {/* Emblema dual compacto unificado (sin cajas dobles) */}
+                              <div className="relative w-12 h-11 shrink-0">
+                                <img
+                                  src={tripwireHookThumbUrl}
+                                  alt={prod.tripwireConfig?.entryProductName || 'Gancho'}
+                                  referrerPolicy="no-referrer"
+                                  className="w-8 h-10 rounded-md object-cover border border-sky-400/80 bg-[#0b1220] absolute left-0 top-0"
+                                />
+                                <img
+                                  src={tripwireMainThumbUrl}
+                                  alt={prod.nombre}
+                                  referrerPolicy="no-referrer"
+                                  className="w-8 h-10 rounded-md object-cover border border-emerald-400/90 bg-[#0b1220] absolute right-0 bottom-0 shadow-md"
+                                />
                               </div>
 
-                              {renderCardActionsToolbar('tripwire')}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm sm:text-base font-black uppercase tracking-wide text-emerald-300 leading-none">
+                                    {pageCategoryMeta.label}
+                                  </span>
+                                  {isJustCreated && (
+                                    <span className="text-[11px] font-bold text-[#f4dfb0]">· Nueva</span>
+                                  )}
+                                  <span className="text-[11px] font-mono text-zinc-400">
+                                    {hasPixelConfigured ? `· Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}` : '· Sin Píxel'}
+                                  </span>
+                                </div>
+
+                                {/* Flujo limpio en una sola línea integrada */}
+                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mt-1 text-xs sm:text-sm min-w-0">
+                                  <span className="text-sky-300 font-bold truncate max-w-[260px]">
+                                    Paso 1: {prod.tripwireConfig?.entryProductName || 'Gancho'}{' '}
+                                    <span className="font-mono tabular-nums text-sky-200">({formatGs(tripwireHookPrice)})</span>
+                                  </span>
+                                  <span className="text-emerald-300 font-black">→</span>
+                                  <h3 className="text-white font-extrabold truncate max-w-[280px]" title={prod.nombre}>
+                                    Paso 2: {prod.nombre}{' '}
+                                    <span className="font-mono tabular-nums text-emerald-200">({formatGs(prod.precios?.[1] || 189000)})</span>
+                                  </h3>
+                                </div>
+                              </div>
                             </div>
+
+                            {renderCardActionsToolbar('tripwire')}
                           </div>
                         </div>
                       ) : isQuickStandardCard ? (
-                        /* VIP 2: CREADOR RÁPIDO · ESTÁNDAR (VITRINA CHAMPAGNE COMPACTA) */
                         <div
                           onClick={() => toggleProductExpand(prod)}
                           className="cursor-pointer select-none"
                         >
-                          <div className="h-[3px] w-full bg-gradient-to-r from-[#c89d4c] via-[#f6e2b3] to-[#c89d4c]" />
-                          <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                          <div className="h-[2px] w-full bg-gradient-to-r from-[#c89d4c] via-[#f6e2b3] to-[#c89d4c]" />
+                          <div className="px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
                               <label
                                 onClick={e => e.stopPropagation()}
                                 className="inline-flex items-center justify-center cursor-pointer shrink-0"
@@ -3447,26 +3423,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                 src={primaryThumbUrl}
                                 alt={prod.nombre}
                                 referrerPolicy="no-referrer"
-                                className="w-11 h-14 rounded-lg object-cover border-2 border-[#e5c88b]/75 shrink-0 bg-[#0b0e16]"
+                                className="w-9 h-11 rounded-md object-cover border border-[#e5c88b]/80 shrink-0 bg-[#0b0e16]"
                               />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm sm:text-base font-black uppercase tracking-wide text-[#f3d89b]">
+                                  <span className="text-sm sm:text-base font-black uppercase tracking-wide text-[#f4dfb0] leading-none">
                                     {pageCategoryMeta.label}
                                   </span>
                                   {isJustCreated && (
                                     <span className="text-[11px] font-bold text-white">· Nueva</span>
                                   )}
-                                </div>
-                                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 mt-0.5">
-                                  <h3 className="text-sm sm:text-base font-bold text-white truncate max-w-[260px] sm:max-w-[380px]" title={prod.nombre}>
-                                    {prod.nombre}
-                                  </h3>
-                                  <span className="text-xs sm:text-sm font-mono font-bold tabular-nums text-[#e5c88b]">
-                                    {formatGs(prod.precios?.[1] || 189000)}
-                                  </span>
                                   <span className="text-[11px] font-mono text-zinc-400">
                                     {hasPixelConfigured ? `· Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}` : '· Sin Píxel'}
+                                  </span>
+                                </div>
+                                <div className="flex items-baseline gap-2 mt-1 min-w-0">
+                                  <h3 className="text-sm font-bold text-white truncate max-w-[280px] sm:max-w-[400px]" title={prod.nombre}>
+                                    {prod.nombre}
+                                  </h3>
+                                  <span className="text-xs sm:text-sm font-mono font-bold tabular-nums text-[#e5c88b] shrink-0">
+                                    {formatGs(prod.precios?.[1] || 189000)}
                                   </span>
                                 </div>
                               </div>
@@ -3476,10 +3452,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           </div>
                         </div>
                       ) : (
-                        /* VIP 1: PÁGINA ANTIGUA (ARCHIVO CLÁSICO COMPACTO EN ACERO) */
                         <div
                           onClick={() => toggleProductExpand(prod)}
-                          className="cursor-pointer select-none px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          className="cursor-pointer select-none px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                         >
                           <div className="flex items-center gap-3 min-w-0 flex-1">
                             <label
@@ -3499,21 +3474,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                               src={primaryThumbUrl}
                               alt={prod.nombre}
                               referrerPolicy="no-referrer"
-                              className="w-10 h-10 rounded-md object-cover border border-zinc-500/60 shrink-0 bg-[#0b0e16]"
+                              className="w-9 h-9 rounded-md object-cover border border-zinc-600/70 shrink-0 bg-[#0b0e16]"
                             />
                             <div className="min-w-0 flex-1">
-                              <span className="block text-xs sm:text-sm font-black uppercase tracking-wider text-zinc-300 leading-none">
-                                {pageCategoryMeta.label}
-                              </span>
-                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mt-1">
-                                <h3 className="text-sm font-semibold text-white truncate max-w-[240px] sm:max-w-[340px]" title={prod.nombre}>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-zinc-400 leading-none">
+                                  {pageCategoryMeta.label}
+                                </span>
+                                <span className="text-[11px] font-mono text-zinc-500">
+                                  {hasPixelConfigured ? `· Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}` : '· Sin Píxel'}
+                                </span>
+                              </div>
+                              <div className="flex items-baseline gap-2 mt-1 min-w-0">
+                                <h3 className="text-sm font-semibold text-zinc-100 truncate max-w-[260px] sm:max-w-[360px]" title={prod.nombre}>
                                   {prod.nombre}
                                 </h3>
-                                <span className="text-xs font-mono tabular-nums text-zinc-300">
+                                <span className="text-xs font-mono tabular-nums text-zinc-300 shrink-0">
                                   {formatGs(prod.precios?.[1] || 189000)}
-                                </span>
-                                <span className="text-[11px] font-mono text-zinc-400">
-                                  {hasPixelConfigured ? `· Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}` : '· Sin Píxel'}
                                 </span>
                               </div>
                             </div>
