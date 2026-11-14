@@ -81,6 +81,13 @@ import {
   normalizeOrderGpsFields,
   buildGoogleMapsSearchUrl
 } from '../utils/paraguayGeo';
+import {
+  ProductPageCategoryFilter,
+  classifyProductPageType,
+  matchesProductPageCategoryFilter,
+  countProductPageCategories,
+  getProductPageCategoryMeta
+} from '../utils/productPageClassifier';
 
 export interface WaSessionCardData {
   id: string;
@@ -215,6 +222,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
   // Filtros y Selección Múltiple de Páginas de Productos + Eliminación Masiva
   const [filterProductName, setFilterProductName] = useState('');
   const [filterProductPhoneOrPixel, setFilterProductPhoneOrPixel] = useState('');
+  const [filterProductCategory, setFilterProductCategory] = useState<ProductPageCategoryFilter>('todas');
   const [filterProductTab, setFilterProductTab] = useState<'todas' | 'con_pixel' | 'envio_gratis'>('todas');
   const [selectedProductPageIds, setSelectedProductPageIds] = useState<string[]>([]);
   const [deleteProductsConfirmModal, setDeleteProductsConfirmModal] = useState<{
@@ -302,10 +310,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
     }
   };
 
+  const productCategoryCounts = useMemo(
+    () => countProductPageCategories(productPages),
+    [productPages]
+  );
+
   const filteredProductPages = useMemo(() => {
     const qName = filterProductName.trim().toLowerCase();
     const qMeta = filterProductPhoneOrPixel.trim().toLowerCase();
     return productPages.filter(prod => {
+      if (!matchesProductPageCategoryFilter(prod, filterProductCategory)) {
+        return false;
+      }
       if (filterProductTab === 'con_pixel' && !prod.metaTracking?.pixelId?.trim()) {
         return false;
       }
@@ -313,7 +329,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         return false;
       }
       if (qName) {
-        const hayName = `${prod.nombre || ''} ${prod.slug || ''} ${prod.id || ''}`.toLowerCase();
+        const hayName = `${prod.nombre || ''} ${prod.slug || ''} ${prod.id || ''} ${prod.tripwireConfig?.entryProductName || ''}`.toLowerCase();
         if (!hayName.includes(qName)) return false;
       }
       if (qMeta) {
@@ -322,7 +338,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       }
       return true;
     });
-  }, [productPages, filterProductName, filterProductPhoneOrPixel, filterProductTab]);
+  }, [productPages, filterProductCategory, filterProductName, filterProductPhoneOrPixel, filterProductTab]);
 
   const toggleSelectProductPage = (prodId: string) => {
     const cleanId = String(prodId || '').trim();
@@ -2767,6 +2783,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     onClick={() => setShowPageFiltersBar(prev => !prev)}
                     className={`h-8 px-3 rounded-xl border text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 cursor-pointer select-none transition-colors duration-150 ${
                       showPageFiltersBar ||
+                      filterProductCategory !== 'todas' ||
                       filterProductName ||
                       filterProductPhoneOrPixel ||
                       filterProductTab !== 'todas' ||
@@ -2774,7 +2791,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         ? 'bg-[#e5c88b]/15 border-[#e5c88b]/50 text-[#e5c88b]'
                         : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-zinc-300'
                     }`}
-                    title="Mostrar u ocultar filtros y selección múltiple de páginas"
+                    title="Mostrar u ocultar búsqueda por texto, píxel y selección múltiple"
                   >
                     <Filter className="w-3.5 h-3.5 shrink-0" />
                     <span>
@@ -2803,7 +2820,95 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 proTip="Las páginas con envío gratis y precios psicológicos terminados en 9.000 Gs (ej: 189.000 Gs) tienen hasta un 34% más de conversión en Paraguay."
               />
 
-              {/* BARRA DE FILTROS + SELECCIÓN MÚLTIPLE */}
+              {/* SEGMENTADOR SIEMPRE ACTIVO: ANTIGUAS vs CREADOR RÁPIDO (ESTÁNDAR vs TRIPWIRE) */}
+              <div
+                data-testid="product-category-filter-bar"
+                className="flex flex-wrap items-center justify-between gap-2 p-1.5 rounded-2xl bg-[#0b0e16]/85 backdrop-blur-md border border-white/10"
+              >
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    data-testid="filter-category-todas"
+                    onClick={() => setFilterProductCategory('todas')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors border whitespace-nowrap ${
+                      filterProductCategory === 'todas'
+                        ? 'bg-white/[0.12] text-white border-white/25'
+                        : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    Todas <span className="font-mono tabular-nums opacity-80">({productCategoryCounts.todas})</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="filter-category-antiguas"
+                    onClick={() => setFilterProductCategory('antiguas')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors border whitespace-nowrap ${
+                      filterProductCategory === 'antiguas'
+                        ? 'bg-zinc-600/25 text-zinc-100 border-zinc-400/45'
+                        : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    Antiguas <span className="font-mono tabular-nums opacity-80">({productCategoryCounts.antiguas})</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="filter-category-nuevas"
+                    onClick={() => setFilterProductCategory('nuevas')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors border whitespace-nowrap ${
+                      filterProductCategory === 'nuevas'
+                        ? 'bg-sky-500/15 text-sky-200 border-sky-400/45'
+                        : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    Creador Rápido <span className="font-mono tabular-nums opacity-80">({productCategoryCounts.nuevas})</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="filter-category-estandar"
+                    onClick={() => setFilterProductCategory('nuevas_estandar')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors border whitespace-nowrap ${
+                      filterProductCategory === 'nuevas_estandar'
+                        ? 'bg-[#e5c88b]/20 text-[#f4dfb0] border-[#e5c88b]/55'
+                        : 'bg-transparent text-[#e5c88b]/80 border-transparent hover:text-[#f4dfb0] hover:bg-[#e5c88b]/10'
+                    }`}
+                  >
+                    Estándar (Nueva) <span className="font-mono tabular-nums opacity-90">({productCategoryCounts.nuevas_estandar})</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="filter-category-tripwire"
+                    onClick={() => setFilterProductCategory('nuevas_tripwire')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors border whitespace-nowrap ${
+                      filterProductCategory === 'nuevas_tripwire'
+                        ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/55'
+                        : 'bg-transparent text-emerald-300/80 border-transparent hover:text-emerald-200 hover:bg-emerald-500/10'
+                    }`}
+                  >
+                    Tripwire (Nueva) <span className="font-mono tabular-nums opacity-90">({productCategoryCounts.nuevas_tripwire})</span>
+                  </button>
+                </div>
+
+                {(filterProductCategory !== 'todas' ||
+                  Boolean(filterProductName) ||
+                  Boolean(filterProductPhoneOrPixel) ||
+                  filterProductTab !== 'todas') && (
+                  <button
+                    type="button"
+                    data-testid="reset-all-product-filters-btn"
+                    onClick={() => {
+                      setFilterProductCategory('todas');
+                      setFilterProductTab('todas');
+                      setFilterProductName('');
+                      setFilterProductPhoneOrPixel('');
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] cursor-pointer whitespace-nowrap"
+                  >
+                    Ver todas
+                  </button>
+                )}
+              </div>
+
+              {/* BARRA DE FILTROS AVANZADOS + SELECCIÓN MÚLTIPLE */}
               {(showPageFiltersBar ||
                 Boolean(filterProductName) ||
                 Boolean(filterProductPhoneOrPixel) ||
@@ -2981,6 +3086,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               {recentlyCreatedProductId && (() => {
                 const recentProd = productPages.find(p => p.id === recentlyCreatedProductId);
                 if (!recentProd) return null;
+                const recentMeta = getProductPageCategoryMeta(classifyProductPageType(recentProd));
                 return (
                   <div
                     data-testid="recently-created-product-banner"
@@ -2988,7 +3094,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   >
                     <div className="space-y-0.5">
                       <span className="text-[11px] font-mono uppercase tracking-wider text-[#e5c88b] block">
-                        Página Creada y Guardada
+                        Página Creada y Guardada · {recentMeta.label}
                       </span>
                       <p className="text-sm font-semibold text-white">
                         {recentProd.nombre}{' '}
@@ -3027,23 +3133,71 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 );
               })()}
 
-              <div className="space-y-2.5">
-                {filteredProductPages.map((prod, prodIdx) => {
+              <div className="space-y-3">
+                {filteredProductPages.length === 0 ? (
+                  <div
+                    data-testid="filtered-products-empty-state"
+                    className="p-8 rounded-2xl bg-[#0b0e16]/80 border border-white/10 text-center space-y-3"
+                  >
+                    <p className="text-sm font-semibold text-white">
+                      No se encontraron páginas en este filtro
+                    </p>
+                    <p className="text-xs text-zinc-400 max-w-md mx-auto">
+                      Podés cambiar de pestaña arriba (Antiguas, Creador Rápido, Estándar o Tripwire) o restablecer los filtros activos.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterProductCategory('todas');
+                        setFilterProductTab('todas');
+                        setFilterProductName('');
+                        setFilterProductPhoneOrPixel('');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-xs font-semibold text-white cursor-pointer"
+                    >
+                      Ver todas las páginas ({productPages.length})
+                    </button>
+                  </div>
+                ) : (
+                  filteredProductPages.map((prod) => {
                   const isExpanded = expandedProductId === prod.id;
                   const isProductChecked = selectedProductPageIds.includes(prod.id);
                   const hasPixelConfigured = Boolean(prod.metaTracking?.pixelId?.trim());
                   const hasCapiTokenConfigured = Boolean(prod.metaTracking?.capiAccessToken?.trim());
+                  const pageCategory = classifyProductPageType(prod);
+                  const pageCategoryMeta = getProductPageCategoryMeta(pageCategory);
+                  const isLegacyCard = pageCategory === 'legacy';
+                  const isQuickStandardCard = pageCategory === 'quick_standard';
+                  const isQuickTripwireCard = pageCategory === 'quick_tripwire';
+                  const primaryThumbUrl =
+                    !isLegacyCard && prod.visualLanding?.sheets?.[0]?.imageUrl
+                      ? prod.visualLanding.sheets[0].imageUrl
+                      : prod.imagen || '/assets/real/galeria-1.jpg';
+                  const tripwireHookThumbUrl =
+                    prod.tripwireConfig?.entryProductImage ||
+                    prod.tripwireConfig?.entryImageUrl ||
+                    prod.imagen ||
+                    '/assets/real/galeria-1.jpg';
+                  const tripwireHookPrice = Number(
+                    prod.tripwireConfig?.entryPriceGs ??
+                      prod.tripwireConfig?.entryProductPriceGs ??
+                      20000
+                  );
                   const matchesProductOrder = (o: Order, targetProd: ProductPage) =>
                     (o.productoId && o.productoId === targetProd.id) ||
                     (o.producto || 'Noelux™ Proyector')
                       .toLowerCase()
                       .includes(targetProd.nombre.toLowerCase().slice(0, 10));
 
+                  const defaultLegacyId =
+                    productPages.find(p => p.id === 'prod-noelux-01')?.id ||
+                    productPages[0]?.id;
+
                   const allProdOrders = orders.filter(o => {
                     if (matchesProductOrder(o, prod)) return true;
-                    if (prodIdx === 0) {
+                    if (prod.id === defaultLegacyId) {
                       const matchesAnyOther = productPages.some(
-                        (otherP, otherIdx) => otherIdx !== 0 && matchesProductOrder(o, otherP)
+                        (otherP) => otherP.id !== prod.id && matchesProductOrder(o, otherP)
                       );
                       return !matchesAnyOther;
                     }
@@ -3074,28 +3228,48 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     allFilteredIdsForProd.every(id => selectedOrderIds.includes(id));
 
                   const isJustCreated = recentlyCreatedProductId === prod.id;
-                  const charLabel = `PÁGINA #${prodIdx + 1}`;
+
+                  const cardContainerClasses = isProductChecked
+                    ? 'rounded-2xl bg-[#0b0e16]/85 border-red-500/55 ring-1 ring-red-500/25'
+                    : isQuickTripwireCard
+                      ? `rounded-2xl bg-gradient-to-r from-[#061813]/95 via-[#09121a]/90 to-[#0b0e16]/95 ${
+                          isJustCreated || isExpanded
+                            ? 'border-emerald-400/75 ring-1 ring-emerald-400/25'
+                            : 'border-emerald-400/45 hover:border-emerald-300/80 shadow-[0_8px_28px_-14px_rgba(16,185,129,0.28)]'
+                        }`
+                      : isQuickStandardCard
+                        ? `rounded-2xl bg-gradient-to-r from-[#171209]/95 via-[#0c0f17]/90 to-[#0b0e16]/95 ${
+                            isJustCreated || isExpanded
+                              ? 'border-[#e5c88b]/75 ring-1 ring-[#e5c88b]/25'
+                              : 'border-[#e5c88b]/45 hover:border-[#e5c88b]/80 shadow-[0_8px_28px_-14px_rgba(229,200,139,0.24)]'
+                          }`
+                        : `rounded-xl bg-[#080b11]/75 ${
+                            isExpanded
+                              ? 'border-zinc-500/70'
+                              : 'border-zinc-700/45 hover:border-zinc-500/65'
+                          }`;
 
                   return (
                     <div
                       key={prod.id}
                       data-testid={`product-card-${prod.id}`}
-                      className={`w-full bg-[#0b0e16]/80 backdrop-blur-md rounded-2xl border transition-colors duration-150 overflow-hidden ${
-                        isProductChecked
-                          ? 'border-red-500/50 ring-1 ring-red-500/25'
-                          : isJustCreated
-                            ? 'border-[#e5c88b]/60 ring-1 ring-[#e5c88b]/25'
-                            : isExpanded
-                              ? 'border-white/20'
-                              : 'border-white/10 hover:border-white/20'
-                      }`}
+                      data-page-category={pageCategory}
+                      className={`w-full backdrop-blur-md border transition-colors duration-150 overflow-hidden ${cardContainerClasses}`}
                     >
-                      {/* TARJETA DE PRODUCTO — OBISDIAN SMOKED GLASS */}
+                      {/* Borde superior distintivo según versión/tipo de página */}
+                      {isQuickTripwireCard && (
+                        <div className="h-[2px] w-full bg-gradient-to-r from-emerald-500/20 via-emerald-400/90 to-teal-300/20" />
+                      )}
+                      {isQuickStandardCard && (
+                        <div className="h-[2px] w-full bg-gradient-to-r from-[#e5c88b]/20 via-[#e5c88b]/90 to-[#f4dfb0]/20" />
+                      )}
+
+                      {/* TARJETA DE PRODUCTO DIFERENCIADA */}
                       <div
                         onClick={() => toggleProductExpand(prod)}
                         className="w-full px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-white/[0.03] transition-colors duration-150"
                       >
-                        {/* IZQUIERDA: Checkbox + Miniatura + Nombre + Metadata */}
+                        {/* IZQUIERDA: Checkbox + Visual Diferenciado + Nombre + Metadata */}
                         <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
                           <label
                             onClick={e => e.stopPropagation()}
@@ -3110,16 +3284,68 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                               className="w-3.5 h-3.5 rounded accent-[#e5c88b] cursor-pointer"
                             />
                           </label>
-                          <img
-                            src={prod.imagen || '/assets/real/galeria-1.jpg'}
-                            alt={prod.nombre}
-                            referrerPolicy="no-referrer"
-                            className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0 bg-[#07090f]"
-                          />
+
+                          {isQuickTripwireCard ? (
+                            <div className="relative shrink-0 w-12 h-14">
+                              <img
+                                src={primaryThumbUrl}
+                                alt={prod.nombre}
+                                referrerPolicy="no-referrer"
+                                className="w-11 h-14 rounded-xl object-cover border border-emerald-400/50 bg-[#07090f]"
+                              />
+                              <img
+                                src={tripwireHookThumbUrl}
+                                alt={prod.tripwireConfig?.entryProductName || 'Gancho'}
+                                referrerPolicy="no-referrer"
+                                className="w-6 h-6 rounded-lg object-cover border-2 border-[#061813] ring-1 ring-emerald-400/80 absolute -bottom-1 -right-0.5 bg-[#07090f]"
+                                title={`Gancho: ${prod.tripwireConfig?.entryProductName}`}
+                              />
+                            </div>
+                          ) : isQuickStandardCard ? (
+                            <img
+                              src={primaryThumbUrl}
+                              alt={prod.nombre}
+                              referrerPolicy="no-referrer"
+                              className="w-11 h-14 rounded-xl object-cover border border-[#e5c88b]/50 shrink-0 bg-[#07090f]"
+                            />
+                          ) : (
+                            <img
+                              src={primaryThumbUrl}
+                              alt={prod.nombre}
+                              referrerPolicy="no-referrer"
+                              className="w-11 h-11 rounded-lg object-cover border border-zinc-600/45 shrink-0 bg-[#07090f] opacity-90"
+                            />
+                          )}
+
                           <div className="min-w-0 flex-1">
+                            {/* Kicker limpio sin pills */}
+                            <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider mb-0.5 truncate">
+                              <span
+                                className={
+                                  isQuickTripwireCard
+                                    ? 'text-emerald-300 font-semibold'
+                                    : isQuickStandardCard
+                                      ? 'text-[#e5c88b] font-semibold'
+                                      : 'text-zinc-400 font-medium'
+                                }
+                              >
+                                {pageCategoryMeta.kicker}
+                              </span>
+                              {!isLegacyCard && (
+                                <span className="text-zinc-500 hidden sm:inline">
+                                  · {prod.visualLanding?.sheets?.length || 2} láminas
+                                </span>
+                              )}
+                              {isJustCreated && (
+                                <span className="text-[#f4dfb0]">· Recién creada</span>
+                              )}
+                            </div>
+
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3
-                                className="text-sm font-semibold text-white truncate max-w-[200px] sm:max-w-[280px] md:max-w-[360px] xl:max-w-none"
+                                className={`text-sm font-semibold truncate max-w-[200px] sm:max-w-[280px] md:max-w-[360px] xl:max-w-none ${
+                                  isLegacyCard ? 'text-zinc-200' : 'text-white'
+                                }`}
                                 title={prod.nombre}
                               >
                                 {prod.nombre}
@@ -3133,29 +3359,42 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   ? `· Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
                                   : '· Sin Píxel'}
                               </span>
+                            </div>
 
-                              {isJustCreated && (
-                                <span className="text-[10px] font-mono uppercase tracking-wider text-[#e5c88b] shrink-0">
-                                  · Nueva
+                            {isQuickTripwireCard ? (
+                              <div className="flex items-center gap-2 text-[12px] text-zinc-400 mt-1 overflow-hidden">
+                                <span className="text-emerald-300 font-mono tabular-nums truncate max-w-[210px] sm:max-w-[280px]">
+                                  Gancho: {prod.tripwireConfig?.entryProductName} ({formatGs(tripwireHookPrice)})
                                 </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 text-[12px] text-zinc-500 mt-1 overflow-hidden">
-                              <span className="font-mono truncate max-w-[130px] sm:max-w-[190px] text-zinc-400">
-                                /?p={prod.slug}
-                              </span>
-                              <span className="text-zinc-700">·</span>
-                              <span className="text-zinc-200 font-mono tabular-nums whitespace-nowrap">
-                                1x {formatGs(prod.precios?.[1] || 189000)}
-                              </span>
-                              <span className="hidden sm:inline text-[#e5c88b] font-mono tabular-nums whitespace-nowrap">
-                                · 2x {formatGs(prod.precios?.[2] || 358000)}
-                              </span>
-                              <span className="hidden md:inline text-zinc-500 whitespace-nowrap">
-                                · {prod.freeShipping === false ? 'Envío Pagado' : 'Envío Gratis'}
-                              </span>
-                            </div>
+                                <span className="text-zinc-600">→</span>
+                                <span className="text-zinc-100 font-mono tabular-nums whitespace-nowrap">
+                                  Principal: {formatGs(prod.precios?.[1] || 189000)}
+                                </span>
+                                <span className="hidden md:inline font-mono truncate max-w-[140px] text-zinc-500">
+                                  · /?p={prod.slug}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-[12px] text-zinc-500 mt-1 overflow-hidden">
+                                <span className="font-mono truncate max-w-[130px] sm:max-w-[190px] text-zinc-400">
+                                  /?p={prod.slug}
+                                </span>
+                                <span className="text-zinc-700">·</span>
+                                <span className="text-zinc-200 font-mono tabular-nums whitespace-nowrap">
+                                  1x {formatGs(prod.precios?.[1] || 189000)}
+                                </span>
+                                <span
+                                  className={`hidden sm:inline font-mono tabular-nums whitespace-nowrap ${
+                                    isQuickStandardCard ? 'text-[#e5c88b]' : 'text-zinc-400'
+                                  }`}
+                                >
+                                  · 2x {formatGs(prod.precios?.[2] || 358000)}
+                                </span>
+                                <span className="hidden md:inline text-zinc-500 whitespace-nowrap">
+                                  · {prod.freeShipping === false ? 'Envío Pagado' : 'Envío Gratis'}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -3202,7 +3441,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           <button
                             type="button"
                             onClick={e => { e.stopPropagation(); toggleProductExpand(prod); }}
-                            className={`h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer border inline-flex items-center gap-1 font-mono tabular-nums ${isExpanded ? 'bg-white/[0.1] text-white border-[#e5c88b]/40' : 'bg-white/[0.04] text-zinc-300 border-white/10 hover:bg-white/[0.08]'}`}
+                            className={`h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer border inline-flex items-center gap-1 font-mono tabular-nums ${
+                              isExpanded
+                                ? 'bg-white/[0.12] text-white border-[#e5c88b]/40'
+                                : isQuickTripwireCard
+                                  ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/25'
+                                  : isQuickStandardCard
+                                    ? 'bg-[#e5c88b]/12 text-[#f4dfb0] border-[#e5c88b]/40 hover:bg-[#e5c88b]/20'
+                                    : 'bg-white/[0.04] text-zinc-300 border-white/10 hover:bg-white/[0.08]'
+                            }`}
                           >
                             {isExpanded ? 'Cerrar' : `Abrir (${activeProdOrdersCount})`}
                             <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -4464,7 +4711,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       )}
                     </div>
                   );
-                })}
+                })
+                )}
               </div>
             </div>
           )}
