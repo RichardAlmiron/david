@@ -3163,7 +3163,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   const isExpanded = expandedProductId === prod.id;
                   const isProductChecked = selectedProductPageIds.includes(prod.id);
                   const hasPixelConfigured = Boolean(prod.metaTracking?.pixelId?.trim());
-                  const hasCapiTokenConfigured = Boolean(prod.metaTracking?.capiAccessToken?.trim());
                   const pageCategory = classifyProductPageType(prod);
                   const pageCategoryMeta = getProductPageCategoryMeta(pageCategory);
                   const isLegacyCard = pageCategory === 'legacy';
@@ -3228,7 +3227,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     allFilteredIdsForProd.every(id => selectedOrderIds.includes(id));
 
                   const isJustCreated = recentlyCreatedProductId === prod.id;
-                  const mainSheetCount = prod.visualLanding?.sheets?.length || 2;
                   const tripwireMainThumbUrl =
                     prod.visualLanding?.sheets?.[1]?.imageUrl ||
                     prod.visualLanding?.sheets?.[0]?.imageUrl ||
@@ -3304,23 +3302,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   );
 
                   const cardContainerClasses = isProductChecked
-                    ? 'rounded-2xl bg-[#0b0e16]/90 border-red-500/70 ring-1 ring-red-500/35'
+                    ? 'rounded-2xl bg-[#19121a] border-red-400/80 ring-1 ring-red-400/40 shadow-[0_12px_28px_rgba(0,0,0,0.5)]'
                     : isQuickTripwireCard
-                      ? `rounded-3xl bg-[#051214] ${
+                      ? `rounded-2xl bg-gradient-to-r from-[#102534] via-[#13242b] to-[#102a22] ${
                           isJustCreated || isExpanded
-                            ? 'border-emerald-400 ring-1 ring-emerald-400/30'
-                            : 'border-emerald-500/60 hover:border-emerald-400 shadow-[0_12px_32px_-16px_rgba(16,185,129,0.35)]'
+                            ? 'border-emerald-300 ring-1 ring-emerald-400/45 shadow-[0_16px_36px_-10px_rgba(16,185,129,0.38)]'
+                            : 'border-emerald-400/70 hover:border-emerald-300 shadow-[0_14px_30px_-10px_rgba(16,185,129,0.28)]'
                         }`
                       : isQuickStandardCard
-                        ? `rounded-2xl bg-[#130f08] ${
+                        ? `rounded-2xl bg-gradient-to-r from-[#241d12] via-[#1c1a1c] to-[#171b28] ${
                             isJustCreated || isExpanded
-                              ? 'border-[#e5c88b] ring-1 ring-[#e5c88b]/30'
-                              : 'border-[#e5c88b]/60 hover:border-[#f4dfb0] shadow-[0_12px_32px_-16px_rgba(229,200,139,0.3)]'
+                              ? 'border-[#f4dfb0] ring-1 ring-[#e5c88b]/45 shadow-[0_16px_36px_-10px_rgba(229,200,139,0.36)]'
+                              : 'border-[#e5c88b]/70 hover:border-[#f4dfb0] shadow-[0_14px_30px_-10px_rgba(229,200,139,0.25)]'
                           }`
-                        : `rounded-lg bg-[#0a0c11] ${
+                        : `rounded-xl bg-[#131722] ${
                             isExpanded
-                              ? 'border-zinc-500'
-                              : 'border-zinc-700/70 hover:border-zinc-500/80'
+                              ? 'border-zinc-400'
+                              : 'border-zinc-600/55 hover:border-zinc-400/80 shadow-[0_10px_24px_rgba(0,0,0,0.45)]'
                           }`;
 
                   return (
@@ -3328,200 +3326,110 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       key={prod.id}
                       data-testid={`product-card-${prod.id}`}
                       data-page-category={pageCategory}
-                      className={`w-full border transition-colors duration-150 overflow-hidden ${cardContainerClasses}`}
+                      className={`w-full border transition-all duration-150 overflow-hidden ${cardContainerClasses}`}
                     >
-                      {/* 3 ARQUITECTURAS DE TARJETA COMPLETAMENTE DIFERENTES */}
+                      {/* 3 TARJETAS VIP COMPACTAS Y ELEVADAS (CERO BARULLO, CERO ALTURA INNECESARIA) */}
                       {isQuickTripwireCard ? (
-                        /* DISEÑO 3: CREADOR RÁPIDO · TRIPWIRE (EMBUDO VISUAL EN 2 ETAPAS AZUL/ESMERALDA) */
+                        /* VIP 3: CREADOR RÁPIDO · TRIPWIRE (PASO 1 -> PASO 2 EN COMPACTO DE LUJO) */
                         <div
                           onClick={() => toggleProductExpand(prod)}
                           className="cursor-pointer select-none"
                         >
-                          {/* BANDA SUPERIOR GIGANTE DE IDENTIDAD TRIPWIRE */}
-                          <div className="px-4 py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-700 text-white flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <label
-                                onClick={e => e.stopPropagation()}
-                                className="inline-flex items-center justify-center cursor-pointer shrink-0 bg-black/25 p-1.5 rounded-md border border-white/25"
-                                title="Seleccionar esta página"
-                              >
-                                <input
-                                  type="checkbox"
-                                  data-testid={`select-product-checkbox-${prod.id}`}
-                                  checked={isProductChecked}
-                                  onChange={() => toggleSelectProductPage(prod.id)}
-                                  className="w-4 h-4 rounded accent-emerald-300 cursor-pointer"
-                                />
-                              </label>
-                              <div className="min-w-0">
-                                <span className="block text-base sm:text-lg md:text-xl font-black uppercase tracking-tight leading-none text-white">
+                          <div className="h-[3px] w-full bg-gradient-to-r from-sky-400 via-teal-300 to-emerald-400" />
+                          <div className="px-4 py-3 flex flex-col gap-2.5">
+                            {/* LÍNEA SUPERIOR LIMPIA CON LETRA GRANDE */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <label
+                                  onClick={e => e.stopPropagation()}
+                                  className="inline-flex items-center justify-center cursor-pointer shrink-0"
+                                  title="Seleccionar esta página"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    data-testid={`select-product-checkbox-${prod.id}`}
+                                    checked={isProductChecked}
+                                    onChange={() => toggleSelectProductPage(prod.id)}
+                                    className="w-3.5 h-3.5 rounded accent-emerald-400 cursor-pointer"
+                                  />
+                                </label>
+                                <span className="text-sm sm:text-base font-black uppercase tracking-wide text-emerald-300 truncate">
                                   {pageCategoryMeta.label}
                                 </span>
-                                <span className="block text-xs font-medium text-emerald-50/90 mt-1">
-                                  Embudo en 2 etapas dentro de la página · {mainSheetCount} láminas
-                                  {isJustCreated ? ' · Recién creada' : ''}
-                                </span>
+                                {isJustCreated && (
+                                  <span className="text-[11px] font-bold text-[#f4dfb0] shrink-0">· Nueva</span>
+                                )}
                               </div>
+                              <span className="text-[11px] font-mono text-zinc-300 whitespace-nowrap">
+                                {hasPixelConfigured
+                                  ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}`
+                                  : 'Sin Píxel'}
+                              </span>
                             </div>
-                            <span className="text-xs font-mono font-bold text-white/95 whitespace-nowrap">
-                              {hasPixelConfigured
-                                ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
-                                : 'Sin Píxel'}
-                            </span>
-                          </div>
 
-                          {/* CUERPO DUAL EN 2 ETAPAS (GANCHO COBALTO -> ESTRELLA ESMERALDA) */}
-                          <div className="p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4 hover:bg-emerald-950/20 transition-colors">
-                            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1.2fr] items-stretch flex-1 min-w-0 divide-y md:divide-y-0 md:divide-x divide-white/10 border-y border-white/10">
-                              {/* PASO 1: GANCHO */}
-                              <div className="flex items-center gap-3 bg-sky-950/35 px-3 py-2.5 min-w-0">
-                                <img
-                                  src={tripwireHookThumbUrl}
-                                  alt={prod.tripwireConfig?.entryProductName || 'Gancho'}
-                                  referrerPolicy="no-referrer"
-                                  className="w-12 h-16 rounded-lg object-cover border border-sky-400/50 shrink-0 bg-[#07090f]"
-                                />
-                                <div className="min-w-0">
-                                  <span className="block text-[11px] font-bold uppercase tracking-wider text-sky-300">
-                                    Paso 1 · Gancho Directo
-                                  </span>
-                                  <p className="text-sm font-bold text-white truncate mt-0.5" title={prod.tripwireConfig?.entryProductName}>
-                                    {prod.tripwireConfig?.entryProductName || 'Producto Gancho'}
-                                  </p>
-                                  <span className="text-sm font-mono font-black tabular-nums text-sky-200">
-                                    {formatGs(tripwireHookPrice)}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* CONECTOR CENTRAL */}
-                              <div className="flex items-center justify-center px-3 py-1 bg-black/25 text-emerald-300 font-black text-base select-none">
-                                <span className="md:hidden">↓</span>
-                                <span className="hidden md:inline">→</span>
-                              </div>
-
-                              {/* PASO 2: PRODUCTO ESTRELLA */}
-                              <div className="flex items-center gap-3 bg-emerald-950/35 px-3 py-2.5 min-w-0">
-                                <img
-                                  src={tripwireMainThumbUrl}
-                                  alt={prod.nombre}
-                                  referrerPolicy="no-referrer"
-                                  className="w-12 h-16 rounded-lg object-cover border border-emerald-400/50 shrink-0 bg-[#07090f]"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <span className="block text-[11px] font-bold uppercase tracking-wider text-emerald-300">
-                                    Paso 2 · Producto Estrella + Regalo
-                                  </span>
-                                  <h3 className="text-sm sm:text-base font-extrabold text-white truncate mt-0.5" title={prod.nombre}>
-                                    {prod.nombre}
-                                  </h3>
-                                  <div className="flex items-center gap-2 text-xs font-mono tabular-nums mt-0.5">
-                                    <span className="font-black text-emerald-200">
-                                      {formatGs(prod.precios?.[1] || 189000)}
+                            {/* FLUJO HORIZONTAL PASO 1 -> PASO 2 + ACCIONES */}
+                            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1 min-w-0">
+                                <div className="flex items-center gap-2.5 min-w-0 flex-1 bg-sky-950/55 border border-sky-400/35 rounded-xl px-2.5 py-1.5">
+                                  <img
+                                    src={tripwireHookThumbUrl}
+                                    alt={prod.tripwireConfig?.entryProductName || 'Gancho'}
+                                    referrerPolicy="no-referrer"
+                                    className="w-9 h-11 rounded-md object-cover border border-sky-400/60 shrink-0 bg-[#0b1220]"
+                                  />
+                                  <div className="min-w-0">
+                                    <span className="block text-[10px] font-black uppercase tracking-wider text-sky-300 leading-none">
+                                      Paso 1 · Gancho
                                     </span>
-                                    <span className="text-zinc-500">·</span>
-                                    <span className="text-zinc-400 truncate">/?p={prod.slug}</span>
+                                    <div className="flex items-baseline gap-2 mt-0.5 min-w-0">
+                                      <span className="text-xs sm:text-sm font-bold text-white truncate">
+                                        {prod.tripwireConfig?.entryProductName || 'Gancho'}
+                                      </span>
+                                      <span className="text-xs font-mono font-bold tabular-nums text-sky-200 shrink-0">
+                                        {formatGs(tripwireHookPrice)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <span className="hidden sm:inline text-emerald-300 font-black text-base shrink-0">→</span>
+
+                                <div className="flex items-center gap-2.5 min-w-0 flex-1 bg-emerald-950/55 border border-emerald-400/40 rounded-xl px-2.5 py-1.5">
+                                  <img
+                                    src={tripwireMainThumbUrl}
+                                    alt={prod.nombre}
+                                    referrerPolicy="no-referrer"
+                                    className="w-9 h-11 rounded-md object-cover border border-emerald-400/60 shrink-0 bg-[#0b1220]"
+                                  />
+                                  <div className="min-w-0">
+                                    <span className="block text-[10px] font-black uppercase tracking-wider text-emerald-300 leading-none">
+                                      Paso 2 · Estrella
+                                    </span>
+                                    <div className="flex items-baseline gap-2 mt-0.5 min-w-0">
+                                      <h3 className="text-xs sm:text-sm font-extrabold text-white truncate" title={prod.nombre}>
+                                        {prod.nombre}
+                                      </h3>
+                                      <span className="text-xs font-mono font-bold tabular-nums text-emerald-200 shrink-0">
+                                        {formatGs(prod.precios?.[1] || 189000)}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
 
-                            {renderCardActionsToolbar('tripwire')}
+                              {renderCardActionsToolbar('tripwire')}
+                            </div>
                           </div>
                         </div>
                       ) : isQuickStandardCard ? (
-                        /* DISEÑO 2: CREADOR RÁPIDO · ESTÁNDAR (VITRINA DORADA DE UN SOLO PRODUCTO) */
+                        /* VIP 2: CREADOR RÁPIDO · ESTÁNDAR (VITRINA CHAMPAGNE COMPACTA) */
                         <div
                           onClick={() => toggleProductExpand(prod)}
                           className="cursor-pointer select-none"
                         >
-                          {/* BANDA SUPERIOR DORADA DE GRAN FORMATO */}
-                          <div className="px-4 py-3 bg-gradient-to-r from-[#e5c88b] via-[#edd49e] to-[#cfa85c] text-[#160f04] flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <label
-                                onClick={e => e.stopPropagation()}
-                                className="inline-flex items-center justify-center cursor-pointer shrink-0 bg-[#160f04]/15 p-1.5 rounded-md border border-[#160f04]/25"
-                                title="Seleccionar esta página"
-                              >
-                                <input
-                                  type="checkbox"
-                                  data-testid={`select-product-checkbox-${prod.id}`}
-                                  checked={isProductChecked}
-                                  onChange={() => toggleSelectProductPage(prod.id)}
-                                  className="w-4 h-4 rounded accent-[#160f04] cursor-pointer"
-                                />
-                              </label>
-                              <div className="min-w-0">
-                                <span className="block text-base sm:text-lg md:text-xl font-black uppercase tracking-tight leading-none text-[#160f04]">
-                                  {pageCategoryMeta.label}
-                                </span>
-                                <span className="block text-xs font-bold text-[#2f2008] mt-1">
-                                  Página directa 100% enfocada en un solo producto · {mainSheetCount} láminas
-                                  {isJustCreated ? ' · Recién creada' : ''}
-                                </span>
-                              </div>
-                            </div>
-                            <span className="text-xs font-mono font-extrabold text-[#160f04] whitespace-nowrap">
-                              {hasPixelConfigured
-                                ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
-                                : 'Sin Píxel'}
-                            </span>
-                          </div>
-
-                          {/* VITRINA DE PRODUCTO ÚNICO + TIRA DE 3 PACKS */}
-                          <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-[#e5c88b]/[0.05] transition-colors">
-                            <div className="flex items-center gap-4 min-w-0 flex-1">
-                              <img
-                                src={primaryThumbUrl}
-                                alt={prod.nombre}
-                                referrerPolicy="no-referrer"
-                                className="w-16 h-24 rounded-xl object-cover border-2 border-[#e5c88b]/60 shrink-0 bg-[#07090f] shadow-md"
-                              />
-                              <div className="min-w-0 flex-1 space-y-2">
-                                <div>
-                                  <h3 className="text-base sm:text-lg font-extrabold text-white truncate" title={prod.nombre}>
-                                    {prod.nombre}
-                                  </h3>
-                                  <p className="text-xs font-mono text-zinc-400 truncate">
-                                    /?p={prod.slug} · {prod.freeShipping === false ? 'Envío Pagado' : 'Envío Gratis en Paraguay'}
-                                  </p>
-                                </div>
-
-                                <div className="grid grid-cols-3 max-w-md divide-x divide-[#e5c88b]/25 border-y border-[#e5c88b]/25 bg-black/30">
-                                  <div className="px-3 py-1.5">
-                                    <span className="block text-[10px] font-bold uppercase text-[#e5c88b]">Pack 1x</span>
-                                    <span className="text-xs sm:text-sm font-mono font-bold tabular-nums text-white">
-                                      {formatGs(prod.precios?.[1] || 189000)}
-                                    </span>
-                                  </div>
-                                  <div className="px-3 py-1.5">
-                                    <span className="block text-[10px] font-bold uppercase text-zinc-400">Pack 2x</span>
-                                    <span className="text-xs sm:text-sm font-mono font-bold tabular-nums text-zinc-200">
-                                      {formatGs(prod.precios?.[2] || 358000)}
-                                    </span>
-                                  </div>
-                                  <div className="px-3 py-1.5">
-                                    <span className="block text-[10px] font-bold uppercase text-zinc-400">Pack 3x</span>
-                                    <span className="text-xs sm:text-sm font-mono font-bold tabular-nums text-zinc-200">
-                                      {formatGs(prod.precios?.[3] || 499000)}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {renderCardActionsToolbar('standard')}
-                          </div>
-                        </div>
-                      ) : (
-                        /* DISEÑO 1: PÁGINA ANTIGUA (FICHA CLÁSICA COMPACTA DE ARCHIVO EN ACERO) */
-                        <div
-                          onClick={() => toggleProductExpand(prod)}
-                          className="cursor-pointer select-none"
-                        >
-                          {/* CABECERA CLÁSICA EN ACERO CON LETRA GRANDE */}
-                          <div className="px-4 py-2.5 bg-zinc-900 border-b border-zinc-700/60 flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="h-[3px] w-full bg-gradient-to-r from-[#c89d4c] via-[#f6e2b3] to-[#c89d4c]" />
+                          <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3.5 min-w-0 flex-1">
                               <label
                                 onClick={e => e.stopPropagation()}
                                 className="inline-flex items-center justify-center cursor-pointer shrink-0"
@@ -3532,47 +3440,86 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   data-testid={`select-product-checkbox-${prod.id}`}
                                   checked={isProductChecked}
                                   onChange={() => toggleSelectProductPage(prod.id)}
-                                  className="w-3.5 h-3.5 rounded accent-zinc-300 cursor-pointer"
+                                  className="w-3.5 h-3.5 rounded accent-[#e5c88b] cursor-pointer"
                                 />
                               </label>
-                              <span className="text-sm sm:text-base md:text-lg font-extrabold uppercase tracking-wider text-zinc-200">
-                                {pageCategoryMeta.label}
-                              </span>
-                              <span className="text-[11px] text-zinc-400 hidden sm:inline">
-                                · Versión clásica anterior
-                              </span>
-                            </div>
-                            <span className="text-[11px] font-mono text-zinc-400">
-                              {hasPixelConfigured
-                                ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
-                                : 'Sin Píxel'}
-                            </span>
-                          </div>
-
-                          {/* FILA COMPACTA TRADICIONAL */}
-                          <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-white/[0.02] transition-colors">
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
                               <img
                                 src={primaryThumbUrl}
                                 alt={prod.nombre}
                                 referrerPolicy="no-referrer"
-                                className="w-11 h-11 rounded-md object-cover border border-zinc-600/60 shrink-0 bg-[#07090f] opacity-85"
+                                className="w-11 h-14 rounded-lg object-cover border-2 border-[#e5c88b]/75 shrink-0 bg-[#0b0e16]"
                               />
                               <div className="min-w-0 flex-1">
-                                <h3 className="text-sm font-semibold text-zinc-200 truncate" title={prod.nombre}>
-                                  {prod.nombre}
-                                </h3>
-                                <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono tabular-nums mt-0.5 truncate">
-                                  <span className="truncate">/?p={prod.slug}</span>
-                                  <span>·</span>
-                                  <span className="text-zinc-200 font-semibold">1x {formatGs(prod.precios?.[1] || 189000)}</span>
-                                  <span className="hidden md:inline">· {prod.freeShipping === false ? 'Envío Pagado' : 'Envío Gratis'}</span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm sm:text-base font-black uppercase tracking-wide text-[#f3d89b]">
+                                    {pageCategoryMeta.label}
+                                  </span>
+                                  {isJustCreated && (
+                                    <span className="text-[11px] font-bold text-white">· Nueva</span>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 mt-0.5">
+                                  <h3 className="text-sm sm:text-base font-bold text-white truncate max-w-[260px] sm:max-w-[380px]" title={prod.nombre}>
+                                    {prod.nombre}
+                                  </h3>
+                                  <span className="text-xs sm:text-sm font-mono font-bold tabular-nums text-[#e5c88b]">
+                                    {formatGs(prod.precios?.[1] || 189000)}
+                                  </span>
+                                  <span className="text-[11px] font-mono text-zinc-400">
+                                    {hasPixelConfigured ? `· Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}` : '· Sin Píxel'}
+                                  </span>
                                 </div>
                               </div>
                             </div>
 
-                            {renderCardActionsToolbar('legacy')}
+                            {renderCardActionsToolbar('standard')}
                           </div>
+                        </div>
+                      ) : (
+                        /* VIP 1: PÁGINA ANTIGUA (ARCHIVO CLÁSICO COMPACTO EN ACERO) */
+                        <div
+                          onClick={() => toggleProductExpand(prod)}
+                          className="cursor-pointer select-none px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <label
+                              onClick={e => e.stopPropagation()}
+                              className="inline-flex items-center justify-center cursor-pointer shrink-0"
+                              title="Seleccionar esta página"
+                            >
+                              <input
+                                type="checkbox"
+                                data-testid={`select-product-checkbox-${prod.id}`}
+                                checked={isProductChecked}
+                                onChange={() => toggleSelectProductPage(prod.id)}
+                                className="w-3.5 h-3.5 rounded accent-zinc-300 cursor-pointer"
+                              />
+                            </label>
+                            <img
+                              src={primaryThumbUrl}
+                              alt={prod.nombre}
+                              referrerPolicy="no-referrer"
+                              className="w-10 h-10 rounded-md object-cover border border-zinc-500/60 shrink-0 bg-[#0b0e16]"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <span className="block text-xs sm:text-sm font-black uppercase tracking-wider text-zinc-300 leading-none">
+                                {pageCategoryMeta.label}
+                              </span>
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mt-1">
+                                <h3 className="text-sm font-semibold text-white truncate max-w-[240px] sm:max-w-[340px]" title={prod.nombre}>
+                                  {prod.nombre}
+                                </h3>
+                                <span className="text-xs font-mono tabular-nums text-zinc-300">
+                                  {formatGs(prod.precios?.[1] || 189000)}
+                                </span>
+                                <span className="text-[11px] font-mono text-zinc-400">
+                                  {hasPixelConfigured ? `· Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}` : '· Sin Píxel'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {renderCardActionsToolbar('legacy')}
                         </div>
                       )}
 

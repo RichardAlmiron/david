@@ -1351,78 +1351,78 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                               data-testid={`clone-source-${p.id}`}
                               data-page-category={pageCategory}
                               onClick={() => handleSelectSourceProduct(p)}
-                              className={`text-left rounded-3xl bg-[#051214] border overflow-hidden transition-all cursor-pointer ${
+                              className={`text-left rounded-2xl bg-gradient-to-r from-[#102534] via-[#13242b] to-[#102a22] border overflow-hidden transition-all cursor-pointer ${
                                 isSelectedClone
-                                  ? 'border-emerald-300 ring-2 ring-emerald-400/55 shadow-[0_12px_30px_-14px_rgba(16,185,129,0.55)]'
-                                  : 'border-emerald-500/55 hover:border-emerald-400'
+                                  ? 'border-emerald-300 ring-2 ring-emerald-400/55 shadow-[0_14px_30px_-10px_rgba(16,185,129,0.45)]'
+                                  : 'border-emerald-400/65 hover:border-emerald-300 shadow-[0_12px_26px_-10px_rgba(16,185,129,0.24)]'
                               }`}
                             >
-                              <div className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-700 text-white flex items-center justify-between gap-2">
-                                <span className="text-sm sm:text-base font-black uppercase tracking-tight leading-none truncate">
-                                  {pageCategoryMeta.label}
-                                </span>
-                                {isSelectedClone && (
-                                  <span className="text-[11px] font-black uppercase bg-black/35 px-2 py-0.5 rounded text-emerald-200 shrink-0">
-                                    Elegida
+                              <div className="h-[3px] w-full bg-gradient-to-r from-sky-400 via-teal-300 to-emerald-400" />
+                              <div className="px-3.5 py-3 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-sm font-black uppercase tracking-wide text-emerald-300 truncate">
+                                    {pageCategoryMeta.label}
                                   </span>
-                                )}
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1.15fr] items-stretch divide-y sm:divide-y-0 sm:divide-x divide-white/10">
-                                <div className="flex items-center gap-2.5 bg-sky-950/35 p-3 min-w-0">
-                                  {hookThumb ? (
-                                    <img
-                                      src={hookThumb}
-                                      alt={p.tripwireConfig?.entryProductName || 'Gancho'}
-                                      referrerPolicy="no-referrer"
-                                      className="w-10 h-14 rounded-lg object-cover border border-sky-400/50 shrink-0 bg-[#07090f]"
-                                    />
-                                  ) : (
-                                    <div className="w-10 h-14 rounded-lg bg-sky-950/60 border border-sky-400/40 flex items-center justify-center shrink-0">
-                                      <Layers className="w-4 h-4 text-sky-300" />
-                                    </div>
+                                  {isSelectedClone && (
+                                    <span className="text-[11px] font-black uppercase text-emerald-200 shrink-0">
+                                      Elegida
+                                    </span>
                                   )}
-                                  <div className="min-w-0">
-                                    <span className="block text-[10px] font-bold uppercase tracking-wider text-sky-300">
-                                      Paso 1 · Gancho
-                                    </span>
-                                    <span className="block text-xs font-bold text-white truncate">
-                                      {p.tripwireConfig?.entryProductName || 'Gancho'}
-                                    </span>
-                                    <span className="block text-xs font-mono font-black tabular-nums text-sky-200">
-                                      {formatGs(hookPrice)}
-                                    </span>
+                                </div>
+
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0 bg-sky-950/55 border border-sky-400/35 rounded-xl px-2 py-1.5">
+                                    {hookThumb ? (
+                                      <img
+                                        src={hookThumb}
+                                        alt={p.tripwireConfig?.entryProductName || 'Gancho'}
+                                        referrerPolicy="no-referrer"
+                                        className="w-8 h-10 rounded-md object-cover border border-sky-400/60 shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-8 h-10 rounded-md bg-sky-950/70 border border-sky-400/40 flex items-center justify-center shrink-0">
+                                        <Layers className="w-3.5 h-3.5 text-sky-300" />
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <span className="block text-[9px] font-black uppercase text-sky-300 leading-none">
+                                        Paso 1 · Gancho
+                                      </span>
+                                      <span className="block text-xs font-bold text-white truncate mt-0.5">
+                                        {p.tripwireConfig?.entryProductName || 'Gancho'}
+                                      </span>
+                                      <span className="block text-[11px] font-mono font-bold tabular-nums text-sky-200">
+                                        {formatGs(hookPrice)}
+                                      </span>
+                                    </div>
                                   </div>
-                                </div>
 
-                                <div className="flex items-center justify-center px-2 py-1 bg-black/25 text-emerald-300 font-black text-sm">
-                                  <span className="sm:hidden">↓</span>
-                                  <span className="hidden sm:inline">→</span>
-                                </div>
+                                  <span className="text-emerald-300 font-black text-sm shrink-0">→</span>
 
-                                <div className="flex items-center gap-2.5 bg-emerald-950/35 p-3 min-w-0">
-                                  {mainTwThumb ? (
-                                    <img
-                                      src={mainTwThumb}
-                                      alt={p.nombre}
-                                      referrerPolicy="no-referrer"
-                                      className="w-10 h-14 rounded-lg object-cover border border-emerald-400/50 shrink-0 bg-[#07090f]"
-                                    />
-                                  ) : (
-                                    <div className="w-10 h-14 rounded-lg bg-emerald-950/60 border border-emerald-400/40 flex items-center justify-center shrink-0">
-                                      <Layers className="w-4 h-4 text-emerald-300" />
+                                  <div className="flex items-center gap-2 flex-1 min-w-0 bg-emerald-950/55 border border-emerald-400/40 rounded-xl px-2 py-1.5">
+                                    {mainTwThumb ? (
+                                      <img
+                                        src={mainTwThumb}
+                                        alt={p.nombre}
+                                        referrerPolicy="no-referrer"
+                                        className="w-8 h-10 rounded-md object-cover border border-emerald-400/60 shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-8 h-10 rounded-md bg-emerald-950/70 border border-emerald-400/40 flex items-center justify-center shrink-0">
+                                        <Layers className="w-3.5 h-3.5 text-emerald-300" />
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <span className="block text-[9px] font-black uppercase text-emerald-300 leading-none">
+                                        Paso 2 · Estrella
+                                      </span>
+                                      <span className="block text-xs font-extrabold text-white truncate mt-0.5">
+                                        {p.nombre}
+                                      </span>
+                                      <span className="block text-[11px] font-mono font-bold tabular-nums text-emerald-200">
+                                        {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))}
+                                      </span>
                                     </div>
-                                  )}
-                                  <div className="min-w-0">
-                                    <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                                      Paso 2 · Estrella
-                                    </span>
-                                    <span className="block text-xs sm:text-sm font-extrabold text-white truncate">
-                                      {p.nombre}
-                                    </span>
-                                    <span className="block text-xs font-mono font-black tabular-nums text-emerald-200">
-                                      {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))}
-                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -1438,64 +1438,42 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                               data-testid={`clone-source-${p.id}`}
                               data-page-category={pageCategory}
                               onClick={() => handleSelectSourceProduct(p)}
-                              className={`text-left rounded-2xl bg-[#130f08] border overflow-hidden transition-all cursor-pointer ${
+                              className={`text-left rounded-2xl bg-gradient-to-r from-[#241d12] via-[#1c1a1c] to-[#171b28] border overflow-hidden transition-all cursor-pointer ${
                                 isSelectedClone
-                                  ? 'border-[#f4dfb0] ring-2 ring-[#e5c88b]/60 shadow-[0_12px_30px_-14px_rgba(229,200,139,0.55)]'
-                                  : 'border-[#e5c88b]/60 hover:border-[#f4dfb0]'
+                                  ? 'border-[#f4dfb0] ring-2 ring-[#e5c88b]/60 shadow-[0_14px_30px_-10px_rgba(229,200,139,0.45)]'
+                                  : 'border-[#e5c88b]/65 hover:border-[#f4dfb0] shadow-[0_12px_26px_-10px_rgba(229,200,139,0.22)]'
                               }`}
                             >
-                              <div className="px-3.5 py-2.5 bg-gradient-to-r from-[#e5c88b] via-[#edd49e] to-[#cfa85c] text-[#160f04] flex items-center justify-between gap-2">
-                                <span className="text-sm sm:text-base font-black uppercase tracking-tight leading-none truncate">
-                                  {pageCategoryMeta.label}
-                                </span>
-                                {isSelectedClone && (
-                                  <span className="text-[11px] font-black uppercase bg-[#160f04]/20 px-2 py-0.5 rounded text-[#160f04] shrink-0">
-                                    Elegida
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="p-3.5 flex items-center gap-3.5">
+                              <div className="h-[3px] w-full bg-gradient-to-r from-[#c89d4c] via-[#f6e2b3] to-[#c89d4c]" />
+                              <div className="px-3.5 py-3 flex items-center gap-3.5">
                                 {primaryThumb ? (
                                   <img
                                     src={primaryThumb}
                                     alt={p.nombre}
                                     referrerPolicy="no-referrer"
-                                    className="w-14 h-20 rounded-xl object-cover border-2 border-[#e5c88b]/60 shrink-0 bg-[#07090f]"
+                                    className="w-11 h-14 rounded-lg object-cover border-2 border-[#e5c88b]/75 shrink-0 bg-[#0b0e16]"
                                   />
                                 ) : (
-                                  <div className="w-14 h-20 rounded-xl bg-white/[0.05] border border-[#e5c88b]/40 flex items-center justify-center shrink-0">
-                                    <Layers className="w-5 h-5 text-[#e5c88b]" />
+                                  <div className="w-11 h-14 rounded-lg bg-white/[0.06] border border-[#e5c88b]/50 flex items-center justify-center shrink-0">
+                                    <Layers className="w-4 h-4 text-[#e5c88b]" />
                                   </div>
                                 )}
-                                <div className="min-w-0 flex-1 space-y-2">
-                                  <div>
-                                    <div className="text-sm sm:text-base font-extrabold text-white truncate">
-                                      {p.nombre}
-                                    </div>
-                                    <div className="text-[11px] font-mono text-zinc-400 truncate">
-                                      /?p={p.slug}
-                                    </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-black uppercase tracking-wide text-[#f3d89b] truncate">
+                                      {pageCategoryMeta.label}
+                                    </span>
+                                    {isSelectedClone && (
+                                      <span className="text-[11px] font-black uppercase text-[#f4dfb0] shrink-0">
+                                        Elegida
+                                      </span>
+                                    )}
                                   </div>
-                                  <div className="grid grid-cols-3 divide-x divide-[#e5c88b]/25 border-y border-[#e5c88b]/25 bg-black/30">
-                                    <div className="px-2 py-1">
-                                      <span className="block text-[9px] font-bold uppercase text-[#e5c88b]">1x</span>
-                                      <span className="text-[11px] font-mono font-bold tabular-nums text-white">
-                                        {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))}
-                                      </span>
-                                    </div>
-                                    <div className="px-2 py-1">
-                                      <span className="block text-[9px] font-bold uppercase text-zinc-400">2x</span>
-                                      <span className="text-[11px] font-mono font-bold tabular-nums text-zinc-200">
-                                        {formatGs(Number(p.precios?.[2] || Math.round((p.precios?.[1] || 189000) * 1.85)))}
-                                      </span>
-                                    </div>
-                                    <div className="px-2 py-1">
-                                      <span className="block text-[9px] font-bold uppercase text-zinc-400">3x</span>
-                                      <span className="text-[11px] font-mono font-bold tabular-nums text-zinc-200">
-                                        {formatGs(Number(p.precios?.[3] || Math.round((p.precios?.[1] || 189000) * 2.65)))}
-                                      </span>
-                                    </div>
+                                  <div className="text-sm sm:text-base font-bold text-white truncate mt-0.5">
+                                    {p.nombre}
+                                  </div>
+                                  <div className="text-xs font-mono font-bold tabular-nums text-[#e5c88b] mt-0.5">
+                                    {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))}
                                   </div>
                                 </div>
                               </div>
@@ -1503,7 +1481,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                           );
                         }
 
-                        // DISEÑO LEGACY (PÁGINA ANTIGUA COMPACTA DE ARCHIVO EN ACERO)
+                        // VIP 1: PÁGINA ANTIGUA COMPACTA
                         return (
                           <button
                             key={p.id}
@@ -1511,40 +1489,39 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                             data-testid={`clone-source-${p.id}`}
                             data-page-category={pageCategory}
                             onClick={() => handleSelectSourceProduct(p)}
-                            className={`text-left rounded-lg bg-[#0a0c11] border overflow-hidden transition-all cursor-pointer ${
+                            className={`text-left rounded-xl bg-[#131722] border overflow-hidden transition-all cursor-pointer ${
                               isSelectedClone
-                                ? 'border-zinc-200 ring-2 ring-zinc-300/40'
-                                : 'border-zinc-700/70 hover:border-zinc-500'
+                                ? 'border-zinc-200 ring-2 ring-zinc-300/45'
+                                : 'border-zinc-600/55 hover:border-zinc-400 shadow-[0_8px_20px_rgba(0,0,0,0.4)]'
                             }`}
                           >
-                            <div className="px-3.5 py-2 bg-zinc-900 border-b border-zinc-700/60 flex items-center justify-between gap-2">
-                              <span className="text-sm font-extrabold uppercase tracking-wider text-zinc-200 truncate">
-                                {pageCategoryMeta.label}
-                              </span>
-                              {isSelectedClone && (
-                                <span className="text-[11px] font-bold uppercase text-white shrink-0">
-                                  Elegida
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="p-3 flex items-center gap-3">
+                            <div className="px-3.5 py-3 flex items-center gap-3">
                               {primaryThumb ? (
                                 <img
                                   src={primaryThumb}
                                   alt={p.nombre}
                                   referrerPolicy="no-referrer"
-                                  className="w-11 h-11 rounded-md object-cover border border-zinc-600/60 shrink-0 opacity-85"
+                                  className="w-10 h-10 rounded-md object-cover border border-zinc-500/60 shrink-0"
                                 />
                               ) : (
-                                <div className="w-11 h-11 rounded-md bg-white/[0.04] border border-zinc-700 flex items-center justify-center shrink-0">
+                                <div className="w-10 h-10 rounded-md bg-white/[0.05] border border-zinc-600 flex items-center justify-center shrink-0">
                                   <Layers className="w-4 h-4 text-zinc-400" />
                                 </div>
                               )}
-                              <div className="min-w-0 flex-1 space-y-0.5">
-                                <div className="text-sm font-semibold text-zinc-200 truncate">{p.nombre}</div>
-                                <div className="text-xs font-mono tabular-nums text-zinc-400 truncate">
-                                  1x {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))} · /?p={p.slug}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-black uppercase tracking-wider text-zinc-300 truncate">
+                                    {pageCategoryMeta.label}
+                                  </span>
+                                  {isSelectedClone && (
+                                    <span className="text-[11px] font-bold uppercase text-white shrink-0">
+                                      Elegida
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-sm font-semibold text-white truncate mt-0.5">{p.nombre}</div>
+                                <div className="text-xs font-mono tabular-nums text-zinc-300">
+                                  {formatGs(Number(p.precios?.[1] || p.precioNormal || 0))}
                                 </div>
                               </div>
                             </div>
