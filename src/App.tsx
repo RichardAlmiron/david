@@ -269,14 +269,10 @@ export const AppContent: React.FC = () => {
           </div>
         </div>
       )}
-      <Navbar />
+      {!currentProductPage?.visualLanding?.enabled && <Navbar />}
       <main className="flex-1">
         {currentProductPage?.visualLanding?.enabled ? (
-          <>
-            <VisualProductLanding entryFocusedMode={isEntryLandingMode} />
-            <OrderForm />
-            <FaqSection />
-          </>
+          <VisualProductLanding entryFocusedMode={isEntryLandingMode} />
         ) : isEntryLandingMode && currentProductPage?.tripwireConfig?.enabled ? (
           <>
             <EntryHookLandingHero />
@@ -295,11 +291,11 @@ export const AppContent: React.FC = () => {
           </>
         )}
       </main>
-      <Footer />
+      {!currentProductPage?.visualLanding?.enabled && <Footer />}
       <CartDrawer />
       <ViralModal />
       <PoliciesModal />
-      <FloatingWhatsApp />
+      {!currentProductPage?.visualLanding?.enabled && <FloatingWhatsApp />}
       <MapCorrectionModal />
     </div>
   );

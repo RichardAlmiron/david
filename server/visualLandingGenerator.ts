@@ -246,6 +246,17 @@ export interface QuickCreateVisualProductInput {
   sheetCount?: 2 | 3;
   waNumber?: string;
   referer?: string;
+  clonedFromContext?: {
+    sourceProductId: string;
+    sourceProductName: string;
+    sourceSlug?: string;
+    sourceMode?: 'dual_tripwire_winner' | 'principal_only';
+    sourceDescription?: string;
+    sourceWinnerAngle?: string;
+    sourceEntryProductName?: string;
+    sourceContextoIA?: string;
+    differentiationNote?: string;
+  };
   fetchImpl?: typeof fetch;
 }
 
@@ -293,24 +304,35 @@ export async function generateUniversalVisualProductPage(
     : await saveImageInputLocally(resolvedEntryImgInput, 'prod_entry');
 
   const cleanAngleInput = String(input.winnerAngle || '').trim();
-  const promptSystemContent = isPrincipalOnly
-    ? `Eres el Director de Producto y Psicología de Conversión Sobria en Paraguay.
-Diseñas páginas gráficas verticales ultra-claras enfocadas 100% EN UN ÚNICO PRODUCTO PRINCIPAL (sin artículos secundarios ni ofertas de entrada paralelas).
+  const cloneCtx = input.clonedFromContext;
+  const cloneDirectiveBlock = cloneCtx?.sourceProductName
+    ? `\n\nCONOCIMIENTO COMPLETO DE PÁGINA CLONADA (REFERENCIA BASE "${cloneCtx.sourceProductName}"):
+- El operador seleccionó clonar la información técnica de la página existente "${cloneCtx.sourceProductName}" (ID: ${cloneCtx.sourceProductId}).
+- Descripción original conocida: ${cloneCtx.sourceDescription || input.productDescription}
+${cloneCtx.sourceWinnerAngle ? `- Ángulo de la página anterior (NO REPETIR IGUAL): ${cloneCtx.sourceWinnerAngle}` : ''}
+${cloneCtx.sourceEntryProductName ? `- Artículo de entrada anterior: ${cloneCtx.sourceEntryProductName}` : ''}
+${cloneCtx.sourceContextoIA ? `- Conocimiento comercial heredado:\n${cloneCtx.sourceContextoIA}` : ''}
+${cloneCtx.differentiationNote ? `- NUEVA DIRECCIÓN VISUAL / ÁNGULO SOLICITADO POR EL OPERADOR: ${cloneCtx.differentiationNote}` : '- OBJETIVO DEL CLON: Conservá la veracidad técnica y precios reales, pero diseñá un ÁNGULO NUEVO, titulares inéditos y composiciones visuales 100% frescas y distintas a la página anterior.'}`
+    : '';
 
-REGLA INQUEBRANTABLE DE LENGUAJE:
+  const promptSystemContent = isPrincipalOnly
+    ? `Eres el Director Creativo Senior de Marcas Flagship y Psicología de Conversión en Paraguay.
+Diseñas páginas gráficas verticales 100% visuales (cero bloques HTML intermedios: las láminas SON toda la presentación visual del producto) enfocadas en UN ÚNICO PRODUCTO GANADOR.
+
+REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
 - JAMÁS escribas la palabra "tripwire", "gancho trampa" ni menciones artículos secundarios inexistentes.
 - Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
-- Tono visual de los prompts para gpt-image-2.6-sunburst: diseño editorial comercial limpio de alto contraste en español paraguayo, composición tipo lámina de catálogo/app móvil vertical (3:4), fondo equilibrado, tipografía nítida en español sin texto cortado, cero stickers chillones.`
-    : `Eres el Director de Producto y Psicología de Conversión Sobria en Paraguay.
-Diseñas páginas gráficas verticales ultra-claras que NO gritan "¡cómprame!", sino que despiertan deseo inteligente mediante psicología inversa y congruencia real entre un producto de entrada accesible y el producto principal definitivo.
+- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña Apple / Dyson / Bang & Olufsen adaptada a hogar/consumo real en Paraguay), iluminación cinematográfica de estudio con profundidad 3D, materiales táctiles ultra nítidos, tipografía editorial española impecable sin errores ni letras cortadas, ocupación total borde a borde (edge-to-edge 3:4 sin marcos blancos), CERO estrellas chillonas, CERO stickers baratos de infoproducto.${cloneDirectiveBlock}`
+    : `Eres el Director Creativo Senior de Marcas Flagship y Psicología de Conversión en Paraguay.
+Diseñas páginas gráficas verticales 100% visuales (cero bloques HTML intermedios: las láminas SON toda la presentación visual) mediante psicología inversa elegante entre un artículo accesible de entrada y el producto ganador completo.
 
-REGLA INQUEBRANTABLE DE LENGUAJE:
-- JAMÁS escribas la palabra "tripwire", "gancho trampa" ni jerga de marketing en ningún texto ni prompt visual. Refiérete siempre al artículo de entrada por su nombre real: "${safeEntryName}".
+REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
+- JAMÁS escribas la palabra "tripwire", "gancho trampa" ni jerga técnica. Refiérete siempre al artículo de entrada por su nombre real: "${safeEntryName}".
 - Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
-- Tono visual de los prompts para gpt-image-2.6-sunburst: diseño editorial comercial limpio de alto contraste en español paraguayo, composición tipo lámina de catálogo/app móvil vertical (3:4), fondo equilibrado, tipografía nítida en español sin texto cortado, cero stickers chillones ni explosiones de ofertas falsas.`;
+- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña flagship internacional adaptada a Paraguay), iluminación de estudio dramática y limpia, fotografía comercial realista de alto impacto visual y tipografía española nítida integrando la oferta sin parecer folleto barato, ocupación total borde a borde (edge-to-edge 3:4 sin marcos ni bordes blancos), CERO estrellas ni stickers baratos de infoproducto.${cloneDirectiveBlock}`;
 
   const promptUserContent = isPrincipalOnly
-    ? `PRODUCTO PRINCIPAL EXCLUSIVO (PÁGINA DIRECTA SIN ARTÍCULO SECUNDARIO):
+    ? `PRODUCTO GANADOR ÚNICO (PÁGINA DIRECTA SIN ARTÍCULO SECUNDARIO):
 - Nombre: ${input.productName}
 - Enfoque / ángulo principal: ${cleanAngleInput || input.productDescription}
 - Qué hace / descripción: ${input.productDescription}
@@ -334,13 +356,13 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "role": "hero_presentation",
       "title": "Presentación del producto principal",
       "caption": "Pie corto sobrio",
-      "imagePrompt": "Prompt detallado en inglés+español visible para openai/gpt-image-2.6-sunburst creando una lámina vertical editorial 3:4 limpia en español paraguayo mostrando el producto principal ${input.productName} (${cleanAngleInput || 'resultado superior en el hogar'}) en uso real, encabezado sobrio y badge discreto 'Envío Gratis · Pago al Recibir · Gs. ${formatParaguayGs(price1)}'."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero showcase of ${input.productName} (${cleanAngleInput || 'superior result'}) in dramatic modern architectural lighting, razor-sharp bold editorial Spanish headline integrated harmoniously, clean pricing callout 'Gs. ${formatParaguayGs(price1)} · Envío Gratis · Pagás al Recibir', luxury tactile realism, edge-to-edge artwork with zero outer frame."
     },
     {
       "role": "comparison_need",
       "title": "Beneficios y packs disponibles",
       "caption": "Comparativa clara de packs",
-      "imagePrompt": "Prompt detallado en inglés+español visible para openai/gpt-image-2.6-sunburst creando la lámina 2 vertical editorial 3:4 limpia en español detallando beneficios clave de ${input.productName}, opciones 1 Unidad (Gs. ${formatParaguayGs(price1)}) y Pack 2x Ahorro (Gs. ${formatParaguayGs(price2)}) con Envío Gratis en Paraguay, diseño minimalista moderno."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial infographic poster for openai/gpt-image-2.6-sunburst in crisp Spanish: macro visual breakdown of ${input.productName} key benefits and real materials, clean side-by-side comparison of 1 Unidad (Gs. ${formatParaguayGs(price1)}) and Pack 2x Ahorro (Gs. ${formatParaguayGs(price2)}) with 'Envío Gratis Paraguay', high-contrast studio typography, zero cheap stickers, edge-to-edge composition."
     }${
       sheetCount === 3
         ? `,
@@ -348,7 +370,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "role": "social_trust_specs",
       "title": "Garantía y contenido real en caja",
       "caption": "Lo que recibís en tu puerta",
-      "imagePrompt": "Prompt detallado en inglés+español visible para openai/gpt-image-2.6-sunburst creando la lámina 3 vertical editorial 3:4 limpia en español mostrando el contenido real de la caja de ${input.productName}, garantía escrita de 7 días y pago en efectivo o QR al repartidor en Paraguay."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial studio poster for openai/gpt-image-2.6-sunburst in crisp Spanish: clean overhead unboxing composition showing exact box contents of ${input.productName}, subtle refined emblem 'Garantía Escrita 7 Días · Pago Efectivo o QR al Recibir en Paraguay', architectural dark/warm studio aesthetic, edge-to-edge."
     }`
         : ''
     }
@@ -392,15 +414,15 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   "sheetPrompts": [
     {
       "role": "hero_presentation",
-      "title": "Presentación del sistema completo",
+      "title": "Presentación de oferta y producto ganador",
       "caption": "Pie corto sobrio",
-      "imagePrompt": "Prompt detallado en inglés+español visible para openai/gpt-image-2.6-sunburst creando una lámina vertical editorial 3:4 limpia en español paraguayo mostrando el producto principal ${input.productName} (${cleanAngleInput || 'ángulo de solución definitiva'}) en uso real en un hogar moderno paraguayo, encabezado limpio con el titular y badge discreto 'Pago al Recibir · Paraguay · Gs. ${formatParaguayGs(price1)}'."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero composition showcasing both '${safeEntryName}' (entry option at Gs. ${formatParaguayGs(entryPrice)}) and flagship '${input.productName}' (${cleanAngleInput || 'solución completa'}) inside a modern upscale setting, sharp editorial typography reading clearly in Spanish, refined badge 'Pago al Recibir · Paraguay', dramatic commercial lighting, edge-to-edge zero white border."
     },
     {
       "role": "comparison_need",
-      "title": "Por qué se complementan",
+      "title": "Comparativa clara de ambas opciones",
       "caption": "Comparación racional y visual",
-      "imagePrompt": "Prompt detallado en inglés+español visible para openai/gpt-image-2.6-sunburst creando la lámina 2 vertical editorial 3:4 limpia en español comparando lado a lado: Opción A solo '${safeEntryName}' (Gs. ${formatParaguayGs(entryPrice)} + Delivery) vs Opción B completa '${input.productName}' (ángulo: ${cleanAngleInput || 'resultado completo en segundos'}) con '${safeEntryName}' INCLUIDO GRATIS + Envío Gratis, diseño sobrio sin stickers ruidosos."
+      "imagePrompt": "Flagship full-bleed 3:4 editorial comparison sheet for openai/gpt-image-2.6-sunburst in crisp Spanish: clean visual split contrasting Option 1 Solo '${safeEntryName}' (Gs. ${formatParaguayGs(entryPrice)} + Delivery) vs Option 2 Paquete Completo '${input.productName}' (Gs. ${formatParaguayGs(price1)} con '${safeEntryName}' DE REGALO + Envío Gratis), ultra sharp Spanish labels, luxury commercial studio photography, zero cartoon icons, edge-to-edge."
     }${
       sheetCount === 3
         ? `,
@@ -408,7 +430,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "role": "social_trust_specs",
       "title": "Garantía y contenido real en caja",
       "caption": "Lo que recibís en tu puerta",
-      "imagePrompt": "Prompt detallado en inglés+español visible para openai/gpt-image-2.6-sunburst creando la lámina 3 vertical editorial 3:4 limpia en español mostrando el contenido real de la caja, garantía escrita de 7 días y pago en efectivo o QR al repartidor en Paraguay."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial studio poster for openai/gpt-image-2.6-sunburst in crisp Spanish: crisp tabletop presentation showing exact contents of '${input.productName}' alongside '${safeEntryName}', clean verified seal 'Garantía Escrita 7 Días · Pagás en Efectivo o QR al Recibir', luxury lighting, edge-to-edge."
     }`
         : ''
     }

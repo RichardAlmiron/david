@@ -31,6 +31,10 @@ import {
   filterGenuineTripwirePages,
   resolveDefaultSlotMode
 } from '../../src/utils/autoAdsSlotPlanner.ts';
+import {
+  buildCloneDraftFromProductPage,
+  isProductCloneable
+} from '../../src/utils/quickCreatorCloner.ts';
 
 const PRODUCT_WITH_ENTRY = {
   id: 'prod-navidad-01',
@@ -632,6 +636,126 @@ test('autoAdsSlotPlanner calcula cantidades libres (sin prefijos 4+2) y enruta c
     }
   }
 });
+
+test('quickCreatorCloner extrae ficha completa para clonar páginas Tripwire y Estándar', () => {
+  assert.equal(isProductCloneable(null), false);
+  assert.equal(isProductCloneable(PRODUCT_WITH_ENTRY as any), true);
+
+  const dualClone = buildCloneDraftFromProductPage(PRODUCT_WITH_ENTRY as any);
+  assert.equal(dualClone.suggestedMode, 'dual_tripwire_winner');
+  assert.equal(dualClone.productName, PRODUCT_WITH_ENTRY.nombre);
+  assert.equal(dualClone.entryProductName, 'Guirnalda LED Navideña 10m');
+  assert.equal(dualClone.entryPriceGs, 20000);
+  assert.equal(dualClone.price1Gs, 189000);
+  assert.equal(dualClone.clonedFromContext.sourceProductId, 'prod-navidad-01');
+  assert.equal(dualClone.clonedFromContext.sourceEntryProductName, 'Guirnalda LED Navideña 10m');
+
+  const stdClone = buildCloneDraftFromProductPage({
+    id: 'prod-std-only',
+    nombre: 'Auriculares Estudio ANC',
+    slug: 'auriculares-anc',
+    descripcion: 'Cancelación activa de ruido 40h',
+    imagen: 'https://cdn.example.com/anc.jpg',
+    precioNormal: 320000,
+    precios: { 1: 249000, 2: 459000, 3: 649000 },
+    wa: '595981112233',
+    activo: true,
+    creadoEn: '2026-11-10T00:00:00Z'
+  } as any);
+  assert.equal(stdClone.suggestedMode, 'principal_only');
+  assert.equal(stdClone.entryProductName, '');
+  assert.equal(stdClone.price1Gs, 249000);
+  assert.equal(stdClone.clonedFromContext.sourceMode, 'principal_only');
+});
+
+test('generateUniversalVisualProductPage inyecta clonedFromContext al agente para crear ángulo e imágenes inéditas sin mencionar tripwire en público', async () => {
+  const capturedChatPayloads: any[] = [];
+  const createdTempFiles: string[] = [];
+  const fakeJpgB64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46]).toString('base64');
+
+  const mockFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/chat/completions')) {
+      capturedChatPayloads.push(JSON.parse(String(init?.body || '{}')));
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  strategySummary: 'Ángulo clonado renovado sin duplicar visual',
+                  sobrietyHeadline: 'Cocina saludable en tiempo récord para tu familia',
+                  subheadline: 'Nueva edición de alta capacidad con envío gratis en Paraguay.',
+                  winnerAngleHeadline: 'Versión Nocturna Express sin humo ni aceite',
+                  winnerAngleDescription: 'Pensada para cenas rápidas entre semana con limpieza en 30 segundos.',
+                  reversePsychologyHook: 'Compará el accesorio suelto versus el equipo completo.',
+                  entryButtonLabel: 'Elegir solo Set de Papeles (Gs. 20.000)',
+                  entryDisclaimer: 'Solo incluye el set de papeles. Delivery Gs. 40.000.',
+                  bundleButtonLabel: 'Llevar Freidora 6L + Set Papeles GRATIS (Gs. 389.000)',
+                  bundleDisclaimer: 'Envío gratis en todo Paraguay.',
+                  sheetPrompts: [
+                    { role: 'hero_presentation', title: 'Lámina Nueva 1', caption: 'Vista 1', imagePrompt: 'fresh studio hero' },
+                    { role: 'comparison_need', title: 'Lámina Nueva 2', caption: 'Vista 2', imagePrompt: 'fresh comparison' }
+                  ],
+                  faq: [{ q: '¿Incluye garantía?', a: 'Sí, 7 días.' }],
+                  agentContext: 'Precios exactos en Gs.'
+                })
+              }
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    }
+    return new Response(JSON.stringify({ data: [{ b64_json: fakeJpgB64 }] }), { status: 200 });
+  }) as any;
+
+  try {
+    const res = await generateUniversalVisualProductPage({
+      openRouterApiKey: 'test-key',
+      pageCreationMode: 'dual_tripwire_winner',
+      productName: 'Freidora de Aire 6L',
+      productDescription: 'Freidora digital acero inoxidable 6 litros',
+      price1Gs: 389000,
+      entryProductName: 'Set de Papeles Antiadherentes',
+      entryPriceGs: 20000,
+      clonedFromContext: {
+        sourceProductId: 'prod-old-freidora',
+        sourceProductName: 'Freidora Clásica 6L',
+        sourceWinnerAngle: 'Ángulo original diurno de cocina familiar',
+        differentiationNote: 'Estilo nocturno minimalista enfocado en cenas rápidas sin limpiar'
+      },
+      sheetCount: 2,
+      fetchImpl: mockFetch
+    });
+
+    for (const sh of res.product.visualLanding?.sheets || []) {
+      if (sh.imageUrl.startsWith('/assets/visual-pages/')) {
+        createdTempFiles.push(path.resolve(process.cwd(), 'public', sh.imageUrl.replace(/^\//, '')));
+      }
+    }
+
+    assert.equal(capturedChatPayloads.length, 1);
+    const systemMsg = String(capturedChatPayloads[0]?.messages?.[0]?.content || '');
+    assert.ok(systemMsg.includes('Freidora Clásica 6L'), 'Debe heredar conocimiento de la página clonada');
+    assert.ok(
+      systemMsg.includes('Estilo nocturno minimalista enfocado en cenas rápidas sin limpiar'),
+      'Debe incluir la nueva dirección diferenciada'
+    );
+    assert.equal(
+      JSON.stringify(res.product.visualLanding).toLowerCase().includes('tripwire'),
+      false,
+      'La landing pública generada nunca debe exponer tripwire'
+    );
+  } finally {
+    for (const abs of createdTempFiles) {
+      try {
+        if (fs.existsSync(abs)) fs.unlinkSync(abs);
+      } catch {}
+    }
+  }
+});
+
 
 
 

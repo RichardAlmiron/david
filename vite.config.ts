@@ -9414,7 +9414,11 @@ setTimeout(()=>window.close(),5000);
                   backgroundMusicPreset: incoming.backgroundMusicPreset || 'warm_ambient',
                   sheetCount: incoming.sheetCount === 3 ? 3 : 2,
                   waNumber: String(incoming.waNumber || cfg?.wa || '595973532550').trim(),
-                  referer: getOpenRouterReferer(req)
+                  referer: getOpenRouterReferer(req),
+                  clonedFromContext:
+                    incoming.clonedFromContext && typeof incoming.clonedFromContext === 'object'
+                      ? incoming.clonedFromContext
+                      : undefined
                 });
 
                 try {
