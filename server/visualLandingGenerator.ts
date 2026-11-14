@@ -221,12 +221,53 @@ async function generateSingleVisualSheetImage(params: {
   throw new Error(lastError || 'No se pudo generar la imagen de la página.');
 }
 
+export interface QuickCreatorAngleOption {
+  id: string;
+  title: string;
+  archetype: string;
+  winnerAngle: string;
+  visualDirection: string;
+  recommendedSheetCount: 2 | 3;
+  recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
+  whyItConverts: string;
+  tripwireBridgeNote?: string;
+}
+
+export interface QuickCreatorAiStrategyInput {
+  openRouterApiKey: string;
+  pageCreationMode: 'dual_tripwire_winner' | 'principal_only';
+  productName: string;
+  productDescription: string;
+  winnerAngle?: string;
+  price1Gs?: number;
+  normalPriceGs?: number;
+  entryProductName?: string;
+  entryProductDescription?: string;
+  entryPriceGs?: number;
+  entryDeliveryFeeGs?: number;
+  clonedFromContext?: QuickCreateVisualProductInput['clonedFromContext'];
+  userQuestion?: string;
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  referer?: string;
+  fetchImpl?: typeof fetch;
+}
+
+export interface QuickCreatorAiStrategyResult {
+  currentPageDiagnosis: string;
+  assistantReply: string;
+  recommendedSheetCount: 2 | 3;
+  recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
+  options: QuickCreatorAngleOption[];
+  recommendedOptionId: string;
+}
+
 export interface QuickCreateVisualProductInput {
   openRouterApiKey: string;
   pageCreationMode?: 'dual_tripwire_winner' | 'principal_only';
   productName: string;
   productDescription: string;
   winnerAngle?: string;
+  visualDirection?: string;
   price1Gs: number;
   price2Gs?: number;
   price3Gs?: number;
@@ -242,8 +283,8 @@ export interface QuickCreateVisualProductInput {
   instantDiscountPercent?: number;
   eventDurationHours?: number;
   slotsTotal?: number;
-  backgroundMusicPreset?: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
-  sheetCount?: 2 | 3;
+  backgroundMusicPreset?: 'auto' | 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
+  sheetCount?: 'auto' | 2 | 3;
   waNumber?: string;
   referer?: string;
   clonedFromContext?: {
@@ -253,11 +294,186 @@ export interface QuickCreateVisualProductInput {
     sourceMode?: 'dual_tripwire_winner' | 'principal_only';
     sourceDescription?: string;
     sourceWinnerAngle?: string;
+    sourceHeadline?: string;
+    sourceVisualMode?: string;
+    sourceVisualSheetsSummary?: string[];
     sourceEntryProductName?: string;
     sourceContextoIA?: string;
     differentiationNote?: string;
   };
   fetchImpl?: typeof fetch;
+}
+
+export async function analyzeQuickCreatorStrategy(
+  input: QuickCreatorAiStrategyInput
+): Promise<QuickCreatorAiStrategyResult> {
+  if (!String(input.openRouterApiKey || '').trim()) {
+    throw new Error('Falta OPENROUTER_API_KEY configurada para consultar al Estratega IA.');
+  }
+
+  const f = input.fetchImpl || fetch;
+  const isPrincipalOnly = input.pageCreationMode === 'principal_only';
+  const cloneCtx = input.clonedFromContext;
+  const safeEntryName = String(input.entryProductName || '').trim() || 'Artículo de Entrada';
+
+  const systemPrompt = isPrincipalOnly
+    ? `Eres el Estratega Jefe de Conversión Directa (COD Paraguay) y Director Creativo GPT-2.6 para páginas de PRODUCTO GANADOR ÚNICO (Estándar).
+TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES sin tener que inventar diseños, cantidades de láminas ni prompts visuales.
+REGLAS ESTRICTAS:
+1. Modo ESTÁNDAR (Producto Ganador Único): JAMÁS sugieras artículos secundarios ni menciones "tripwire" en textos públicos. Toda la fuerza visual y psicológica recae sobre un único producto.
+2. Si existe PÁGINA CLONADA, primero diagnosticá con precisión qué ángulo, promesa y estética visual está usando la página anterior ("currentPageDiagnosis"), y luego proponé 3 opciones CLARAMENTE DISTINTAS (prohibido repetir el mismo ángulo o atmósfera visual).
+3. Para cada opción, TÚ decides automáticamente "recommendedSheetCount" (2 para ofertas claras y directas de impulso rápido; 3 cuando el producto requiere más prueba técnica/contenido de caja/confianza) y "recommendedAudioPreset" ('warm_ambient', 'soft_lounge' o 'commercial_pulse'), más "visualDirection" detallando iluminación, paleta y composición editorial para GPT-2.6.
+4. Precios siempre en Guaraníes ("Gs."). Español natural paraguayo/rioplatense comercial sobrio, cero estrellitas ni humo de infoproducto.
+5. Si el usuario hace una pregunta o pide un giro específico ("userQuestion"), respondé de forma directa y útil en "assistantReply" y regenerá 3 opciones ajustadas exactamente a lo que pidió.`
+    : `Eres el Estratega Jefe de Embudos Duales de Psicología Inversa (COD Paraguay) y Director Creativo GPT-2.6 para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
+TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES sin tener que diseñar nada ni elegir estructura manual.
+PSICOLOGÍA DEL EMBUDO DUAL QUE DOMINÁS:
+- En la parte inicial se presenta el artículo accesible de entrada ("${safeEntryName}" a Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))} + delivery) que captura el interés sin fricción.
+- En la misma página se presenta el Producto Ganador ("${input.productName}") bajo un ÁNGULO SUPERIOR donde llevar el Producto Ganador incluye "${safeEntryName}" DE REGALO + ENVÍO GRATIS (psicología inversa racional).
+- NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
+REGLAS ESTRICTAS:
+1. Si existe PÁGINA CLONADA, primero diagnosticá con exactitud qué ángulo de entrada y qué estética visual usaba la página original ("currentPageDiagnosis"), y proponé 3 opciones frescas con distinto enfoque psicológico y visual.
+2. TÚ decides automáticamente "recommendedSheetCount" (2 o 3 según si la comparativa dual y contenido de caja justifican 3 láminas) y "recommendedAudioPreset" ('warm_ambient', 'soft_lounge' o 'commercial_pulse') más "visualDirection" cinematográfica para GPT-2.6.
+3. Si el usuario conversa o pide otro enfoque ("userQuestion"), respondé con claridad ejecutiva en "assistantReply" y entregá 3 opciones nuevas alineadas a su pedido.`;
+
+  const cloneContextBlock = cloneCtx?.sourceProductName
+    ? `\nPÁGINA CLONADA COMO REFERENCIA BASE:
+- Nombre original: ${cloneCtx.sourceProductName} (slug: ${cloneCtx.sourceSlug || 'N/A'}, modo previo: ${cloneCtx.sourceMode || 'N/A'})
+- Titular previo detectado: ${cloneCtx.sourceHeadline || 'No registrado'}
+- Ángulo previo detectado: ${cloneCtx.sourceWinnerAngle || 'No especificado explícitamente'}
+- Descripción previa: ${cloneCtx.sourceDescription || input.productDescription}
+${cloneCtx.sourceEntryProductName ? `- Artículo de entrada previo: ${cloneCtx.sourceEntryProductName}` : ''}
+${Array.isArray(cloneCtx.sourceVisualSheetsSummary) && cloneCtx.sourceVisualSheetsSummary.length > 0 ? `- Láminas visuales actuales:\n  * ${cloneCtx.sourceVisualSheetsSummary.join('\n  * ')}` : ''}
+${cloneCtx.sourceContextoIA ? `- Contexto comercial heredado:\n${cloneCtx.sourceContextoIA}` : ''}`
+    : '\nPÁGINA NUEVA DESDE CERO (sin página clonada previa).';
+
+  const historyText = Array.isArray(input.conversationHistory) && input.conversationHistory.length > 0
+    ? `\nHISTORIAL RECIENTE CON EL OPERADOR:\n${input.conversationHistory
+        .slice(-6)
+        .map((m) => `${m.role === 'user' ? 'Operador' : 'Estratega IA'}: ${m.content}`)
+        .join('\n')}`
+    : '';
+
+  const userPrompt = `ANALIZÁ ESTE PRODUCTO Y GENERÁ LA ESTRATEGIA 100% MANOS LIBRES:
+- Modo seleccionado: ${isPrincipalOnly ? 'Producto Ganador Único (Estándar)' : 'Tripwire + Producto Ganador en la misma página'}
+- Producto Principal: ${input.productName}
+- Descripción: ${input.productDescription}
+- Ángulo borrador ingresado (si existe): ${input.winnerAngle || 'Ninguno aún — proponé los mejores'}
+- Precio Principal 1x: Gs. ${formatParaguayGs(Number(input.price1Gs || 189000))} (Normal: Gs. ${formatParaguayGs(Number(input.normalPriceGs || 249000))})
+${
+  !isPrincipalOnly
+    ? `- Artículo de Entrada (Tripwire): ${safeEntryName}
+- Descripción entrada: ${input.entryProductDescription || safeEntryName}
+- Precio Entrada: Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))} + Delivery Gs. ${formatParaguayGs(Number(input.entryDeliveryFeeGs || 40000))}`
+    : ''
+}${cloneContextBlock}${historyText}
+${input.userQuestion ? `\nPREGUNTA O INSTRUCCIÓN ACTUAL DEL OPERADOR: "${input.userQuestion}"` : '\nGENERÁ EL DIAGNÓSTICO INICIAL Y LAS 3 MEJORES OPCIONES LISTAS PARA 1 CLIC.'}
+
+Devolvé EXCLUSIVAMENTE este JSON válido:
+{
+  "currentPageDiagnosis": "${cloneCtx?.sourceProductName ? 'Explicación clara de qué ángulo, promesa y estilo visual usa actualmente la página clonada, para no repetirlo.' : 'Diagnóstico breve de cómo posicionaremos este producto desde cero en el mercado paraguayo.'}",
+  "assistantReply": "Respuesta directa y clara al operador (2-3 oraciones) explicando por qué la Opción 1 es la recomendación principal o respondiendo a su pregunta.",
+  "recommendedSheetCount": 2,
+  "recommendedAudioPreset": "warm_ambient",
+  "recommendedOptionId": "opt_1",
+  "options": [
+    {
+      "id": "opt_1",
+      "title": "Nombre corto del ángulo (máx 6 palabras)",
+      "archetype": "Recomendada por IA",
+      "winnerAngle": "Titular de ángulo listo para vender (máx 13 palabras)",
+      "visualDirection": "Dirección artística completa para GPT-2.6 (iluminación, escenario, paleta, encuadre editorial sin humo)",
+      "recommendedSheetCount": 3,
+      "recommendedAudioPreset": "warm_ambient",
+      "whyItConverts": "Por qué este ángulo y visual convierten mejor (y cómo se diferencia del clon si aplica).",
+      "tripwireBridgeNote": "${isPrincipalOnly ? '' : 'Cómo conecta el artículo de entrada con este Producto Ganador en la misma página.'}"
+    },
+    {
+      "id": "opt_2",
+      "title": "Segundo enfoque distinto",
+      "archetype": "Ángulo Emocional / Hogar",
+      "winnerAngle": "...",
+      "visualDirection": "...",
+      "recommendedSheetCount": 2,
+      "recommendedAudioPreset": "soft_lounge",
+      "whyItConverts": "...",
+      "tripwireBridgeNote": "${isPrincipalOnly ? '' : '...'}"
+    },
+    {
+      "id": "opt_3",
+      "title": "Tercer enfoque disruptivo",
+      "archetype": "Contraste Racional",
+      "winnerAngle": "...",
+      "visualDirection": "...",
+      "recommendedSheetCount": 2,
+      "recommendedAudioPreset": "commercial_pulse",
+      "whyItConverts": "...",
+      "tripwireBridgeNote": "${isPrincipalOnly ? '' : '...'}"
+    }
+  ]
+}`;
+
+  const llmRes = await f('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${input.openRouterApiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': input.referer || 'https://noelux.shop',
+      'X-Title': 'Noelux Quick Creator AI Strategist'
+    },
+    body: JSON.stringify({
+      model: VISUAL_CREATOR_TEXT_MODEL,
+      temperature: 0.55,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ]
+    }),
+    signal: AbortSignal.timeout(40000)
+  });
+
+  if (!llmRes.ok) {
+    const errTxt = await llmRes.text().catch(() => '');
+    throw new Error(`Estratega IA falló (${llmRes.status}): ${errTxt.slice(0, 220)}`);
+  }
+
+  const llmJson: any = await llmRes.json();
+  const rawContent = String(llmJson?.choices?.[0]?.message?.content || '').trim();
+  const parsed = JSON.parse(rawContent);
+
+  const normalizeAudio = (val: any): 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none' =>
+    val === 'soft_lounge' || val === 'commercial_pulse' || val === 'none' ? val : 'warm_ambient';
+
+  const rawOptions: any[] = Array.isArray(parsed?.options) ? parsed.options : [];
+  const options: QuickCreatorAngleOption[] = rawOptions.slice(0, 4).map((o, idx) => ({
+    id: String(o?.id || `opt_${idx + 1}`),
+    title: String(o?.title || `Estrategia ${idx + 1}`).trim(),
+    archetype: String(o?.archetype || (idx === 0 ? 'Recomendada por IA' : `Enfoque ${idx + 1}`)).trim(),
+    winnerAngle: String(o?.winnerAngle || input.winnerAngle || input.productName).trim(),
+    visualDirection: String(o?.visualDirection || '').trim(),
+    recommendedSheetCount: Number(o?.recommendedSheetCount) === 3 ? 3 : 2,
+    recommendedAudioPreset: normalizeAudio(o?.recommendedAudioPreset),
+    whyItConverts: String(o?.whyItConverts || '').trim(),
+    tripwireBridgeNote: !isPrincipalOnly && o?.tripwireBridgeNote ? String(o.tripwireBridgeNote).trim() : undefined
+  }));
+
+  if (options.length === 0) {
+    throw new Error('El Estratega IA no devolvió opciones de ángulo válidas.');
+  }
+
+  const recommendedOptionId = String(parsed?.recommendedOptionId || options[0].id);
+  const matchedRec = options.find((o) => o.id === recommendedOptionId) || options[0];
+
+  return {
+    currentPageDiagnosis: String(parsed?.currentPageDiagnosis || '').trim(),
+    assistantReply: String(parsed?.assistantReply || '').trim(),
+    recommendedSheetCount:
+      Number(parsed?.recommendedSheetCount) === 3 || matchedRec.recommendedSheetCount === 3 ? 3 : 2,
+    recommendedAudioPreset: normalizeAudio(parsed?.recommendedAudioPreset || matchedRec.recommendedAudioPreset),
+    options,
+    recommendedOptionId: matchedRec.id
+  };
 }
 
 export async function generateUniversalVisualProductPage(
@@ -274,7 +490,10 @@ export async function generateUniversalVisualProductPage(
   const pageCreationMode: 'dual_tripwire_winner' | 'principal_only' =
     input.pageCreationMode === 'principal_only' ? 'principal_only' : 'dual_tripwire_winner';
   const isPrincipalOnly = pageCreationMode === 'principal_only';
-  const sheetCount: 2 | 3 = input.sheetCount === 3 ? 3 : 2;
+  const sheetCountMode: 'auto' | 2 | 3 =
+    input.sheetCount === 2 ? 2 : input.sheetCount === 3 ? 3 : 'auto';
+  const requestedSheetCount: 2 | 3 =
+    sheetCountMode === 'auto' ? (isPrincipalOnly ? 2 : 3) : sheetCountMode;
   const price1 = Math.max(35000, Number(input.price1Gs) || 189000);
   const price2 = Number(input.price2Gs) || Math.round(price1 * 1.85);
   const price3 = Number(input.price3Gs) || Math.round(price1 * 2.65);
@@ -304,15 +523,20 @@ export async function generateUniversalVisualProductPage(
     : await saveImageInputLocally(resolvedEntryImgInput, 'prod_entry');
 
   const cleanAngleInput = String(input.winnerAngle || '').trim();
+  const visualDirectionInput = String(input.visualDirection || '').trim();
   const cloneCtx = input.clonedFromContext;
   const cloneDirectiveBlock = cloneCtx?.sourceProductName
     ? `\n\nCONOCIMIENTO COMPLETO DE PÁGINA CLONADA (REFERENCIA BASE "${cloneCtx.sourceProductName}"):
 - El operador seleccionó clonar la información técnica de la página existente "${cloneCtx.sourceProductName}" (ID: ${cloneCtx.sourceProductId}).
 - Descripción original conocida: ${cloneCtx.sourceDescription || input.productDescription}
 ${cloneCtx.sourceWinnerAngle ? `- Ángulo de la página anterior (NO REPETIR IGUAL): ${cloneCtx.sourceWinnerAngle}` : ''}
+${cloneCtx.sourceHeadline ? `- Titular de la página anterior (SUPERAR CON ENFOQUE INÉDITO): ${cloneCtx.sourceHeadline}` : ''}
 ${cloneCtx.sourceEntryProductName ? `- Artículo de entrada anterior: ${cloneCtx.sourceEntryProductName}` : ''}
 ${cloneCtx.sourceContextoIA ? `- Conocimiento comercial heredado:\n${cloneCtx.sourceContextoIA}` : ''}
 ${cloneCtx.differentiationNote ? `- NUEVA DIRECCIÓN VISUAL / ÁNGULO SOLICITADO POR EL OPERADOR: ${cloneCtx.differentiationNote}` : '- OBJETIVO DEL CLON: Conservá la veracidad técnica y precios reales, pero diseñá un ÁNGULO NUEVO, titulares inéditos y composiciones visuales 100% frescas y distintas a la página anterior.'}`
+    : '';
+  const visualDirectionBlock = visualDirectionInput
+    ? `\n- DIRECCIÓN ARTÍSTICA APROBADA POR EL ESTRATEGA IA (RESPETAR AL PIE DE LA LETRA EN LOS PROMPTS GPT-2.6): ${visualDirectionInput}`
     : '';
 
   const promptSystemContent = isPrincipalOnly
@@ -322,14 +546,14 @@ Diseñas páginas gráficas verticales 100% visuales (cero bloques HTML intermed
 REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
 - JAMÁS escribas la palabra "tripwire", "gancho trampa" ni menciones artículos secundarios inexistentes.
 - Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
-- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña Apple / Dyson / Bang & Olufsen adaptada a hogar/consumo real en Paraguay), iluminación cinematográfica de estudio con profundidad 3D, materiales táctiles ultra nítidos, tipografía editorial española impecable sin errores ni letras cortadas, ocupación total borde a borde (edge-to-edge 3:4 sin marcos blancos), CERO estrellas chillonas, CERO stickers baratos de infoproducto.${cloneDirectiveBlock}`
+- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña Apple / Dyson / Bang & Olufsen adaptada a hogar/consumo real en Paraguay), iluminación cinematográfica de estudio con profundidad 3D, materiales táctiles ultra nítidos, tipografía editorial española impecable sin errores ni letras cortadas, ocupación total borde a borde (edge-to-edge 3:4 sin marcos blancos), CERO estrellas chillonas, CERO stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`
     : `Eres el Director Creativo Senior de Marcas Flagship y Psicología de Conversión en Paraguay.
 Diseñas páginas gráficas verticales 100% visuales (cero bloques HTML intermedios: las láminas SON toda la presentación visual) mediante psicología inversa elegante entre un artículo accesible de entrada y el producto ganador completo.
 
 REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
 - JAMÁS escribas la palabra "tripwire", "gancho trampa" ni jerga técnica. Refiérete siempre al artículo de entrada por su nombre real: "${safeEntryName}".
 - Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
-- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña flagship internacional adaptada a Paraguay), iluminación de estudio dramática y limpia, fotografía comercial realista de alto impacto visual y tipografía española nítida integrando la oferta sin parecer folleto barato, ocupación total borde a borde (edge-to-edge 3:4 sin marcos ni bordes blancos), CERO estrellas ni stickers baratos de infoproducto.${cloneDirectiveBlock}`;
+- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña flagship internacional adaptada a Paraguay), iluminación de estudio dramática y limpia, fotografía comercial realista de alto impacto visual y tipografía española nítida integrando la oferta sin parecer folleto barato, ocupación total borde a borde (edge-to-edge 3:4 sin marcos ni bordes blancos), CERO estrellas ni stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`;
 
   const promptUserContent = isPrincipalOnly
     ? `PRODUCTO GANADOR ÚNICO (PÁGINA DIRECTA SIN ARTÍCULO SECUNDARIO):
@@ -339,12 +563,14 @@ REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
 - Precio Normal tachado: Gs. ${formatParaguayGs(normalPrice)}
 - Precio 1x: Gs. ${formatParaguayGs(price1)} (Pack 2x: Gs. ${formatParaguayGs(price2)}, Pack 3x: Gs. ${formatParaguayGs(price3)})
 - Envío Producto Principal: ENVÍO GRATIS en todo Paraguay + Pago en mano al recibir.
+${visualDirectionInput ? `- Dirección visual asignada: ${visualDirectionInput}` : ''}
 
-CANTIDAD DE LÁMINAS A DISEÑAR: ${sheetCount}
+CANTIDAD DE LÁMINAS A DISEÑAR: ${sheetCountMode === 'auto' ? `Decidí automáticamente entre 2 o 3 láminas según el producto (sugerido: ${requestedSheetCount})` : requestedSheetCount}
 
 Devuelve EXCLUSIVAMENTE este JSON válido:
 {
   "strategySummary": "Explicación breve interna del enfoque principal de venta directa.",
+  "recommendedAudioPreset": "warm_ambient",
   "sobrietyHeadline": "Titular sobrio y elegante de alto impacto racional (máx 10 palabras).",
   "subheadline": "Bajada clara explicando qué resuelve en el hogar/vida del cliente en Paraguay (máx 22 palabras).",
   "winnerAngleHeadline": "Ángulo de valor clave del producto principal (máx 12 palabras).",
@@ -356,7 +582,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "role": "hero_presentation",
       "title": "Presentación del producto principal",
       "caption": "Pie corto sobrio",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero showcase of ${input.productName} (${cleanAngleInput || 'superior result'}) in dramatic modern architectural lighting, razor-sharp bold editorial Spanish headline integrated harmoniously, clean pricing callout 'Gs. ${formatParaguayGs(price1)} · Envío Gratis · Pagás al Recibir', luxury tactile realism, edge-to-edge artwork with zero outer frame."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero showcase of ${input.productName} (${cleanAngleInput || 'superior result'}) in ${visualDirectionInput || 'dramatic modern architectural lighting'}, razor-sharp bold editorial Spanish headline integrated harmoniously, clean pricing callout 'Gs. ${formatParaguayGs(price1)} · Envío Gratis · Pagás al Recibir', luxury tactile realism, edge-to-edge artwork with zero outer frame."
     },
     {
       "role": "comparison_need",
@@ -364,7 +590,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "caption": "Comparativa clara de packs",
       "imagePrompt": "Flagship full-bleed 3:4 commercial infographic poster for openai/gpt-image-2.6-sunburst in crisp Spanish: macro visual breakdown of ${input.productName} key benefits and real materials, clean side-by-side comparison of 1 Unidad (Gs. ${formatParaguayGs(price1)}) and Pack 2x Ahorro (Gs. ${formatParaguayGs(price2)}) with 'Envío Gratis Paraguay', high-contrast studio typography, zero cheap stickers, edge-to-edge composition."
     }${
-      sheetCount === 3
+      requestedSheetCount === 3 || sheetCountMode === 'auto'
         ? `,
     {
       "role": "social_trust_specs",
@@ -389,6 +615,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
 - Precio Normal tachado: Gs. ${formatParaguayGs(normalPrice)}
 - Precio 1x: Gs. ${formatParaguayGs(price1)} (Pack 2x: Gs. ${formatParaguayGs(price2)}, Pack 3x: Gs. ${formatParaguayGs(price3)})
 - Envío Producto Principal: ENVÍO GRATIS en todo Paraguay + Pago al recibir.
+${visualDirectionInput ? `- Dirección visual asignada: ${visualDirectionInput}` : ''}
 
 ARTÍCULO COMPLEMENTARIO DE ENTRADA (BLOQUE 1 DE LA MISMA PÁGINA):
 - Nombre real: ${safeEntryName}
@@ -397,11 +624,12 @@ ARTÍCULO COMPLEMENTARIO DE ENTRADA (BLOQUE 1 DE LA MISMA PÁGINA):
 - Precio Promo Entrada: Gs. ${formatParaguayGs(entryPrice)} + Delivery según zona (Gs. ${formatParaguayGs(deliveryFee)} aprox.)
 - REGLA TRANSPARENTE: Si lleva el Producto Principal (${input.productName}), este complemento "${safeEntryName}" le va TOTALMENTE DE REGALO + ENVÍO GRATIS directo a su puerta.
 
-CANTIDAD DE LÁMINAS A DISEÑAR: ${sheetCount}
+CANTIDAD DE LÁMINAS A DISEÑAR: ${sheetCountMode === 'auto' ? `Decidí automáticamente entre 2 o 3 láminas según la complejidad de la oferta dual (sugerido: ${requestedSheetCount})` : requestedSheetCount}
 
 Devuelve EXCLUSIVAMENTE este JSON válido:
 {
   "strategySummary": "Explicación breve interna de la congruencia psicológica usada.",
+  "recommendedAudioPreset": "warm_ambient",
   "sobrietyHeadline": "Titular sobrio y elegante que NO ruega compra (máx 10 palabras).",
   "subheadline": "Bajada clara explicando qué cambia en la casa/vida del cliente en Paraguay (máx 22 palabras).",
   "winnerAngleHeadline": "Titular del ángulo diferente con el que se presenta el Producto Ganador en esta misma página (máx 12 palabras).",
@@ -416,7 +644,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "role": "hero_presentation",
       "title": "Presentación de oferta y producto ganador",
       "caption": "Pie corto sobrio",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero composition showcasing both '${safeEntryName}' (entry option at Gs. ${formatParaguayGs(entryPrice)}) and flagship '${input.productName}' (${cleanAngleInput || 'solución completa'}) inside a modern upscale setting, sharp editorial typography reading clearly in Spanish, refined badge 'Pago al Recibir · Paraguay', dramatic commercial lighting, edge-to-edge zero white border."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero composition showcasing both '${safeEntryName}' (entry option at Gs. ${formatParaguayGs(entryPrice)}) and flagship '${input.productName}' (${cleanAngleInput || 'solución completa'}) in ${visualDirectionInput || 'a modern upscale setting with dramatic commercial lighting'}, sharp editorial typography reading clearly in Spanish, refined badge 'Pago al Recibir · Paraguay', edge-to-edge zero white border."
     },
     {
       "role": "comparison_need",
@@ -424,7 +652,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "caption": "Comparación racional y visual",
       "imagePrompt": "Flagship full-bleed 3:4 editorial comparison sheet for openai/gpt-image-2.6-sunburst in crisp Spanish: clean visual split contrasting Option 1 Solo '${safeEntryName}' (Gs. ${formatParaguayGs(entryPrice)} + Delivery) vs Option 2 Paquete Completo '${input.productName}' (Gs. ${formatParaguayGs(price1)} con '${safeEntryName}' DE REGALO + Envío Gratis), ultra sharp Spanish labels, luxury commercial studio photography, zero cartoon icons, edge-to-edge."
     }${
-      sheetCount === 3
+      requestedSheetCount === 3 || sheetCountMode === 'auto'
         ? `,
     {
       "role": "social_trust_specs",
@@ -477,9 +705,23 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
     throw new Error('OpenRouter GPT-4o no devolvió las láminas gráficas completas.');
   }
 
+  const finalSheetCount: 2 | 3 =
+    sheetCountMode === 'auto'
+      ? (rawSheets.length >= 3 ? 3 : 2)
+      : sheetCountMode;
+
+  const resolvedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none' =
+    input.backgroundMusicPreset && input.backgroundMusicPreset !== 'auto'
+      ? input.backgroundMusicPreset
+      : parsed?.recommendedAudioPreset === 'soft_lounge' ||
+          parsed?.recommendedAudioPreset === 'commercial_pulse' ||
+          parsed?.recommendedAudioPreset === 'none'
+        ? parsed.recommendedAudioPreset
+        : 'warm_ambient';
+
   // 2. Generar las 2 o 3 imágenes verticales reales en paralelo/turno con openai/gpt-image-2.6-sunburst
   const generatedSheets: ProductVisualLandingSheet[] = [];
-  for (let i = 0; i < Math.min(sheetCount, rawSheets.length); i++) {
+  for (let i = 0; i < Math.min(finalSheetCount, rawSheets.length); i++) {
     const s = rawSheets[i];
     const extraVisualContext = [
       String(s.imagePrompt || ''),
@@ -534,7 +776,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
         instantDiscountPercent: instantDiscountPct,
         eventDurationHours,
         slotsTotal,
-        backgroundMusicPreset: input.backgroundMusicPreset || 'warm_ambient',
+        backgroundMusicPreset: resolvedAudioPreset,
         sourceUrl: input.entrySourceUrl?.trim() || undefined,
         entryOnlyClarification: `Incluye únicamente 1x ${cleanPublicText(safeEntryName)}. No incluye ${input.productName.trim()} ni envío gratis por separado.`,
         principalBundleClarification: `Incluye ${input.productName.trim()} + ${cleanPublicText(safeEntryName)} DE REGALO + Envío Gratis sin esperar evento.`
@@ -548,7 +790,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
 
   const visualLanding: ProductVisualLandingConfig = {
     enabled: true,
-    mode: sheetCount === 3 ? 'sober_graphic_3sheet' : 'sober_graphic_2sheet',
+    mode: finalSheetCount === 3 ? 'sober_graphic_3sheet' : 'sober_graphic_2sheet',
     generatorModel: VISUAL_CREATOR_IMAGE_MODEL,
     sheets: generatedSheets,
     sobrietyHeadline: cleanPublicText(parsed?.sobrietyHeadline || input.productName),

@@ -23,7 +23,10 @@ import {
   upgradeDefaultNoeluxWithVisualPreset,
   ensureProductHasMandatoryTripwire
 } from '../../src/data/noeluxVisualPreset.ts';
-import { generateUniversalVisualProductPage } from '../visualLandingGenerator.ts';
+import {
+  analyzeQuickCreatorStrategy,
+  generateUniversalVisualProductPage
+} from '../visualLandingGenerator.ts';
 import {
   buildPlannedSlotSpecs,
   clampAdsCount,
@@ -747,6 +750,191 @@ test('generateUniversalVisualProductPage inyecta clonedFromContext al agente par
       false,
       'La landing pública generada nunca debe exponer tripwire'
     );
+  } finally {
+    for (const abs of createdTempFiles) {
+      try {
+        if (fs.existsSync(abs)) fs.unlinkSync(abs);
+      } catch {}
+    }
+  }
+});
+
+test('analyzeQuickCreatorStrategy diagnostica página clonada y propone opciones manos libres en Estándar y Tripwire', async () => {
+  const capturedPayloads: any[] = [];
+  const mockFetch: typeof fetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body || '{}'));
+    capturedPayloads.push(body);
+    const isPrincipal = String(body?.messages?.[0]?.content || '').includes('PRODUCTO GANADOR ÚNICO');
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                currentPageDiagnosis: 'La página clonada original usaba un enfoque navideño genérico con luz cálida doméstica.',
+                assistantReply: 'Te propongo 3 ángulos frescos; la Opción 1 maximiza contraste visual sin repetir el clon.',
+                recommendedSheetCount: isPrincipal ? 2 : 3,
+                recommendedAudioPreset: 'soft_lounge',
+                recommendedOptionId: 'opt_1',
+                options: [
+                  {
+                    id: 'opt_1',
+                    title: 'Fachada Impactante en 60 Segundos',
+                    archetype: 'Recomendada por IA',
+                    winnerAngle: 'Transformá tu patio sin cables ni escaleras en menos de un minuto',
+                    visualDirection: 'Iluminación arquitectónica nocturna de lujo en patio paraguayo moderno, contraste cálido-ámbar',
+                    recommendedSheetCount: isPrincipal ? 2 : 3,
+                    recommendedAudioPreset: 'soft_lounge',
+                    whyItConverts: 'Ataca directamente la pereza de colgar luces tradicionales.',
+                    tripwireBridgeNote: isPrincipal ? '' : 'Compará decorar una esquina vs iluminar toda la casa gratis.'
+                  },
+                  {
+                    id: 'opt_2',
+                    title: 'Noche Segura Resistente a Lluvia',
+                    archetype: 'Durabilidad Exterior',
+                    winnerAngle: 'Proyección HD impermeable preparada para el clima de Paraguay',
+                    visualDirection: 'Fotografía editorial macro bajo lluvia ligera nocturna con gotas nítidas',
+                    recommendedSheetCount: 2,
+                    recommendedAudioPreset: 'warm_ambient',
+                    whyItConverts: 'Elimina objeción técnica de exterior.'
+                  },
+                  {
+                    id: 'opt_3',
+                    title: 'Ahorro Real frente a Instaladores',
+                    archetype: 'Contraste Racional',
+                    winnerAngle: 'Resultados profesionales en casa sin pagar mano de obra cada año',
+                    visualDirection: 'Composición sobria minimalista sobre mesa oscura con ficha técnica clara',
+                    recommendedSheetCount: 3,
+                    recommendedAudioPreset: 'commercial_pulse',
+                    whyItConverts: 'Justifica el valor en Gs. frente al gasto recurrente.'
+                  }
+                ]
+              })
+            }
+          }
+        ]
+      }),
+      { status: 200 }
+    );
+  }) as any;
+
+  // 1. Modo Estándar con clonaje + consulta interactiva
+  const cloneDraft = buildCloneDraftFromProductPage({
+    ...PRODUCT_WITH_ENTRY,
+    visualLanding: {
+      enabled: true,
+      mode: 'sober_graphic_2sheet',
+      sobrietyHeadline: 'Iluminación navideña fácil',
+      sheets: [
+        { id: 's1', title: 'Portada Clásica', caption: 'Vista frontal', imageUrl: 'https://cdn.example.com/s1.jpg' }
+      ]
+    }
+  } as any);
+
+  assert.equal(cloneDraft.clonedFromContext.sourceHeadline, 'Iluminación navideña fácil');
+  assert.ok(cloneDraft.clonedFromContext.sourceVisualSheetsSummary?.[0]?.includes('Portada Clásica'));
+
+  const stdResult = await analyzeQuickCreatorStrategy({
+    openRouterApiKey: 'test-key',
+    pageCreationMode: 'principal_only',
+    productName: cloneDraft.productName,
+    productDescription: 'Proyector LED 12 discos exterior',
+    price1Gs: 189000,
+    clonedFromContext: cloneDraft.clonedFromContext,
+    userQuestion: '¿Qué otro enfoque funciona para clientes exigentes?',
+    fetchImpl: mockFetch
+  });
+
+  assert.equal(stdResult.options.length, 3);
+  assert.equal(stdResult.recommendedOptionId, 'opt_1');
+  assert.equal(stdResult.recommendedSheetCount, 2);
+  assert.equal(stdResult.recommendedAudioPreset, 'soft_lounge');
+  assert.ok(stdResult.currentPageDiagnosis.includes('enfoque navideño'));
+  assert.equal(stdResult.options[0].tripwireBridgeNote, undefined);
+
+  const stdPrompt = String(capturedPayloads[0]?.messages?.[1]?.content || '');
+  assert.ok(stdPrompt.includes('Iluminación navideña fácil'));
+  assert.ok(stdPrompt.includes('¿Qué otro enfoque funciona para clientes exigentes?'));
+
+  // 2. Modo Tripwire + Ganador con puente dual
+  const dualResult = await analyzeQuickCreatorStrategy({
+    openRouterApiKey: 'test-key',
+    pageCreationMode: 'dual_tripwire_winner',
+    productName: 'Freidora de Aire 6L',
+    productDescription: 'Freidora digital 6 litros acero',
+    price1Gs: 389000,
+    entryProductName: 'Set de Papeles Antiadherentes',
+    entryPriceGs: 20000,
+    fetchImpl: mockFetch
+  });
+
+  assert.equal(dualResult.recommendedSheetCount, 3);
+  assert.ok(dualResult.options[0].tripwireBridgeNote && dualResult.options[0].tripwireBridgeNote.length > 5);
+});
+
+test('generateUniversalVisualProductPage soporta sheetCount auto y aplica visualDirection en GPT-2.6', async () => {
+  const createdTempFiles: string[] = [];
+  const capturedImgPayloads: any[] = [];
+  const fakeJpgB64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46]).toString('base64');
+
+  const mockFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/chat/completions')) {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  strategySummary: 'Modo autónomo 3 láminas con iluminación editorial oscura',
+                  recommendedAudioPreset: 'soft_lounge',
+                  sobrietyHeadline: 'Cocina sin humo en la mitad de tiempo',
+                  subheadline: 'Capacidad familiar real con entrega en mano.',
+                  winnerAngleHeadline: 'Cenas listas sin ensuciar ollas',
+                  winnerAngleDescription: 'Circulación rápida 360 grados para todo el hogar.',
+                  bundleButtonLabel: 'Pedir Freidora 6L — Envío Gratis (389.000 Gs.)',
+                  bundleDisclaimer: 'Pago al recibir en Paraguay.',
+                  sheetPrompts: [
+                    { role: 'hero_presentation', title: 'Lámina 1', caption: 'Hero', imagePrompt: 'Hero editorial oscuro' },
+                    { role: 'comparison_need', title: 'Lámina 2', caption: 'Packs', imagePrompt: 'Comparativa clara' },
+                    { role: 'social_trust_specs', title: 'Lámina 3', caption: 'Caja', imagePrompt: 'Unboxing estudio' }
+                  ],
+                  faq: [{ q: '¿Tiene garantía?', a: 'Sí.' }],
+                  agentContext: 'Freidora 6L Gs. 389.000.'
+                })
+              }
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    }
+    capturedImgPayloads.push(JSON.parse(String(init?.body || '{}')));
+    return new Response(JSON.stringify({ data: [{ b64_json: fakeJpgB64 }] }), { status: 200 });
+  }) as any;
+
+  try {
+    const res = await generateUniversalVisualProductPage({
+      openRouterApiKey: 'test-key',
+      pageCreationMode: 'principal_only',
+      productName: 'Freidora de Aire 6L',
+      productDescription: 'Freidora digital 6 litros acero',
+      price1Gs: 389000,
+      sheetCount: 'auto',
+      backgroundMusicPreset: 'auto',
+      visualDirection: 'Editorial oscuro de mármol y acento cálido metálico',
+      fetchImpl: mockFetch
+    });
+
+    for (const sh of res.product.visualLanding?.sheets || []) {
+      if (sh.imageUrl.startsWith('/assets/visual-pages/')) {
+        createdTempFiles.push(path.resolve(process.cwd(), 'public', sh.imageUrl.replace(/^\//, '')));
+      }
+    }
+
+    assert.equal(res.product.visualLanding?.mode, 'sober_graphic_3sheet');
+    assert.equal(res.product.visualLanding?.sheets.length, 3);
+    assert.equal(capturedImgPayloads.length, 3);
   } finally {
     for (const abs of createdTempFiles) {
       try {

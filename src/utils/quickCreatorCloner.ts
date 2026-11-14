@@ -7,6 +7,9 @@ export interface QuickCreatorCloneContext {
   sourceMode: 'dual_tripwire_winner' | 'principal_only';
   sourceDescription?: string;
   sourceWinnerAngle?: string;
+  sourceHeadline?: string;
+  sourceVisualMode?: string;
+  sourceVisualSheetsSummary?: string[];
   sourceEntryProductName?: string;
   sourceContextoIA?: string;
   differentiationNote?: string;
@@ -50,16 +53,29 @@ export function buildCloneDraftFromProductPage(source: ProductPage): QuickCreato
   const p3 = Math.max(70000, Number(source.precios?.[3] || Math.round(p1 * 2.65)));
   const normalP = Math.max(p1, Number(source.precioNormal || Math.round(p1 * 1.32)));
 
+  const landingAny = source.landingContent as Record<string, any> | undefined;
+
   const winnerAngle =
     String(source.winnerAngle || '').trim() ||
     String(source.visualLanding?.winnerAngleHeadline || '').trim() ||
-    String(source.landingContent?.heroTitle || '').trim() ||
+    String(landingAny?.heroHeadline || source.landingContent?.heroTitle || '').trim() ||
     '';
+
+  const sourceHeadline =
+    String(source.visualLanding?.sobrietyHeadline || '').trim() ||
+    String(landingAny?.heroHeadline || source.landingContent?.heroTitle || '').trim() ||
+    '';
+
+  const sheetsSummary = Array.isArray(source.visualLanding?.sheets)
+    ? source.visualLanding.sheets
+        .map((sh) => [sh.title, sh.caption, sh.promptUsed ? `Visual: ${sh.promptUsed.slice(0, 140)}` : ''].filter(Boolean).join(' — '))
+        .filter(Boolean)
+    : [];
 
   const productDesc =
     String(source.descripcion || '').trim() ||
     String(source.visualLanding?.winnerAngleDescription || '').trim() ||
-    String(source.landingContent?.heroSubtitle || '').trim() ||
+    String(landingAny?.heroSubheadline || source.landingContent?.heroSubtitle || '').trim() ||
     source.nombre;
 
   const entryCfg = source.tripwireConfig;
@@ -69,14 +85,15 @@ export function buildCloneDraftFromProductPage(source: ProductPage): QuickCreato
 
   const contextSummaryParts = [
     source.contextoIA ? String(source.contextoIA).trim() : '',
-    source.landingContent?.heroTitle ? `Titular previo: ${source.landingContent.heroTitle}` : '',
+    sourceHeadline ? `Titular previo: ${sourceHeadline}` : '',
     Array.isArray(source.landingContent?.benefitCards) && source.landingContent.benefitCards.length > 0
       ? `Puntos clave previos: ${source.landingContent.benefitCards
           .slice(0, 4)
           .map(c => c.title)
           .filter(Boolean)
           .join(' | ')}`
-      : ''
+      : '',
+    sheetsSummary.length > 0 ? `Láminas previas: ${sheetsSummary.join(' || ')}` : ''
   ].filter(Boolean);
 
   return {
@@ -110,6 +127,9 @@ export function buildCloneDraftFromProductPage(source: ProductPage): QuickCreato
       sourceMode: hasTripwire ? 'dual_tripwire_winner' : 'principal_only',
       sourceDescription: productDesc,
       sourceWinnerAngle: winnerAngle || undefined,
+      sourceHeadline: sourceHeadline || undefined,
+      sourceVisualMode: source.visualLanding?.mode || undefined,
+      sourceVisualSheetsSummary: sheetsSummary.length > 0 ? sheetsSummary : undefined,
       sourceEntryProductName: hasTripwire ? String(entryCfg?.entryProductName || '').trim() : undefined,
       sourceContextoIA: contextSummaryParts.join('\n') || undefined
     }

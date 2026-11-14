@@ -150,6 +150,7 @@ import {
   syncMetaAdPostsAndComments
 } from './server/metaCommentsEngine.ts';
 import {
+  analyzeQuickCreatorStrategy,
   generateUniversalVisualProductPage,
   scrapeEntryProductUrlInfo
 } from './server/visualLandingGenerator.ts';
@@ -9361,6 +9362,71 @@ setTimeout(()=>window.close(),5000);
             return;
           }
 
+          if (req.method === 'POST' && url === '/api/products/quick-creator-ai-strategy') {
+            const auth = verifyAdminToken(req.headers['authorization'], req.headers['cookie']);
+            if (!auth.valid) {
+              res.statusCode = 401;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: 'Autenticación admin requerida.' }));
+              return;
+            }
+            let body = '';
+            req.on('data', (c: any) => (body += c));
+            req.on('end', async () => {
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                const incoming = JSON.parse(body || '{}');
+                const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+                if (!openRouterApiKey) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error: 'Falta OPENROUTER_API_KEY configurada para consultar al Estratega IA.'
+                    })
+                  );
+                  return;
+                }
+                const strategy = await analyzeQuickCreatorStrategy({
+                  openRouterApiKey,
+                  pageCreationMode:
+                    incoming.pageCreationMode === 'principal_only'
+                      ? 'principal_only'
+                      : 'dual_tripwire_winner',
+                  productName: String(incoming.productName || '').trim(),
+                  productDescription: String(incoming.productDescription || '').trim(),
+                  winnerAngle: String(incoming.winnerAngle || '').trim() || undefined,
+                  price1Gs: incoming.price1Gs ? Number(incoming.price1Gs) : undefined,
+                  normalPriceGs: incoming.normalPriceGs ? Number(incoming.normalPriceGs) : undefined,
+                  entryProductName: String(incoming.entryProductName || '').trim() || undefined,
+                  entryProductDescription: String(incoming.entryProductDescription || '').trim() || undefined,
+                  entryPriceGs: incoming.entryPriceGs ? Number(incoming.entryPriceGs) : undefined,
+                  entryDeliveryFeeGs: incoming.entryDeliveryFeeGs ? Number(incoming.entryDeliveryFeeGs) : undefined,
+                  clonedFromContext:
+                    incoming.clonedFromContext && typeof incoming.clonedFromContext === 'object'
+                      ? incoming.clonedFromContext
+                      : undefined,
+                  userQuestion: String(incoming.userQuestion || '').trim() || undefined,
+                  conversationHistory: Array.isArray(incoming.conversationHistory)
+                    ? incoming.conversationHistory
+                    : undefined,
+                  referer: getOpenRouterReferer(req)
+                });
+                res.statusCode = 200;
+                res.end(JSON.stringify({ success: true, strategy }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(
+                  JSON.stringify({
+                    success: false,
+                    error: err?.message || 'Error consultando al Estratega IA.'
+                  })
+                );
+              }
+            });
+            return;
+          }
+
           if (req.method === 'POST' && url === '/api/products/quick-create-visual') {
             const auth = verifyAdminToken(req.headers['authorization'], req.headers['cookie']);
             if (!auth.valid) {
@@ -9387,6 +9453,8 @@ setTimeout(()=>window.close(),5000);
                   return;
                 }
                 const cfg = loadStoreConfig();
+                const parsedSheetCount =
+                  incoming.sheetCount === 2 ? 2 : incoming.sheetCount === 3 ? 3 : 'auto';
                 const result = await generateUniversalVisualProductPage({
                   openRouterApiKey,
                   pageCreationMode:
@@ -9396,6 +9464,7 @@ setTimeout(()=>window.close(),5000);
                   productName: String(incoming.productName || '').trim(),
                   productDescription: String(incoming.productDescription || '').trim(),
                   winnerAngle: String(incoming.winnerAngle || '').trim() || undefined,
+                  visualDirection: String(incoming.visualDirection || '').trim() || undefined,
                   price1Gs: Number(incoming.price1Gs) || 189000,
                   price2Gs: incoming.price2Gs ? Number(incoming.price2Gs) : undefined,
                   price3Gs: incoming.price3Gs ? Number(incoming.price3Gs) : undefined,
@@ -9411,8 +9480,8 @@ setTimeout(()=>window.close(),5000);
                   instantDiscountPercent: Number(incoming.instantDiscountPercent) || 12,
                   eventDurationHours: Number(incoming.eventDurationHours) || 6,
                   slotsTotal: Number(incoming.slotsTotal) || 10,
-                  backgroundMusicPreset: incoming.backgroundMusicPreset || 'warm_ambient',
-                  sheetCount: incoming.sheetCount === 3 ? 3 : 2,
+                  backgroundMusicPreset: incoming.backgroundMusicPreset || 'auto',
+                  sheetCount: parsedSheetCount,
                   waNumber: String(incoming.waNumber || cfg?.wa || '595973532550').trim(),
                   referer: getOpenRouterReferer(req),
                   clonedFromContext:
