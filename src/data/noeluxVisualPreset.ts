@@ -73,30 +73,15 @@ export const NOELUX_VISUAL_LANDING: ProductVisualLandingConfig = {
 
 export function upgradeDefaultNoeluxWithVisualPreset<T extends Record<string, any>>(product: T): T {
   if (!product || product.id !== 'prod-noelux-01') return product;
-  const hasVisual = Boolean(
-    product.visualLanding?.enabled &&
-      Array.isArray(product.visualLanding?.sheets) &&
-      product.visualLanding.sheets.length > 0
-  );
   const hasTripwire = Boolean(product.tripwireConfig?.enabled && product.tripwireConfig?.entryProductName);
-  if (hasVisual && hasTripwire) {
-    if (!product.visualLanding?.winnerAngleHeadline) {
-      return {
-        ...product,
-        visualLanding: {
-          ...product.visualLanding,
-          winnerAngleHeadline: NOELUX_VISUAL_LANDING.winnerAngleHeadline,
-          winnerAngleDescription: NOELUX_VISUAL_LANDING.winnerAngleDescription
-        }
-      };
-    }
-    return product;
-  }
-  return {
+  const nextProduct: Record<string, any> = {
     ...product,
-    tripwireConfig: hasTripwire ? product.tripwireConfig : NOELUX_TRIPWIRE_CONFIG,
-    visualLanding: hasVisual ? product.visualLanding : NOELUX_VISUAL_LANDING
+    tripwireConfig: hasTripwire ? product.tripwireConfig : NOELUX_TRIPWIRE_CONFIG
   };
+  if ('visualLanding' in nextProduct) {
+    delete nextProduct.visualLanding;
+  }
+  return nextProduct as T;
 }
 
 /**

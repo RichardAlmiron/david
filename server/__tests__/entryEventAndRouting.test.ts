@@ -255,35 +255,31 @@ test('mixVoiceWithBackgroundMusic respeta preset none y mezcla pista BGM real co
   assert.ok(path.resolve(process.cwd(), 'server/entryEventEngine.ts'));
 });
 
-test('upgradeDefaultNoeluxWithVisualPreset convierte prod-noelux-01 con 3 láminas y sin filtrar palabra prohibida', () => {
-  const legacyNoelux = {
+test('upgradeDefaultNoeluxWithVisualPreset revierte prod-noelux-01 a su página HTML original eliminando visualLanding', () => {
+  const legacyNoeluxWithVisual = {
     id: 'prod-noelux-01',
     nombre: 'Noelux™ Proyector Navideño 12 Diseños',
     slug: 'noelux-proyector-12-disenos',
-    wa: '595973532550'
+    wa: '595973532550',
+    visualLanding: {
+      enabled: true,
+      mode: 'sober_graphic_3sheet',
+      sheets: [{ id: 'noelux_sheet_1', imageUrl: '/assets/visual-pages/noelux-sheet-1.jpg' }]
+    }
   };
-  const upgraded = upgradeDefaultNoeluxWithVisualPreset(legacyNoelux) as any;
-  assert.equal(upgraded.wa, '595973532550');
-  assert.equal(upgraded.visualLanding?.enabled, true);
-  assert.equal(upgraded.visualLanding?.sheets?.length, 3);
-  assert.equal(upgraded.tripwireConfig?.enabled, true);
-  assert.equal(upgraded.tripwireConfig?.entryPriceGs, 20000);
-  assert.equal(upgraded.tripwireConfig?.deliveryFeeGs, 40000);
-  assert.equal(upgraded.tripwireConfig?.backgroundMusicPreset, 'warm_ambient');
+  const reverted = upgradeDefaultNoeluxWithVisualPreset(legacyNoeluxWithVisual) as any;
+  assert.equal(reverted.wa, '595973532550');
+  assert.equal(reverted.visualLanding, undefined);
+  assert.equal(reverted.tripwireConfig?.enabled, true);
+  assert.equal(reverted.tripwireConfig?.entryPriceGs, 20000);
+  assert.equal(reverted.tripwireConfig?.deliveryFeeGs, 40000);
+  assert.equal(reverted.tripwireConfig?.backgroundMusicPreset, 'warm_ambient');
 
-  const visualSerialized = JSON.stringify(upgraded.visualLanding).toLowerCase();
-  assert.equal(visualSerialized.includes('tripwire'), false, 'visualLanding público jamás debe contener tripwire');
-
-  for (const relAsset of [
-    'public/assets/visual-pages/noelux-sheet-1.jpg',
-    'public/assets/visual-pages/noelux-sheet-2.jpg',
-    'public/assets/visual-pages/noelux-sheet-3.jpg',
-    'public/assets/visual-pages/noelux-entry-guirnalda.jpg'
-  ]) {
-    assert.equal(fs.existsSync(path.resolve(process.cwd(), relAsset)), true, `Falta asset ${relAsset}`);
-  }
-
-  const otherProd = { id: 'prod-salud-99', nombre: 'Colágeno Plus' };
+  const otherProd = {
+    id: 'prod-salud-99',
+    nombre: 'Colágeno Plus',
+    visualLanding: { enabled: true, mode: 'sober_graphic_3sheet', sheets: [] }
+  };
   assert.deepEqual(upgradeDefaultNoeluxWithVisualPreset(otherProd), otherProd);
 });
 
