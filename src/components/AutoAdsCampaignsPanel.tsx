@@ -9,7 +9,7 @@ import {
   RotateCw,
   Send,
   CheckCircle2,
-  Sparkles,
+  Wand2,
   Cloud,
   Target,
   FolderOpen,
@@ -218,60 +218,60 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
     return (
       <div
         data-testid="autoads-single-campaign-view"
-        className="rounded-2xl bg-[#090a0c] border border-emerald-500/30 shadow-2xl overflow-hidden"
+        className="rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 shadow-2xl overflow-hidden"
       >
         {/* Cabecera Única Compacta de la Campaña + Pestañas Internas */}
-        <div className="px-4 py-3 bg-[#0f1115] border-b border-zinc-800/90 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-4 py-3 bg-[#07090f]/80 border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
             <button
               type="button"
               data-testid="autoads-back-to-campaigns"
               onClick={() => onSelectCampaign(null)}
-              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/90 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+              className="px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
             >
-              <ArrowLeft className="w-3.5 h-3.5 text-emerald-400" />
+              <ArrowLeft className="w-3.5 h-3.5 text-[#e5c88b]" />
               <span>Campañas</span>
             </button>
 
-            <span className="h-4 w-px bg-zinc-800 hidden sm:inline-block" />
+            <span className="h-4 w-px bg-white/10 hidden sm:inline-block" />
 
             <div className="flex items-center gap-2 min-w-0">
-              <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 font-mono text-[9px] font-bold uppercase tracking-wider shrink-0">
+              <span className="px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/10 text-zinc-300 font-mono text-[9px] font-semibold uppercase tracking-wider shrink-0">
                 Privado
               </span>
               <h2
-                className="text-xs sm:text-sm font-bold text-white truncate max-w-[260px] sm:max-w-[380px]"
+                className="text-xs sm:text-sm font-semibold text-white truncate max-w-[260px] sm:max-w-[380px]"
                 title={selectedCampaign.campaignName}
               >
                 {selectedCampaign.campaignName}
               </h2>
               <span
-                className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold border shrink-0 ${
+                className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-semibold border shrink-0 ${
                   isCampActive
-                    ? 'bg-emerald-950/80 border-emerald-700/70 text-emerald-300'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                    ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                    : 'bg-white/[0.04] border-white/10 text-zinc-300'
                 }`}
               >
-                {isCampActive ? '● ACTIVA' : campStatus}
+                {isCampActive ? 'ACTIVA' : campStatus}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Pestañas Internas Dentro de la Campaña */}
-            <div className="bg-zinc-950 p-1 rounded-xl border border-zinc-800 inline-flex items-center gap-1">
+            <div className="bg-[#06080d] p-1 rounded-xl border border-white/10 inline-flex items-center gap-1">
               <button
                 type="button"
                 data-testid="campaign-subtab-anuncios"
                 onClick={() => setCampaignSubTab('anuncios')}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
                   campaignSubTab === 'anuncios'
-                    ? 'bg-emerald-500 text-black shadow-sm font-bold'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    ? 'bg-[#e5c88b] text-[#090b10] font-bold'
+                    : 'text-zinc-400 hover:text-white'
                 }`}
               >
                 <Layers className="w-3 h-3" />
-                <span>Anuncios ({adsList.length})</span>
+                <span className="font-mono tabular-nums">Anuncios ({adsList.length})</span>
               </button>
 
               <button
@@ -280,11 +280,11 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                 onClick={() => setCampaignSubTab('grupo')}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
                   campaignSubTab === 'grupo'
-                    ? 'bg-sky-500 text-black shadow-sm font-bold'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    ? 'bg-white/[0.12] border border-[#e5c88b]/40 text-white font-bold'
+                    : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                <Target className="w-3 h-3" />
+                <Target className="w-3 h-3 text-[#e5c88b]" />
                 <span>Grupo de Anuncios</span>
               </button>
 
@@ -294,11 +294,11 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                 onClick={() => setCampaignSubTab('campana')}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-all ${
                   campaignSubTab === 'campana'
-                    ? 'bg-zinc-200 text-black shadow-sm font-bold'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    ? 'bg-white/[0.12] border border-[#e5c88b]/40 text-white font-bold'
+                    : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                <Megaphone className="w-3 h-3" />
+                <Megaphone className="w-3 h-3 text-[#e5c88b]" />
                 <span>Campaña</span>
               </button>
             </div>
@@ -310,7 +310,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
               }
               target="_blank"
               rel="noreferrer"
-              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] font-semibold text-emerald-300 inline-flex items-center gap-1 shrink-0"
+              className="px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-[11px] font-semibold text-[#e5c88b] inline-flex items-center gap-1 shrink-0"
             >
               <span>Ads Manager</span>
               <ExternalLink className="w-3 h-3" />
@@ -320,7 +320,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
 
         {/* Contenido Exclusivo según la Pestaña Interna Activa */}
         <div className="p-4 sm:p-5">
-          {/* PESTAÑA 1: ANUNCIOS (VISTA DIRECTA + INYECCIÓN EN EL CONJUNTO) */}
+          {/* PESTAÑA 1: ANUNCIOS */}
           {campaignSubTab === 'anuncios' && (() => {
             const nextInjectSlot = adsList.length;
             const appendAdKey = buildCampaignAdKey(selectedCampaign.campaignId, nextInjectSlot, 'new_inject');
@@ -347,41 +347,41 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
 
             return (
             <div className="space-y-4">
-              {/* Botón "+" Ilimitado para Inyectar Nuevo Anuncio (Crear Anuncio o Crear Anuncio Tripwire) sin borrar los existentes */}
-              <div className="p-3.5 rounded-xl bg-[#11141a] border border-zinc-800 space-y-3">
+              {/* Botón "+" Ilimitado */}
+              <div className="p-4 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h3 className="text-xs font-bold text-white">
+                    <h3 className="text-xs font-semibold text-white font-mono tabular-nums">
                       Grupo de Anuncios Activo ({adsList.length} anuncios) · Agregá sin límite
                     </h3>
                     <p className="text-[11px] text-zinc-400">
-                      Tocá <strong className="text-emerald-300">+</strong> para sumar la cantidad que quieras (Crear Anuncio normal o Crear Anuncio Tripwire) sin reemplazar los actuales.
+                      Tocá <strong className="text-[#e5c88b]">+</strong> para sumar la cantidad que quieras (Estándar o Tripwire) sin reemplazar los actuales.
                     </p>
                   </div>
                   <button
                     type="button"
                     data-testid="campaign-plus-add-ad-btn"
                     onClick={() => setShowPlusMenuInPanel(v => !v)}
-                    className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>+ Sumar Anuncio #{nextInjectSlot + 1}</span>
+                    <span className="font-mono tabular-nums">+ Sumar Anuncio #{nextInjectSlot + 1}</span>
                   </button>
                 </div>
 
                 {showPlusMenuInPanel && (
-                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
-                    {/* Selector Explícito de Página Tripwire Destino ANTES de generar o lanzar */}
-                    <div className="p-3 rounded-xl bg-[#0d1016] border border-amber-500/40 space-y-2.5">
+                  <div className="p-3.5 rounded-xl bg-[#0b0e16] border border-white/10 space-y-3">
+                    {/* Selector Explícito de Página Tripwire Destino */}
+                    <div className="p-3 rounded-xl bg-[#07090f]/80 border border-[#e5c88b]/25 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wide">
+                        <span className="text-[11px] font-semibold text-[#e5c88b] uppercase tracking-wide">
                           1. Elegí la Página Tripwire de Destino (para Anuncio Tripwire)
                         </span>
                         {onOpenTripwirePageCreator && (
                           <button
                             type="button"
                             onClick={onOpenTripwirePageCreator}
-                            className="px-2.5 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/50 text-[11px] font-bold text-amber-300 cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-[#e5c88b]/10 hover:bg-[#e5c88b]/20 border border-[#e5c88b]/35 text-[11px] font-semibold text-[#e5c88b] cursor-pointer"
                           >
                             + Crear Página Tripwire
                           </button>
@@ -394,7 +394,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                             data-testid="campaign-tripwire-page-select"
                             value={selectedTripwirePage?.id || ''}
                             onChange={e => applyTripwirePageSelection(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-amber-500/50 text-xs font-semibold text-white outline-none focus:border-amber-400 cursor-pointer"
+                            className="w-full px-3 py-2 rounded-lg bg-[#06080d] border border-white/15 text-xs font-medium text-white outline-none focus:border-[#e5c88b]/60 cursor-pointer"
                           >
                             {tripwirePages.map(tp => (
                               <option key={tp.id} value={tp.id} className="bg-zinc-900 text-white">
@@ -403,12 +403,12 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                             ))}
                           </select>
 
-                          <div className="px-3 py-2 rounded-lg bg-emerald-950/50 border border-emerald-600/50 text-[11px] space-y-0.5">
-                            <div className="text-emerald-200 font-semibold">
-                              ✅ Página Tripwire seleccionada: <span className="text-white">{selectedTripwirePage?.nombre}</span>
+                          <div className="px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] space-y-0.5">
+                            <div className="text-emerald-300 font-semibold">
+                              Página Tripwire seleccionada: <span className="text-white">{selectedTripwirePage?.nombre}</span>
                             </div>
-                            <div className="font-mono text-amber-300 break-all">
-                              🔗 URL Meta Ads al dar clic: {resolvedAppendTargetUrl}
+                            <div className="font-mono text-[#e5c88b] break-all">
+                              URL Meta Ads al dar clic: {resolvedAppendTargetUrl}
                             </div>
                             <div className="text-[10px] text-zinc-400">
                               Los anuncios estándar de esta campaña siguen yendo a: <span className="font-mono text-zinc-300">{selectedCampaign.landingUrl}</span>
@@ -416,7 +416,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                           </div>
                         </div>
                       ) : (
-                        <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-500/40 text-[11px] text-amber-200 space-y-1">
+                        <div className="p-2.5 rounded-lg bg-[#e5c88b]/10 border border-[#e5c88b]/25 text-[11px] text-[#e5c88b] space-y-1">
                           <div>
                             Todavía no creaste ninguna Página Tripwire en el Creador Rápido. Creala primero para seleccionarla acá y redirigir el anuncio Tripwire a su propia página.
                           </div>
@@ -438,7 +438,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                             'standard'
                           );
                         }}
-                        className="px-4 py-2 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                       >
                         {isRegeneratingAppend && newAdInjectMode === 'standard' ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -463,7 +463,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                             currentHookOverride
                           );
                         }}
-                        className="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                       >
                         {isRegeneratingAppend && newAdInjectMode === 'entry_hook' ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -477,17 +477,17 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                 )}
 
                 {appendDraft && (
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 flex flex-col sm:flex-row items-center gap-3">
+                  <div className="p-3 rounded-xl bg-[#e5c88b]/10 border border-[#e5c88b]/30 flex flex-col sm:flex-row items-center gap-3">
                     {appendDraft.aiGeneratedImageUrl && (
                       <img
                         src={appendDraft.aiGeneratedImageUrl}
                         alt={appendDraft.headline}
                         referrerPolicy="no-referrer"
-                        className="w-20 h-20 rounded-lg object-cover border border-zinc-800 shrink-0"
+                        className="w-20 h-20 rounded-xl object-cover border border-white/10 shrink-0"
                       />
                     )}
                     <div className="flex-1 min-w-0 space-y-1">
-                      <div className="text-xs font-bold text-amber-200 truncate">
+                      <div className="text-xs font-semibold text-[#e5c88b] truncate">
                         Borrador Nuevo Anuncio #{nextInjectSlot + 1} listo · {appendDraft.headline}
                       </div>
                       <p className="text-[11px] text-zinc-300 line-clamp-2">{appendDraft.primaryText}</p>
@@ -504,7 +504,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                         type="button"
                         onClick={() => onDiscardDraft(appendAdKey)}
                         disabled={isReplacingAppend}
-                        className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 cursor-pointer"
+                        className="px-2.5 py-1.5 rounded-lg bg-white/[0.05] border border-white/10 text-xs text-zinc-300 cursor-pointer"
                       >
                         Cancelar
                       </button>
@@ -521,7 +521,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                           )
                         }
                         disabled={isReplacingAppend}
-                        className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                        className="px-3.5 py-1.5 rounded-lg bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
                       >
                         {isReplacingAppend ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -538,7 +538,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
               </div>
 
               {adsList.length === 0 ? (
-                <div className="p-8 rounded-xl border border-dashed border-zinc-800 text-center text-xs text-zinc-400">
+                <div className="p-8 rounded-xl border border-dashed border-white/10 text-center text-xs text-zinc-400">
                   No se registraron anuncios individuales en esta campaña.
                 </div>
               ) : (
@@ -599,33 +599,33 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                       <div
                         key={adKey}
                         data-testid={`campaign-ad-card-${slotIdx}`}
-                        className={`rounded-xl border overflow-hidden flex flex-col justify-between bg-[#131519] transition-all ${
+                        className={`rounded-2xl border overflow-hidden flex flex-col justify-between bg-[#07090f]/80 transition-all ${
                           draft
-                            ? 'border-amber-400/80 ring-1 ring-amber-400/30'
+                            ? 'border-[#e5c88b]/60 ring-1 ring-[#e5c88b]/30'
                             : replaceResult
-                              ? 'border-emerald-500/70'
-                              : 'border-zinc-800/90'
+                              ? 'border-emerald-500/50'
+                              : 'border-white/10'
                         }`}
                       >
                         {/* Header compacto del anuncio */}
-                        <div className="px-3 py-2.5 bg-[#0f1115] border-b border-zinc-800 space-y-2">
+                        <div className="px-3.5 py-2.5 bg-[#0b0e16]/80 border-b border-white/10 space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[11px] font-bold text-emerald-400 font-mono">
+                              <span className="text-[11px] font-bold text-[#e5c88b] font-mono tabular-nums">
                                 Anuncio #{slotIdx + 1}
                               </span>
                               <span
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
                                   ad.status === 'ACTIVE'
-                                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60'
-                                    : 'bg-zinc-800 text-zinc-300'
+                                    ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25'
+                                    : 'bg-white/[0.05] text-zinc-300'
                                 }`}
                               >
                                 {ad.status || 'ACTIVE'}
                               </span>
                               {isCloudinary && (
-                                <span className="px-1.5 py-0.5 rounded bg-sky-950/70 border border-sky-700/60 text-sky-300 text-[9px] font-semibold inline-flex items-center gap-0.5">
-                                  <Cloud className="w-2.5 h-2.5" />
+                                <span className="px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/10 text-zinc-300 text-[9px] font-medium inline-flex items-center gap-0.5">
+                                  <Cloud className="w-2.5 h-2.5 text-[#e5c88b]" />
                                   <span>Cloudinary</span>
                                 </span>
                               )}
@@ -652,22 +652,22 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                                 )
                               }
                               disabled={isRegenerating || isReplacing}
-                              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0"
+                              className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-zinc-100 text-[10px] font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0"
                             >
-                              <RotateCw className={`w-3 h-3 text-emerald-400 ${isRegenerating ? 'animate-spin' : ''}`} />
+                              <RotateCw className={`w-3 h-3 text-[#e5c88b] ${isRegenerating ? 'animate-spin' : ''}`} />
                               <span>{isRegenerating ? 'Regenerando...' : 'Regenerar'}</span>
                             </button>
                           </div>
 
                           <div className="flex items-center justify-between gap-2 text-[10px]">
                             <span className="text-zinc-400">Modo:</span>
-                            <div className="inline-flex rounded-md bg-zinc-950 border border-zinc-800 p-0.5">
+                            <div className="inline-flex rounded-lg bg-[#06080d] border border-white/10 p-0.5">
                               <button
                                 type="button"
                                 onClick={() => setSlotInjectModes(prev => ({ ...prev, [adKey]: 'standard' }))}
                                 className={`px-2 py-0.5 rounded font-semibold cursor-pointer ${
                                   selectedSlotMode === 'standard'
-                                    ? 'bg-zinc-200 text-black'
+                                    ? 'bg-white text-[#090b10]'
                                     : 'text-zinc-400 hover:text-white'
                                 }`}
                               >
@@ -678,7 +678,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                                 onClick={() => setSlotInjectModes(prev => ({ ...prev, [adKey]: 'entry_hook' }))}
                                 className={`px-2 py-0.5 rounded font-semibold cursor-pointer ${
                                   selectedSlotMode === 'entry_hook'
-                                    ? 'bg-amber-400 text-black'
+                                    ? 'bg-[#e5c88b] text-[#090b10]'
                                     : 'text-zinc-400 hover:text-white'
                                 }`}
                               >
@@ -698,7 +698,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                                       [adKey]: e.target.value
                                     }))
                                   }
-                                  className="w-full px-2 py-1 rounded bg-zinc-950 border border-amber-500/40 text-[10px] text-amber-200 font-medium outline-none cursor-pointer"
+                                  className="w-full px-2 py-1 rounded bg-[#06080d] border border-[#e5c88b]/30 text-[10px] text-[#e5c88b] font-medium outline-none cursor-pointer"
                                 >
                                   {tripwirePages.map(tp => (
                                     <option key={tp.id} value={tp.id} className="bg-zinc-900 text-white">
@@ -710,7 +710,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                                 <button
                                   type="button"
                                   onClick={onOpenTripwirePageCreator}
-                                  className="w-full py-1 rounded bg-amber-400/15 border border-amber-400/40 text-[10px] font-bold text-amber-300 cursor-pointer"
+                                  className="w-full py-1 rounded bg-[#e5c88b]/10 border border-[#e5c88b]/30 text-[10px] font-semibold text-[#e5c88b] cursor-pointer"
                                 >
                                   + Crear Página Tripwire primero
                                 </button>
@@ -720,14 +720,14 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
 
                           <div className="text-[10px] font-mono text-zinc-400 truncate" title={draft?.targetLandingUrl || ad.destinationUrl || slotTargetUrlPreview}>
                             Destino:{' '}
-                            <span className={selectedSlotMode === 'entry_hook' ? 'text-amber-300' : 'text-emerald-300'}>
+                            <span className={selectedSlotMode === 'entry_hook' ? 'text-[#e5c88b]' : 'text-emerald-300'}>
                               {draft?.targetLandingUrl || ad.destinationUrl || slotTargetUrlPreview}
                             </span>
                           </div>
                         </div>
 
-                        {/* Imagen del anuncio con fallback automático si falla la URL */}
-                        <div className="relative aspect-square bg-zinc-950 border-b border-zinc-800 flex items-center justify-center overflow-hidden">
+                        {/* Imagen del anuncio */}
+                        <div className="relative aspect-square bg-[#06080d] border-b border-white/10 flex items-center justify-center overflow-hidden">
                           {displayImgUrl ? (
                             <img
                               src={displayImgUrl}
@@ -756,18 +756,18 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                                   )
                                 }
                                 disabled={isRegenerating || isReplacing}
-                                className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                                className="px-3 py-1.5 rounded-lg bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
                               >
-                                <Sparkles className="w-3 h-3" />
+                                <Wand2 className="w-3 h-3" />
                                 <span>Generar en Cloudinary</span>
                               </button>
                             </div>
                           )}
 
                           {(isRegenerating || isReplacing) && (
-                            <div className="absolute inset-0 bg-black/70 backdrop-blur-[1px] flex flex-col items-center justify-center p-4 text-center gap-2">
-                              <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
-                              <span className="text-xs font-bold text-white">
+                            <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center gap-2">
+                              <Loader2 className="w-6 h-6 animate-spin text-[#e5c88b]" />
+                              <span className="text-xs font-semibold text-white">
                                 {isReplacing
                                   ? `Reemplazando Anuncio #${slotIdx + 1} en Meta Ads...`
                                   : `Generando nueva imagen IA para Anuncio #${slotIdx + 1}...`}
@@ -776,18 +776,18 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                           )}
 
                           {draft && !isRegenerating && !isReplacing && (
-                            <div className="absolute top-2 inset-x-2 px-2.5 py-1 rounded-lg bg-amber-400 text-black text-[10px] font-extrabold uppercase tracking-wide text-center shadow-lg">
-                              ✨ Nuevo borrador listo · Reemplazar en Meta
+                            <div className="absolute top-2 inset-x-2 px-2.5 py-1 rounded-lg bg-[#e5c88b] text-[#090b10] text-[10px] font-bold uppercase tracking-wide text-center shadow-lg">
+                              Nuevo borrador listo · Reemplazar en Meta
                             </div>
                           )}
                         </div>
 
                         {/* Pie del anuncio */}
-                        <div className="p-3 space-y-2.5 flex-1 flex flex-col justify-between">
+                        <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
                           <div className="space-y-1">
                             <div className="flex items-center justify-between gap-2">
                               <strong className="text-xs text-white line-clamp-1">{displayHeadline}</strong>
-                              <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10px] font-semibold shrink-0">
+                              <span className="px-2 py-0.5 rounded bg-white/[0.06] text-zinc-200 text-[10px] font-medium shrink-0">
                                 {displayCta}
                               </span>
                             </div>
@@ -799,9 +799,9 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                           </div>
 
                           {replaceResult && !draft && (
-                            <div className="px-2.5 py-1.5 rounded-lg bg-emerald-950/70 border border-emerald-600/50 text-[10px] text-emerald-200 flex items-center gap-1.5">
+                            <div className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-[10px] text-emerald-200 flex items-center gap-1.5">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                              <span>
+                              <span className="font-mono">
                                 {replaceResult.deletedFromMeta
                                   ? `Anterior eliminado · Nuevo activo (${replaceResult.newAdId})`
                                   : `Nuevo anuncio activo en Meta (${replaceResult.newAdId})`}
@@ -810,10 +810,10 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                           )}
 
                           {draft && (
-                            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/40 space-y-2">
-                              <p className="text-[10px] text-amber-200 leading-snug">
+                            <div className="p-2.5 rounded-xl bg-[#e5c88b]/10 border border-[#e5c88b]/30 space-y-2">
+                              <p className="text-[10px] text-zinc-200 leading-snug">
                                 Al lanzar se elimina el Ad anterior en Meta y este Ad #{slotIdx + 1} apuntará a:{' '}
-                                <span className="font-mono text-white break-all">
+                                <span className="font-mono text-[#e5c88b] break-all">
                                   {draft.targetLandingUrl || slotTargetUrlPreview}
                                 </span>
                               </p>
@@ -822,7 +822,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                                   type="button"
                                   onClick={() => onDiscardDraft(adKey)}
                                   disabled={isReplacing}
-                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] font-semibold text-zinc-300 inline-flex items-center gap-1 cursor-pointer"
+                                  className="px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-[11px] font-medium text-zinc-300 inline-flex items-center gap-1 cursor-pointer"
                                 >
                                   <X className="w-3 h-3" />
                                   <span>Cancelar</span>
@@ -832,7 +832,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                                   data-testid={`campaign-launch-replace-ad-btn-${slotIdx}`}
                                   onClick={() => onLaunchReplaceAd(selectedCampaign, slotIdx, ad, draft)}
                                   disabled={isReplacing}
-                                  className="flex-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                                  className="flex-1 px-3 py-1.5 rounded-lg bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-[11px] font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
                                 >
                                   {isReplacing ? (
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -862,15 +862,15 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
           {campaignSubTab === 'grupo' && (
             <div
               data-testid="campaign-tab-panel-grupo"
-              className="p-5 rounded-xl bg-[#0f1115] border border-sky-800/40 space-y-4"
+              className="p-5 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-4"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-zinc-800">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-sky-500 text-black text-[10px] font-extrabold uppercase tracking-wider inline-flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded bg-white/[0.06] border border-[#e5c88b]/30 text-[#e5c88b] text-[10px] font-semibold uppercase tracking-wider inline-flex items-center gap-1">
                     <Target className="w-3 h-3" />
                     Grupo de Anuncios
                   </span>
-                  <h3 className="text-sm font-bold text-white">
+                  <h3 className="text-sm font-semibold text-white">
                     {selectedCampaign.adSetName || '[PARAGUAY 18-65+] Grupo Principal'}
                   </h3>
                 </div>
@@ -880,21 +880,21 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div className="p-3 rounded-xl bg-[#0b0e16]/80 border border-white/10">
                   <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">Segmentación</span>
                   <strong className="text-zinc-100">Paraguay (PY) · 18–65+ años</strong>
                 </div>
-                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div className="p-3 rounded-xl bg-[#0b0e16]/80 border border-white/10">
                   <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">Píxel Meta</span>
-                  <strong className="text-emerald-300 font-mono">{selectedCampaign.pixelId || '1276031534651377'}</strong>
+                  <strong className="text-emerald-300 font-mono tabular-nums">{selectedCampaign.pixelId || '1276031534651377'}</strong>
                 </div>
-                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div className="p-3 rounded-xl bg-[#0b0e16]/80 border border-white/10">
                   <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">Evento Optimización</span>
-                  <strong className="text-sky-300 font-mono">{(selectedCampaign as any).optimizationEvent || 'LEAD'}</strong>
+                  <strong className="text-[#e5c88b] font-mono">{(selectedCampaign as any).optimizationEvent || 'LEAD'}</strong>
                 </div>
-                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div className="p-3 rounded-xl bg-[#0b0e16]/80 border border-white/10">
                   <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">Anuncios Activos</span>
-                  <strong className="text-zinc-100 font-mono">{adsList.length} anuncios</strong>
+                  <strong className="text-zinc-100 font-mono tabular-nums">{adsList.length} anuncios</strong>
                 </div>
               </div>
             </div>
@@ -904,14 +904,14 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
           {campaignSubTab === 'campana' && (
             <div
               data-testid="campaign-tab-panel-campana"
-              className="p-5 rounded-xl bg-[#0f1115] border border-zinc-800 space-y-4"
+              className="p-5 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-4"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-zinc-800">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#e5c88b] block">
                     Detalles de Campaña
                   </span>
-                  <h3 className="text-sm font-bold text-white mt-0.5">{selectedCampaign.campaignName}</h3>
+                  <h3 className="text-sm font-semibold text-white mt-0.5">{selectedCampaign.campaignName}</h3>
                 </div>
                 <span className="text-[11px] font-mono text-zinc-400">
                   Campaign ID: <strong className="text-zinc-200">{selectedCampaign.campaignId}</strong>
@@ -919,25 +919,25 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div className="p-3 rounded-xl bg-[#0b0e16]/80 border border-white/10">
                   <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">Producto</span>
                   <strong className="text-zinc-100 truncate block">{selectedCampaign.productName}</strong>
                 </div>
-                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div className="p-3 rounded-xl bg-[#0b0e16]/80 border border-white/10">
                   <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">Objetivo Meta</span>
                   <strong className="text-emerald-300 font-mono">{(selectedCampaign as any).objective || 'OUTCOME_LEADS'}</strong>
                 </div>
-                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div className="p-3 rounded-xl bg-[#0b0e16]/80 border border-white/10">
                   <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">Cuenta Publicitaria</span>
-                  <strong className="text-zinc-200 font-mono">act_{actNum}</strong>
+                  <strong className="text-zinc-200 font-mono tabular-nums">act_{actNum}</strong>
                 </div>
-                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                <div className="p-3 rounded-xl bg-[#0b0e16]/80 border border-white/10">
                   <span className="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">Creada</span>
                   <strong className="text-zinc-200">{createdLabel}</strong>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-800/80">
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
                 <span className="text-[11px] font-mono text-zinc-500 truncate max-w-md">
                   {selectedCampaign.landingUrl}
                 </span>
@@ -945,9 +945,9 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                   <button
                     type="button"
                     onClick={() => onLoadCampaignInCreator(selectedCampaign)}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <Wand2 className="w-3.5 h-3.5 text-[#e5c88b]" />
                     <span>Editar en Creador</span>
                   </button>
                   <a
@@ -957,7 +957,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                     }
                     target="_blank"
                     rel="noreferrer"
-                    className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold inline-flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 rounded-lg bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold inline-flex items-center gap-1.5"
                   >
                     <span>Ver en Ads Manager</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -986,10 +986,10 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
   return (
     <div
       data-testid="autoads-all-campaigns-view"
-      className="rounded-2xl bg-[#090a0c] border border-zinc-800/90 shadow-xl overflow-hidden"
+      className="rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 shadow-xl overflow-hidden"
     >
       {/* Cabecera Propia de la Interfaz Campañas */}
-      <div className="px-4 py-3 bg-[#0f1115] border-b border-zinc-800/90 flex flex-wrap items-center justify-between gap-3">
+      <div className="px-4 py-3 bg-[#07090f]/80 border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 flex-wrap">
           {onBackToInicio && (
             <>
@@ -997,29 +997,29 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                 type="button"
                 data-testid="autoads-campaigns-back-inicio"
                 onClick={onBackToInicio}
-                className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/90 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                className="px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
               >
-                <ArrowLeft className="w-3.5 h-3.5 text-emerald-400" />
+                <ArrowLeft className="w-3.5 h-3.5 text-[#e5c88b]" />
                 <span>Inicio</span>
               </button>
-              <span className="h-4 w-px bg-zinc-800 hidden sm:inline-block" />
+              <span className="h-4 w-px bg-white/10 hidden sm:inline-block" />
             </>
           )}
 
           <div className="flex items-center gap-2">
-            <FolderOpen className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-sm font-bold text-zinc-100">
+            <FolderOpen className="w-4 h-4 text-[#e5c88b]" />
+            <h2 className="text-sm font-semibold text-white font-mono tabular-nums">
               Campañas ({campaigns.length})
             </h2>
           </div>
 
           {campaigns.length > 0 && (
-            <div className="bg-zinc-950 p-0.5 rounded-lg border border-zinc-800 inline-flex items-center gap-0.5">
+            <div className="bg-[#06080d] p-0.5 rounded-lg border border-white/10 inline-flex items-center gap-0.5">
               <button
                 type="button"
                 onClick={() => setListFilterTab('todas')}
-                className={`px-2 py-1 rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${
-                  listFilterTab === 'todas' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold font-mono tabular-nums cursor-pointer transition-colors ${
+                  listFilterTab === 'todas' ? 'bg-white/[0.1] text-white' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 Todas ({campaigns.length})
@@ -1027,8 +1027,8 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
               <button
                 type="button"
                 onClick={() => setListFilterTab('activas')}
-                className={`px-2 py-1 rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${
-                  listFilterTab === 'activas' ? 'bg-zinc-800 text-emerald-300' : 'text-zinc-400 hover:text-zinc-200'
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold font-mono tabular-nums cursor-pointer transition-colors ${
+                  listFilterTab === 'activas' ? 'bg-white/[0.1] text-[#e5c88b]' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 Activas ({activeCount})
@@ -1042,12 +1042,12 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
             type="button"
             onClick={onSyncLiveCampaigns}
             disabled={syncingCampaigns}
-            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+            className="px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-200 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
           >
             {syncingCampaigns ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#e5c88b]" />
             ) : (
-              <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+              <RefreshCw className="w-3.5 h-3.5 text-[#e5c88b]" />
             )}
             <span>Sincronizar Meta</span>
           </button>
@@ -1055,9 +1055,9 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
           <button
             type="button"
             onClick={onGoToCreateCampaign}
-            className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Wand2 className="w-3.5 h-3.5" />
             <span>Nueva Campaña</span>
           </button>
         </div>
@@ -1065,7 +1065,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
 
       <div className="p-4 sm:p-5">
         {visibleCampaigns.length === 0 ? (
-          <div className="p-10 rounded-xl border border-dashed border-zinc-800 text-center space-y-3">
+          <div className="p-10 rounded-xl border border-dashed border-white/10 text-center space-y-3">
             <Megaphone className="w-8 h-8 text-zinc-500 mx-auto" />
             <div className="text-sm font-semibold text-zinc-200">
               {campaigns.length === 0
@@ -1076,9 +1076,9 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
               <button
                 type="button"
                 onClick={onGoToCreateCampaign}
-                className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Wand2 className="w-3.5 h-3.5" />
                 <span>Crear Primera Campaña</span>
               </button>
             )}
@@ -1117,7 +1117,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                   key={camp.id}
                   data-testid={`campaign-list-card-${camp.campaignId}`}
                   onClick={() => onSelectCampaign(camp)}
-                  className="relative aspect-square rounded-xl border border-zinc-800 hover:border-emerald-500/80 bg-[#0d0f13] overflow-hidden cursor-pointer transition-all group shadow-md"
+                  className="relative aspect-square rounded-xl border border-white/10 hover:border-[#e5c88b]/60 bg-[#07090f] overflow-hidden cursor-pointer transition-all group shadow-md"
                 >
                   {coverImg ? (
                     <img
@@ -1128,7 +1128,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                       className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
                     />
                   ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-zinc-950 text-zinc-500 p-3 text-center">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-[#07090f] text-zinc-500 p-3 text-center">
                       <ImageIcon className="w-6 h-6 text-zinc-600" />
                       <span className="text-[10px] font-medium">Sin imagen</span>
                     </div>
@@ -1136,13 +1136,13 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
 
                   <div className="absolute top-2 inset-x-2 flex items-center justify-between gap-1 z-10">
                     <span
-                      className={`px-1.5 py-0.5 rounded font-mono text-[9px] font-bold border backdrop-blur-sm ${
+                      className={`px-1.5 py-0.5 rounded font-mono text-[9px] font-semibold border backdrop-blur-sm ${
                         isActive
-                          ? 'bg-emerald-950/85 border-emerald-600/70 text-emerald-300'
-                          : 'bg-zinc-900/90 border-zinc-700 text-zinc-300'
+                          ? 'bg-emerald-500/20 border-emerald-500/35 text-emerald-300'
+                          : 'bg-black/70 border-white/15 text-zinc-300'
                       }`}
                     >
-                      {isActive ? '● ACTIVA' : campStatus}
+                      {isActive ? 'ACTIVA' : campStatus}
                     </span>
 
                     <a
@@ -1154,21 +1154,21 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                       rel="noreferrer"
                       onClick={e => e.stopPropagation()}
                       title="Abrir en Meta Ads Manager"
-                      className="p-1 rounded bg-black/75 hover:bg-black border border-zinc-700/80 text-zinc-300 hover:text-white backdrop-blur-sm transition-colors"
+                      className="p-1 rounded bg-black/75 hover:bg-black border border-white/15 text-zinc-300 hover:text-white backdrop-blur-sm transition-colors"
                     >
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
 
                   <div className="absolute inset-x-0 bottom-0 p-2.5 pt-10 bg-gradient-to-t from-black via-black/85 to-transparent z-10 flex flex-col gap-1">
-                    <span className="text-[11px] font-bold text-white group-hover:text-emerald-300 transition-colors line-clamp-2 leading-tight">
+                    <span className="text-[11px] font-semibold text-white group-hover:text-[#e5c88b] transition-colors line-clamp-2 leading-tight">
                       {camp.campaignName}
                     </span>
                     <div className="flex items-center justify-between gap-1 text-[10px] text-zinc-400">
-                      <span className="font-mono truncate">
+                      <span className="font-mono tabular-nums truncate">
                         {ads.length || 6} ads · {dateLabel}
                       </span>
-                      <span className="text-emerald-400 font-bold shrink-0">Abrir →</span>
+                      <span className="text-[#e5c88b] font-semibold shrink-0">Abrir →</span>
                     </div>
                   </div>
                 </div>

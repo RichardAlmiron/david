@@ -27,7 +27,7 @@ import {
   RotateCcw,
   MessageSquare,
   Bot,
-  Sparkles,
+  Wand2,
   Settings,
   Search,
   Archive,
@@ -61,6 +61,7 @@ import { ProductTemplateBuilderStudio } from '../components/ProductTemplateBuild
 import { AutoAdsView } from '../components/AutoAdsView';
 import { MetaCommentsView } from '../components/MetaCommentsView';
 import { QuickProductCreatorView } from '../components/QuickProductCreatorView';
+import { LuminousOrbsBackdrop } from '../components/LuminousOrbsBackdrop';
 import { AdminSectionGuide } from '../components/AdminSectionGuide';
 import { DownloadAppsModal } from '../components/DownloadAppsModal';
 import { SUBNICHE_TEMPLATES, buildAutoTrainedAgentBrain } from '../data/productTemplatesCatalog';
@@ -2195,38 +2196,39 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
   const connectedSessionsCount = waSessions.filter(s => s.status === 'connected').length;
 
   return (
-    <div className={androidShell ? 'flex flex-col min-h-full bg-[#111318] text-zinc-100 font-sans' : 'flex h-screen bg-[#000000] text-zinc-100 overflow-hidden font-sans'}>
+    <div className={androidShell ? 'relative flex flex-col min-h-full bg-[#06080d] text-zinc-100 font-sans overflow-hidden' : 'relative flex h-screen bg-[#06080d] text-zinc-100 overflow-hidden font-sans'}>
+      <LuminousOrbsBackdrop />
       {/* Toast Alert */}
       {toast && (
         <div
-          className={`fixed z-50 bg-zinc-900 text-white px-4 py-3 rounded-lg shadow-lg border border-zinc-700 flex items-center gap-2.5 ${
+          className={`fixed z-50 bg-[#0b0e16]/90 backdrop-blur-xl text-white px-4 py-3 rounded-xl shadow-2xl border border-white/15 flex items-center gap-2.5 ${
             androidShell ? 'bottom-20 left-4 right-4 sm:left-auto sm:right-6' : 'bottom-6 right-6'
           }`}
         >
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <CheckCircle2 className="w-4 h-4 text-[#e5c88b] shrink-0" />
           <span className="text-sm font-medium">{toast}</span>
         </div>
       )}
 
       {/* ============================================================== */}
-      {/* 1. LEFT SIDEBAR — PREMIUM SaaS (oculto en modo Android App)    */}
+      {/* 1. LEFT SIDEBAR — OBSIDIAN SMOKED GLASS                        */}
       {/* ============================================================== */}
       {!androidShell && (
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-52 bg-[#0a0a0a] text-zinc-300 flex flex-col border-r border-zinc-800 transition-transform duration-300 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-56 bg-[#07090f]/85 backdrop-blur-2xl text-zinc-300 flex flex-col border-r border-white/10 transition-transform duration-300 lg:static lg:translate-x-0 ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Brand Header */}
-        <div className="px-4 py-3.5 border-b border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-zinc-900 border border-zinc-700 flex items-center justify-center text-white font-bold text-xs">
+        <div className="px-4 py-4 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-[#e5c88b]/15 border border-[#e5c88b]/40 flex items-center justify-center text-[#e5c88b] font-bold text-xs">
               ▲
             </div>
             <div>
-              <div className="font-semibold text-white text-xs tracking-tight flex items-center gap-1.5">
+              <div className="font-semibold text-white text-xs tracking-[0.14em] flex items-center gap-2">
                 <span>NOELUX</span>
-                <span className="text-[9px] font-mono text-zinc-500 bg-zinc-900 border border-zinc-800 px-1 py-0.5 rounded">
+                <span className="text-[9px] font-mono text-zinc-500">
                   ADMIN
                 </span>
               </div>
@@ -2242,8 +2244,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         </div>
 
         {/* User Badge */}
-        <div className="px-4 py-2.5 border-b border-zinc-800/70 flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-mono text-zinc-300 text-[10px]">
+        <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-white/[0.06] border border-white/10 flex items-center justify-center font-mono text-[#e5c88b] text-[10px]">
             {(adminUser?.nombre || 'AD').slice(0, 2).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
@@ -2257,11 +2259,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         </div>
 
         {/* Navigation Menus */}
-        <nav className="flex-1 px-2.5 py-3 space-y-4 overflow-y-auto">
+        <nav className="flex-1 px-2.5 py-3.5 space-y-5 overflow-y-auto">
 
           {/* Section: Principal */}
           <div>
-            <div className="px-3 pb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+            <div className="px-3 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500">
               Principal
             </div>
             <div className="space-y-1">
@@ -2273,47 +2275,47 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   setActiveMenu('productos');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'productos'
-                    ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'bg-white/[0.08] text-white border-[#e5c88b]/45'
+                    : 'text-zinc-400 border-transparent hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Layers
                     className={`w-4 h-4 shrink-0 ${
-                      activeMenu === 'productos' ? 'text-white' : 'text-zinc-500'
+                      activeMenu === 'productos' ? 'text-[#e5c88b]' : 'text-zinc-500'
                     }`}
                   />
                   <span className="truncate">Páginas de Productos</span>
                 </div>
-                <span className="text-[10px] font-mono bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-full text-zinc-400">
+                <span className="text-[11px] font-mono tabular-nums text-zinc-400">
                   {productPages.length}
                 </span>
               </button>
 
-              {/* Menu 2: Creador Rápido Universal GPT-2.6 (Menú e Interfaz Independiente) */}
+              {/* Menu 2: Creador Rápido Universal GPT-2.6 */}
               <button
                 data-testid="sidebar-menu-creador-rapido"
                 onClick={() => {
                   setActiveMenu('creador_rapido');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'creador_rapido'
-                    ? 'bg-zinc-800/60 text-white border-l-2 border-cyan-400'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'bg-white/[0.08] text-white border-[#e5c88b]/45'
+                    : 'text-zinc-400 border-transparent hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Zap
                     className={`w-4 h-4 shrink-0 ${
-                      activeMenu === 'creador_rapido' ? 'text-cyan-400' : 'text-zinc-500'
+                      activeMenu === 'creador_rapido' ? 'text-[#e5c88b]' : 'text-zinc-500'
                     }`}
                   />
                   <span className="truncate">Creador Rápido</span>
                 </div>
-                <span className="text-[10px] font-mono text-cyan-400">
+                <span className="text-[10px] font-mono tabular-nums text-[#e5c88b]/80">
                   2.6
                 </span>
               </button>
@@ -2326,16 +2328,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   setActiveMenu('creador');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'creador'
-                    ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'bg-white/[0.08] text-white border-[#e5c88b]/45'
+                    : 'text-zinc-400 border-transparent hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <Sparkles
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Wand2
                     className={`w-4 h-4 shrink-0 ${
-                      activeMenu === 'creador' ? 'text-emerald-400' : 'text-zinc-500'
+                      activeMenu === 'creador' ? 'text-[#e5c88b]' : 'text-zinc-500'
                     }`}
                   />
                   <span className="truncate">Creador IA</span>
@@ -2346,33 +2348,33 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
           {/* Section: Automatización */}
           <div>
-            <div className="px-3 pb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+            <div className="px-3 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500">
               Automatización
             </div>
             <div className="space-y-1">
 
-              {/* Menu 3: Pipeboard Meta Ads IA */}
+              {/* Menu 3: AutoAds Meta Ads IA */}
               <button
                 data-testid="sidebar-menu-pipeboard"
                 onClick={() => {
                   setActiveMenu('pipeboard');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'pipeboard'
-                    ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'bg-white/[0.08] text-white border-[#e5c88b]/45'
+                    : 'text-zinc-400 border-transparent hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Bot
                     className={`w-4 h-4 shrink-0 ${
-                      activeMenu === 'pipeboard' ? 'text-white' : 'text-zinc-500'
+                      activeMenu === 'pipeboard' ? 'text-[#e5c88b]' : 'text-zinc-500'
                     }`}
                   />
                   <span className="truncate">AutoAds</span>
                 </div>
-                <span className="text-[10px] font-mono bg-zinc-900 border border-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-mono text-zinc-500">
                   Meta
                 </span>
               </button>
@@ -2384,25 +2386,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   setActiveMenu('whatsapp');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'whatsapp'
-                    ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'bg-white/[0.08] text-white border-[#e5c88b]/45'
+                    : 'text-zinc-400 border-transparent hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Smartphone
                     className={`w-4 h-4 shrink-0 ${
-                      activeMenu === 'whatsapp' ? 'text-emerald-400' : 'text-zinc-500'
+                      activeMenu === 'whatsapp' ? 'text-[#e5c88b]' : 'text-zinc-500'
                     }`}
                   />
                   <span className="truncate">WhatsApp</span>
                 </div>
                 <span
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                    connectedSessionsCount > 0
-                      ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                      : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                  className={`text-[11px] font-mono tabular-nums ${
+                    connectedSessionsCount > 0 ? 'text-emerald-400' : 'text-zinc-500'
                   }`}
                 >
                   {connectedSessionsCount}/{waSessions.length}
@@ -2416,21 +2416,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   setActiveMenu('comentarios');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'comentarios'
-                    ? 'bg-zinc-800/60 text-white border-l-2 border-cyan-400'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'bg-white/[0.08] text-white border-[#e5c88b]/45'
+                    : 'text-zinc-400 border-transparent hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <MessageSquare
                     className={`w-4 h-4 shrink-0 ${
-                      activeMenu === 'comentarios' ? 'text-cyan-400' : 'text-zinc-500'
+                      activeMenu === 'comentarios' ? 'text-[#e5c88b]' : 'text-zinc-500'
                     }`}
                   />
                   <span className="truncate">Comentarios Ads</span>
                 </div>
-                <span className="text-[10px] font-mono bg-cyan-950/60 border border-cyan-800/70 text-cyan-300 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-mono text-zinc-500">
                   IA
                 </span>
               </button>
@@ -2439,7 +2439,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
           {/* Section: Configuración */}
           <div>
-            <div className="px-3 pb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+            <div className="px-3 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500">
               Configuración
             </div>
             <div className="space-y-1">
@@ -2451,16 +2451,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   setActiveMenu('deepgram');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'deepgram'
-                    ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'bg-white/[0.08] text-white border-[#e5c88b]/45'
+                    : 'text-zinc-400 border-transparent hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Zap
                     className={`w-4 h-4 shrink-0 ${
-                      activeMenu === 'deepgram' ? 'text-white' : 'text-zinc-500'
+                      activeMenu === 'deepgram' ? 'text-[#e5c88b]' : 'text-zinc-500'
                     }`}
                   />
                   <span className="truncate">Deepgram</span>
@@ -2477,16 +2477,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   setActiveMenu('openrouter');
                   setMobileSidebarOpen(false);
                 }}
-                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors duration-150 cursor-pointer ${
                   activeMenu === 'openrouter'
-                    ? 'bg-zinc-800/60 text-white border-l-2 border-emerald-500'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'bg-white/[0.08] text-white border-[#e5c88b]/45'
+                    : 'text-zinc-400 border-transparent hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Bot
                     className={`w-4 h-4 shrink-0 ${
-                      activeMenu === 'openrouter' ? 'text-white' : 'text-zinc-500'
+                      activeMenu === 'openrouter' ? 'text-[#e5c88b]' : 'text-zinc-500'
                     }`}
                   />
                   <span className="truncate">Cerebro LLM</span>
@@ -2500,21 +2500,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         </nav>
 
         {/* Bottom Actions */}
-        <div className="p-2.5 border-t border-zinc-800 space-y-1">
+        <div className="p-2.5 border-t border-white/10 space-y-1.5">
           <button
             onClick={() => setCurrentView('store')}
-            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-zinc-900/40 hover:bg-zinc-800 text-xs text-zinc-400 hover:text-white transition-colors duration-150 cursor-pointer border border-zinc-800"
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] text-xs text-zinc-300 hover:text-white transition-colors duration-150 cursor-pointer border border-white/10"
           >
             <div className="flex items-center gap-2 min-w-0">
-              <ExternalLink className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+              <ExternalLink className="w-3.5 h-3.5 text-[#e5c88b] shrink-0" />
               <span className="truncate">Ver Tienda</span>
             </div>
-            <ChevronRight className="w-3 h-3 text-zinc-600" />
+            <ChevronRight className="w-3 h-3 text-zinc-500" />
           </button>
 
           <button
             onClick={() => logoutAdmin()}
-            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-red-400/80 hover:text-red-300 hover:bg-red-950/20 transition-colors duration-150 cursor-pointer"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-red-400/80 hover:text-red-300 hover:bg-red-950/30 transition-colors duration-150 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Cerrar Sesión</span>
@@ -2534,23 +2534,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       {/* ============================================================== */}
       {/* 2. MAIN CONTENT AREA                                            */}
       {/* ============================================================== */}
-      <div className={androidShell ? 'flex-1 flex flex-col min-w-0 bg-[#111318]' : 'flex-1 flex flex-col min-w-0 overflow-hidden bg-[#09090b]'}>
+      <div className={androidShell ? 'relative z-10 flex-1 flex flex-col min-w-0 bg-transparent' : 'relative z-10 flex-1 flex flex-col min-w-0 overflow-hidden bg-transparent'}>
         {/* Top Header */}
         {!androidShell && (
-        <header className="h-14 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between px-3 sm:px-6 shrink-0 z-20 sticky top-0">
+        <header className="h-14 bg-[#07090f]/75 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-3 sm:px-6 shrink-0 z-20 sticky top-0">
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+              className="lg:hidden p-2 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 cursor-pointer"
               title="Abrir Menú"
             >
               <Menu className="w-4 h-4" />
             </button>
 
-            <div className="flex items-center gap-1.5 text-sm font-mono">
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-mono">
               <span className="text-zinc-500 hidden sm:inline">admin</span>
               <span className="text-zinc-700 hidden sm:inline">/</span>
-              <span className="text-white font-medium truncate max-w-[160px] sm:max-w-none">
+              <span className="text-white font-medium tracking-tight truncate max-w-[160px] sm:max-w-none">
                 {activeMenu === 'productos' && 'Páginas & Ventas'}
                 {activeMenu === 'creador_rapido' && 'Creador Rápido IA'}
                 {activeMenu === 'creador' && 'Creador IA'}
@@ -2568,10 +2568,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               type="button"
               data-testid="header-download-apps-btn"
               onClick={() => setShowDownloadAppsModal(true)}
-              className="px-3 py-1.5 rounded-lg border border-emerald-700/60 bg-emerald-950/60 hover:bg-emerald-900/70 text-emerald-300 text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap"
+              className="px-3 py-1.5 rounded-xl border border-[#e5c88b]/35 bg-[#e5c88b]/10 hover:bg-[#e5c88b]/20 text-[#e5c88b] text-xs font-medium flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap"
               title="Descargar aplicaciones para Android y iPhone"
             >
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <Smartphone className="w-3.5 h-3.5 shrink-0" />
               <span>Descargar App</span>
             </button>
 
@@ -2581,25 +2581,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 fetchWhatsAppStatus();
                 showToast('Datos actualizados.');
               }}
-              className="px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-sm flex items-center gap-1.5 transition-colors duration-150 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-xs sm:text-sm flex items-center gap-1.5 transition-colors duration-150 cursor-pointer"
               title="Actualizar datos"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-zinc-500" />
+              <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
               <span className="hidden sm:inline">Actualizar</span>
             </button>
 
             <button
               onClick={() => setCurrentView('store')}
-              className="px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-sm flex items-center gap-1.5 transition-colors duration-150 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-xs sm:text-sm flex items-center gap-1.5 transition-colors duration-150 cursor-pointer"
               title="Ver Tienda Pública"
             >
-              <ExternalLink className="w-3.5 h-3.5 text-emerald-500" />
+              <ExternalLink className="w-3.5 h-3.5 text-[#e5c88b]" />
               <span className="hidden sm:inline">Tienda</span>
             </button>
 
             <button
               onClick={() => logoutAdmin()}
-              className="p-2 rounded-lg border border-red-900/30 bg-red-950/20 hover:bg-red-950/40 text-red-400 transition-colors duration-150 cursor-pointer"
+              className="p-2 rounded-xl border border-red-500/25 bg-red-950/30 hover:bg-red-950/50 text-red-400 transition-colors duration-150 cursor-pointer"
               title="Cerrar Sesión"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -2610,14 +2610,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
         {/* Live Incoming Order Alert Banner */}
         {newOrderNotification && (
-          <div className="bg-emerald-950/80 text-white px-4 sm:px-6 py-2.5 flex items-center justify-between border-b border-emerald-800/40">
+          <div className="bg-[#0b0e16]/85 backdrop-blur-md text-white px-4 sm:px-6 py-2.5 flex items-center justify-between border-b border-[#e5c88b]/25">
             <div className="flex items-center gap-2.5 text-sm font-medium">
-              <span className="p-1 rounded-full bg-emerald-500 text-white">
-                <Bell className="w-3 h-3" />
+              <span className="p-1.5 rounded-lg bg-[#e5c88b]/15 border border-[#e5c88b]/30 text-[#e5c88b]">
+                <Bell className="w-3.5 h-3.5" />
               </span>
               <span>
                 Nuevo pedido recibido —{' '}
-                <strong className="text-emerald-300">{newOrderNotification.nombre}</strong> (
+                <strong className="text-[#e5c88b]">{newOrderNotification.nombre}</strong> (
                 {newOrderNotification.ciudad}) ordenó Pack {newOrderNotification.cantidad} un. (
                 {formatGs(newOrderNotification.monto)})
               </span>
@@ -2630,7 +2630,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   handleOpenOrderWhatsAppChat(newOrderNotification);
                   setNewOrderNotification(null);
                 }}
-                className="text-sm font-medium bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-500 cursor-pointer transition-colors"
+                className="text-xs font-bold bg-[#e5c88b] text-[#090b10] px-3 py-1.5 rounded-lg hover:bg-[#edd49e] cursor-pointer transition-colors"
               >
                 Abrir Chat →
               </button>
@@ -2646,7 +2646,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         )}
 
         {/* Content View */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-28 lg:pb-8 space-y-5 bg-[#09090b] text-zinc-100">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-28 lg:pb-8 space-y-5 bg-transparent text-zinc-100">
           {/* ======================================================== */}
           {/* INTERFAZ INDEPENDIENTE: CREADOR RÁPIDO UNIVERSAL GPT-2.6  */}
           {/* ======================================================== */}
@@ -2765,14 +2765,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     type="button"
                     data-testid="toggle-product-pages-filter-btn"
                     onClick={() => setShowPageFiltersBar(prev => !prev)}
-                    className={`h-8 px-3 rounded-lg border text-sm font-medium inline-flex items-center gap-1.5 cursor-pointer select-none transition-colors duration-150 ${
+                    className={`h-8 px-3 rounded-xl border text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 cursor-pointer select-none transition-colors duration-150 ${
                       showPageFiltersBar ||
                       filterProductName ||
                       filterProductPhoneOrPixel ||
                       filterProductTab !== 'todas' ||
                       selectedProductPageIds.length > 0
-                        ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
-                        : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400'
+                        ? 'bg-[#e5c88b]/15 border-[#e5c88b]/50 text-[#e5c88b]'
+                        : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-zinc-300'
                     }`}
                     title="Mostrar u ocultar filtros y selección múltiple de páginas"
                   >
@@ -2803,7 +2803,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 proTip="Las páginas con envío gratis y precios psicológicos terminados en 9.000 Gs (ej: 189.000 Gs) tienen hasta un 34% más de conversión en Paraguay."
               />
 
-              {/* BARRA DE FILTROS + SELECCIÓN MÚLTIPLE (Oculta por defecto, se despliega al tocar el botón Filtrar) */}
+              {/* BARRA DE FILTROS + SELECCIÓN MÚLTIPLE */}
               {(showPageFiltersBar ||
                 Boolean(filterProductName) ||
                 Boolean(filterProductPhoneOrPixel) ||
@@ -2811,13 +2811,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 selectedProductPageIds.length > 0) && (
               <div
                 data-testid="product-pages-filter-bar"
-                className="p-3 rounded-lg bg-[#0f0f11] border border-zinc-800/80 shadow-sm space-y-2.5"
+                className="p-4 rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 shadow-sm space-y-3"
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
                   <div className="lg:col-span-4">
-                    <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1 flex items-center justify-between">
+                    <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1 flex items-center justify-between">
                       <span>Filtrar por Nombre o Slug</span>
-                      <span className="text-[10px] text-zinc-500 font-normal">Búsqueda rápida</span>
+                      <span className="text-[10px] text-zinc-500 font-sans normal-case">Búsqueda rápida</span>
                     </label>
                     <div className="relative">
                       <input
@@ -2826,7 +2826,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         value={filterProductName}
                         onChange={e => setFilterProductName(e.target.value)}
                         placeholder="Ej: Proyector, Taladro, ?p=..."
-                        className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                        className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-white/10 text-xs font-medium text-zinc-100 bg-[#07090f]/80 focus:border-[#e5c88b]/60 outline-none placeholder-zinc-500"
                         title="Escribí el nombre del producto o parte de su link para filtrar"
                       />
                       {filterProductName && (
@@ -2843,7 +2843,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   </div>
 
                   <div className="lg:col-span-4">
-                    <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                    <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                       Filtrar por ID de Píxel o WhatsApp
                     </label>
                     <div className="relative">
@@ -2853,7 +2853,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         value={filterProductPhoneOrPixel}
                         onChange={e => setFilterProductPhoneOrPixel(e.target.value)}
                         placeholder="Ej: 123456789012345 o 595973..."
-                        className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                        className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-white/10 text-xs font-mono font-medium text-zinc-100 bg-[#07090f]/80 focus:border-[#e5c88b]/60 outline-none placeholder-zinc-500"
                       />
                       {filterProductPhoneOrPixel && (
                         <button
@@ -2869,17 +2869,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   </div>
 
                   <div className="lg:col-span-4">
-                    <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                    <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                     Filtro Rápido de Páginas
                     </label>
-                    <div className="grid grid-cols-3 gap-1 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
+                    <div className="grid grid-cols-3 gap-1 bg-[#07090f]/80 p-1 rounded-xl border border-white/10">
                       <button
                         type="button"
                         data-testid="admin-product-tab-todas"
                         onClick={() => setFilterProductTab('todas')}
                         className={`py-1.5 px-2 rounded-lg text-[11px] font-medium cursor-pointer transition-all whitespace-nowrap ${
                           filterProductTab === 'todas'
-                            ? 'bg-zinc-800 text-white shadow-sm'
+                            ? 'bg-white/[0.1] text-white'
                             : 'text-zinc-400 hover:text-zinc-200'
                         }`}
                       >
@@ -2891,7 +2891,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         onClick={() => setFilterProductTab('con_pixel')}
                         className={`py-1.5 px-2 rounded-lg text-[11px] font-medium cursor-pointer transition-all whitespace-nowrap ${
                           filterProductTab === 'con_pixel'
-                            ? 'bg-zinc-800 text-emerald-400 shadow-sm'
+                            ? 'bg-white/[0.1] text-[#e5c88b]'
                             : 'text-zinc-400 hover:text-zinc-200'
                         }`}
                       >
@@ -2903,7 +2903,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         onClick={() => setFilterProductTab('envio_gratis')}
                         className={`py-1.5 px-2 rounded-lg text-[11px] font-medium cursor-pointer transition-all whitespace-nowrap ${
                           filterProductTab === 'envio_gratis'
-                            ? 'bg-zinc-800 text-white shadow-sm'
+                            ? 'bg-white/[0.1] text-white'
                             : 'text-zinc-400 hover:text-zinc-200'
                         }`}
                       >
@@ -2920,24 +2920,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     allFilteredProductIds.length > 0 &&
                     allFilteredProductIds.every(id => selectedProductPageIds.includes(id));
                   return (
-                    <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
+                    <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
                           type="button"
                           data-testid="admin-select-all-products-btn"
                           onClick={() => toggleSelectAllProductPages(allFilteredProductIds)}
                           disabled={allFilteredProductIds.length === 0}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
                             isAllProductsSelected
-                              ? 'bg-zinc-800 text-white border-zinc-700'
-                              : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
+                              ? 'bg-white/[0.1] text-white border-[#e5c88b]/40'
+                              : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border-white/10'
                           }`}
                         >
                           <input
                             type="checkbox"
                             readOnly
                             checked={isAllProductsSelected}
-                            className="w-3.5 h-3.5 accent-emerald-500 pointer-events-none"
+                            className="w-3.5 h-3.5 accent-[#e5c88b] pointer-events-none"
                           />
                           <span>
                             {isAllProductsSelected
@@ -2950,7 +2950,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           <button
                             type="button"
                             onClick={() => setSelectedProductPageIds([])}
-                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-zinc-800 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] border border-white/10 cursor-pointer"
                           >
                             Limpiar selección ({selectedProductPageIds.length})
                           </button>
@@ -2963,7 +2963,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           data-testid="admin-bulk-delete-products-btn"
                           disabled={selectedProductPageIds.length === 0}
                           onClick={() => openRedDeleteProductsModal(selectedProductPageIds)}
-                          className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-red-950/40 hover:bg-red-900/60 disabled:opacity-40 text-red-300 border border-red-900/50 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-red-950/50 hover:bg-red-900/60 disabled:opacity-40 text-red-300 border border-red-500/35 inline-flex items-center gap-1.5 cursor-pointer transition-all"
                           title="Eliminar todas las páginas de producto seleccionadas directamente de la Base de Datos"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2984,10 +2984,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 return (
                   <div
                     data-testid="recently-created-product-banner"
-                    className="bg-[#0f0f11] text-white rounded-lg p-4 border border-emerald-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    className="bg-[#0b0e16]/85 backdrop-blur-md text-white rounded-2xl p-4 border border-[#e5c88b]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
                     <div className="space-y-0.5">
-                      <span className="text-[12px] font-medium uppercase tracking-wider text-emerald-400 block">
+                      <span className="text-[11px] font-mono uppercase tracking-wider text-[#e5c88b] block">
                         Página Creada y Guardada
                       </span>
                       <p className="text-sm font-semibold text-white">
@@ -3006,7 +3006,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           window.history.pushState({}, '', `/?p=${recentProd.slug}`);
                           setCurrentView('store');
                         }}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg cursor-pointer flex items-center gap-1.5 transition-colors duration-150"
+                        className="bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold px-4 py-2 rounded-xl cursor-pointer flex items-center gap-1.5 transition-colors duration-150"
                       >
                         <Eye className="w-4 h-4" />
                         <span>Abrir Página en Vivo</span>
@@ -3018,7 +3018,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           navigator.clipboard?.writeText(url);
                           showToast(`Link copiado: ${url}`);
                         }}
-                        className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-medium px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150"
+                        className="bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-zinc-200 text-xs font-medium px-3 py-2 rounded-xl cursor-pointer transition-colors duration-150"
                       >
                         Copiar Link
                       </button>
@@ -3080,22 +3080,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     <div
                       key={prod.id}
                       data-testid={`product-card-${prod.id}`}
-                      className={`w-full bg-[#0f0f11] rounded-lg border transition-colors duration-150 overflow-hidden ${
+                      className={`w-full bg-[#0b0e16]/80 backdrop-blur-md rounded-2xl border transition-colors duration-150 overflow-hidden ${
                         isProductChecked
-                          ? 'border-red-500/60 ring-1 ring-red-500/30'
+                          ? 'border-red-500/50 ring-1 ring-red-500/25'
                           : isJustCreated
-                            ? 'border-emerald-500/50 ring-1 ring-emerald-500/20'
+                            ? 'border-[#e5c88b]/60 ring-1 ring-[#e5c88b]/25'
                             : isExpanded
-                              ? 'border-zinc-700'
-                              : 'border-zinc-800/80 hover:border-zinc-700'
+                              ? 'border-white/20'
+                              : 'border-white/10 hover:border-white/20'
                       }`}
                     >
-                      {/* TARJETA DE PRODUCTO — FILA PREMIUM */}
+                      {/* TARJETA DE PRODUCTO — OBISDIAN SMOKED GLASS */}
                       <div
                         onClick={() => toggleProductExpand(prod)}
-                        className="w-full px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-zinc-900/30 transition-colors duration-150"
+                        className="w-full px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-white/[0.03] transition-colors duration-150"
                       >
-                        {/* IZQUIERDA: Checkbox + Miniatura + Etiqueta Característica + Nombre Completo + Badges en Línea */}
+                        {/* IZQUIERDA: Checkbox + Miniatura + Nombre + Metadata */}
                         <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
                           <label
                             onClick={e => e.stopPropagation()}
@@ -3107,13 +3107,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                               data-testid={`select-product-checkbox-${prod.id}`}
                               checked={isProductChecked}
                               onChange={() => toggleSelectProductPage(prod.id)}
-                              className="w-3.5 h-3.5 rounded accent-emerald-500 cursor-pointer"
+                              className="w-3.5 h-3.5 rounded accent-[#e5c88b] cursor-pointer"
                             />
                           </label>
                           <img
                             src={prod.imagen || '/assets/real/galeria-1.jpg'}
                             alt={prod.nombre}
-                            className="w-11 h-11 rounded-lg object-cover border border-zinc-800 shrink-0"
+                            referrerPolicy="no-referrer"
+                            className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0 bg-[#07090f]"
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -3124,34 +3125,32 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                 {prod.nombre}
                               </h3>
                               <span
-                                className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${
-                                  hasPixelConfigured
-                                    ? 'bg-sky-950/80 text-sky-300 border border-sky-800/60'
-                                    : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                                className={`text-[10px] font-mono shrink-0 ${
+                                  hasPixelConfigured ? 'text-emerald-400' : 'text-zinc-500'
                                 }`}
                               >
                                 {hasPixelConfigured
-                                  ? `Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
-                                  : 'Sin Píxel'}
+                                  ? `· Píxel •${String(prod.metaTracking?.pixelId).slice(-3)}${hasCapiTokenConfigured ? ' + CAPI' : ''}`
+                                  : '· Sin Píxel'}
                               </span>
 
                               {isJustCreated && (
-                                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60 shrink-0">
-                                  Nueva
+                                <span className="text-[10px] font-mono uppercase tracking-wider text-[#e5c88b] shrink-0">
+                                  · Nueva
                                 </span>
                               )}
                             </div>
 
                             <div className="flex items-center gap-2 text-[12px] text-zinc-500 mt-1 overflow-hidden">
-                              <span className="font-mono truncate max-w-[130px] sm:max-w-[190px]">
+                              <span className="font-mono truncate max-w-[130px] sm:max-w-[190px] text-zinc-400">
                                 /?p={prod.slug}
                               </span>
                               <span className="text-zinc-700">·</span>
-                              <span className="text-zinc-300 font-medium whitespace-nowrap">
-                                1x: {formatGs(prod.precios?.[1] || 189000)}
+                              <span className="text-zinc-200 font-mono tabular-nums whitespace-nowrap">
+                                1x {formatGs(prod.precios?.[1] || 189000)}
                               </span>
-                              <span className="hidden sm:inline text-emerald-400 font-medium whitespace-nowrap">
-                                · 2x: {formatGs(prod.precios?.[2] || 358000)}
+                              <span className="hidden sm:inline text-[#e5c88b] font-mono tabular-nums whitespace-nowrap">
+                                · 2x {formatGs(prod.precios?.[2] || 358000)}
                               </span>
                               <span className="hidden md:inline text-zinc-500 whitespace-nowrap">
                                 · {prod.freeShipping === false ? 'Envío Pagado' : 'Envío Gratis'}
@@ -3161,41 +3160,41 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         </div>
 
                         {/* DERECHA: Toolbar compacto */}
-                        <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                           {isExpanded && (
                             <>
-                              <button type="button" data-testid={`toggle-pixel-config-${prod.id}`} onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'pixel'); }} className={`h-6 px-2 rounded text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='pixel' ? 'bg-zinc-700 text-white border-zinc-600' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}>
+                              <button type="button" data-testid={`toggle-pixel-config-${prod.id}`} onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'pixel'); }} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='pixel' ? 'bg-white/[0.1] text-white border-[#e5c88b]/50' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
                                 Píxel
                               </button>
-                              <button type="button" onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'precios'); }} className={`h-6 px-2 rounded text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='precios' ? 'bg-zinc-700 text-white border-zinc-600' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}>
+                              <button type="button" onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'precios'); }} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='precios' ? 'bg-white/[0.1] text-white border-[#e5c88b]/50' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
                                 Precios
                               </button>
-                              <button type="button" onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'voz'); }} className={`h-6 px-2 rounded text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='voz' ? 'bg-zinc-700 text-white border-zinc-600' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}>
+                              <button type="button" onClick={e => { e.stopPropagation(); setProductSubTab(prod.id, 'voz'); }} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border ${getProductSubTab(prod.id)==='voz' ? 'bg-white/[0.1] text-white border-[#e5c88b]/50' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
                                 Voz
                               </button>
-                              <button type="button" data-testid={`quick-excel-confirmed-${prod.id}`} onClick={e => { e.stopPropagation(); const count = downloadConfirmedOrdersExcelCsv(prod, allProdOrders); showToast(count > 0 ? `Excel descargada (${count} pedidos).` : 'Sin pedidos para exportar.'); }} className="h-6 px-2 rounded text-[11px] font-medium bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer transition-colors inline-flex items-center gap-1" title="Descargar Excel">
+                              <button type="button" data-testid={`quick-excel-confirmed-${prod.id}`} onClick={e => { e.stopPropagation(); const count = downloadConfirmedOrdersExcelCsv(prod, allProdOrders); showToast(count > 0 ? `Excel descargada (${count} pedidos).` : 'Sin pedidos para exportar.'); }} className="h-7 px-2.5 rounded-lg text-[11px] font-semibold bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-emerald-300 cursor-pointer transition-colors inline-flex items-center gap-1" title="Descargar Excel">
                                 <Download className="w-3 h-3" /> Excel
                               </button>
                               <div className="relative" onClick={e => e.stopPropagation()}>
-                                <button type="button" onClick={() => setShowAudioPopover(prev => prev === prod.id ? null : prod.id)} className={`h-6 px-2 rounded text-[11px] font-medium cursor-pointer transition-colors border inline-flex items-center gap-1 ${(autoCallOnOrder || autoChatOnOrder) ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}>
+                                <button type="button" onClick={() => setShowAudioPopover(prev => prev === prod.id ? null : prod.id)} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border inline-flex items-center gap-1 ${(autoCallOnOrder || autoChatOnOrder) ? 'bg-white/[0.08] text-[#e5c88b] border-[#e5c88b]/40' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
                                   Audio <ChevronDown className="w-3 h-3" />
                                 </button>
                                 {showAudioPopover === prod.id && (
-                                  <div className="absolute right-0 top-full mt-1 z-50 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-2 min-w-[140px] space-y-1">
-                                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider px-2 pb-1">Recepción de pedidos</div>
-                                    <button type="button" onClick={() => { handleToggleAutomationSetting('autoCallOnOrder', true); handleToggleAutomationSetting('autoChatOnOrder', true); setShowAudioPopover(null); }} className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors ${(autoCallOnOrder || autoChatOnOrder) ? 'bg-emerald-950 text-emerald-300' : 'text-zinc-300 hover:bg-zinc-800'}`}>
+                                  <div className="absolute right-0 top-full mt-1 z-50 bg-[#0b0e16]/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl p-2 min-w-[140px] space-y-1">
+                                    <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider px-2 pb-1">Recepción</div>
+                                    <button type="button" onClick={() => { handleToggleAutomationSetting('autoCallOnOrder', true); handleToggleAutomationSetting('autoChatOnOrder', true); setShowAudioPopover(null); }} className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${(autoCallOnOrder || autoChatOnOrder) ? 'bg-[#e5c88b]/15 text-[#e5c88b]' : 'text-zinc-300 hover:bg-white/[0.06]'}`}>
                                       Automático
                                     </button>
-                                    <button type="button" onClick={() => { handleToggleAutomationSetting('autoCallOnOrder', false); handleToggleAutomationSetting('autoChatOnOrder', false); setShowAudioPopover(null); }} className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors ${(!autoCallOnOrder && !autoChatOnOrder) ? 'bg-zinc-800 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}>
+                                    <button type="button" onClick={() => { handleToggleAutomationSetting('autoCallOnOrder', false); handleToggleAutomationSetting('autoChatOnOrder', false); setShowAudioPopover(null); }} className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${(!autoCallOnOrder && !autoChatOnOrder) ? 'bg-white/[0.1] text-white' : 'text-zinc-300 hover:bg-white/[0.06]'}`}>
                                       Manual
                                     </button>
                                   </div>
                                 )}
                               </div>
-                              <button type="button" data-testid={`btn-manual-order-${prod.id}`} onClick={e => { e.stopPropagation(); openManualOrderModal(prod); }} className="h-6 px-2 rounded text-[11px] font-medium bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer transition-colors inline-flex items-center gap-1">
+                              <button type="button" data-testid={`btn-manual-order-${prod.id}`} onClick={e => { e.stopPropagation(); openManualOrderModal(prod); }} className="h-7 px-2.5 rounded-lg text-[11px] font-bold bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] cursor-pointer transition-colors inline-flex items-center gap-1">
                                 <Plus className="w-3 h-3" /> Nuevo
                               </button>
-                              <button type="button" data-testid={`toggle-order-filters-${prod.id}`} onClick={e => { e.stopPropagation(); setShowOrderFiltersBar(prev => !prev); }} className={`h-6 px-2 rounded text-[11px] font-medium cursor-pointer transition-colors border inline-flex items-center gap-1 ${(showOrderFiltersBar || filterOrderName || filterOrderPhone) ? 'bg-emerald-950 text-emerald-200 border-emerald-600' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}>
+                              <button type="button" data-testid={`toggle-order-filters-${prod.id}`} onClick={e => { e.stopPropagation(); setShowOrderFiltersBar(prev => !prev); }} className={`h-7 px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-colors border inline-flex items-center gap-1 ${(showOrderFiltersBar || filterOrderName || filterOrderPhone) ? 'bg-[#e5c88b]/15 text-[#e5c88b] border-[#e5c88b]/45' : 'bg-white/[0.03] text-zinc-400 border-white/10 hover:text-zinc-200'}`}>
                                 <Filter className="w-3 h-3" /> Filtrar
                               </button>
                             </>
@@ -3203,7 +3202,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           <button
                             type="button"
                             onClick={e => { e.stopPropagation(); toggleProductExpand(prod); }}
-                            className={`h-6 px-2 rounded text-[11px] font-medium transition-colors cursor-pointer border inline-flex items-center gap-1 ${isExpanded ? 'bg-zinc-700 text-white border-zinc-600' : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800'}`}
+                            className={`h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer border inline-flex items-center gap-1 font-mono tabular-nums ${isExpanded ? 'bg-white/[0.1] text-white border-[#e5c88b]/40' : 'bg-white/[0.04] text-zinc-300 border-white/10 hover:bg-white/[0.08]'}`}
                           >
                             {isExpanded ? 'Cerrar' : `Abrir (${activeProdOrdersCount})`}
                             <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -3212,38 +3211,37 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                             type="button"
                             data-testid={`delete-product-btn-${prod.id}`}
                             onClick={e => { e.stopPropagation(); openRedDeleteProductsModal([prod.id]); }}
-                            className="h-6 w-6 rounded bg-zinc-900 hover:bg-red-950/50 text-zinc-500 hover:text-red-400 border border-zinc-800 flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                            className="h-7 w-7 rounded-lg bg-white/[0.04] hover:bg-red-950/50 text-zinc-500 hover:text-red-400 border border-white/10 flex items-center justify-center cursor-pointer transition-colors shrink-0"
                             title="Eliminar"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
 
                       {/* CONTENIDO EXPANDIDO DEL PRODUCTO */}
                       {isExpanded && (
-                        <div className="border-t border-zinc-800/80 bg-[#09090b] px-3 py-3 space-y-2.5">
-
+                        <div className="border-t border-white/10 bg-[#07090f]/70 px-3.5 py-3.5 space-y-3">
 
                           {/* TAB PIXEL */}
                           {getProductSubTab(prod.id) === 'pixel' && (
                           <form
                             onSubmit={e => handleSaveProductPixelConfig(e, prod)}
                             data-testid={`product-pixel-token-box-${prod.id}`}
-                            className="p-3.5 sm:p-4 rounded-lg bg-[#0f0f11] border border-zinc-800 shadow-sm space-y-3"
+                            className="p-4 rounded-xl bg-[#0b0e16]/85 border border-white/10 space-y-3.5"
                           >
                             {/* Referencia oficial en vivo sincronizada con Meta Graph API */}
-                            <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/70 space-y-2 text-xs">
+                            <div className="p-3.5 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-2.5 text-xs">
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="font-semibold text-emerald-300 text-[11px] uppercase tracking-wider">
+                                <span className="font-mono font-semibold text-[#e5c88b] text-[11px] uppercase tracking-wider">
                                   Referencia Meta Ads
                                 </span>
                                 <span className="text-[10px] font-mono text-zinc-400">
                                   Portafolio: <strong className="text-white">Landingcod</strong> · Cuenta (834): <strong className="text-white">{liveMetaRef.adAccountName}</strong>
                                 </span>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-between gap-2">
                                   <div>
                                     <span className="text-[10px] text-zinc-400 block">Portafolio Comercial</span>
                                     <strong className="text-zinc-100 font-mono text-xs">Landingcod</strong>
@@ -3252,14 +3250,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     type="button"
                                     onClick={() => {
                                       try { navigator.clipboard.writeText('Landingcod'); } catch {}
-                                      showToast('📋 Copiado Portafolio Comercial: Landingcod');
+                                      showToast('Portafolio Comercial copiado: Landingcod');
                                     }}
-                                    className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-mono text-[10px] font-bold cursor-pointer"
+                                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-zinc-200 font-mono text-[10px] font-bold cursor-pointer"
                                   >
                                     Copiar
                                   </button>
                                 </div>
-                                <div className="p-2 rounded-lg bg-zinc-900/90 border border-zinc-800 flex items-center justify-between gap-2">
+                                <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-between gap-2">
                                   <div>
                                     <span className="text-[10px] text-zinc-400 block">Cuenta Publicitaria</span>
                                     <strong className="text-white font-mono text-xs">{liveMetaRef.adAccountName}</strong>
@@ -3268,18 +3266,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     type="button"
                                     onClick={() => {
                                       try { navigator.clipboard.writeText('1048211497774834'); } catch {}
-                                      showToast(`📋 Copiado ID Cuenta ${liveMetaRef.adAccountName} (834): 1048211497774834`);
+                                      showToast(`ID Cuenta ${liveMetaRef.adAccountName} (834) copiado.`);
                                     }}
-                                    className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
+                                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-[#e5c88b] font-mono text-[10px] font-bold cursor-pointer"
                                   >
                                     Copiar 834
                                   </button>
                                 </div>
-                                <div className="p-2 rounded-lg bg-zinc-900/90 border border-emerald-700/70 flex items-center justify-between gap-2">
+                                <div className="p-2.5 rounded-xl bg-white/[0.03] border border-[#e5c88b]/30 flex items-center justify-between gap-2">
                                   <div>
                                     <span className="text-[10px] text-zinc-400 block">Píxel</span>
                                     <strong className="text-white font-mono text-xs">{liveMetaRef.pixelName}</strong>
-                                    <span className="text-[10px] text-zinc-500 font-mono block">{liveMetaRef.pixelId}</span>
+                                    <span className="text-[10px] text-zinc-500 font-mono tabular-nums block">{liveMetaRef.pixelId}</span>
                                   </div>
                                   <button
                                     type="button"
@@ -3288,7 +3286,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                       setEditPixelId(liveMetaRef.pixelId);
                                       showToast(`Píxel ${liveMetaRef.pixelName} copiado y colocado en el campo.`);
                                     }}
-                                    className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-emerald-300 font-mono text-[10px] font-bold cursor-pointer"
+                                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-[#e5c88b] font-mono text-[10px] font-bold cursor-pointer"
                                   >
                                     Copiar
                                   </button>
@@ -3296,13 +3294,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                               </div>
                             </div>
 
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-white/10">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-zinc-900 text-zinc-300 border border-zinc-800">
+                                <span className="text-[10px] font-mono uppercase tracking-wider text-[#e5c88b]">
                                   Píxel de Facebook & Token API (CAPI)
                                 </span>
                                 <span className="text-[11px] text-zinc-400 font-medium">
-                                  Pegá acá el Píxel y el Token de este producto ({prod.nombre})
+                                  · {prod.nombre}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
@@ -3311,7 +3309,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   disabled={testingProductCapi}
                                   data-testid={`test-product-capi-btn-${prod.id}`}
                                   onClick={() => handleTestProductCapi(prod)}
-                                  className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 font-medium text-xs cursor-pointer transition-colors"
+                                  className="px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 border border-white/10 font-medium text-xs cursor-pointer transition-colors"
                                 >
                                   {testingProductCapi ? 'Probando...' : 'Probar CAPI'}
                                 </button>
@@ -3320,17 +3318,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   disabled={savingToDb}
                                   data-testid={`save-product-pixel-btn-${prod.id}`}
                                   onClick={undefined}
-                                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+                                  className="px-4 py-1.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] disabled:opacity-60 text-[#090b10] font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer transition-all"
                                 >
-                                  <Save className="w-3.5 h-3.5 text-emerald-400" />
+                                  <Save className="w-3.5 h-3.5" />
                                   <span>{savingToDb ? 'Guardando...' : 'Guardar Píxel y Token'}</span>
                                 </button>
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-start">
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
                               <div className="sm:col-span-5">
-                                <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                                <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                                   ID del Píxel de Facebook ({liveMetaRef.pixelName}: {liveMetaRef.pixelId})
                                 </label>
                                 <input
@@ -3339,12 +3337,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   value={editPixelId}
                                   onChange={e => setEditPixelId(e.target.value)}
                                   placeholder={`${liveMetaRef.pixelId} (Píxel ${liveMetaRef.pixelName})`}
-                                  className="w-full px-3 py-2.5 border border-zinc-800 rounded-lg text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                                  className="w-full px-3 py-2.5 border border-white/10 rounded-xl text-xs font-mono font-medium text-zinc-100 bg-[#07090f]/80 focus:border-[#e5c88b]/60 outline-none placeholder-zinc-500"
                                 />
                               </div>
 
                               <div className="sm:col-span-7">
-                                <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                                <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                                   Token de API de Conversiones (CAPI Access Token)
                                 </label>
                                 <input
@@ -3353,7 +3351,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   value={editCapiToken}
                                   onChange={e => setEditCapiToken(e.target.value)}
                                   placeholder="Pegá aquí tu Token EAAB... de Meta Events Manager"
-                                  className="w-full px-3 py-2.5 border border-zinc-800 rounded-lg text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                                  className="w-full px-3 py-2.5 border border-white/10 rounded-xl text-xs font-mono font-medium text-zinc-100 bg-[#07090f]/80 focus:border-[#e5c88b]/60 outline-none placeholder-zinc-500"
                                 />
                               </div>
                             </div>
@@ -3364,25 +3362,26 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           {(getProductSubTab(prod.id) === 'precios' || showPriceConfig) && (
                             <form
                               onSubmit={handleSaveProductConfig}
-                              className="p-3.5 sm:p-4 rounded-lg bg-[#0f0f11] border border-zinc-800 shadow-sm space-y-3"
+                              className="p-4 rounded-xl bg-[#0b0e16]/85 border border-white/10 space-y-3.5"
                             >
-                              <div className="p-2.5 rounded-xl bg-amber-950/30 border border-amber-900/50 flex items-start gap-2.5 text-xs text-amber-200">
-                                <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                              <div className="p-3 rounded-xl bg-[#07090f]/80 border border-white/10 flex items-start gap-2.5 text-xs text-zinc-300">
+                                <Info className="w-4 h-4 text-[#e5c88b] shrink-0 mt-0.5" />
                                 <div className="leading-relaxed">
-                                  <strong className="text-amber-400 font-bold block text-[11px] uppercase tracking-wide">
-                                    💰 Estrategia de Precios Psicológicos y Número de WhatsApp
+                                  <strong className="text-[#e5c88b] font-semibold block text-[11px] uppercase tracking-wide">
+                                    Estrategia de Precios Psicológicos y Número de WhatsApp
                                   </strong>
-                                  <span className="text-[11px] text-zinc-300 mt-0.5 block">
+                                  <span className="text-[11px] text-zinc-400 mt-0.5 block">
                                     Ajustá el precio base (1x) y las ofertas por volumen (2x y 3x). También podés asignar un número de WhatsApp dedicado para este producto.
                                   </span>
                                 </div>
                               </div>
 
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-white/10">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-300 border border-zinc-800">
+                                  <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
                                     Configuración de Producto
                                   </span>
+                                  <span className="text-zinc-700">·</span>
                                   <h4 className="text-xs sm:text-sm font-semibold text-zinc-100 truncate max-w-sm">
                                     {prod.nombre}
                                   </h4>
@@ -3392,16 +3391,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   <button
                                     type="button"
                                     onClick={() => setShowPriceConfig(false)}
-                                    className="px-2.5 py-1.5 rounded-xl border border-zinc-800 hover:bg-zinc-900 text-xs font-medium text-zinc-400 cursor-pointer transition-colors"
+                                    className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-xs font-medium text-zinc-300 cursor-pointer transition-colors"
                                   >
                                     Cerrar
                                   </button>
                                   <button
                                     type="submit"
                                     disabled={savingToDb}
-                                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition-all shrink-0"
+                                    className="px-4 py-1.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] disabled:opacity-60 text-[#090b10] font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
                                   >
-                                    <Save className="w-3.5 h-3.5 text-emerald-400" />
+                                    <Save className="w-3.5 h-3.5" />
                                     <span>{savingToDb ? 'Guardando...' : 'Guardar Configuración'}</span>
                                   </button>
                                 </div>
@@ -3410,7 +3409,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                               {/* 5 Campos en 1 sola fila responsiva horizontal compacta */}
                               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 items-start">
                                 <div>
-                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-0.5">
+                                  <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                                     WhatsApp Ventas
                                   </label>
                                   <input
@@ -3418,7 +3417,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     value={editWa}
                                     onChange={e => setEditWa(e.target.value)}
                                     placeholder="Ej: 595973532550"
-                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
+                                    className="w-full px-3 py-2 border border-white/10 rounded-xl text-xs font-mono font-medium text-zinc-100 outline-none bg-[#07090f]/80 focus:border-[#e5c88b]/60"
                                   />
                                   <span className="text-[10px] text-zinc-500 block mt-0.5 truncate font-mono">
                                     +{formatWaPhone(editWa)}
@@ -3426,39 +3425,39 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                 </div>
 
                                 <div>
-                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-0.5">
+                                  <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                                     Normal (Tachado)
                                   </label>
                                   <input
                                     type="number"
                                     value={editPriceNormal}
                                     onChange={e => setEditPriceNormal(Number(e.target.value))}
-                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
+                                    className="w-full px-3 py-2 border border-white/10 rounded-xl text-xs font-mono font-medium text-zinc-100 outline-none bg-[#07090f]/80 focus:border-[#e5c88b]/60"
                                   />
-                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate line-through">
+                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate line-through font-mono tabular-nums">
                                     {formatGs(editPriceNormal)}
                                   </span>
                                 </div>
 
                                 <div>
-                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-0.5">
+                                  <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                                     Pack 1 un.
                                   </label>
                                   <input
                                     type="number"
                                     value={editPricePack1}
                                     onChange={e => setEditPricePack1(Number(e.target.value))}
-                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
+                                    className="w-full px-3 py-2 border border-white/10 rounded-xl text-xs font-mono font-medium text-zinc-100 outline-none bg-[#07090f]/80 focus:border-[#e5c88b]/60"
                                   />
-                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate">
+                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate font-mono tabular-nums">
                                     {formatGs(editPricePack1)}
                                   </span>
                                 </div>
 
-                                <div className="bg-zinc-900/60 p-1.5 rounded-xl border border-emerald-900/60">
-                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-[#0a7a4a] mb-0.5 flex items-center justify-between">
+                                <div className="bg-white/[0.04] p-2 rounded-xl border border-[#e5c88b]/35">
+                                  <label className="block text-[10px] font-mono uppercase tracking-wider text-[#e5c88b] mb-1 flex items-center justify-between">
                                     <span>Pack 2 un.</span>
-                                    <span className="text-[10px] bg-[#0a7a4a] text-white px-1 rounded font-bold">
+                                    <span className="text-[9px] text-[#e5c88b] font-semibold">
                                       Popular
                                     </span>
                                   </label>
@@ -3466,24 +3465,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     type="number"
                                     value={editPricePack2}
                                     onChange={e => setEditPricePack2(Number(e.target.value))}
-                                    className="w-full px-2.5 py-2 border border-emerald-800 rounded-lg text-xs font-bold outline-none bg-zinc-900 text-emerald-400 focus:border-emerald-500"
+                                    className="w-full px-2.5 py-1.5 border border-[#e5c88b]/40 rounded-lg text-xs font-mono font-bold outline-none bg-[#07090f] text-[#e5c88b] focus:border-[#e5c88b]"
                                   />
-                                  <span className="text-[10px] text-emerald-700 block mt-0.5 truncate font-bold">
+                                  <span className="text-[10px] text-zinc-400 block mt-0.5 truncate font-mono tabular-nums">
                                     {formatGs(editPricePack2)}
                                   </span>
                                 </div>
 
                                 <div>
-                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-0.5">
+                                  <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                                     Pack 3 un.
                                   </label>
                                   <input
                                     type="number"
                                     value={editPricePack3}
                                     onChange={e => setEditPricePack3(Number(e.target.value))}
-                                    className="w-full px-2.5 py-2 border border-zinc-800 rounded-lg text-xs font-medium text-zinc-100 outline-none bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500"
+                                    className="w-full px-3 py-2 border border-white/10 rounded-xl text-xs font-mono font-medium text-zinc-100 outline-none bg-[#07090f]/80 focus:border-[#e5c88b]/60"
                                   />
-                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate">
+                                  <span className="text-[10px] text-zinc-500 block mt-0.5 truncate font-mono tabular-nums">
                                     {formatGs(editPricePack3)}
                                   </span>
                                 </div>
@@ -3493,61 +3492,58 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                           {/* TAB VOZ & OPCIONES */}
                           {(getProductSubTab(prod.id) === 'voz' || showVoiceCatalog) && (
-                            <div className="p-3.5 sm:p-4 rounded-lg bg-[#0f0f11] text-zinc-100 border border-zinc-800 shadow-sm space-y-3">
-                              <div className="p-2.5 rounded-lg bg-zinc-900/30 border border-zinc-900/50 flex items-start gap-2.5 text-xs text-zinc-300">
-                                <Info className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
+                            <div className="p-4 rounded-xl bg-[#0b0e16]/85 text-zinc-100 border border-white/10 space-y-3.5">
+                              <div className="p-3 rounded-xl bg-[#07090f]/80 border border-white/10 flex items-start gap-2.5 text-xs text-zinc-300">
+                                <Info className="w-4 h-4 text-[#e5c88b] shrink-0 mt-0.5" />
                                 <div className="leading-relaxed">
-                                  <strong className="text-zinc-300 font-bold block text-[11px] uppercase tracking-wide">
+                                  <strong className="text-[#e5c88b] font-semibold block text-[11px] uppercase tracking-wide">
                                     Selección de Voz Humana para Confirmación Telefónica
                                   </strong>
-                                  <span className="text-[11px] text-zinc-300 mt-0.5 block">
+                                  <span className="text-[11px] text-zinc-400 mt-0.5 block">
                                     El Agente Telefónico llamará automáticamente al comprador usando la voz que selecciones aquí para confirmar su horario de recepción del paquete.
                                   </span>
                                 </div>
                               </div>
 
-                              <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800 text-xs">
-                                <div className="flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                                  <span className="font-bold text-zinc-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                                    <Bot className="w-4 h-4 text-emerald-400" />
-                                    <span>Voces Oficiales · Deepgram Aura-2</span>
-                                  </span>
-                                </div>
+                              <div className="flex items-center justify-between pb-2 border-b border-white/10 text-xs">
+                                <span className="font-semibold text-zinc-200 text-xs uppercase tracking-wider flex items-center gap-2">
+                                  <Bot className="w-4 h-4 text-[#e5c88b]" />
+                                  <span>Voces Oficiales · Deepgram Aura-2</span>
+                                </span>
                                 <button
                                   type="button"
                                   onClick={() => setShowVoiceCatalog(false)}
-                                  className="text-zinc-400 hover:text-white text-xs font-bold px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 cursor-pointer transition-colors"
+                                  className="text-zinc-400 hover:text-white text-xs font-medium px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 cursor-pointer transition-colors"
                                 >
-                                  Cerrar ✕
+                                  Cerrar
                                 </button>
                               </div>
 
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                                 {voicesCatalog.map(voice => {
                                   const isSelected = voice.id === selectedVoiceId;
                                   return (
                                     <div
                                       key={voice.id}
-                                      className={`p-2.5 rounded-xl border text-[11px] transition-all flex flex-col justify-between gap-2 ${
+                                      className={`p-3 rounded-xl border text-[11px] transition-all flex flex-col justify-between gap-2 ${
                                         isSelected
-                                          ? 'bg-emerald-950/70 border-emerald-600 shadow-sm'
-                                          : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'
+                                          ? 'bg-[#e5c88b]/10 border-[#e5c88b]/55'
+                                          : 'bg-[#07090f]/80 border-white/10 hover:border-white/20'
                                       }`}
                                     >
                                       <div>
-                                        <div className="flex items-center justify-between text-[10px] font-bold">
-                                          <span className={voice.gender === 'Femenina' ? 'text-pink-400' : 'text-blue-400'}>
-                                            {voice.gender === 'Femenina' ? '👩 Mujer' : '👨 Hombre'}
+                                        <div className="flex items-center justify-between text-[10px] font-mono">
+                                          <span className="text-zinc-400">
+                                            {voice.gender === 'Femenina' ? 'Femenina' : 'Masculina'}
                                           </span>
                                           {isSelected && (
-                                            <span className="text-emerald-400 uppercase font-bold tracking-wide">Activa</span>
+                                            <span className="text-[#e5c88b] uppercase font-bold tracking-wide">Activa</span>
                                           )}
                                         </div>
-                                        <div className="font-bold text-zinc-100 truncate mt-1">
+                                        <div className="font-semibold text-zinc-100 truncate mt-1">
                                           {voice.name.split(' (')[0]}
                                         </div>
-                                        <div className="text-[10px] text-zinc-400 line-clamp-2">
+                                        <div className="text-[10px] text-zinc-400 line-clamp-2 mt-0.5">
                                           {voice.description}
                                         </div>
                                       </div>
@@ -3556,7 +3552,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                         <button
                                           type="button"
                                           onClick={() => handleTestVoiceSample(voice)}
-                                          className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 cursor-pointer transition-colors"
+                                          className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-zinc-200 cursor-pointer transition-colors"
                                           title={`Probar voz de ${voice.name}`}
                                         >
                                           <Volume2 className="w-3.5 h-3.5" />
@@ -3567,8 +3563,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                           onClick={() => handleSelectAndSaveVoice(voice)}
                                           className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold cursor-pointer text-center truncate transition-all ${
                                             isSelected
-                                              ? 'bg-emerald-500 text-black'
-                                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                                              ? 'bg-[#e5c88b] text-[#090b10]'
+                                              : 'bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 border border-white/10'
                                           }`}
                                         >
                                           {isSelected ? '✓ Activa' : 'Elegir'}
@@ -3607,11 +3603,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                               Boolean(filterOrderName) ||
                               Boolean(filterOrderPhone) ||
                               selectedIdsForProd.length > 0) && (
-                            <div className="p-3 rounded-lg bg-[#0f0f11] border border-zinc-800 space-y-2.5">
+                            <div className="p-3.5 rounded-xl bg-[#0b0e16]/85 border border-white/10 space-y-2.5">
                               {/* Filtros: Nombre y Teléfono */}
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-end">
                                 <div>
-                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-500 mb-1">
+                                  <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                                     Nombre
                                   </label>
                                   <div className="relative">
@@ -3624,7 +3620,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                         setProductCurrentPage(prod.id, 1);
                                       }}
                                       placeholder="Ej: Christopher, María o NX-..."
-                                      className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                                      className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-white/10 text-xs font-medium text-zinc-100 bg-[#07090f]/80 focus:border-[#e5c88b]/60 outline-none placeholder-zinc-500"
                                     />
                                     {filterOrderName && (
                                       <button
@@ -3640,7 +3636,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                 </div>
 
                                 <div>
-                                  <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-500 mb-1">
+                                  <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
                                     Teléfono
                                   </label>
                                   <div className="relative">
@@ -3653,7 +3649,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                         setProductCurrentPage(prod.id, 1);
                                       }}
                                       placeholder="Ej: 0973 857 397 o 0981..."
-                                      className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-zinc-800 text-xs font-mono font-medium text-zinc-100 bg-zinc-900/80 focus:bg-zinc-900 focus:border-emerald-500 outline-none placeholder-zinc-500"
+                                      className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-white/10 text-xs font-mono font-medium text-zinc-100 bg-[#07090f]/80 focus:border-[#e5c88b]/60 outline-none placeholder-zinc-500"
                                     />
                                     {filterOrderPhone && (
                                       <button
@@ -3670,25 +3666,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                               </div>
 
-                              {/* Fila 2: Selector de Uno o Todos + Acciones Masivas de Archivado y Eliminado con Pop-up Rojo */}
-                              <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2">
+                              {/* Fila 2: Selector de Uno o Todos + Acciones Masivas */}
+                              <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <button
                                     type="button"
                                     data-testid="admin-select-all-btn"
                                     onClick={() => toggleSelectAllOrdersInList(allFilteredIdsForProd)}
                                     disabled={allFilteredIdsForProd.length === 0}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border inline-flex items-center gap-2 cursor-pointer transition-all disabled:opacity-40 ${
                                       isAllFilteredSelected
-                                        ? 'bg-zinc-800 text-white border-zinc-700'
-                                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
+                                        ? 'bg-white/[0.1] text-white border-[#e5c88b]/45'
+                                        : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border-white/10'
                                     }`}
                                   >
                                     <input
                                       type="checkbox"
                                       readOnly
                                       checked={isAllFilteredSelected}
-                                      className="w-3.5 h-3.5 accent-emerald-500 pointer-events-none"
+                                      className="w-3.5 h-3.5 accent-[#e5c88b] pointer-events-none"
                                     />
                                     <span>
                                       {isAllFilteredSelected
@@ -3701,7 +3697,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     <button
                                       type="button"
                                       onClick={() => setSelectedOrderIds([])}
-                                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-zinc-800 cursor-pointer"
+                                      className="px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] border border-white/10 cursor-pointer"
                                     >
                                       Limpiar selección ({selectedIdsForProd.length})
                                     </button>
@@ -3715,13 +3711,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                       data-testid="admin-bulk-archive-btn"
                                       disabled={selectedIdsForProd.length === 0 || isArchivingBatch}
                                       onClick={() => handleArchiveOrders(selectedIdsForProd, true)}
-                                      className="px-3.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 text-amber-400 border border-zinc-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-white/[0.05] hover:bg-white/[0.1] disabled:opacity-40 text-[#e5c88b] border border-white/10 inline-flex items-center gap-1.5 cursor-pointer transition-all"
                                       title="Archivar todos los pedidos seleccionados directamente en la Base de Datos"
                                     >
-                                      <span></span>
-                                      <span>
-                                        Archivar ({selectedIdsForProd.length})
-                                      </span>
+                                      <span>Archivar ({selectedIdsForProd.length})</span>
                                     </button>
                                   )}
 
@@ -3731,12 +3724,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                       data-testid="admin-bulk-unarchive-btn"
                                       disabled={selectedIdsForProd.length === 0 || isArchivingBatch}
                                       onClick={() => handleArchiveOrders(selectedIdsForProd, false)}
-                                      className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white border border-emerald-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                                      className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#e5c88b] hover:bg-[#edd49e] disabled:opacity-40 text-[#090b10] inline-flex items-center gap-1.5 cursor-pointer transition-all"
                                       title="Restaurar los pedidos seleccionados a Activos en la Base de Datos"
                                     >
-                                      <span>
-                                        Desarchivar ({selectedIdsForProd.length})
-                                      </span>
+                                      <span>Desarchivar ({selectedIdsForProd.length})</span>
                                     </button>
                                   )}
 
@@ -3745,13 +3736,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     data-testid="admin-bulk-delete-btn"
                                     disabled={selectedIdsForProd.length === 0}
                                     onClick={() => openRedDeleteConfirmModal(selectedIdsForProd)}
-                                    className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#dc2626] hover:bg-[#b91c1c] disabled:opacity-40 text-white border border-red-800 shadow-sm inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-950/60 hover:bg-red-900/70 disabled:opacity-40 text-red-300 border border-red-500/40 inline-flex items-center gap-1.5 cursor-pointer transition-all"
                                     title="Eliminar los pedidos seleccionados de la Base de Datos (abre confirmación roja)"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
-                                    <span>
-                                      Eliminar ({selectedIdsForProd.length})
-                                    </span>
+                                    <span>Eliminar ({selectedIdsForProd.length})</span>
                                   </button>
                                 </div>
                               </div>
@@ -3760,7 +3749,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                             <div className="space-y-1.5">
                               {/* Cabecera Compacta de la Lista de Tarjetas Horizontales */}
-                              <div className="px-2 py-1.5 rounded-md bg-zinc-900/40 border border-zinc-800/50 flex items-center justify-between gap-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                              <div className="px-2.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-between gap-2 text-[10px] font-mono uppercase tracking-wider text-zinc-500">
                                 <div className="flex items-center gap-2.5 min-w-0">
                                   <input
                                     type="checkbox"
@@ -3768,15 +3757,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     checked={isAllFilteredSelected}
                                     onChange={() => toggleSelectAllOrdersInList(allFilteredIdsForProd)}
                                     title="Seleccionar o deseleccionar todos los pedidos filtrados"
-                                    className="w-3.5 h-3.5 accent-emerald-500 cursor-pointer shrink-0"
+                                    className="w-3.5 h-3.5 accent-[#e5c88b] cursor-pointer shrink-0"
                                   />
-                                  <span className="truncate">{prodOrders.length} pedidos</span>
+                                  <span className="truncate tabular-nums">{prodOrders.length} pedidos</span>
                                 </div>
-  
                               </div>
 
                               {paginatedOrders.length === 0 ? (
-                                <div className="py-5 px-4 rounded-lg border border-zinc-800/60 bg-[#0f0f11] text-center text-zinc-500 text-xs">
+                                <div className="py-6 px-4 rounded-xl border border-white/10 bg-[#0b0e16]/70 text-center text-zinc-500 text-xs">
                                   {filterOrderName || filterOrderPhone
                                     ? 'No se encontraron pedidos que coincidan con el nombre o teléfono buscado.'
                                     : filterArchiveMode === 'archivados'
@@ -3837,15 +3825,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                             );
                                           }
                                         }}
-                                        className={`w-full h-10 min-h-[40px] max-h-[40px] px-2 rounded-lg border flex items-center justify-between gap-2 transition-all cursor-pointer select-none overflow-hidden ${
+                                        className={`w-full h-11 min-h-[44px] max-h-[44px] px-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer select-none overflow-hidden ${
                                           isFromMetaComment
-                                            ? 'bg-gradient-to-r from-[#081b26] via-[#0d1926] to-[#0f0f14] hover:from-[#0b2330] border-cyan-500/80 text-cyan-50 shadow-[0_0_12px_rgba(6,182,212,0.12)]'
+                                            ? 'bg-[#0d141d]/90 hover:bg-[#111b26] border-[#e5c88b]/40 text-zinc-100'
                                             : isConfirmedByAgent
-                                            ? 'bg-[#0f0f11] hover:bg-zinc-900/90 border-emerald-800/80 text-zinc-100'
-                                            : 'bg-[#0f0f11] hover:bg-zinc-900/90 border-zinc-800 text-zinc-200'
-                                        } ${isRowSelected ? 'ring-1 ring-emerald-500/50' : ''}`}
+                                            ? 'bg-[#0b0e16]/85 hover:bg-white/[0.05] border-emerald-500/35 text-zinc-100'
+                                            : 'bg-[#0b0e16]/85 hover:bg-white/[0.05] border-white/10 text-zinc-200'
+                                        } ${isRowSelected ? 'ring-1 ring-[#e5c88b]/60' : ''}`}
                                       >
-                                        {/* IZQUIERDA Y CENTRO: Pequeñas informaciones bien alineadas en 1 sola línea */}
+                                        {/* IZQUIERDA Y CENTRO: Info alineada en 1 sola línea */}
                                         <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                                           <input
                                             type="checkbox"
@@ -3853,54 +3841,52 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                             checked={isRowSelected}
                                             onClick={e => e.stopPropagation()}
                                             onChange={() => toggleSelectOrder(ord.reservaid)}
-                                            className="w-3.5 h-3.5 accent-emerald-500 cursor-pointer shrink-0"
+                                            className="w-3.5 h-3.5 accent-[#e5c88b] cursor-pointer shrink-0"
                                             title={`Seleccionar pedido ${ord.reservaid}`}
                                           />
 
                                           <span
-                                            className={`font-mono text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 tabular-nums ${
-                                              isConfirmedByAgent
-                                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                                                : 'bg-zinc-800 text-zinc-400'
+                                            className={`font-mono text-[10px] font-medium shrink-0 tabular-nums ${
+                                              isConfirmedByAgent ? 'text-emerald-400' : 'text-zinc-500'
                                             }`}
                                           >
                                             #{rowNumber}
                                           </span>
 
-                                          <span className="font-mono text-[11px] font-medium shrink-0 tabular-nums">
+                                          <span className="font-mono text-[11px] font-medium text-zinc-300 shrink-0 tabular-nums">
                                             {ord.reservaid}
                                           </span>
 
                                           {isConfirmedByAgent ? (
-                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-semibold uppercase tracking-tight shrink-0">
-                                              <CheckCircle2 className="w-2.5 h-2.5" />
+                                            <span className="inline-flex items-center gap-1 text-emerald-400 text-[10px] font-mono uppercase tracking-tight shrink-0">
+                                              <CheckCircle2 className="w-3 h-3" />
                                               <span>Confirmado</span>
                                             </span>
                                           ) : (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-950/70 border border-amber-800/70 text-amber-400 text-[10px] font-bold uppercase tracking-tight shrink-0">
-                                              Pendiente
+                                            <span className="text-[#e5c88b] text-[10px] font-mono uppercase tracking-tight shrink-0">
+                                              · Pendiente
                                             </span>
                                           )}
 
                                           {isFromMetaComment && (
                                             <span
                                               data-testid={`meta-comment-order-badge-${ord.reservaid}`}
-                                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/90 border border-cyan-500/70 text-cyan-300 text-[10px] font-bold uppercase tracking-tight shrink-0"
+                                              className="text-zinc-300 text-[10px] font-mono uppercase tracking-tight shrink-0"
                                               title={`Origen Comentario Anuncio: ${ord.metaCommentOrigin?.adName || ord.metaCommentOrigin?.adId || 'Meta Ads'}`}
                                             >
-                                              💬 {ord.metaCommentOrigin?.adIndex ? `Ad #${ord.metaCommentOrigin.adIndex}` : 'Chat Ads'}
+                                              · {ord.metaCommentOrigin?.adIndex ? `Ad #${ord.metaCommentOrigin.adIndex}` : 'Chat Ads'}
                                             </span>
                                           )}
 
                                           {ord.archivado && (
-                                            <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-amber-400 text-[10px] font-semibold uppercase shrink-0">
-                                              Arch.
+                                            <span className="text-amber-400 text-[10px] font-mono uppercase shrink-0">
+                                              · Arch.
                                             </span>
                                           )}
 
                                           {/* Nombre del Cliente */}
                                           <span
-                                            className="font-extrabold text-xs truncate max-w-[135px] sm:max-w-[155px] shrink-0 text-zinc-100"
+                                            className="font-semibold text-xs truncate max-w-[135px] sm:max-w-[165px] shrink-0 text-white"
                                             title={ord.nombre}
                                           >
                                             {ord.nombre}
@@ -3908,7 +3894,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                                           {/* Teléfono 4-3-3 */}
                                           <span
-                                            className={`hidden sm:inline-block font-mono text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0 ${
+                                            className={`hidden sm:inline-block font-mono text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0 ${
                                               isConfirmedByAgent ? 'text-emerald-400' : 'text-zinc-400'
                                             }`}
                                           >
@@ -3918,26 +3904,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                           {/* Ciudad completa */}
                                           {fullCityDept && (
                                             <span
-                                              className={`hidden md:inline-block text-[11px] font-semibold truncate min-w-0 max-w-[160px] ${
-                                                isConfirmedByAgent ? 'text-emerald-400' : 'text-zinc-400'
-                                              }`}
+                                              className="hidden md:inline-block text-[11px] text-zinc-400 truncate min-w-0 max-w-[160px]"
                                               title={fullCityDept}
                                             >
-                                              {ord.tipoVivienda === 'edificio' ? '🏢' : '📍'} {fullCityDept || shortCity}
+                                              · {fullCityDept || shortCity}
                                             </span>
                                           )}
                                         </div>
 
-                                        {/* DERECHA: Precio + Accesos Rápidos Compactos (Mensaje, Archivar, Eliminar y Abrir Detalle) */}
+                                        {/* DERECHA: Precio + Accesos Rápidos */}
                                         <div className="flex items-center gap-1.5 shrink-0">
-                                          {/* Pack y Monto siempre 100% visible */}
-                                          <span
-                                            className={`hidden lg:inline-block font-mono text-[11px] font-medium tabular-nums whitespace-nowrap px-1.5 py-0.5 rounded ${
-                                              isConfirmedByAgent
-                                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
-                                                : 'bg-zinc-900 text-emerald-400 border border-zinc-800'
-                                            }`}
-                                          >
+                                          <span className="hidden lg:inline-block font-mono text-[11px] font-medium tabular-nums whitespace-nowrap text-zinc-200 px-1.5">
                                             {ord.cantidad}u · {formatGs(displayAmount)}
                                           </span>
 
@@ -3947,17 +3924,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                               e.stopPropagation();
                                               handleOpenOrderWhatsAppChat(ord, preferredChannel);
                                             }}
-                                            className="h-8 px-3 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer transition-all bg-[#25D366] hover:bg-[#1ebd5a] text-black shadow-sm"
+                                            className="h-7 px-2.5 text-[11px] font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer transition-all bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10]"
                                             title="Ver mensajes del chat de este pedido (solo lectura, sin autodisparo)"
                                           >
-                                            <MessageCircle className="w-3 h-3 text-black" />
+                                            <MessageCircle className="w-3 h-3" />
                                             <span className="hidden sm:inline">Mensaje</span>
                                             {msgCount > 0 && (
                                               <span
-                                                className="px-1.5 rounded-full bg-[#0b3d2e] text-[#25D366] text-[10px] font-bold tabular-nums"
+                                                className="font-mono text-[10px] font-bold tabular-nums opacity-80"
                                                 title={`${msgCount} mensajes en este chat`}
                                               >
-                                                {msgCount} msg
+                                                ({msgCount})
                                               </span>
                                             )}
                                           </button>
@@ -3972,8 +3949,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                             }}
                                             className={`h-7 px-2 rounded-lg text-[10px] font-medium border transition-all cursor-pointer inline-flex items-center gap-1 ${
                                               ord.archivado
-                                                ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border-emerald-800'
-                                                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-700'
+                                                ? 'bg-[#e5c88b]/15 hover:bg-[#e5c88b]/25 text-[#e5c88b] border-[#e5c88b]/40'
+                                                : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border-white/10'
                                             }`}
                                             title={
                                               ord.archivado
@@ -3981,7 +3958,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                 : 'Archivar pedido en Base de Datos'
                                             }
                                           >
-                                            <span>{ord.archivado ? '📤' : '🗄️'}</span>
+                                            {ord.archivado ? <ArchiveRestore className="w-3 h-3" /> : <Archive className="w-3 h-3" />}
                                             <span className="hidden xl:inline">
                                               {ord.archivado ? 'Desarchivar' : 'Archivar'}
                                             </span>
@@ -3994,7 +3971,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                               e.stopPropagation();
                                               openRedDeleteConfirmModal([ord.reservaid]);
                                             }}
-                                            className="h-7 w-7 rounded-lg text-white bg-red-600/90 hover:bg-red-600 border border-red-800 flex items-center justify-center transition-all cursor-pointer"
+                                            className="h-7 w-7 rounded-lg text-zinc-400 hover:text-red-300 bg-white/[0.04] hover:bg-red-950/60 border border-white/10 hover:border-red-500/40 flex items-center justify-center transition-all cursor-pointer"
                                             title="Eliminar este pedido de la Base de Datos (abre confirmación roja)"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -4002,9 +3979,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                                           <span
                                             className={`h-7 px-2 rounded-lg text-[10px] font-medium inline-flex items-center gap-1 border ${
-                                              isConfirmedByAgent
-                                                ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                                                : 'bg-zinc-900 text-zinc-300 border-zinc-800'
+                                              isOrderOpen
+                                                ? 'bg-white/[0.1] text-white border-[#e5c88b]/40'
+                                                : 'bg-white/[0.04] text-zinc-300 border-white/10'
                                             }`}
                                             title="Clic para ver u ocultar toda la información dentro del pedido"
                                           >
@@ -4024,22 +4001,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                       {isOrderOpen && (
                                         <div
                                           data-testid={`admin-order-detail-panel-${ord.reservaid}`}
-                                          className={`mt-1 p-3.5 sm:p-4 rounded-xl border space-y-3 ${
+                                          className={`mt-1.5 p-4 rounded-2xl border space-y-3.5 backdrop-blur-md ${
                                             isFromMetaComment
-                                              ? 'bg-[#08131a] border-cyan-600/70'
+                                              ? 'bg-[#0b0e16]/90 border-[#e5c88b]/40'
                                               : isConfirmedByAgent
-                                              ? 'bg-[#09090b] border-emerald-800/80'
-                                              : 'bg-[#09090b] border-zinc-800'
+                                              ? 'bg-[#0b0e16]/90 border-emerald-500/35'
+                                              : 'bg-[#0b0e16]/90 border-white/15'
                                           }`}
                                         >
                                           {isFromMetaComment && ord.metaCommentOrigin && (
-                                            <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-500/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                            <div className="p-3 rounded-xl bg-[#07090f]/80 border border-[#e5c88b]/30 flex flex-wrap items-center justify-between gap-2 text-xs">
                                               <div className="space-y-0.5">
-                                                <div className="font-bold text-cyan-300 flex items-center gap-1.5">
-                                                  <span>💬 Capturado desde Comentario / Messenger Ads</span>
+                                                <div className="font-semibold text-[#e5c88b] flex items-center gap-1.5">
+                                                  <span>Capturado desde Comentario / Messenger Ads</span>
                                                   {ord.metaCommentOrigin.adIndex && (
-                                                    <span className="px-1.5 py-0.5 rounded bg-cyan-500 text-zinc-950 text-[10px] font-black">
-                                                      Anuncio #{ord.metaCommentOrigin.adIndex}
+                                                    <span className="font-mono text-[10px] text-zinc-300">
+                                                      · Anuncio #{ord.metaCommentOrigin.adIndex}
                                                     </span>
                                                   )}
                                                 </div>
@@ -4048,7 +4025,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                   {ord.metaCommentOrigin.campaignName && ` · Campaña: ${ord.metaCommentOrigin.campaignName}`}
                                                 </div>
                                                 {ord.metaCommentOrigin.commentText && (
-                                                  <div className="text-[11px] italic text-cyan-100/80">
+                                                  <div className="text-[11px] italic text-zinc-400">
                                                     Comentario original: “{ord.metaCommentOrigin.commentText}”
                                                   </div>
                                                 )}
@@ -4056,14 +4033,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                             </div>
                                           )}
 
-                                          {/* Fila Superior del Detalle: Cabecera + Controles de Unidades, Estado y Acciones */}
-                                          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
+                                          {/* Fila Superior del Detalle */}
+                                          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
                                             <div className="flex items-center gap-2 flex-wrap">
-                                              <span className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-emerald-400 font-mono text-xs font-semibold">
+                                              <span className="text-[#e5c88b] font-mono text-xs font-semibold tabular-nums">
                                                 #{rowNumber}
                                               </span>
-                                              <span className="text-xs font-bold text-zinc-400">
-                                                {fullFormattedDate} · {formattedTime}
+                                              <span className="text-xs font-mono text-zinc-400">
+                                                · {fullFormattedDate} · {formattedTime}
                                               </span>
                                               {(ord.waVendedor || prod.wa) && (
                                                 <span className="text-[11px] font-mono text-zinc-400">
@@ -4074,8 +4051,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                                             {/* Controles de Pack (+/-), Precio y Estado */}
                                             <div className="flex items-center gap-2 flex-wrap">
-                                              <div className="inline-flex items-center gap-1 bg-zinc-900 rounded-lg px-2 py-1 border border-zinc-800">
-                                                <span className="text-[10px] font-medium uppercase text-zinc-400 mr-1">
+                                              <div className="inline-flex items-center gap-1 bg-[#07090f]/80 rounded-xl px-2.5 py-1 border border-white/10">
+                                                <span className="text-[10px] font-mono uppercase text-zinc-400 mr-1">
                                                   Pack:
                                                 </span>
                                                 <button
@@ -4102,14 +4079,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                       monto: nextMonto
                                                     });
                                                     showToast(
-                                                      `✏️ Pedido ${ord.reservaid} actualizado a ${nextQty} un. (${formatGs(nextMonto)}).`
+                                                      `Pedido ${ord.reservaid} actualizado a ${nextQty} un. (${formatGs(nextMonto)}).`
                                                     );
                                                   }}
-                                                  className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center cursor-pointer"
+                                                  className="w-5 h-5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 font-semibold text-xs flex items-center justify-center cursor-pointer"
                                                 >
                                                   -
                                                 </button>
-                                                <span className="px-1.5 text-xs font-semibold text-zinc-100 tabular-nums">
+                                                <span className="px-1.5 text-xs font-mono font-semibold text-white tabular-nums">
                                                   {ord.cantidad} un.
                                                 </span>
                                                 <button
@@ -4135,14 +4112,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                       monto: nextMonto
                                                     });
                                                     showToast(
-                                                      `✏️ Pedido ${ord.reservaid} actualizado a ${nextQty} un. (${formatGs(nextMonto)}).`
+                                                      `Pedido ${ord.reservaid} actualizado a ${nextQty} un. (${formatGs(nextMonto)}).`
                                                     );
                                                   }}
-                                                  className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold text-xs flex items-center justify-center cursor-pointer"
+                                                  className="w-5 h-5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 font-semibold text-xs flex items-center justify-center cursor-pointer"
                                                 >
                                                   +
                                                 </button>
-                                                <span className="ml-1.5 font-mono text-xs font-semibold text-emerald-400 tabular-nums">
+                                                <span className="ml-1.5 font-mono text-xs font-semibold text-[#e5c88b] tabular-nums">
                                                   {formatGs(ord.monto)}
                                                 </span>
                                               </div>
@@ -4157,16 +4134,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                     `Pedido ${ord.reservaid} actualizado a '${next}'.`
                                                   );
                                                 }}
-                                                className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border outline-none cursor-pointer bg-zinc-900 ${
+                                                className={`text-xs font-semibold px-2.5 py-1.5 rounded-xl border outline-none cursor-pointer bg-[#07090f] ${
                                                   isConfirmedByAgent
-                                                    ? 'text-emerald-300 border-emerald-700'
+                                                    ? 'text-emerald-300 border-emerald-500/40'
                                                     : ord.estado === 'reservado'
-                                                      ? 'text-amber-400 border-amber-800'
+                                                      ? 'text-[#e5c88b] border-[#e5c88b]/40'
                                                       : ord.estado === 'en_camino'
-                                                        ? 'text-sky-300 border-blue-800'
+                                                        ? 'text-zinc-200 border-white/20'
                                                         : ord.estado === 'entregado_pagado'
-                                                          ? 'text-emerald-300 border-emerald-800'
-                                                          : 'text-red-300 border-red-800'
+                                                          ? 'text-emerald-300 border-emerald-500/40'
+                                                          : 'text-red-300 border-red-500/40'
                                                 }`}
                                               >
                                                 <option value="reservado">Reservado</option>
@@ -4179,29 +4156,29 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                                           {/* Grilla de Información Completa del Pedido */}
                                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                                            {/* Columna 1: Datos Completos del Cliente (Nombre + Teléfono) */}
-                                            <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-2 flex flex-col justify-between">
-                                              <div className="space-y-1.5">
-                                                <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                                            {/* Columna 1: Datos Completos del Cliente */}
+                                            <div className="p-3 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-2 flex flex-col justify-between">
+                                              <div className="space-y-2">
+                                                <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
                                                   Datos del Cliente
                                                 </div>
-                                                <div className="flex items-center justify-between gap-2 pb-1 border-b border-zinc-800/70">
+                                                <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-white/10">
                                                   <div className="min-w-0">
                                                     <span className="text-[10px] uppercase text-zinc-500 block">
                                                       Nombre completo
                                                     </span>
-                                                    <div className="font-semibold text-zinc-100 text-sm truncate" title={ord.nombre}>
+                                                    <div className="font-semibold text-white text-sm truncate" title={ord.nombre}>
                                                       {ord.nombre}
                                                     </div>
                                                   </div>
                                                   <CopyFieldBtn text={ord.nombre} label="Copiar" tooltip="Copiar Nombre Completo" />
                                                 </div>
-                                                <div className="flex items-center justify-between gap-2 pb-1 border-b border-zinc-800/70">
+                                                <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-white/10">
                                                   <div className="min-w-0">
                                                     <span className="text-[10px] uppercase text-zinc-500 block">
                                                       Teléfono (WhatsApp)
                                                     </span>
-                                                    <div className="font-mono text-xs font-bold text-emerald-400">
+                                                    <div className="font-mono text-xs font-semibold text-emerald-400 tabular-nums">
                                                       {formatParaguayanPhone433(ord.celular)}
                                                     </div>
                                                   </div>
@@ -4217,10 +4194,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                             </div>
 
                                             {/* Columna 2: Ciudad Completa y Dirección */}
-                                            <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-1.5 flex flex-col justify-between">
-                                              <div className="space-y-1.5">
-                                                <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
-                                                  <span>Ciudad Completa y Dirección</span>
+                                            <div className="p-3 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-2 flex flex-col justify-between">
+                                              <div className="space-y-2">
+                                                <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                                                  <span>Ciudad y Dirección</span>
                                                   <CopyFieldBtn
                                                     text={`${fullCityDept}${ord.direccion ? ` — ${ord.direccion}` : ''}`}
                                                     label="Copiar"
@@ -4232,7 +4209,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                     Ciudad / Departamento
                                                   </span>
                                                   <div
-                                                    className="font-bold text-zinc-100 text-xs truncate"
+                                                    className="font-semibold text-white text-xs truncate"
                                                     title={fullCityDept}
                                                   >
                                                     {fullCityDept || 'Sin ciudad especificada'}
@@ -4247,8 +4224,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                   </div>
                                                 </div>
                                                 {ord.tipoVivienda === 'edificio' && (
-                                                  <div className="p-1.5 rounded-lg bg-blue-950/50 border border-blue-800/70 text-[10px] text-blue-200 mt-1">
-                                                    <strong>🏢 Edificio:</strong> {ord.nombreEdificio || 'Confirmado'} ·{' '}
+                                                  <div className="p-2 rounded-xl bg-white/[0.04] border border-white/10 text-[10px] text-zinc-300 mt-1">
+                                                    <strong className="text-[#e5c88b]">Edificio:</strong> {ord.nombreEdificio || 'Confirmado'} ·{' '}
                                                     <strong>Piso:</strong> {ord.pisoEdificio || '-'} ·{' '}
                                                     <strong>Dpto:</strong> {ord.departamentoNumero || '-'}
                                                     {ord.detalleRecepcion ? ` · ${ord.detalleRecepcion}` : ''}
@@ -4258,9 +4235,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                             </div>
 
                                             {/* Columna 3: Ubicación GPS y Referencia */}
-                                            <div className="p-2.5 sm:p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-2 flex flex-col justify-between">
-                                              <div className="space-y-1.5">
-                                                <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                                            <div className="p-3 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-2 flex flex-col justify-between">
+                                              <div className="space-y-2">
+                                                <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 flex items-center justify-between">
                                                   <span>Ubicación GPS y Referencia</span>
                                                   {ord.referenciaCasa && (
                                                     <CopyFieldBtn text={ord.referenciaCasa} label="Copiar Ref." tooltip="Copiar Referencia" />
@@ -4269,27 +4246,27 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                                                 {gpsUrl ? (
                                                   <div
-                                                    className={`p-2 rounded-lg border space-y-1.5 ${
+                                                    className={`p-2.5 rounded-xl border space-y-1.5 ${
                                                       hasExactGps
-                                                        ? 'bg-emerald-950/50 border-emerald-700/70'
-                                                        : 'bg-sky-950/50 border-sky-700/60'
+                                                        ? 'bg-white/[0.04] border-emerald-500/35'
+                                                        : 'bg-white/[0.04] border-white/15'
                                                     }`}
                                                   >
                                                     <div className="flex items-center justify-between gap-2">
                                                       <span
-                                                        className={`text-[10px] font-bold uppercase ${
-                                                          hasExactGps ? 'text-emerald-300' : 'text-sky-300'
+                                                        className={`text-[10px] font-mono font-semibold uppercase ${
+                                                          hasExactGps ? 'text-emerald-400' : 'text-[#e5c88b]'
                                                         }`}
                                                       >
                                                         {hasExactGps
-                                                          ? '📍 GPS Exacto del Cliente'
+                                                          ? 'GPS Exacto del Cliente'
                                                           : hasApproxPin
-                                                            ? '🧭 Pin Barrio / Dirección'
-                                                            : '📍 Mapa GPS'}
+                                                            ? 'Pin Barrio / Dirección'
+                                                            : 'Mapa GPS'}
                                                       </span>
                                                       {typeof gpsNorm.gpsLat === 'number' &&
                                                         typeof gpsNorm.gpsLng === 'number' && (
-                                                          <span className="font-mono text-[10px] text-zinc-300">
+                                                          <span className="font-mono text-[10px] text-zinc-300 tabular-nums">
                                                             {gpsNorm.gpsLat.toFixed(4)}, {gpsNorm.gpsLng.toFixed(4)}
                                                           </span>
                                                         )}
@@ -4304,11 +4281,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                         href={gpsUrl}
                                                         target="_blank"
                                                         rel="noreferrer"
-                                                        className={`flex-1 px-2.5 py-1 rounded-lg font-bold text-[11px] inline-flex items-center justify-center gap-1 shadow-sm ${
-                                                          hasExactGps
-                                                            ? 'bg-[#25D366] hover:bg-[#20bd5a] text-black'
-                                                            : 'bg-sky-500 hover:bg-sky-400 text-black'
-                                                        }`}
+                                                        className="flex-1 px-2.5 py-1.5 rounded-lg font-bold text-[11px] inline-flex items-center justify-center gap-1 bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10]"
                                                       >
                                                         <span>{hasApproxPin ? 'Ver Pin en Maps' : 'Abrir GPS'}</span>
                                                         <ExternalLink className="w-3 h-3" />
@@ -4316,9 +4289,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                     </div>
                                                   </div>
                                                 ) : effectiveMapUrl ? (
-                                                  <div className="p-2 rounded-lg bg-zinc-950 border border-zinc-700/80 space-y-1.5">
-                                                    <div className="text-[10px] text-amber-300 font-semibold">
-                                                      📍 GPS exacto no autorizado — Enlace por dirección
+                                                  <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/10 space-y-1.5">
+                                                    <div className="text-[10px] text-[#e5c88b] font-medium">
+                                                      GPS exacto no autorizado — Enlace por dirección
                                                     </div>
                                                     <div className="flex items-center gap-1.5">
                                                       <CopyFieldBtn
@@ -4330,9 +4303,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                         href={effectiveMapUrl}
                                                         target="_blank"
                                                         rel="noreferrer"
-                                                        className="flex-1 px-2.5 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white font-semibold text-[11px] inline-flex items-center justify-center gap-1"
+                                                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.14] text-white font-medium text-[11px] inline-flex items-center justify-center gap-1"
                                                       >
-                                                        <span>🔍 Buscar en Google Maps</span>
+                                                        <span>Buscar en Google Maps</span>
                                                         <ExternalLink className="w-3 h-3" />
                                                       </a>
                                                     </div>
@@ -4344,8 +4317,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                 )}
 
                                                 {ord.referenciaCasa ? (
-                                                  <div className="p-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-emerald-200 font-semibold text-[11px] flex items-start gap-1.5">
-                                                    <Home className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                                                  <div className="p-2 rounded-xl bg-white/[0.03] border border-white/10 text-zinc-200 font-medium text-[11px] flex items-start gap-1.5">
+                                                    <Home className="w-3.5 h-3.5 text-[#e5c88b] shrink-0 mt-0.5" />
                                                     <span className="leading-tight">{ord.referenciaCasa}</span>
                                                   </div>
                                                 ) : (
@@ -4365,10 +4338,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                                 const fullText = formatFullOrderTextForCourier(ord, comparison, 'confirmado');
                                                 try {
                                                   navigator.clipboard.writeText(fullText);
-                                                  showToast(`📋 Ficha completa de ${ord.nombre} copiada al portapapeles.`);
+                                                  showToast(`Ficha completa de ${ord.nombre} copiada al portapapeles.`);
                                                 } catch {}
                                               }}
-                                              className="w-full py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer select-none"
+                                              className="w-full py-2 px-3 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer select-none"
                                               title="Copiar todos los datos de este pedido (Nombre, Teléfono, Ciudad, Dirección, Referencia, GPS y Total) de una sola vez"
                                             >
                                               <Copy className="w-3.5 h-3.5" />
@@ -4376,47 +4349,47 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                             </button>
                                           </div>
 
-                                          {/* Si está confirmado por el Agente IA, mostrar Comparativa Formulario Web vs Chat IA */}
+                                          {/* Si está confirmado por el Agente IA, mostrar Comparativa */}
                                           {isConfirmedByAgent && comparison && (
-                                            <div className="p-3 rounded-lg bg-zinc-900/80 border border-emerald-800/70 space-y-2">
-                                              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-zinc-800">
-                                                <span className="text-[11px] font-medium uppercase text-zinc-100 flex items-center gap-1.5">
+                                            <div className="p-3.5 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-2.5">
+                                              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
+                                                <span className="text-[11px] font-mono uppercase text-zinc-200 flex items-center gap-1.5">
                                                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                                                  Resumen del Agente IA: Datos Formulario Web vs. Datos Confirmados en Chat
+                                                  Resumen IA: Formulario Web vs. Chat Confirmado
                                                 </span>
-                                                <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 text-[10px] font-medium uppercase">
+                                                <span className="text-emerald-400 text-[10px] font-mono uppercase">
                                                   ✓ 100% Verificado por IA
                                                 </span>
                                               </div>
                                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px]">
-                                                <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
-                                                  <div className="text-[10px] font-semibold uppercase text-zinc-400">
-                                                    1. Datos Formulario Web
+                                                <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/10">
+                                                  <div className="text-[10px] font-mono uppercase text-zinc-400">
+                                                    1. Formulario Web
                                                   </div>
-                                                  <div className="font-bold text-zinc-100 mt-0.5">
+                                                  <div className="font-semibold text-zinc-100 mt-0.5">
                                                     {comparison.nombreWeb} ({comparison.celularWeb})
                                                   </div>
                                                   <div className="text-zinc-400">
                                                     {comparison.ubicacionWeb} — {comparison.direccionWeb}
                                                   </div>
                                                 </div>
-                                                <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-900/60">
-                                                  <div className="text-[10px] font-semibold uppercase text-emerald-400">
-                                                    2. Datos Confirmados Chat IA
+                                                <div className="p-2.5 rounded-xl bg-white/[0.04] border border-emerald-500/30">
+                                                  <div className="text-[10px] font-mono uppercase text-emerald-400">
+                                                    2. Confirmado Chat IA
                                                   </div>
-                                                  <div className="font-bold text-emerald-200 mt-0.5">
+                                                  <div className="font-semibold text-white mt-0.5">
                                                     {comparison.nombreConfirmado} ({comparison.celularConfirmado})
                                                   </div>
                                                   <div className="text-zinc-300">
                                                     {comparison.ubicacionConfirmada} — {comparison.direccionConfirmada}
                                                   </div>
-                                                  <div className="text-emerald-300 font-semibold mt-0.5">
-                                                    🏠 Ref: {comparison.referenciaConfirmada}
+                                                  <div className="text-[#e5c88b] font-medium mt-0.5">
+                                                    Ref: {comparison.referenciaConfirmada}
                                                   </div>
                                                 </div>
-                                                <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200">
-                                                  <div className="text-[10px] font-semibold uppercase text-amber-400">
-                                                    3. Dictamen del Agente IA
+                                                <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-zinc-200">
+                                                  <div className="text-[10px] font-mono uppercase text-[#e5c88b]">
+                                                    3. Dictamen del Agente
                                                   </div>
                                                   <p className="text-[11px] text-zinc-300 mt-0.5 leading-snug">
                                                     {ord.resumenConfirmacionIA || comparison.resumenTexto}
@@ -4436,13 +4409,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                             {/* BARRA DE PAGINACIÓN DE 10 EN 10 */}
                             {prodOrders.length > 0 && (
                               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 px-1">
-                                <span className="text-xs font-bold text-zinc-400">
+                                <span className="text-xs text-zinc-400 font-mono tabular-nums">
                                   Mostrando{' '}
-                                  <strong className="text-zinc-100">{startIndex + 1}</strong> a{' '}
-                                  <strong className="text-zinc-100">
+                                  <strong className="text-white">{startIndex + 1}</strong> a{' '}
+                                  <strong className="text-white">
                                     {Math.min(startIndex + ITEMS_PER_PAGE, prodOrders.length)}
                                   </strong>{' '}
-                                  de <strong className="text-zinc-100">{prodOrders.length}</strong>{' '}
+                                  de <strong className="text-white">{prodOrders.length}</strong>{' '}
                                   pedidos (10 por página)
                                 </span>
 
@@ -4451,7 +4424,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     type="button"
                                     disabled={currentPage <= 1}
                                     onClick={() => setProductCurrentPage(prod.id, currentPage - 1)}
-                                    className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 text-xs font-bold text-zinc-200 flex items-center gap-1 cursor-pointer"
+                                    className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-40 text-xs font-semibold text-zinc-200 flex items-center gap-1 cursor-pointer"
                                   >
                                     <ChevronLeft className="w-3.5 h-3.5" />
                                     <span>Anterior</span>
@@ -4463,9 +4436,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                         key={pageNum}
                                         type="button"
                                         onClick={() => setProductCurrentPage(prod.id, pageNum)}
-                                        className={`w-8 h-8 rounded-lg text-xs font-semibold cursor-pointer transition-all ${pageNum === currentPage
-                                            ? 'bg-emerald-500 text-black shadow-sm'
-                                            : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                                        className={`w-8 h-8 rounded-xl text-xs font-mono font-semibold cursor-pointer transition-all ${pageNum === currentPage
+                                            ? 'bg-[#e5c88b] text-[#090b10]'
+                                            : 'bg-white/[0.04] border border-white/10 text-zinc-300 hover:bg-white/[0.08]'
                                           }`}
                                       >
                                         {pageNum}
@@ -4477,7 +4450,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     type="button"
                                     disabled={currentPage >= totalPages}
                                     onClick={() => setProductCurrentPage(prod.id, currentPage + 1)}
-                                    className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-40 text-xs font-bold text-zinc-200 flex items-center gap-1 cursor-pointer"
+                                    className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-40 text-xs font-semibold text-zinc-200 flex items-center gap-1 cursor-pointer"
                                   >
                                     <span>Siguiente</span>
                                     <ChevronRight className="w-3.5 h-3.5" />
@@ -4527,13 +4500,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               />
 
               {/* Top Banner: Add Unlimited WhatsApp Lines */}
-              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[11px] font-mono uppercase tracking-wider">
-                    <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              <div className="bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.16em] text-[#e5c88b]">
+                    <Smartphone className="w-3.5 h-3.5" />
                     <span>Sincronización Multi-Línea Ilimitada</span>
                   </div>
-                  <h2 className="text-lg font-bold text-zinc-100">
+                  <h2 className="text-lg font-semibold text-white">
                     Administración de Cuentas de WhatsApp ({waSessions.length})
                   </h2>
                   <p className="text-xs text-zinc-400 max-w-2xl">
@@ -4551,12 +4524,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     value={newSessionLabel}
                     onChange={e => setNewSessionLabel(e.target.value)}
                     placeholder="Nombre (ej: WhatsApp Ventas #2)..."
-                    className="px-3.5 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder-zinc-500 text-xs font-medium outline-none min-w-[230px] focus:border-emerald-500"
+                    className="px-3.5 py-2.5 rounded-xl border border-white/10 bg-[#07090f]/80 text-zinc-100 placeholder-zinc-500 text-xs font-medium outline-none min-w-[230px] focus:border-[#e5c88b]/60"
                   />
                   <button
                     type="submit"
                     disabled={addingSession}
-                    className="px-5 py-2.5 rounded-lg bg-[#25D366] hover:bg-[#1ebd5a] text-black font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm shrink-0 transition-all"
+                    className="px-5 py-2.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shrink-0 transition-all"
                   >
                     <Plus className="w-4 h-4" />
                     <span>{addingSession ? 'Agregando...' : 'Agregar Nuevo WhatsApp'}</span>
@@ -4565,7 +4538,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               </div>
 
               {/* Grid of Unlimited WhatsApp Sessions */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {waSessions.map((session, idx) => {
                   const isLoading = Boolean(loadingSessionMap[session.id]);
                   const phoneInputVal = pairingInputs[session.id] || '';
@@ -4573,23 +4546,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   return (
                     <div
                       key={session.id}
-                      className="bg-[#0f0f11] rounded-lg border border-zinc-800 shadow-sm overflow-hidden flex flex-col justify-between"
+                      className="bg-[#0b0e16]/80 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden flex flex-col justify-between"
                     >
                       {/* Card Header */}
-                      <div className="p-5 bg-[#075E54] text-white flex items-center justify-between gap-2">
+                      <div className="p-4 sm:p-5 bg-[#07090f]/90 border-b border-white/10 text-white flex items-center justify-between gap-2">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-lg bg-[#25D366] text-black flex items-center justify-center font-bold shrink-0 shadow-sm">
+                          <div className="w-10 h-10 rounded-xl bg-[#e5c88b]/15 border border-[#e5c88b]/40 text-[#e5c88b] flex items-center justify-center font-mono font-bold text-xs shrink-0">
                             #{idx + 1}
                           </div>
                           <div className="min-w-0">
-                            <h3 className="text-sm font-semibold truncate">{session.label}</h3>
-                            <span className="text-[11px] text-emerald-200 font-bold flex items-center gap-1.5">
-                              <span
-                                className={`w-2 h-2 rounded-full ${session.status === 'connected'
-                                    ? 'bg-[#25D366]'
-                                    : 'bg-amber-400'
-                                  }`}
-                              />
+                            <h3 className="text-sm font-semibold truncate text-white">{session.label}</h3>
+                            <span
+                              className={`text-[11px] font-mono flex items-center gap-1.5 mt-0.5 ${
+                                session.status === 'connected' ? 'text-emerald-400' : 'text-[#e5c88b]'
+                              }`}
+                            >
                               {session.status === 'connected'
                                 ? `Conectado (+${session.connectedPhone})`
                                 : session.status === 'syncing'
@@ -4606,7 +4577,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                             type="button"
                             disabled={isLoading}
                             onClick={() => handleRemoveWhatsAppSession(session.id, session.label)}
-                            className="p-2 rounded-xl bg-white/10 hover:bg-red-600 text-white transition-colors cursor-pointer"
+                            className="p-2 rounded-xl bg-white/[0.04] hover:bg-red-950/60 border border-white/10 hover:border-red-500/40 text-zinc-400 hover:text-red-300 transition-colors cursor-pointer"
                             title="Eliminar esta línea de WhatsApp"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -4617,15 +4588,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       {/* Card Body */}
                       <div className="p-5 space-y-4 flex-1 flex flex-col justify-between">
                         {session.status === 'connected' ? (
-                          <div className="p-5 rounded-lg bg-zinc-900 border border-emerald-500/50 text-center space-y-3 my-auto">
-                            <div className="w-14 h-14 rounded-full bg-[#25D366] text-white flex items-center justify-center mx-auto shadow-sm">
-                              <CheckCircle2 className="w-8 h-8" />
+                          <div className="p-5 rounded-xl bg-[#07090f]/80 border border-emerald-500/35 text-center space-y-3 my-auto">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+                              <CheckCircle2 className="w-6 h-6" />
                             </div>
                             <div>
-                              <span className="text-[10px] font-medium uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-950">
+                              <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400">
                                 Línea Blindada Activa 24/7
                               </span>
-                              <h4 className="text-lg font-bold text-zinc-100 mt-2">
+                              <h4 className="text-lg font-mono font-bold text-white mt-1.5 tabular-nums">
                                 +{session.connectedPhone}
                               </h4>
                               <p className="text-xs text-zinc-400 mt-1">
@@ -4637,10 +4608,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                 type="button"
                                 disabled={isLoading}
                                 onClick={() => handleRepairSession(session.id)}
-                                className="w-full px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold uppercase tracking-wide shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                className="w-full px-4 py-2.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold uppercase tracking-wide transition-all cursor-pointer flex items-center justify-center gap-1.5"
                               >
                                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                                <span>Reparar / Refrescar Señal (Sin Desconectar)</span>
+                                <span>Reparar / Refrescar Señal</span>
                               </button>
                               <button
                                 type="button"
@@ -4653,17 +4624,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     'logout'
                                   )
                                 }
-                                className="w-full px-3 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-red-950/80 border border-zinc-700 hover:border-red-500/60 text-zinc-400 hover:text-red-300 text-[11px] font-bold transition-colors cursor-pointer"
+                                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-red-950/60 border border-white/10 hover:border-red-500/40 text-zinc-400 hover:text-red-300 text-[11px] font-semibold transition-colors cursor-pointer"
                               >
                                 Desvincular / Cambiar Número (Protegido)
                               </button>
                             </div>
                           </div>
                         ) : session.status === 'syncing' ? (
-                          <div className="p-6 rounded-lg bg-emerald-50 border-2 border-emerald-400 text-center space-y-3 my-auto">
-                            <RefreshCw className="w-10 h-10 text-[#0a7a4a] animate-spin mx-auto" />
-                            <h4 className="text-sm font-semibold text-zinc-100">
-                              ¡Sincronizando con tu celular!
+                          <div className="p-6 rounded-xl bg-[#07090f]/80 border border-[#e5c88b]/40 text-center space-y-3 my-auto">
+                            <RefreshCw className="w-9 h-9 text-[#e5c88b] animate-spin mx-auto" />
+                            <h4 className="text-sm font-semibold text-white">
+                              Sincronizando con tu celular...
                             </h4>
                             <p className="text-xs text-zinc-400">
                               Mantené WhatsApp abierto en tu teléfono unos segundos mientras se
@@ -4672,14 +4643,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           </div>
                         ) : (
                           <div className="space-y-4">
-                            {/* 8-Digit Pairing Code Option (Sin escanear QR — ideal desde el celular) */}
-                            <div className="bg-zinc-900 border border-emerald-700/40 rounded-xl p-3.5 text-left space-y-3">
+                            {/* 8-Digit Pairing Code Option */}
+                            <div className="bg-[#07090f]/80 border border-white/10 rounded-xl p-3.5 text-left space-y-3">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-bold text-emerald-300">
+                                <span className="text-xs font-semibold text-[#e5c88b]">
                                   Conectar con Código (sin QR)
                                 </span>
-                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
-                                  Paso 1 · Acá
+                                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                                  Paso 1
                                 </span>
                               </div>
                               <p className="text-[11px] text-zinc-400 leading-snug">
@@ -4697,13 +4668,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     }))
                                   }
                                   placeholder="Ej: 0973532550"
-                                  className="flex-1 min-h-[42px] px-3 py-2 rounded-xl border border-zinc-700 bg-black text-xs font-mono text-zinc-100 outline-none placeholder-zinc-500 focus:border-emerald-500"
+                                  className="flex-1 min-h-[42px] px-3 py-2 rounded-xl border border-white/10 bg-[#0b0e16] text-xs font-mono text-zinc-100 outline-none placeholder-zinc-500 focus:border-[#e5c88b]/60"
                                 />
                                 <button
                                   type="button"
                                   disabled={isLoading || !phoneInputVal.trim()}
                                   onClick={() => handleRequestSessionPairingCode(session.id)}
-                                  className="min-h-[42px] px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black text-xs font-bold cursor-pointer shrink-0 inline-flex items-center gap-1.5"
+                                  className="min-h-[42px] px-3.5 py-2 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] disabled:opacity-50 text-[#090b10] text-xs font-bold cursor-pointer shrink-0 inline-flex items-center gap-1.5"
                                 >
                                   {isLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                                   <span>{isLoading ? 'Generando...' : 'Dame el Código'}</span>
@@ -4711,19 +4682,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                               </div>
 
                               {pairingErrorMap[session.id] && (
-                                <div className="p-2.5 rounded-lg bg-red-950/70 border border-red-700/60 text-xs text-red-200">
+                                <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-200">
                                   {pairingErrorMap[session.id]}
                                 </div>
                               )}
 
                               {session.pairingCode && (
-                                <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/60 space-y-3">
+                                <div className="p-3.5 rounded-xl bg-[#0b0e16] border border-[#e5c88b]/45 space-y-3">
                                   <div className="text-center space-y-2">
-                                    <span className="text-[11px] font-semibold text-emerald-200 block">
+                                    <span className="text-[11px] font-semibold text-zinc-300 block">
                                       Tu código de 8 dígitos:
                                     </span>
                                     <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                                      <strong className="text-xl sm:text-2xl font-mono font-bold tracking-widest text-emerald-300">
+                                      <strong className="text-xl sm:text-2xl font-mono font-bold tracking-widest text-[#e5c88b]">
                                         {session.pairingCode}
                                       </strong>
                                       <button
@@ -4732,18 +4703,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                           navigator.clipboard?.writeText(String(session.pairingCode).replace(/-/g, ''));
                                           showToast('Código copiado. Ahora abrilo en tu WhatsApp normal.');
                                         }}
-                                        className="px-3 py-1.5 rounded-lg bg-emerald-500 text-black text-xs font-bold cursor-pointer hover:bg-emerald-400"
+                                        className="px-3 py-1.5 rounded-lg bg-[#e5c88b] text-[#090b10] text-xs font-bold cursor-pointer hover:bg-[#edd49e]"
                                       >
                                         Copiar Código
                                       </button>
                                     </div>
                                   </div>
 
-                                  <div className="pt-2 border-t border-emerald-700/50 text-[11px] text-emerald-100 space-y-1">
-                                    <div className="font-bold text-emerald-300 uppercase tracking-wider text-[10px]">
-                                      Paso 2 · Pegalo en tu app de WhatsApp normal:
+                                  <div className="pt-2 border-t border-white/10 text-[11px] text-zinc-300 space-y-1">
+                                    <div className="font-mono font-bold text-[#e5c88b] uppercase tracking-wider text-[10px]">
+                                      Paso 2 · Pegalo en tu app de WhatsApp:
                                     </div>
-                                    <p>1. Salí de acá y abrí tu <strong>WhatsApp normal</strong> (el ícono verde).</p>
+                                    <p>1. Abrí tu <strong>WhatsApp normal</strong> en el teléfono.</p>
                                     <p>2. Tocá <strong>3 puntitos (⋮)</strong> o <strong>Configuración</strong> → <strong>Dispositivos vinculados</strong> → <strong>Vincular dispositivo</strong>.</p>
                                     <p>3. Abajo tocá <strong>“Vincular con el número de teléfono”</strong> y pegá este código.</p>
                                   </div>
@@ -4751,9 +4722,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                               )}
                             </div>
 
-                            {/* QR Box (Opción B: escanear desde otro celular) */}
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col items-center justify-center text-center">
-                              <div className="text-[11px] font-semibold text-zinc-400 mb-2">
+                            {/* QR Box */}
+                            <div className="bg-[#07090f]/80 border border-white/10 rounded-xl p-4 flex flex-col items-center justify-center text-center">
+                              <div className="text-[11px] font-medium text-zinc-400 mb-2">
                                 Opción B · Escanear QR con otro teléfono
                               </div>
                               {session.qrDataUrl ? (
@@ -4761,17 +4732,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                   <img
                                     src={session.qrDataUrl}
                                     alt={`QR ${session.label}`}
-                                    className="w-44 h-44 rounded-lg border-4 border-[#0b3d2e] shadow-sm bg-white p-1"
+                                    referrerPolicy="no-referrer"
+                                    className="w-44 h-44 rounded-xl border border-white/20 bg-white p-1.5"
                                   />
                                   <div className="flex items-center gap-2 pt-1">
-                                    <span className="text-[11px] font-medium text-[#0a7a4a]">
+                                    <span className="text-[11px] font-medium text-emerald-400">
                                       Escaneá este QR con tu WhatsApp
                                     </span>
                                     <button
                                       type="button"
                                       disabled={isLoading}
                                       onClick={() => handleConnectSession(session.id, true)}
-                                      className="text-[11px] font-medium text-zinc-400 hover:text-zinc-100 underline cursor-pointer"
+                                      className="text-[11px] font-medium text-zinc-400 hover:text-white underline cursor-pointer"
                                     >
                                       Refrescar QR
                                     </button>
@@ -4779,7 +4751,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                 </div>
                               ) : (
                                 <div className="space-y-2.5 py-3">
-                                  <RefreshCw className="w-6 h-6 text-[#0a7a4a] animate-spin mx-auto" />
+                                  <RefreshCw className="w-6 h-6 text-[#e5c88b] animate-spin mx-auto" />
                                   <p className="text-xs font-medium text-zinc-400">
                                     Preparando QR de respaldo para {session.label}...
                                   </p>
@@ -4787,7 +4759,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                     type="button"
                                     disabled={isLoading}
                                     onClick={() => handleConnectSession(session.id, true)}
-                                    className="px-3.5 py-1.5 rounded-lg bg-[#0b3d2e] text-white text-xs font-semibold cursor-pointer"
+                                    className="px-3.5 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white text-xs font-semibold cursor-pointer"
                                   >
                                     Generar Nuevo QR
                                   </button>
@@ -4835,13 +4807,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               />
 
               {/* Tab Selector: Deepgram Todo-en-Uno vs Cerebro LLM */}
-              <div className="flex items-center bg-zinc-900 p-1 rounded-xl border border-zinc-800 gap-1 max-w-md mx-auto">
+              <div className="flex items-center bg-[#0b0e16]/85 p-1 rounded-xl border border-white/10 gap-1 max-w-md mx-auto">
                 <button
                   type="button"
                   onClick={() => setActiveMenu("deepgram")}
-                  className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-zinc-800 text-white shadow-sm flex items-center justify-center gap-2"
+                  className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-white/[0.1] border border-[#e5c88b]/45 text-white flex items-center justify-center gap-2"
                 >
-                  <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                  <Zap className="w-3.5 h-3.5 text-[#e5c88b]" />
                   <span>Deepgram Todo-en-Uno</span>
                 </button>
                 <button
@@ -4849,41 +4821,40 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   onClick={() => setActiveMenu("openrouter")}
                   className="flex-1 py-2 px-3 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                  <Bot className="w-3.5 h-3.5 text-zinc-400" />
                   <span>Cerebro GLM-5.3</span>
                 </button>
               </div>
 
-              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-lg">
-                    <Zap className="w-6 h-6 text-emerald-400" />
+              <div className="bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 sm:p-6 space-y-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-[#e5c88b]/15 border border-[#e5c88b]/40 flex items-center justify-center">
+                    <Zap className="w-5 h-5 text-[#e5c88b]" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-zinc-100">Infraestructura de Voz Deepgram (STT + TTS)</h2>
+                    <h2 className="text-lg font-semibold text-white">Infraestructura de Voz Deepgram (STT + TTS)</h2>
                     <p className="text-xs text-zinc-400">Deepgram impulsa la escucha (Nova-3 STT) y la voz humana ultra-realista (Aura-2 TTS) para llamadas automáticas a compradores.</p>
                   </div>
                 </div>
-                <div className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold ${deepgramHasKey ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80' : 'bg-amber-950/80 text-amber-400 border border-amber-800/80'}`}>
-                  <span className={`w-2.5 h-2.5 rounded-full ${deepgramHasKey ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                  {deepgramHasKey ? `✅ Deepgram Activo (${deepgramApiKeyPreview})` : '⚠️ No hay API Key configurada — Las funciones de voz están deshabilitadas'}
+                <div className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-mono ${deepgramHasKey ? 'bg-white/[0.04] text-emerald-400 border border-emerald-500/35' : 'bg-white/[0.04] text-[#e5c88b] border border-[#e5c88b]/35'}`}>
+                  {deepgramHasKey ? `Deepgram Activo · ${deepgramApiKeyPreview}` : 'No hay API Key configurada — Las funciones de voz están deshabilitadas'}
                 </div>
               </div>
 
-              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
-                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-400" />
+              <div className="bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 sm:p-6 space-y-4">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Wand2 className="w-4 h-4 text-[#e5c88b]" />
                   API Key de Deepgram
                 </h3>
                 <p className="text-xs text-zinc-400">
                   Obtiene tu API Key desde{' '}
-                  <a href="https://console.deepgram.com" target="_blank" rel="noopener noreferrer" className="text-[#25D366] underline font-bold hover:text-zinc-100">console.deepgram.com</a>
+                  <a href="https://console.deepgram.com" target="_blank" rel="noopener noreferrer" className="text-[#e5c88b] underline font-semibold hover:text-white">console.deepgram.com</a>
                   {' '}→ API Keys → Create Key
                 </p>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <input type={deepgramShowKey ? 'text' : 'password'} value={deepgramApiKey} onChange={e => setDeepgramApiKey(e.target.value)} placeholder="Pegar tu API Key aquí..." className="w-full px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-100 focus:border-[#25D366] focus:ring-1 focus:ring-[#25D366]/40 outline-none text-sm font-mono placeholder-zinc-500" />
-                    <button type="button" onClick={() => setDeepgramShowKey(prev => !prev)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-500 hover:text-zinc-300 cursor-pointer" title={deepgramShowKey ? 'Ocultar' : 'Mostrar'}>
+                    <input type={deepgramShowKey ? 'text' : 'password'} value={deepgramApiKey} onChange={e => setDeepgramApiKey(e.target.value)} placeholder="Pegar tu API Key aquí..." className="w-full px-4 py-3 rounded-xl border border-white/10 bg-[#07090f]/80 text-zinc-100 focus:border-[#e5c88b]/60 outline-none text-sm font-mono placeholder-zinc-500" />
+                    <button type="button" onClick={() => setDeepgramShowKey(prev => !prev)} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-zinc-500 hover:text-zinc-200 cursor-pointer" title={deepgramShowKey ? 'Ocultar' : 'Mostrar'}>
                       <Eye className="w-4 h-4" />
                     </button>
                   </div>
@@ -4892,20 +4863,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     try {
                       const res = await fetch('/api/deepgram/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey: deepgramApiKey.trim() }) });
                       const data = await res.json();
-                      if (data?.success) { setDeepgramHasKey(data.hasApiKey); setDeepgramApiKeyPreview(data.apiKeyPreview || ''); setDeepgramApiKey(''); showToast('✅ API Key de Deepgram guardada correctamente'); }
-                      else { showToast(`❌ Error: ${data?.error || 'Error desconocido'}`); }
-                    } catch (e) { showToast('❌ Error al guardar la API Key'); }
+                      if (data?.success) { setDeepgramHasKey(data.hasApiKey); setDeepgramApiKeyPreview(data.apiKeyPreview || ''); setDeepgramApiKey(''); showToast('API Key de Deepgram guardada correctamente'); }
+                      else { showToast(`Error: ${data?.error || 'Error desconocido'}`); }
+                    } catch (e) { showToast('Error al guardar la API Key'); }
                     setDeepgramSaving(false);
-                  }} className="px-5 py-3 rounded-lg bg-[#25D366] hover:bg-[#1ebd5a] text-black font-bold text-sm cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm">
+                  }} className="px-5 py-3 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] font-bold text-sm cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2">
                     <Save className="w-4 h-4" />
                     {deepgramSaving ? 'Guardando...' : 'Guardar'}
                   </button>
                 </div>
               </div>
 
-              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
-                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                  <Volume2 className="w-4 h-4 text-[#25D366]" />
+              <div className="bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 sm:p-6 space-y-4">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Volume2 className="w-4 h-4 text-[#e5c88b]" />
                   Probar Conexión
                 </h3>
                 <p className="text-xs text-zinc-400">Verifica que tu API Key funciona correctamente realizando una prueba de síntesis de voz.</p>
@@ -4914,29 +4885,29 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   try {
                     const res = await fetch('/api/deepgram/test', { method: 'POST' });
                     const data = await res.json();
-                    if (data?.success && data.audioDataUrl) { showToast('✅ Conexión exitosa con Deepgram — Reproduciendo audio...'); const audio = new Audio(data.audioDataUrl); audio.play().catch(() => showToast('🔊 Hacé clic en la pantalla y volvé a probar.')); }
-                    else { showToast(`❌ Error: ${data?.error || 'No se pudo conectar'}`); }
-                  } catch (e) { showToast('❌ Error al probar la conexión'); }
+                    if (data?.success && data.audioDataUrl) { showToast('Conexión exitosa con Deepgram — Reproduciendo audio...'); const audio = new Audio(data.audioDataUrl); audio.play().catch(() => showToast('Hacé clic en la pantalla y volvé a probar.')); }
+                    else { showToast(`Error: ${data?.error || 'No se pudo conectar'}`); }
+                  } catch (e) { showToast('Error al probar la conexión'); }
                   setDeepgramTesting(false);
-                }} className="px-5 py-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-300 font-bold text-sm cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm">
+                }} className="px-5 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-[#e5c88b] font-semibold text-sm cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2">
                   <Volume2 className="w-4 h-4" />
                   {deepgramTesting ? 'Probando...' : 'Probar Conexión'}
                 </button>
               </div>
 
-              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-4">
-                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                  <Mic className="w-4 h-4 text-emerald-400" />
+              <div className="bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 sm:p-6 space-y-4">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Mic className="w-4 h-4 text-[#e5c88b]" />
                   Voces Disponibles (Deepgram Aura-2 · Español)
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {DEFAULT_DEEPGRAM_CATALOG.map(voice => (
-                    <div key={voice.id} className="p-3 rounded-xl border border-zinc-800 bg-zinc-900/80 hover:border-zinc-700 transition-all">
+                    <div key={voice.id} className="p-3.5 rounded-xl border border-white/10 bg-[#07090f]/80 hover:border-white/20 transition-all">
                       <div className="flex items-center justify-between mb-1">
-                        <span className={`text-[10px] font-medium uppercase ${voice.gender === 'Femenina' ? 'text-rose-400' : 'text-sky-400'}`}>{voice.gender === 'Femenina' ? 'Mujer' : 'Hombre'}</span>
+                        <span className="text-[10px] font-mono uppercase text-[#e5c88b]">{voice.gender === 'Femenina' ? 'Femenina' : 'Masculina'}</span>
                         <span className="text-[10px] font-mono text-zinc-500">{voice.deepgramModel}</span>
                       </div>
-                      <div className="font-semibold text-sm text-zinc-100">{voice.name.split(' (')[0]}</div>
+                      <div className="font-semibold text-sm text-white">{voice.name.split(' (')[0]}</div>
                       <div className="text-[11px] text-zinc-400 mt-0.5">{voice.description}</div>
                       <div className="text-[10px] text-zinc-500 mt-1">{voice.accent}</div>
                     </div>
@@ -4979,48 +4950,47 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               />
 
               {/* Tab Selector: Deepgram Todo-en-Uno vs Cerebro LLM */}
-              <div className="flex items-center bg-zinc-900 p-1 rounded-xl border border-zinc-800 gap-1 max-w-md mx-auto">
+              <div className="flex items-center bg-[#0b0e16]/85 p-1 rounded-xl border border-white/10 gap-1 max-w-md mx-auto">
                 <button
                   type="button"
                   onClick={() => setActiveMenu('deepgram')}
                   className="flex-1 py-2 px-3 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                  <Zap className="w-3.5 h-3.5 text-zinc-400" />
                   <span>Deepgram Todo-en-Uno</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveMenu('openrouter')}
-                  className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-zinc-800 text-white shadow-sm flex items-center justify-center gap-2"
+                  className="flex-1 py-2 px-3 rounded-lg text-xs font-semibold bg-white/[0.1] border border-[#e5c88b]/45 text-white flex items-center justify-center gap-2"
                 >
-                  <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                  <Bot className="w-3.5 h-3.5 text-[#e5c88b]" />
                   <span>Cerebro GLM-5.3</span>
                 </button>
               </div>
 
               {/* Header */}
-              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-3">
+              <div className="bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 sm:p-6 space-y-3">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-sm">
-                    <Bot className="w-6 h-6 text-emerald-400" />
+                  <div className="w-11 h-11 rounded-xl bg-[#e5c88b]/15 border border-[#e5c88b]/40 flex items-center justify-center">
+                    <Bot className="w-5 h-5 text-[#e5c88b]" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-zinc-100">Cerebro LLM · GLM-5.3 (OpenRouter)</h2>
+                    <h2 className="text-lg font-semibold text-white">Cerebro LLM · GLM-5.3 (OpenRouter)</h2>
                     <p className="text-xs text-zinc-400">
                       Modelo conversacional inteligente que atiende dudas de compradores, confirma reservas y asiste al Agente de Codificación en tiempo real.
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-xs font-semibold">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-emerald-500/35 text-emerald-400 text-xs font-mono">
                   <span>Modelo Activo: GLM-5.3 · Conexión directa vía OpenRouter</span>
                 </div>
               </div>
 
               {/* Test Connection */}
-              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-3">
-                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-emerald-600" />
+              <div className="bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 sm:p-6 space-y-3">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-[#e5c88b]" />
                   Probar Razonamiento del LLM de Deepgram en Vivo
                 </h3>
                 <p className="text-xs text-zinc-400">
@@ -5037,36 +5007,36 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       const d = await r.json();
                       if (d.success) {
                         setOpenRouterTestReply(d.reply || 'OK');
-                        showToast('✅ Respuesta recibida de Deepgram Voice Agent LLM');
+                        showToast('Respuesta recibida de Deepgram Voice Agent LLM');
                       } else {
-                        showToast('❌ Error: ' + (d.error || 'Fallo la conexión'));
+                        showToast('Error: ' + (d.error || 'Fallo la conexión'));
                       }
                     } catch (e: any) {
-                      showToast('❌ Error de conexión: ' + e?.message);
+                      showToast('Error de conexión: ' + e?.message);
                     }
                     setOpenRouterTesting(false);
                   }}
-                  className="px-5 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 disabled:opacity-50 text-emerald-300 font-bold text-sm inline-flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+                  className="px-5 py-2.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] disabled:opacity-50 text-[#090b10] font-bold text-sm inline-flex items-center gap-2 cursor-pointer transition-all"
                 >
-                  <Bot className="w-4 h-4 text-emerald-400" />
+                  <Bot className="w-4 h-4" />
                   <span>{openRouterTesting ? 'Probando LLM GLM-5.3...' : 'Probar LLM GLM-5.3'}</span>
                 </button>
                 {openRouterTestReply && (
-                  <div className="mt-3 p-4 bg-emerald-950/40 border border-emerald-800/60 rounded-xl space-y-1">
-                    <p className="text-xs font-bold text-emerald-300">Respuesta en vivo de GLM-5.3:</p>
+                  <div className="mt-3 p-4 bg-[#07090f]/80 border border-emerald-500/35 rounded-xl space-y-1">
+                    <p className="text-xs font-mono font-bold text-emerald-400">Respuesta en vivo de GLM-5.3:</p>
                     <p className="text-sm text-zinc-200">{openRouterTestReply}</p>
                   </div>
                 )}
               </div>
 
               {/* Info */}
-              <div className="bg-[#0f0f11] border border-zinc-800 rounded-lg p-4 sm:p-6 shadow-sm space-y-2">
-                <h3 className="text-sm font-semibold text-zinc-100">ℹ️ Arquitectura Todo-en-Uno de Deepgram</h3>
+              <div className="bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 rounded-2xl p-5 sm:p-6 space-y-2.5">
+                <h3 className="text-sm font-semibold text-white">Arquitectura Todo-en-Uno de Deepgram</h3>
                 <ul className="text-xs text-zinc-400 space-y-1.5 list-disc pl-4">
-                  <li><strong>STT (Voz a Texto):</strong> Deepgram Nova-3 Español transcribe al instante los audios que envía el cliente.</li>
-                  <li><strong>LLM (Cerebro IA):</strong> Deepgram Voice Agent (`open_ai / gpt-4o-mini` gestionado por Deepgram) razona cada paso sin depender de OpenRouter.</li>
-                  <li><strong>TTS (Texto a Voz):</strong> Deepgram Aura-2 Español sintetiza notas de voz OGG/Opus nativas para WhatsApp.</li>
-                  <li><strong>Flujo Express de 2 Etapas:</strong> Etapa 1 (Saludo + Imagen del pedido esperando confirmación "CORRECTO") → Etapa 2 (Pedido confirmado y agradecimiento final).</li>
+                  <li><strong className="text-zinc-200">STT (Voz a Texto):</strong> Deepgram Nova-3 Español transcribe al instante los audios que envía el cliente.</li>
+                  <li><strong className="text-zinc-200">LLM (Cerebro IA):</strong> Deepgram Voice Agent (`open_ai / gpt-4o-mini` gestionado por Deepgram) razona cada paso sin depender de OpenRouter.</li>
+                  <li><strong className="text-zinc-200">TTS (Texto a Voz):</strong> Deepgram Aura-2 Español sintetiza notas de voz OGG/Opus nativas para WhatsApp.</li>
+                  <li><strong className="text-zinc-200">Flujo Express de 2 Etapas:</strong> Etapa 1 (Saludo + Imagen del pedido esperando confirmación "CORRECTO") → Etapa 2 (Pedido confirmado y agradecimiento final).</li>
                 </ul>
               </div>
             </div>
@@ -5074,14 +5044,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
         </main>
 
-        {/* Mobile Bottom Navigation — iOS/Android Native Style */}
-        <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-[#0a0a0a]/95 backdrop-blur-md border-t border-zinc-800 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 px-2 flex items-center justify-around">
+        {/* Mobile Bottom Navigation */}
+        <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-[#07090f]/90 backdrop-blur-xl border-t border-white/10 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 px-2 flex items-center justify-around">
           <button
             type="button"
             data-testid="bottom-nav-productos"
             onClick={() => setActiveMenu('productos')}
             className={`flex flex-col items-center justify-center flex-1 py-1.5 rounded-lg transition-colors duration-150 cursor-pointer ${
-              activeMenu === 'productos' ? 'text-emerald-400' : 'text-zinc-500'
+              activeMenu === 'productos' ? 'text-[#e5c88b]' : 'text-zinc-500'
             }`}
           >
             <Layers className="w-5 h-5 mb-0.5" />
@@ -5092,10 +5062,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
             data-testid="bottom-nav-creador"
             onClick={() => setActiveMenu('creador')}
             className={`flex flex-col items-center justify-center flex-1 py-1.5 rounded-lg transition-colors duration-150 cursor-pointer ${
-              activeMenu === 'creador' ? 'text-emerald-400' : 'text-zinc-500'
+              activeMenu === 'creador' ? 'text-[#e5c88b]' : 'text-zinc-500'
             }`}
           >
-            <Sparkles className="w-5 h-5 mb-0.5" />
+            <Wand2 className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] font-medium">Creador</span>
           </button>
           <button
@@ -5103,7 +5073,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
             data-testid="bottom-nav-pipeboard"
             onClick={() => setActiveMenu('pipeboard')}
             className={`flex flex-col items-center justify-center flex-1 py-1.5 rounded-lg transition-colors duration-150 cursor-pointer ${
-              activeMenu === 'pipeboard' ? 'text-emerald-400' : 'text-zinc-500'
+              activeMenu === 'pipeboard' ? 'text-[#e5c88b]' : 'text-zinc-500'
             }`}
           >
             <Bot className="w-5 h-5 mb-0.5" />
@@ -5114,7 +5084,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
             data-testid="bottom-nav-comentarios"
             onClick={() => setActiveMenu('comentarios')}
             className={`flex flex-col items-center justify-center flex-1 py-1.5 rounded-lg transition-colors duration-150 cursor-pointer ${
-              activeMenu === 'comentarios' ? 'text-cyan-400' : 'text-zinc-500'
+              activeMenu === 'comentarios' ? 'text-[#e5c88b]' : 'text-zinc-500'
             }`}
           >
             <MessageSquare className="w-5 h-5 mb-0.5" />
@@ -5125,13 +5095,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
             data-testid="bottom-nav-whatsapp"
             onClick={() => setActiveMenu('whatsapp')}
             className={`flex flex-col items-center justify-center flex-1 py-1.5 rounded-lg transition-colors duration-150 cursor-pointer ${
-              activeMenu === 'whatsapp' ? 'text-emerald-400' : 'text-zinc-500'
+              activeMenu === 'whatsapp' ? 'text-[#e5c88b]' : 'text-zinc-500'
             }`}
           >
             <div className="relative">
               <Smartphone className="w-5 h-5 mb-0.5" />
               {connectedSessionsCount > 0 && (
-                <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="absolute -top-0.5 -right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
               )}
             </div>
             <span className="text-[10px] font-medium">WhatsApp</span>
@@ -5141,7 +5111,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
             data-testid="bottom-nav-deepgram"
             onClick={() => setActiveMenu('deepgram')}
             className={`flex flex-col items-center justify-center flex-1 py-1.5 rounded-lg transition-colors duration-150 cursor-pointer ${
-              activeMenu === 'deepgram' || activeMenu === 'openrouter' ? 'text-emerald-400' : 'text-zinc-500'
+              activeMenu === 'deepgram' || activeMenu === 'openrouter' ? 'text-[#e5c88b]' : 'text-zinc-500'
             }`}
           >
             <Zap className="w-5 h-5 mb-0.5" />
@@ -5154,12 +5124,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       {/* 3. CONSOLA DE WHATSAPP INCRUSTADA EN EL SISTEMA (CHAT EN VIVO) */}
       {/* ============================================================== */}
       {activeAiOrder && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-[#0a0a0a] rounded-t-2xl sm:rounded-xl max-w-4xl w-full shadow-lg border border-zinc-800 overflow-hidden max-h-[95vh] sm:max-h-[92vh] flex flex-col">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-[#0b0e16]/95 backdrop-blur-2xl rounded-t-2xl sm:rounded-2xl max-w-4xl w-full shadow-2xl border border-white/10 overflow-hidden max-h-[95vh] sm:max-h-[92vh] flex flex-col">
             {/* CABECERA */}
-            <div className="px-4 sm:px-6 py-3 bg-zinc-900 text-zinc-100 flex flex-wrap items-center justify-between gap-3 shrink-0 border-b border-zinc-800">
+            <div className="px-4 sm:px-6 py-3.5 bg-[#07090f]/90 text-white flex flex-wrap items-center justify-between gap-3 shrink-0 border-b border-white/10">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-semibold text-base shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-[#e5c88b]/30 text-[#e5c88b] flex items-center justify-center font-semibold text-base shrink-0">
                   {(activeAiOrder.nombre || 'C').slice(0, 1).toUpperCase()}
                 </div>
                 <div className="min-w-0">
@@ -5167,50 +5137,46 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     <h3 className="text-sm sm:text-base font-semibold truncate text-white">
                       {activeAiOrder.nombre}
                     </h3>
-                    <span className="text-[11px] font-mono bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded text-zinc-300">
+                    <span className="text-[11px] font-mono tabular-nums bg-white/[0.04] border border-white/10 px-2 py-0.5 rounded-md text-zinc-300">
                       +{formatWaPhone(activeAiOrder.celular)}
                     </span>
-                    <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                      {activeAiOrder.reservaid} · {activeAiOrder.producto || 'Producto'} (
-                      {formatGs(activeAiOrder.monto)})
+                    <span className="text-[10px] font-mono tabular-nums px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/10 text-zinc-300">
+                      {activeAiOrder.reservaid} · {activeAiOrder.producto || 'Producto'} ({formatGs(activeAiOrder.monto)})
                     </span>
                   </div>
-                  <p className="text-[11px] text-zinc-500 truncate mt-0.5">
-                    {activeAiOrder.ciudad}, {activeAiOrder.departamento} —{' '}
-                    {activeAiOrder.direccion}
+                  <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+                    {activeAiOrder.ciudad}, {activeAiOrder.departamento} — {activeAiOrder.direccion}
                     {activeAiOrder.referenciaCasa
-                      ? ` | 🏠 Ref: ${activeAiOrder.referenciaCasa}`
+                      ? ` · Ref: ${activeAiOrder.referenciaCasa}`
                       : ''}
                   </p>
                 </div>
               </div>
 
-              {/* Controles de Canal y Autorización dentro del Chat: Yo Escribo | Texto IA | Audio IA (solo cambia el modo, sin autodisparo) */}
+              {/* Controles de Canal y Autorización dentro del Chat */}
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                <div className="inline-flex items-center bg-zinc-950 p-1 rounded-xl border border-zinc-800 gap-1">
-                  {/* 1. MODO MANUAL: YO ESCRIBO */}
+                <div className="inline-flex items-center bg-[#06080d] p-1 rounded-xl border border-white/10 gap-1">
                   <button
                     type="button"
                     onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'manual', modalAiChannel, false)}
                     className={`px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 cursor-pointer transition-all ${
                       modalAiMode === 'manual'
-                        ? 'bg-amber-400 text-black shadow-sm'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                        ? 'bg-[#e5c88b] text-[#090b10] font-semibold'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
                     }`}
                     title="Modo Manual: Vos escribís y respondés con tus propias palabras (La IA no responde sola)"
                   >
                     <MessageCircle className="w-3.5 h-3.5" />
-                    <span>👤 Yo Escribo</span>
+                    <span>Yo Escribo</span>
                   </button>
 
-                  {/* 2. TEXTO IA */}
                   <button
                     type="button"
                     onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'texto', false)}
                     className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-all ${
                       modalAiMode === 'automatico' && modalAiChannel === 'texto'
-                        ? 'bg-emerald-500 text-black shadow-sm'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
                     }`}
                     title="Activar Agente IA por texto (en contexto, sin autodisparo)"
                   >
@@ -5218,14 +5184,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     <span>IA Texto</span>
                   </button>
 
-                  {/* 3. AUDIO IA */}
                   <button
                     type="button"
                     onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'audio', false)}
                     className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-all ${
                       modalAiMode === 'automatico' && modalAiChannel === 'audio'
-                        ? 'bg-emerald-500 text-black shadow-sm'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
                     }`}
                     title="Activar Agente IA con notas de voz OGG/Opus (en contexto, sin autodisparo)"
                   >
@@ -5238,7 +5203,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   type="button"
                   aria-label="Cerrar ventana de chat"
                   onClick={() => setActiveAiOrder(null)}
-                  className="text-zinc-400 hover:text-white p-1.5 rounded-xl hover:bg-zinc-800 cursor-pointer"
+                  className="text-zinc-400 hover:text-white p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -5247,11 +5212,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
             {/* Estado de Confirmación y Referencia del Paquete */}
             {activeAiOrder.referenciaCasa && (
-              <div className="px-4 py-2 bg-emerald-950/60 border-b border-emerald-500/30 flex items-center justify-between gap-2 text-xs text-emerald-300 font-bold shrink-0">
+              <div className="px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between gap-2 text-xs text-emerald-300 font-medium shrink-0">
                 <div className="flex items-center gap-2">
                   <PackageCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>
-                    <strong>Pedido Confirmado y Empaquetado:</strong> Referencia de casa guardada:{' '}
+                    <strong className="font-semibold text-emerald-200">Pedido Confirmado y Empaquetado:</strong> Referencia guardada:{' '}
                     <em>«{activeAiOrder.referenciaCasa}»</em>
                   </span>
                 </div>
@@ -5260,24 +5225,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
             {/* TARJETA HORIZONTAL DE ETAPA + ÚLTIMO MENSAJE ENVIADO + TEMPORIZADOR DINÁMICO */}
             {activeChatStageSnapshot && (
-              <div className="px-3 sm:px-5 py-2.5 bg-zinc-950 border-b border-zinc-800/90 shrink-0 max-h-[38vh] overflow-y-auto md:max-h-none md:overflow-visible">
+              <div className="px-3 sm:px-5 py-2.5 bg-[#07090f]/80 border-b border-white/10 shrink-0 max-h-[38vh] overflow-y-auto md:max-h-none md:overflow-visible">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
-                  {/* LADO IZQUIERDO: TARJETA ELEGANTE DE ETAPA 1/2 Y 2/2 */}
                   <div
                     className={`md:col-span-7 rounded-xl border px-3.5 py-2.5 flex flex-col justify-between gap-2 ${
                       activeChatStageSnapshot.stage === 'stage_2_confirmed'
-                        ? 'bg-emerald-950/35 border-emerald-500/35'
+                        ? 'bg-emerald-500/[0.06] border-emerald-500/25'
                         : activeChatStageSnapshot.stage === 'stage_1_waiting_correcto'
-                          ? 'bg-amber-950/30 border-amber-500/35'
-                          : 'bg-zinc-900/90 border-zinc-700/75'
+                          ? 'bg-[#e5c88b]/[0.05] border-[#e5c88b]/25'
+                          : 'bg-white/[0.03] border-white/10'
                     }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="inline-flex items-center gap-1 bg-zinc-950/85 p-0.5 rounded-lg border border-zinc-800 text-[11px] font-bold">
+                      <div className="inline-flex items-center gap-1 bg-[#06080d] p-0.5 rounded-lg border border-white/10 text-[11px] font-semibold">
                         <span
                           className={`px-2 py-1 rounded-md transition-colors ${
                             activeChatStageSnapshot.stage !== 'stage_2_confirmed'
-                              ? 'bg-amber-400 text-black'
+                              ? 'bg-[#e5c88b] text-[#090b10]'
                               : 'text-zinc-400'
                           }`}
                         >
@@ -5286,7 +5250,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         <span
                           className={`px-2 py-1 rounded-md transition-colors ${
                             activeChatStageSnapshot.stage === 'stage_2_confirmed'
-                              ? 'bg-emerald-500 text-black'
+                              ? 'bg-emerald-500/20 text-emerald-300'
                               : 'text-zinc-400'
                           }`}
                         >
@@ -5296,17 +5260,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
                             modalAiMode === 'automatico'
-                              ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
-                              : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                              ? 'bg-[#e5c88b]/10 text-[#e5c88b] border-[#e5c88b]/25'
+                              : 'bg-white/[0.04] text-zinc-300 border-white/10'
                           }`}
                         >
                           {modalAiMode === 'automatico'
                             ? modalAiChannel === 'audio'
-                              ? '🎤 Audio IA Activo'
-                              : '💬 Texto IA Activo'
-                            : '👤 Yo Escribo (Manual)'}
+                              ? 'Audio IA Activo'
+                              : 'Texto IA Activo'
+                            : 'Yo Escribo (Manual)'}
                         </span>
                         <button
                           type="button"
@@ -5341,28 +5305,28 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                                 .catch(() => {});
                             }
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-600 text-[11px] font-semibold cursor-pointer transition-colors"
+                          className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-zinc-100 border border-white/10 text-[11px] font-medium cursor-pointer transition-colors"
                           title="Re-enviar manualmente el mensaje de la etapa actual"
                         >
-                          🔄 Re-disparar etapa
+                          Re-disparar etapa
                         </button>
                       </div>
                     </div>
 
                     <div className="space-y-0.5">
                       <p
-                        className={`text-xs sm:text-[13px] font-bold flex items-center gap-1.5 ${
+                        className={`text-xs sm:text-[13px] font-semibold flex items-center gap-1.5 ${
                           activeChatStageSnapshot.stage === 'stage_2_confirmed'
                             ? 'text-emerald-300'
                             : activeChatStageSnapshot.stage === 'stage_1_waiting_correcto'
-                              ? 'text-amber-300'
+                              ? 'text-[#e5c88b]'
                               : 'text-zinc-200'
                         }`}
                       >
                         {activeChatStageSnapshot.stage === 'stage_2_confirmed' ? (
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                         ) : activeChatStageSnapshot.stage === 'stage_1_waiting_correcto' ? (
-                          <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                          <Clock className="w-4 h-4 text-[#e5c88b] shrink-0" />
                         ) : (
                           <Info className="w-4 h-4 text-zinc-400 shrink-0" />
                         )}
@@ -5374,15 +5338,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     </div>
                   </div>
 
-                  {/* LADO DERECHO (AL LADO DENTRO DE LA TARJETA): ÚLTIMO MENSAJE ENVIADO */}
-                  <div className="md:col-span-5 rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 flex flex-col justify-between gap-1.5">
+                  {/* ÚLTIMO MENSAJE ENVIADO */}
+                  <div className="md:col-span-5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 flex flex-col justify-between gap-1.5">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-                        <Send className="w-3 h-3 text-emerald-400" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+                        <Send className="w-3 h-3 text-[#e5c88b]" />
                         Último Mensaje Enviado
                       </span>
                       {activeChatStageSnapshot.lastOutgoingMsg && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200 border border-zinc-700">
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-white/[0.05] text-zinc-200 border border-white/10">
                           {activeChatStageSnapshot.lastOutgoingMsg.channelBadge}
                         </span>
                       )}
@@ -5395,15 +5359,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         </p>
                         <div className="flex items-center justify-between gap-2 text-[10px] pt-0.5 flex-wrap">
                           <span
-                            className={`font-semibold px-1.5 py-0.5 rounded ${
+                            className={`font-medium px-1.5 py-0.5 rounded ${
                               activeChatStageSnapshot.lastOutgoingMsg.isReminder
-                                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                                : 'bg-zinc-800 text-zinc-300'
+                                ? 'bg-[#e5c88b]/10 text-[#e5c88b] border border-[#e5c88b]/25'
+                                : 'bg-white/[0.06] text-zinc-300'
                             }`}
                           >
                             {activeChatStageSnapshot.lastOutgoingMsg.kindBadge}
                           </span>
-                          <span className="text-zinc-400 font-medium">
+                          <span className="text-zinc-400 font-mono tabular-nums">
                             Hace {activeChatStageSnapshot.lastOutgoingMsg.elapsedLabel}
                             {activeChatStageSnapshot.lastOutgoingMsg.clockText
                               ? ` · ${activeChatStageSnapshot.lastOutgoingMsg.clockText}`
@@ -5419,17 +5383,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   </div>
                 </div>
 
-                {/* TEMPORIZADOR DESCRIPTIVO Y DINÁMICO (DEBAJO DE LA TARJETA) */}
+                {/* TEMPORIZADOR DESCRIPTIVO Y DINÁMICO */}
                 <div
                   className={`mt-2 rounded-xl border px-3.5 py-2 flex flex-col sm:flex-row sm:items-center gap-2 ${
                     activeChatStageSnapshot.timerBanner.status === 'counting' ||
                     activeChatStageSnapshot.timerBanner.status === 'due_now'
-                      ? 'bg-amber-500/10 border-amber-500/35 text-amber-100'
+                      ? 'bg-[#e5c88b]/[0.06] border-[#e5c88b]/25 text-zinc-100'
                       : activeChatStageSnapshot.timerBanner.status === 'confirmed'
-                        ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-100'
-                        : activeChatStageSnapshot.timerBanner.status === 'pending_connection'
-                          ? 'bg-sky-500/10 border-sky-500/30 text-sky-100'
-                          : 'bg-zinc-900/90 border-zinc-700/80 text-zinc-200'
+                        ? 'bg-emerald-500/[0.07] border-emerald-500/25 text-emerald-100'
+                        : 'bg-white/[0.03] border-white/10 text-zinc-200'
                   }`}
                 >
                   <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
@@ -5437,22 +5399,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       className={`w-4 h-4 shrink-0 ${
                         activeChatStageSnapshot.timerBanner.status === 'counting' ||
                         activeChatStageSnapshot.timerBanner.status === 'due_now'
-                          ? 'text-amber-400 animate-pulse'
+                          ? 'text-[#e5c88b]'
                           : activeChatStageSnapshot.timerBanner.status === 'confirmed'
                             ? 'text-emerald-400'
                             : 'text-zinc-400'
                       }`}
                     />
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-black/35 border border-white/10">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-black/40 border border-white/10">
                       {activeChatStageSnapshot.timerBanner.badgeText}
                     </span>
                     {activeChatStageSnapshot.timerBanner.countdownBadge && (
-                      <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-black/50 border border-white/15 text-amber-300">
+                      <span className="text-[11px] font-mono tabular-nums font-bold px-2 py-0.5 rounded-md bg-black/50 border border-white/15 text-[#e5c88b]">
                         {activeChatStageSnapshot.timerBanner.countdownBadge}
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] sm:text-xs leading-relaxed text-zinc-100 font-medium">
+                  <p className="text-[11px] sm:text-xs leading-relaxed text-zinc-200 font-medium">
                     {activeChatStageSnapshot.timerBanner.descriptiveText}
                   </p>
                 </div>
@@ -5462,11 +5424,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
             {/* VENTANA CENTRAL DE CHAT DE WHATSAPP EN TIEMPO REAL */}
             <div
               ref={chatScrollContainerRef}
-              className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#09090b]"
+              className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#06080d]"
             >
               {liveChatMessages.length === 0 ? (
                 activeAiOrder.ultimoMensajeIA || activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 2 ? (
-                  <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800 max-w-xl mx-auto space-y-2 mt-4 text-center">
+                  <div className="bg-white/[0.03] rounded-xl p-5 border border-white/10 max-w-xl mx-auto space-y-2 mt-4 text-center">
                     <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
                       Conversación ya iniciada con {activeAiOrder.nombre} ({activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'})
                     </div>
@@ -5475,8 +5437,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     </p>
                   </div>
                 ) : (
-                  <div className="bg-zinc-900 rounded-lg p-5 border border-zinc-800 max-w-xl mx-auto space-y-3 mt-4 text-center">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                  <div className="bg-white/[0.03] rounded-xl p-5 border border-white/10 max-w-xl mx-auto space-y-3 mt-4 text-center">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-[#e5c88b]">
                       Pedido recibido de {activeAiOrder.nombre} ({activeAiOrder.producto})
                     </div>
                     <p className="text-xs text-zinc-400 leading-relaxed">
@@ -5486,18 +5448,18 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       <button
                         type="button"
                         onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'audio', true)}
-                        className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-semibold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+                        className="px-4 py-2.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
                       >
                         <Volume2 className="w-4 h-4" />
-                        <span>1. Mandar 🎤 Audio de Voz IA</span>
+                        <span>1. Mandar Audio de Voz IA</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => handleSwitchOrderChatMode(activeAiOrder, 'automatico', 'texto', true)}
-                        className="px-3.5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+                        className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
                       >
-                        <MessageCircle className="w-4 h-4" />
-                        <span>2. Iniciar con 💬 Texto IA</span>
+                        <MessageCircle className="w-4 h-4 text-[#e5c88b]" />
+                        <span>2. Iniciar con Texto IA</span>
                       </button>
                     </div>
                   </div>
@@ -5517,23 +5479,24 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       key={msg.id}
                       className={`flex flex-col ${isOutgoing ? 'items-end' : 'items-start'}`}
                     >
-                      <span className="text-[10px] font-extrabold text-zinc-400 mb-0.5 px-1.5">
+                      <span className="text-[10px] font-semibold text-zinc-400 mb-0.5 px-1.5">
                         {msg.senderName
                           ? msg.senderName
                           : msg.sender === 'ai'
-                            ? '🤖 Agente IA de Confirmación (Desde tu WhatsApp)'
+                            ? 'Agente IA de Confirmación (Desde tu WhatsApp)'
                             : msg.sender === 'admin'
-                              ? '👤 Tú (Desde tu WhatsApp)'
-                              : `📱 ${activeAiOrder.nombre} (Cliente)`}
+                              ? 'Tú (Desde tu WhatsApp)'
+                              : `${activeAiOrder.nombre} (Cliente)`}
                       </span>
                       <div
-                        className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-lg text-xs sm:text-[13px] whitespace-pre-line leading-relaxed shadow-sm ${isOutgoing
-                            ? 'bg-emerald-950/80 text-emerald-100 rounded-tr-xs border border-emerald-500/30'
-                            : 'bg-zinc-900 text-zinc-100 rounded-tl-xs border border-zinc-800'
-                          }`}
+                        className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-xl text-xs sm:text-[13px] whitespace-pre-line leading-relaxed ${
+                          isOutgoing
+                            ? 'bg-emerald-500/10 text-zinc-100 rounded-tr-xs border border-emerald-500/25'
+                            : 'bg-white/[0.04] text-zinc-100 rounded-tl-xs border border-white/10'
+                        }`}
                       >
                         {msg.imageUrl && (
-                          <div className="mb-2.5 rounded-xl overflow-hidden border border-amber-400/40 bg-black max-w-[300px]">
+                          <div className="mb-2.5 rounded-xl overflow-hidden border border-[#e5c88b]/30 bg-black max-w-[300px]">
                             <img
                               src={msg.imageUrl}
                               alt={msg.senderName || 'Comercial de etapa'}
@@ -5541,7 +5504,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                               className="w-full aspect-square object-cover"
                             />
                             {msg.commercialPackQty && msg.commercialFramedPriceGs && (
-                              <div className="px-2.5 py-1.5 bg-zinc-950 text-[11px] font-mono tabular-nums text-amber-400 flex items-center justify-between">
+                              <div className="px-2.5 py-1.5 bg-[#07090f] text-[11px] font-mono tabular-nums text-[#e5c88b] flex items-center justify-between">
                                 <span>Pack {msg.commercialPackQty}x verificado</span>
                                 <span>{formatGs(msg.commercialFramedPriceGs)}</span>
                               </div>
@@ -5554,16 +5517,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                             <button
                               type="button"
                               onClick={() => playSpokenAudio(msg.text, msg.audioDataUrl)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-semibold text-[10px] cursor-pointer hover:bg-emerald-500/30"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/10 text-[#e5c88b] font-semibold text-[10px] cursor-pointer hover:bg-white/[0.1]"
                             >
-                              <Volume2 className="w-3 h-3 text-emerald-400" />
+                              <Volume2 className="w-3 h-3 text-[#e5c88b]" />
                               <span>Escuchar Voz (Deepgram Aura-2)</span>
                             </button>
                           ) : msg.audioDataUrl ? (
                             <button
                               type="button"
                               onClick={() => playSpokenAudio(msg.text, msg.audioDataUrl)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500 text-black font-semibold text-[10px] cursor-pointer hover:bg-amber-400"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#e5c88b] text-[#090b10] font-semibold text-[10px] cursor-pointer hover:bg-[#edd49e]"
                             >
                               <Volume2 className="w-3 h-3" />
                               <span>Escuchar Audio del Cliente</span>
@@ -5571,7 +5534,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                           ) : (
                             <span />
                           )}
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 font-mono tabular-nums">
                             <span>{timeStr}</span>
                             {isOutgoing && (
                               <span className="text-emerald-400 font-semibold">
@@ -5588,21 +5551,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               <div ref={chatBottomAnchorRef} className="h-1 shrink-0" />
             </div>
 
-            {/* CAMPO DE WHATSAPP INCRUSTADO PARA ESCRIBIR Y ENVIAR DESDE EL SISTEMA */}
-            <div className="p-3 sm:p-4 bg-zinc-900 border-t border-zinc-800 space-y-2 shrink-0">
+            {/* CAMPO DE WHATSAPP INCRUSTADO */}
+            <div className="p-3 sm:p-4 bg-[#07090f]/90 border-t border-white/10 space-y-2 shrink-0">
               {liveChatMessages.length > 0 &&
                 liveChatMessages[liveChatMessages.length - 1]?.sender === 'client' &&
                 !activeAiOrder.datosConfirmados && (
-                  <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-xs">
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs">
                     <span className="text-emerald-200 font-medium">
-                      📩 El cliente respondió último ({activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'}). Podés responderle en contexto sin reiniciar desde cero:
+                      El cliente respondió último ({activeAiOrder.datosConfirmados || (activeAiOrder.convStep || 1) >= 5 ? 'Etapa 2/2' : 'Etapa 1/2'}). Podés responderle en contexto sin reiniciar desde cero:
                     </span>
                     <button
                       type="button"
                       onClick={() => handleSendOrderAudioNote(activeAiOrder, undefined, modalAiChannel)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs shrink-0 cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] font-semibold text-xs shrink-0 cursor-pointer"
                     >
-                      🤖 Responder en contexto
+                      Responder en contexto
                     </button>
                   </div>
                 )}
@@ -5620,10 +5583,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   onChange={e => setEmbeddedWaInput(e.target.value)}
                   placeholder={
                     modalAiMode === 'manual'
-                      ? `✍️ Escribí tu mensaje manual para ${activeAiOrder.nombre}...`
+                      ? `Escribí tu mensaje manual para ${activeAiOrder.nombre}...`
                       : `Escribí acá tu mensaje para ${activeAiOrder.nombre}...`
                   }
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs sm:text-sm text-zinc-100 outline-none focus:border-emerald-500"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#06080d] border border-white/10 text-xs sm:text-sm text-white outline-none focus:border-[#e5c88b]/60"
                 />
 
                 <button
@@ -5633,31 +5596,31 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     setEmbeddedWaInput('');
                     handleSendOrderAudioNote(activeAiOrder, text || undefined);
                   }}
-                  className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-sm transition-all shrink-0"
+                  className="px-3.5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-[#e5c88b] font-semibold text-xs inline-flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
                   title={
                     embeddedWaInput.trim()
                       ? 'Sintetizar y enviar este mensaje como Nota de Voz IA (Deepgram Aura-2)'
                       : 'Enviar siguiente paso como Nota de Voz IA (Deepgram Aura-2)'
                   }
                 >
-                  <Volume2 className="w-4 h-4 text-black" />
+                  <Volume2 className="w-4 h-4" />
                   <span className="hidden sm:inline">Mandar Audio</span>
                 </button>
 
                 <button
                   type="submit"
                   disabled={sendingWaMsg || !embeddedWaInput.trim()}
-                  className="px-4 sm:px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-semibold text-xs sm:text-sm flex items-center gap-2 cursor-pointer shadow-sm shrink-0 transition-all"
+                  className="px-4 sm:px-5 py-2.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] disabled:opacity-50 text-[#090b10] font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer shrink-0 transition-all"
                 >
                   <Send className="w-4 h-4" />
                   <span>{sendingWaMsg ? 'Enviando...' : 'Enviar'}</span>
                 </button>
               </form>
 
-              {/* Simulador de respuesta del cliente para probar la confirmación paso a paso */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1.5 border-t border-zinc-800 text-[11px]">
-                <span className="font-bold text-zinc-400">
-                  🧪 Probar respuesta paso a paso del cliente:
+              {/* Simulador de respuesta del cliente */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1.5 border-t border-white/10 text-[11px]">
+                <span className="font-medium text-zinc-400">
+                  Probar respuesta paso a paso del cliente:
                 </span>
                 <div className="flex items-center gap-1.5 flex-1 max-w-md">
                   <input
@@ -5670,13 +5633,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         handleSendSimulatedReply();
                       }
                     }}
-                    placeholder="Ej: Sí estoy con tiempo / Sí soy yo / Mi casa es blanca al lado de la despensa..."
-                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs outline-none focus:border-zinc-600"
+                    placeholder="Ej: Sí estoy con tiempo / Sí soy yo / Mi casa es blanca..."
+                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#06080d] border border-white/10 text-zinc-100 text-xs outline-none focus:border-[#e5c88b]/60"
                   />
                   <button
                     type="button"
                     onClick={handleSendSimulatedReply}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-[11px] cursor-pointer shrink-0"
+                    className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white font-semibold text-[11px] cursor-pointer shrink-0"
                   >
                     Simular Respuesta
                   </button>
@@ -5708,20 +5671,20 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       {deleteConfirmModal.open && (
         <div
           data-testid="admin-red-delete-modal"
-          className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
         >
-          <div className="bg-[#991b1b] border-4 border-[#ef4444] rounded-3xl w-full max-w-lg overflow-hidden shadow-lg text-white">
-            {/* Cabecera Roja Impactante */}
-            <div className="bg-[#dc2626] px-6 py-5 border-b-2 border-red-400/40 flex items-start justify-between gap-3">
+          <div className="bg-[#14090c]/95 backdrop-blur-2xl border border-red-500/45 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl text-white">
+            {/* Cabecera Alerta Roja */}
+            <div className="bg-red-500/15 px-6 py-4 border-b border-red-500/30 flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-white text-[#dc2626] flex items-center justify-center font-semibold text-2xl shrink-0 shadow-sm">
-                  ⚠️
+                <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-black/30 text-red-100 text-[10px] font-medium uppercase tracking-widest mb-1">
-                    ALERTA ROJA · ELIMINACIÓN DIRECTA EN BASE DE DATOS
+                  <span className="block text-[10px] font-semibold uppercase tracking-widest text-red-300 mb-0.5">
+                    Eliminación directa en base de datos
                   </span>
-                  <h3 className="text-base sm:text-lg font-semibold uppercase tracking-wide leading-tight text-white">
+                  <h3 className="text-sm sm:text-base font-semibold leading-tight text-white">
                     ¿Estás seguro de que querés ejecutar el eliminado?
                   </h3>
                 </div>
@@ -5737,44 +5700,43 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     isDeleting: false
                   })
                 }
-                className="w-8 h-8 rounded-xl bg-black/25 hover:bg-black/40 text-white flex items-center justify-center font-semibold cursor-pointer shrink-0"
+                className="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-300 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Cuerpo del Pop-Up Rojo */}
-            <div className="p-6 space-y-4 bg-red-900">
-              <p className="text-xs sm:text-sm font-bold text-red-100 leading-relaxed">
-                Vas a eliminar de forma <strong className="text-white underline">permanente e irreversible</strong>{' '}
+            <div className="p-6 space-y-4">
+              <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                Vas a eliminar de forma <strong className="text-red-300 font-semibold">permanente e irreversible</strong>{' '}
                 {deleteConfirmModal.orderIds.length === 1
                   ? 'el siguiente pedido seleccionado'
                   : `los siguientes ${deleteConfirmModal.orderIds.length} pedidos seleccionados`}{' '}
-                directamente de la Base de Datos (Supabase + Servidor Central):
+                directamente de la Base de Datos:
               </p>
 
-              <div className="max-h-48 overflow-y-auto rounded-lg bg-black/35 border border-red-400/30 divide-y divide-red-400/20 p-2 space-y-1.5">
+              <div className="max-h-48 overflow-y-auto rounded-xl bg-[#07090f]/80 border border-red-500/20 divide-y divide-white/5 p-2 space-y-1.5">
                 {deleteConfirmModal.ordersPreview.length > 0 ? (
                   deleteConfirmModal.ordersPreview.map(ord => (
                     <div
                       key={ord.reservaid}
-                      className="px-3 py-2 rounded-lg bg-red-950/60 flex items-center justify-between gap-2 text-xs"
+                      className="px-3 py-2 rounded-lg bg-white/[0.02] flex items-center justify-between gap-2 text-xs"
                     >
                       <div className="min-w-0">
                         <div className="font-semibold text-white truncate">
-                          {ord.nombre || 'Cliente'} · <span className="font-mono text-amber-400">{ord.reservaid}</span>
+                          {ord.nombre || 'Cliente'} · <span className="font-mono text-[#e5c88b]">{ord.reservaid}</span>
                         </div>
-                        <div className="text-[11px] text-red-200 font-mono">
-                          {formatParaguayanPhone433(ord.celular)} · 📍 {ord.ciudad}
+                        <div className="text-[11px] text-zinc-400 font-mono tabular-nums">
+                          {formatParaguayanPhone433(ord.celular)} · {ord.ciudad}
                         </div>
                       </div>
-                      <span className="font-semibold text-amber-400 shrink-0">
+                      <span className="font-mono tabular-nums font-semibold text-[#e5c88b] shrink-0">
                         {formatGs(ord.monto)}
                       </span>
                     </div>
                   ))
                 ) : (
-                  <div className="px-3 py-2 text-xs font-mono text-red-100">
+                  <div className="px-3 py-2 text-xs font-mono text-zinc-300">
                     IDs a eliminar: {deleteConfirmModal.orderIds.join(', ')}
                   </div>
                 )}
@@ -5793,7 +5755,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       isDeleting: false
                     })
                   }
-                  className="w-full sm:w-auto px-5 py-3 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs uppercase tracking-wider cursor-pointer transition-all"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white font-semibold text-xs cursor-pointer transition-all"
                 >
                   No, Cancelar
                 </button>
@@ -5802,10 +5764,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   data-testid="admin-confirm-delete-btn"
                   disabled={deleteConfirmModal.isDeleting}
                   onClick={handleConfirmExecuteDelete}
-                  className="w-full sm:w-auto px-6 py-3 rounded-lg bg-[#ef4444] hover:bg-[#dc2626] text-white font-semibold text-xs sm:text-sm uppercase tracking-wider border-2 border-white shadow-xl inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-xs sm:text-sm inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>
+                  <span className="font-mono tabular-nums">
                     {deleteConfirmModal.isDeleting
                       ? 'Eliminando de la Base de Datos...'
                       : `Sí, ejecutar eliminado (${deleteConfirmModal.orderIds.length})`}
@@ -5821,19 +5783,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       {deleteProductsConfirmModal.open && (
         <div
           data-testid="admin-red-delete-products-modal"
-          className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
         >
-          <div className="bg-[#991b1b] border-4 border-[#ef4444] rounded-3xl w-full max-w-lg overflow-hidden shadow-lg text-white">
-            <div className="bg-[#dc2626] px-6 py-5 border-b-2 border-red-400/40 flex items-start justify-between gap-3">
+          <div className="bg-[#14090c]/95 backdrop-blur-2xl border border-red-500/45 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl text-white">
+            <div className="bg-red-500/15 px-6 py-4 border-b border-red-500/30 flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-white text-[#dc2626] flex items-center justify-center font-semibold text-2xl shrink-0 shadow-sm">
-                  ⚠️
+                <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-black/30 text-red-100 text-[10px] font-medium uppercase tracking-widest mb-1">
-                    ALERTA ROJA · ELIMINAR PÁGINAS DE PRODUCTO
+                  <span className="block text-[10px] font-semibold uppercase tracking-widest text-red-300 mb-0.5">
+                    Eliminar páginas de producto
                   </span>
-                  <h3 className="text-base sm:text-lg font-semibold uppercase tracking-wide leading-tight text-white">
+                  <h3 className="text-sm sm:text-base font-semibold leading-tight text-white">
                     ¿Estás seguro de eliminar {deleteProductsConfirmModal.productIds.length === 1 ? 'esta página' : `estas ${deleteProductsConfirmModal.productIds.length} páginas`}?
                   </h3>
                 </div>
@@ -5849,36 +5811,36 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     isDeleting: false
                   })
                 }
-                className="w-8 h-8 rounded-xl bg-black/25 hover:bg-black/40 text-white flex items-center justify-center font-semibold cursor-pointer shrink-0"
+                className="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-300 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 bg-red-900">
-              <p className="text-xs sm:text-sm font-bold text-red-100 leading-relaxed">
-                Vas a eliminar de forma <strong className="text-white underline">permanente</strong>{' '}
+            <div className="p-6 space-y-4">
+              <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+                Vas a eliminar de forma <strong className="text-red-300 font-semibold">permanente</strong>{' '}
                 {deleteProductsConfirmModal.productIds.length === 1
                   ? 'la siguiente página de producto seleccionada'
                   : `las siguientes ${deleteProductsConfirmModal.productIds.length} páginas de producto seleccionadas`}{' '}
                 directamente de la Base de Datos:
               </p>
 
-              <div className="max-h-48 overflow-y-auto rounded-lg bg-black/35 border border-red-400/30 divide-y divide-red-400/20 p-2 space-y-1.5">
+              <div className="max-h-48 overflow-y-auto rounded-xl bg-[#07090f]/80 border border-red-500/20 divide-y divide-white/5 p-2 space-y-1.5">
                 {deleteProductsConfirmModal.productsPreview.map(p => (
                   <div
                     key={p.id}
-                    className="px-3 py-2 rounded-lg bg-red-950/60 flex items-center justify-between gap-2 text-xs"
+                    className="px-3 py-2 rounded-lg bg-white/[0.02] flex items-center justify-between gap-2 text-xs"
                   >
                     <div className="min-w-0">
                       <div className="font-semibold text-white truncate">
                         {p.nombre}
                       </div>
-                      <div className="text-[11px] text-red-200 font-mono">
+                      <div className="text-[11px] text-zinc-400 font-mono">
                         /?p={p.slug} · ID: {p.id}
                       </div>
                     </div>
-                    <span className="font-semibold text-amber-400 shrink-0">
+                    <span className="font-mono tabular-nums font-semibold text-[#e5c88b] shrink-0">
                       {formatGs(p.precios?.[1] || 189000)}
                     </span>
                   </div>
@@ -5898,7 +5860,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       isDeleting: false
                     })
                   }
-                  className="w-full sm:w-auto px-5 py-3 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs uppercase tracking-wider cursor-pointer transition-all"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white font-semibold text-xs cursor-pointer transition-all"
                 >
                   No, Cancelar
                 </button>
@@ -5907,10 +5869,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   data-testid="admin-confirm-delete-products-btn"
                   disabled={deleteProductsConfirmModal.isDeleting}
                   onClick={handleConfirmExecuteDeleteProducts}
-                  className="w-full sm:w-auto px-6 py-3 rounded-lg bg-[#ef4444] hover:bg-[#dc2626] text-white font-semibold text-xs sm:text-sm uppercase tracking-wider border-2 border-white shadow-xl inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-xs sm:text-sm inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>
+                  <span className="font-mono tabular-nums">
                     {deleteProductsConfirmModal.isDeleting
                       ? 'Eliminando de la Base de Datos...'
                       : `Sí, eliminar página(s) (${deleteProductsConfirmModal.productIds.length})`}
@@ -5926,19 +5888,19 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       {showManualOrderModal && manualOrderProduct && (
         <div
           data-testid="admin-manual-order-modal"
-          className="fixed inset-0 z-[95] bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+          className="fixed inset-0 z-[95] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4"
         >
-          <div className="bg-[#0f0f12] border-2 border-emerald-500/60 rounded-3xl w-full max-w-lg overflow-hidden shadow-lg text-white">
-            <div className="bg-emerald-950/80 px-5 py-4 border-b border-emerald-700/50 flex items-center justify-between gap-3">
+          <div className="bg-[#0b0e16]/95 backdrop-blur-2xl border border-white/15 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl text-white">
+            <div className="bg-[#07090f]/90 px-5 py-4 border-b border-white/10 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-emerald-500 text-black flex items-center justify-center font-semibold text-lg shrink-0 shadow-sm">
-                  📲
+                <div className="w-9 h-9 rounded-xl bg-[#e5c88b]/15 border border-[#e5c88b]/30 text-[#e5c88b] flex items-center justify-center shrink-0">
+                  <Smartphone className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm sm:text-base font-semibold uppercase tracking-wide text-emerald-200">
+                  <h3 className="text-sm sm:text-base font-semibold text-white">
                     Registrar Cliente de WhatsApp
                   </h3>
-                  <p className="text-[11px] text-zinc-300 font-medium truncate max-w-xs">
+                  <p className="text-[11px] text-zinc-400 font-medium truncate max-w-xs">
                     {manualOrderProduct.nombre}
                   </p>
                 </div>
@@ -5946,22 +5908,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               <button
                 type="button"
                 onClick={() => setShowManualOrderModal(false)}
-                className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center font-semibold cursor-pointer shrink-0 transition-colors"
+                className="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-300 hover:text-white flex items-center justify-center cursor-pointer shrink-0 transition-colors"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateManualOrder} className="p-5 space-y-3.5 bg-[#0f0f11] max-h-[80vh] overflow-y-auto">
-              <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-[11px] text-emerald-200 leading-relaxed">
-                <strong>Guardado Directo en Base de Datos:</strong> Este cliente se registrará de inmediato en la base de datos de tu servidor y tu Agente IA lo vinculará automáticamente para continuar la confirmación.
+            <form onSubmit={handleCreateManualOrder} className="p-5 space-y-3.5 max-h-[80vh] overflow-y-auto">
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-200 leading-relaxed">
+                <strong className="font-semibold">Guardado Directo en Base de Datos:</strong> Este cliente se registrará de inmediato y el Agente IA lo vinculará automáticamente.
               </div>
 
               {/* Nombre y Teléfono */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
-                    👤 Nombre del Cliente *
+                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                    Nombre del Cliente *
                   </label>
                   <input
                     type="text"
@@ -5969,12 +5931,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     placeholder="Ej. María Benítez"
                     value={manualNombre}
                     onChange={e => setManualNombre(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-bold text-xs focus:border-emerald-500 outline-none"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#07090f]/80 border border-white/10 text-white font-medium text-xs focus:border-[#e5c88b]/60 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
+                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
                     WhatsApp / Celular *
                   </label>
                   <input
@@ -5983,14 +5945,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     placeholder="0981 123 456"
                     value={manualCelular}
                     onChange={e => setManualCelular(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-bold text-xs focus:border-emerald-500 outline-none"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#07090f]/80 border border-white/10 text-white font-mono text-xs focus:border-[#e5c88b]/60 outline-none"
                   />
                 </div>
               </div>
 
               {/* Selector de Pack */}
               <div>
-                <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
+                <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
                   Pack Seleccionado
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -6004,12 +5966,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                         onClick={() => setManualPack(packNum)}
                         className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-sm ring-1 ring-emerald-500'
-                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                            ? 'bg-white/[0.08] border-[#e5c88b]/60 text-white'
+                            : 'bg-[#07090f]/60 border-white/10 text-zinc-400 hover:text-white'
                         }`}
                       >
                         <div className="text-xs font-semibold">{packNum} un.</div>
-                        <div className="text-[10px] font-mono font-bold text-emerald-400 mt-0.5">
+                        <div className="text-[10px] font-mono tabular-nums font-bold text-[#e5c88b] mt-0.5">
                           {formatGs(price)}
                         </div>
                       </button>
@@ -6020,31 +5982,31 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
               {/* Tipo de Vivienda */}
               <div>
-                <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
-                  🏠 Tipo de Vivienda
+                <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                  Tipo de Vivienda
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setManualVivienda('casa')}
-                    className={`p-2 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
+                    className={`p-2 rounded-xl border text-center text-xs font-semibold transition-all cursor-pointer ${
                       manualVivienda === 'casa'
-                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500'
-                        : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                        ? 'bg-white/[0.08] border-[#e5c88b]/60 text-white'
+                        : 'bg-[#07090f]/60 border-white/10 text-zinc-400'
                     }`}
                   >
-                    🏡 Casa Independiente
+                    Casa Independiente
                   </button>
                   <button
                     type="button"
                     onClick={() => setManualVivienda('edificio')}
-                    className={`p-2 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
+                    className={`p-2 rounded-xl border text-center text-xs font-semibold transition-all cursor-pointer ${
                       manualVivienda === 'edificio'
-                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500'
-                        : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                        ? 'bg-white/[0.08] border-[#e5c88b]/60 text-white'
+                        : 'bg-[#07090f]/60 border-white/10 text-zinc-400'
                     }`}
                   >
-                    🏢 Edificio / Dpto
+                    Edificio / Dpto
                   </button>
                 </div>
               </div>
@@ -6052,7 +6014,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               {/* Ciudad y Departamento */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
+                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
                     Ciudad / Barrio
                   </label>
                   <input
@@ -6060,17 +6022,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                     placeholder="Ej. Asunción, San Lorenzo..."
                     value={manualCiudad}
                     onChange={e => setManualCiudad(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-medium text-xs focus:border-emerald-500 outline-none"
+                    className="w-full px-3 py-2 rounded-xl bg-[#07090f]/80 border border-white/10 text-white font-medium text-xs focus:border-[#e5c88b]/60 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
-                    🏛️ Departamento
+                  <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                    Departamento
                   </label>
                   <select
                     value={manualDepartamento}
                     onChange={e => setManualDepartamento(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-medium text-xs focus:border-emerald-500 outline-none"
+                    className="w-full px-3 py-2 rounded-xl bg-[#07090f]/80 border border-white/10 text-white font-medium text-xs focus:border-[#e5c88b]/60 outline-none"
                   >
                     <option value="Central">Central</option>
                     <option value="Capital (Asunción)">Capital (Asunción)</option>
@@ -6096,15 +6058,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
               {/* Dirección / Referencia */}
               <div>
-                <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-300 mb-1">
-                  🧭 Dirección / Calle / Referencia
+                <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
+                  Dirección / Calle / Referencia
                 </label>
                 <input
                   type="text"
                   placeholder="Calle, número de casa, color de portón..."
                   value={manualDireccion}
                   onChange={e => setManualDireccion(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white font-medium text-xs focus:border-emerald-500 outline-none"
+                  className="w-full px-3 py-2 rounded-xl bg-[#07090f]/80 border border-white/10 text-white font-medium text-xs focus:border-[#e5c88b]/60 outline-none"
                 />
               </div>
 
@@ -6114,16 +6076,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   type="button"
                   disabled={manualSubmitting}
                   onClick={() => setShowManualOrderModal(false)}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs uppercase cursor-pointer transition-colors"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-zinc-200 font-semibold text-xs cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={manualSubmitting}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
                 >
-                  <span>{manualSubmitting ? 'Guardando...' : '💾 Registrar Cliente en Base de Datos'}</span>
+                  <span>{manualSubmitting ? 'Guardando...' : 'Registrar Cliente en Base de Datos'}</span>
                 </button>
               </div>
             </form>
@@ -6134,32 +6096,32 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
       {/* POP-UP FUERTE DE SEGURIDAD ANTIDESCONEXIÓN DE WHATSAPP */}
       {disconnectSecurityModal && (
         <div
-          className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => setDisconnectSecurityModal(null)}
         >
           <div
-            className="w-full max-w-lg rounded-3xl bg-zinc-950 border-2 border-red-500  overflow-hidden"
+            className="w-full max-w-lg rounded-2xl bg-[#0b0e16]/95 backdrop-blur-2xl border border-red-500/45 overflow-hidden shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             {/* Header de Alerta Máxima */}
-            <div className="bg-red-700 px-6 py-4 flex items-center justify-between">
+            <div className="bg-red-500/15 border-b border-red-500/30 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-lg bg-black/30 border border-white/25 flex items-center justify-center text-white shrink-0">
-                  <AlertTriangle className="w-6 h-6" />
+                <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-300 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-[10px] font-medium uppercase tracking-widest px-2 py-0.5 rounded bg-black/40 text-amber-200">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-red-300 block">
                     Escudo de Blindaje Antidesconexión
                   </span>
-                  <h3 className="text-base font-semibold text-white uppercase tracking-tight mt-0.5">
-                    ¡Alto! Protección de Campañas y Ventas Activa
+                  <h3 className="text-sm sm:text-base font-semibold text-white mt-0.5">
+                    Protección de Campañas y Ventas Activa
                   </h3>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setDisconnectSecurityModal(null)}
-                className="w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-300 hover:text-white flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -6167,11 +6129,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
 
             {/* Body */}
             <div className="p-6 space-y-4">
-              <div className="p-4 rounded-lg bg-red-950/60 border border-red-500/50 space-y-1.5">
-                <p className="text-xs font-semibold text-red-200 uppercase">
-                  ⚠️ Advertencia Crítica sobre tus Anuncios Activos:
+              <div className="p-4 rounded-xl bg-red-500/[0.07] border border-red-500/25 space-y-1.5">
+                <p className="text-xs font-semibold text-red-300 uppercase">
+                  Advertencia sobre tus Anuncios Activos
                 </p>
-                <p className="text-xs text-red-100/90 leading-relaxed">
+                <p className="text-xs text-zinc-300 leading-relaxed">
                   Estás intentando desvincular la línea{' '}
                   <span className="font-semibold text-white">
                     {disconnectSecurityModal.label}{' '}
@@ -6182,22 +6144,22 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               </div>
 
               {/* Opción Recomendada: Reparar SIN desconectar */}
-              <div className="p-4 rounded-lg bg-emerald-950/60 border-2 border-emerald-500/70 space-y-2.5">
+              <div className="p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/30 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-emerald-300">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
                     Alternativa Segura (Sin perder vinculación)
                   </span>
-                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500 text-zinc-950 uppercase">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 uppercase">
                     Recomendado
                   </span>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed">
-                  Si sentís que algún mensaje tardó o querés refrescar la conexión, <strong>NO hace falta desconectar</strong>. Usá el botón de abajo para regenerar llaves Signal y reiniciar el canal manteniendo tu número conectado:
+                  Si sentís que algún mensaje tardó o querés refrescar la conexión, <strong>NO hace falta desconectar</strong>. Usá el botón de abajo para regenerar llaves Signal manteniendo tu número conectado:
                 </p>
                 <button
                   type="button"
                   onClick={() => handleRepairSession(disconnectSecurityModal.sessionId)}
-                  className="w-full py-3 px-4 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all"
                 >
                   <RefreshCw className="w-4 h-4" />
                   <span>Reparar y Refrescar Señal SIN Desconectar</span>
@@ -6205,9 +6167,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               </div>
 
               {/* Doble llave de confirmación manual */}
-              <div className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 space-y-3">
+              <div className="p-4 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-3">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                  Desbloqueo Manual de Seguridad (Solo si vas a cambiar de número):
+                  Desbloqueo Manual de Seguridad (Solo si vas a cambiar de número)
                 </p>
 
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
@@ -6223,15 +6185,15 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 </label>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                    Escribí la palabra <span className="text-red-400 font-semibold">DESCONECTAR</span> para desbloquear el botón:
+                  <label className="block text-[11px] font-medium text-zinc-400 mb-1">
+                    Escribí la palabra <span className="text-red-400 font-semibold">DESCONECTAR</span> para desbloquear:
                   </label>
                   <input
                     type="text"
                     value={disconnectConfirmText}
                     onChange={e => setDisconnectConfirmText(e.target.value)}
                     placeholder="Escribí DESCONECTAR aquí..."
-                    className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-700 focus:border-red-500 text-white font-semibold text-xs tracking-wider uppercase outline-none"
+                    className="w-full px-3.5 py-2 rounded-xl bg-[#06080d] border border-white/10 focus:border-red-500 text-white font-semibold text-xs tracking-wider uppercase outline-none"
                   />
                 </div>
               </div>
@@ -6241,7 +6203,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 <button
                   type="button"
                   onClick={() => setDisconnectSecurityModal(null)}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs uppercase cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white font-semibold text-xs cursor-pointer"
                 >
                   Cancelar y Mantener Conectado
                 </button>
@@ -6266,9 +6228,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                       );
                     }
                   }}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-semibold text-xs uppercase tracking-wider shadow-lg cursor-pointer disabled:cursor-not-allowed transition-all"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-white/[0.04] disabled:text-zinc-600 text-white font-semibold text-xs cursor-pointer disabled:cursor-not-allowed transition-all"
                 >
-                  🔓 Confirmar Desconexión Definitiva
+                  Confirmar Desconexión Definitiva
                 </button>
               </div>
             </div>

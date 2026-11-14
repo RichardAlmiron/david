@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
-  Sparkles,
+  Wand2,
   Search,
   Check,
   ChevronRight,
@@ -681,56 +681,56 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
     const arch = tpl.theme.layoutArchetype || 'noelux-classic';
     if (arch === 'brutalist-industrial') {
       return (
-        <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-400 text-black border border-black rounded-none shadow-xs">
-          [INDUSTRIAL PESADO]
+        <span className="px-2 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider bg-[#0b0e16]/90 text-[#e5c88b] border border-[#e5c88b]/30 rounded-md">
+          INDUSTRIAL PESADO
         </span>
       );
     }
     if (arch === 'minimalist-luxury') {
       return (
-        <span className="px-2.5 py-0.5 text-[10px] font-serif uppercase tracking-widest bg-stone-100 text-stone-900 border border-stone-300 rounded-full">
+        <span className="px-2 py-0.5 text-[10px] font-serif uppercase tracking-widest bg-[#0b0e16]/90 text-stone-200 border border-white/15 rounded-md">
           LUJO EDITORIAL
         </span>
       );
     }
     if (arch === 'warm-culinary') {
       return (
-        <span className="px-2.5 py-0.5 text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-300 rounded-lg">
-          🍳 COCINA GOURMET
+        <span className="px-2 py-0.5 text-[10px] font-semibold bg-[#0b0e16]/90 text-amber-200 border border-white/15 rounded-md">
+          COCINA GOURMET
         </span>
       );
     }
     if (arch === 'athletic-performance') {
       return (
-        <span className="px-2.5 py-0.5 text-[10px] font-black uppercase italic bg-lime-400 text-black border border-lime-500 rounded-sm">
-          ⚡ PERFORMANCE FITNESS
+        <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-[#0b0e16]/90 text-emerald-300 border border-white/15 rounded-md">
+          PERFORMANCE FITNESS
         </span>
       );
     }
     if (arch === 'nordic-clinical') {
       return (
-        <span className="px-2.5 py-0.5 text-[10px] font-bold bg-sky-100 text-sky-900 border border-sky-300 rounded-md">
-          🩺 CLÍNICO ORTOPÉDICO
+        <span className="px-2 py-0.5 text-[10px] font-semibold bg-[#0b0e16]/90 text-zinc-200 border border-white/15 rounded-md">
+          CLÍNICO ORTOPÉDICO
         </span>
       );
     }
     if (arch === 'futuristic-cyber') {
       return (
-        <span className="px-2.5 py-0.5 text-[10px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-500 rounded-md">
-          &lt;CYBER GADGET&gt;
+        <span className="px-2 py-0.5 text-[10px] font-mono bg-[#0b0e16]/90 text-zinc-200 border border-white/15 rounded-md">
+          CYBER GADGET
         </span>
       );
     }
     if (arch === 'natural-organic') {
       return (
-        <span className="px-2.5 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-full">
-          🌿 BOTÁNICO ORGÁNICO
+        <span className="px-2 py-0.5 text-[10px] font-medium bg-[#0b0e16]/90 text-emerald-200 border border-white/15 rounded-md">
+          BOTÁNICO ORGÁNICO
         </span>
       );
     }
     return (
-      <span className="px-2.5 py-0.5 text-[10px] font-bold bg-emerald-900 text-emerald-200 border border-emerald-700 rounded-full">
-        ⭐ NOELUX CLÁSICO
+      <span className="px-2 py-0.5 text-[10px] font-semibold bg-[#0b0e16]/90 text-[#e5c88b] border border-[#e5c88b]/30 rounded-md">
+        NOELUX CLÁSICO
       </span>
     );
   };
@@ -777,16 +777,13 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
       <div
         className={
           embeddedInView
-            ? 'w-full bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col'
-            : 'w-full max-w-7xl bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh]'
+            ? 'w-full bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col'
+            : 'w-full max-w-7xl bg-[#0b0e16]/95 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh]'
         }
       >
-        {/* ============================================================== */}
-        {/* VERCEL HEADER: Minimalist, Calm, Quiet, Monochrome             */}
-        {/* ============================================================== */}
-        <header className="px-5 py-3.5 border-b border-zinc-800 bg-black flex items-center justify-between shrink-0">
+        <header className="px-5 py-3.5 border-b border-white/10 bg-[#07090f]/80 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <span className="text-white font-mono text-base font-bold">▲</span>
+            <span className="text-[#e5c88b] font-mono text-base font-bold">▲</span>
             <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
               <span className="text-zinc-500">studio</span>
               <span>/</span>
@@ -794,7 +791,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
               {initialProduct && (
                 <>
                   <span>/</span>
-                  <span className="text-emerald-400 font-semibold">{initialProduct.nombre}</span>
+                  <span className="text-[#e5c88b] font-semibold">{initialProduct.nombre}</span>
                 </>
               )}
             </div>
@@ -802,15 +799,13 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
               href="https://github.com/deepseek-ai/deepseek-harness"
               target="_blank"
               rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-300 hover:text-white border border-zinc-800 rounded-full transition-colors"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-mono bg-white/[0.04] text-zinc-300 hover:text-white border border-white/10 rounded-md transition-colors"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               deepseek-ai/deepseek-harness
             </a>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Audio Toggle Button */}
             <button
               type="button"
               onClick={() => {
@@ -821,16 +816,16 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                   setIsSpeaking(false);
                 }
               }}
-              className={`p-2 rounded-lg border text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`p-2 rounded-xl border text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
                 audioEnabled
-                  ? 'bg-zinc-900 border-zinc-700 text-zinc-200 hover:bg-zinc-800'
-                  : 'bg-black border-zinc-800 text-zinc-600 hover:text-zinc-400'
+                  ? 'bg-white/[0.05] border-white/10 text-zinc-200 hover:bg-white/[0.1]'
+                  : 'bg-[#06080d] border-white/10 text-zinc-500 hover:text-zinc-300'
               }`}
               title={audioEnabled ? 'Voz del Agente Activada' : 'Voz Silenciada'}
             >
               {audioEnabled ? (
                 <>
-                  <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <Volume2 className="w-3.5 h-3.5 text-[#e5c88b]" />
                   <span className="hidden sm:inline text-[11px]">Voz IA Activa</span>
                 </>
               ) : (
@@ -841,30 +836,29 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
               )}
             </button>
 
-            {/* Vercel Mode Switcher: Catálogo Autopiloto vs Editor en Vivo */}
-            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 text-xs">
+            <div className="flex items-center bg-[#06080d] border border-white/10 rounded-xl p-0.5 text-xs">
               <button
                 type="button"
                 onClick={() => setActiveStep('catalogo')}
-                className={`px-3 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeStep === 'catalogo'
-                    ? 'bg-zinc-800 text-white font-medium shadow-xs'
+                    ? 'bg-white/[0.1] border border-[#e5c88b]/40 text-white font-semibold'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>1. Catálogo Autopiloto ({SUBNICHE_TEMPLATES.length})</span>
+                <Zap className="w-3.5 h-3.5 text-[#e5c88b]" />
+                <span className="font-mono tabular-nums">1. Catálogo Autopiloto ({SUBNICHE_TEMPLATES.length})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveStep('editor')}
-                className={`px-3 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeStep === 'editor'
-                    ? 'bg-emerald-950 text-emerald-300 font-semibold border border-emerald-700 shadow-xs'
+                    ? 'bg-white/[0.1] border border-[#e5c88b]/40 text-[#e5c88b] font-semibold'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                <Bot className="w-3.5 h-3.5 text-[#e5c88b]" />
                 <span>2. Editor en Vivo (DeepSeek Harness)</span>
               </button>
             </div>
@@ -873,7 +867,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 cursor-pointer"
+                className="p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 text-zinc-400 hover:text-white cursor-pointer"
                 title="Cerrar"
               >
                 <X className="w-4 h-4" />
@@ -882,23 +876,17 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
           </div>
         </header>
 
-        {/* ============================================================== */}
-        {/* TAB 1: CATÁLOGO VISUAL DE PLANTILLAS 100% DIFERENCIADAS         */}
-        {/* ============================================================== */}
+        {/* TAB 1: CATÁLOGO */}
         {activeStep === 'catalogo' && (
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-            {/* VERCEL CALM AUTOPILOT BAR: MODO DUAL (TRIPWIRE + GANADOR) O SOLO PRODUCTO PRINCIPAL */}
-            <div className="p-4 sm:p-5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-4">
+            <div className="p-4 sm:p-5 rounded-2xl bg-[#07090f]/80 border border-white/10 space-y-4">
               <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <h2 className="text-sm sm:text-base font-semibold text-white tracking-tight">
-                      {templateCreationMode === 'principal_only'
-                        ? 'Lanzador Directo: Exclusivamente Producto Principal'
-                        : 'Lanzador Dual: Página Tripwire + Producto Ganador (Misma Página)'}
-                    </h2>
-                  </div>
+                  <h2 className="text-sm sm:text-base font-semibold text-white tracking-tight">
+                    {templateCreationMode === 'principal_only'
+                      ? 'Lanzador Directo: Exclusivamente Producto Principal'
+                      : 'Lanzador Dual: Página Tripwire + Producto Ganador (Misma Página)'}
+                  </h2>
                   <p className="text-xs text-zinc-400">
                     {templateCreationMode === 'principal_only'
                       ? 'Creá una página enfocada 100% en tu Producto Principal (sin Tripwire) para tus campañas estándar normales.'
@@ -906,14 +894,14 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto justify-end">
-                  <div className="inline-flex rounded-xl bg-zinc-950 border border-zinc-800 p-1 text-[11px]">
+                  <div className="inline-flex rounded-xl bg-[#06080d] border border-white/10 p-1 text-[11px]">
                     <button
                       type="button"
                       data-testid="studio-mode-dual"
                       onClick={() => setTemplateCreationMode('dual_tripwire_winner')}
-                      className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-lg font-semibold cursor-pointer ${
                         templateCreationMode === 'dual_tripwire_winner'
-                          ? 'bg-amber-500 text-black'
+                          ? 'bg-[#e5c88b] text-[#090b10]'
                           : 'text-zinc-400 hover:text-white'
                       }`}
                     >
@@ -923,9 +911,9 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       type="button"
                       data-testid="studio-mode-principal"
                       onClick={() => setTemplateCreationMode('principal_only')}
-                      className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-lg font-semibold cursor-pointer ${
                         templateCreationMode === 'principal_only'
-                          ? 'bg-emerald-500 text-black'
+                          ? 'bg-white text-[#090b10]'
                           : 'text-zinc-400 hover:text-white'
                       }`}
                     >
@@ -936,15 +924,15 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                     type="button"
                     disabled={isSynthesizing}
                     onClick={() => handleLaunchAutopilot(selectedTemplate, quickAutopilotQuery)}
-                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50 shrink-0 shadow-sm"
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50 shrink-0"
                   >
-                    <Sparkles className="w-4 h-4 text-emerald-600" />
+                    <Wand2 className="w-4 h-4" />
                     <span>
                       {isSynthesizing
                         ? 'Publicando...'
                         : templateCreationMode === 'principal_only'
-                          ? '⚡ Lanzar Producto Principal (1-Clic)'
-                          : '⚡ Lanzar Página Dual (1-Clic)'}
+                          ? 'Lanzar Producto Principal (1-Clic)'
+                          : 'Lanzar Página Dual (1-Clic)'}
                     </span>
                   </button>
                 </div>
@@ -955,10 +943,9 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                   templateCreationMode === 'dual_tripwire_winner' ? 'lg:grid-cols-2' : ''
                 } gap-3.5`}
               >
-                {/* Campo A: Para Página Tripwire (solo modo dual) */}
                 {templateCreationMode === 'dual_tripwire_winner' && (
-                <div className="p-3.5 rounded-xl bg-black/70 border border-amber-500/40 space-y-2.5">
-                  <span className="inline-block px-2 py-0.5 rounded bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider">
+                <div className="p-3.5 rounded-xl bg-[#0b0e16]/80 border border-[#e5c88b]/25 space-y-2.5">
+                  <span className="inline-block px-2 py-0.5 rounded bg-[#e5c88b]/15 border border-[#e5c88b]/30 text-[#e5c88b] text-[10px] font-semibold uppercase tracking-wider">
                     ESTE ES PARA PÁGINA TRIPWIRE (ENTRADA)
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -967,7 +954,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       value={quickTripwireName}
                       onChange={e => setQuickTripwireName(e.target.value)}
                       placeholder="Nombre Tripwire (ej: Guirnalda LED 10m)"
-                      className="sm:col-span-2 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                      className="sm:col-span-2 bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-[#e5c88b]/60"
                     />
                     <input
                       type="number"
@@ -976,7 +963,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       value={quickTripwirePrice}
                       onChange={e => setQuickTripwirePrice(Number(e.target.value) || 20000)}
                       placeholder="Gs. 20000"
-                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-amber-300"
+                      className="bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono tabular-nums text-[#e5c88b] outline-none focus:border-[#e5c88b]/60"
                     />
                   </div>
                   <input
@@ -984,7 +971,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                     value={quickTripwireDesc}
                     onChange={e => setQuickTripwireDesc(e.target.value)}
                     placeholder="Descripción Tripwire (medidas, qué incluye)"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                    className="w-full bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-[#e5c88b]/60"
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -992,7 +979,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       value={quickTripwirePhoto}
                       onChange={e => setQuickTripwirePhoto(e.target.value)}
                       placeholder="URL Foto Tripwire"
-                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                      className="bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-[#e5c88b]/60"
                     />
                     <input
                       type="number"
@@ -1001,15 +988,14 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       value={quickTripwireDelivery}
                       onChange={e => setQuickTripwireDelivery(Number(e.target.value) || 40000)}
                       placeholder="Delivery Gs."
-                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300"
+                      className="bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono tabular-nums text-zinc-300 outline-none focus:border-[#e5c88b]/60"
                     />
                   </div>
                 </div>
                 )}
 
-                {/* Campo B: Para Página Producto Ganador / Exclusivo Principal */}
-                <div className="p-3.5 rounded-xl bg-black/70 border border-emerald-500/40 space-y-2.5">
-                  <span className="inline-block px-2 py-0.5 rounded bg-emerald-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider">
+                <div className="p-3.5 rounded-xl bg-[#0b0e16]/80 border border-white/10 space-y-2.5">
+                  <span className="inline-block px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-semibold uppercase tracking-wider">
                     {templateCreationMode === 'principal_only'
                       ? 'ESTE ES EXCLUSIVAMENTE PARA PÁGINA DE PRODUCTO PRINCIPAL'
                       : 'ESTE VA A SER PARA PÁGINA PRODUCTO GANADOR (ÁNGULO DIFERENTE)'}
@@ -1020,7 +1006,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       value={quickAutopilotQuery}
                       onChange={e => setQuickAutopilotQuery(e.target.value)}
                       placeholder="Producto Ganador (ej: Freidora 6L)"
-                      className="sm:col-span-2 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                      className="sm:col-span-2 bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-[#e5c88b]/60"
                     />
                     <input
                       type="number"
@@ -1029,7 +1015,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       value={quickWinnerPrice1}
                       onChange={e => setQuickWinnerPrice1(Number(e.target.value) || 189000)}
                       placeholder="Gs. 189000"
-                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300"
+                      className="bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono tabular-nums text-emerald-300 outline-none focus:border-[#e5c88b]/60"
                     />
                   </div>
                   <input
@@ -1037,7 +1023,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                     value={quickWinnerAngle}
                     onChange={e => setQuickWinnerAngle(e.target.value)}
                     placeholder="Ángulo diferente del Producto Ganador en esta misma página"
-                    className="w-full bg-zinc-950 border border-emerald-800/60 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                    className="w-full bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-[#e5c88b]/60"
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -1045,14 +1031,14 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       value={quickAutopilotPhoto}
                       onChange={e => setQuickAutopilotPhoto(e.target.value)}
                       placeholder="URL Foto Producto Ganador"
-                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                      className="bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-[#e5c88b]/60"
                     />
                     <input
                       type="text"
                       value={quickWinnerDesc}
                       onChange={e => setQuickWinnerDesc(e.target.value)}
                       placeholder="Descripción / beneficios clave"
-                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                      className="bg-[#06080d] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-[#e5c88b]/60"
                     />
                   </div>
                 </div>
@@ -1061,7 +1047,6 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
 
             {/* Filter and Search Bar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              {/* Niche Categories Slider */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full scrollbar-none">
                 {NICHE_CATEGORIES.map(cat => {
                   const isSelected = selectedCategoryFilter === cat.id;
@@ -1072,20 +1057,18 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                         setSelectedCategoryFilter(cat.id);
                         setCurrentPage(1);
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
                         isSelected
-                          ? 'bg-white text-black font-semibold shadow-xs'
-                          : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800'
+                          ? 'bg-[#e5c88b] text-[#090b10] font-bold'
+                          : 'bg-white/[0.04] text-zinc-400 hover:text-white hover:bg-white/[0.08] border border-white/10'
                       }`}
                     >
-                      <span>{cat.icon}</span>
                       <span>{cat.shortName}</span>
                     </button>
                   );
                 })}
               </div>
 
-              {/* Template Search Filter */}
               <div className="relative w-full sm:w-60 shrink-0">
                 <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -1096,36 +1079,36 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                     setCurrentPage(1);
                   }}
                   placeholder="Buscar en catálogo..."
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700"
+                  className="w-full bg-[#07090f]/80 border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#e5c88b]/60"
                 />
               </div>
             </div>
 
-            {/* Grid of 100% Unique Templates with Real Niche Photography */}
+            {/* Grid of Templates */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {paginatedTemplates.map(tpl => {
                 const isCurrent = selectedTemplate.id === tpl.id;
                 return (
                   <div
                     key={tpl.id}
-                    className={`rounded-xl border transition-all flex flex-col justify-between overflow-hidden group ${
+                    className={`rounded-2xl border transition-all flex flex-col justify-between overflow-hidden group ${
                       isCurrent
-                        ? 'bg-zinc-900 border-zinc-400 ring-1 ring-zinc-400 shadow-lg'
-                        : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900'
+                        ? 'bg-[#07090f] border-[#e5c88b]/50 ring-1 ring-[#e5c88b]/30 shadow-lg'
+                        : 'bg-[#07090f]/80 border-white/10 hover:border-[#e5c88b]/30'
                     }`}
                   >
-                    {/* Genuine Product Image (Distinct per niche) */}
-                    <div className="relative aspect-video w-full bg-black overflow-hidden border-b border-zinc-800">
+                    <div className="relative aspect-video w-full bg-black overflow-hidden border-b border-white/10">
                       <img
                         src={tpl.previewImage}
                         alt={tpl.name}
                         loading="lazy"
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       <div className="absolute top-2 left-2 flex items-center gap-1">
                         {getArchetypeBadge(tpl)}
                       </div>
-                      <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 rounded text-[10px] font-mono text-zinc-300 border border-zinc-800">
+                      <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-xs px-2 py-0.5 rounded-md text-[10px] font-mono tabular-nums text-[#e5c88b] border border-white/15">
                         {tpl.conversionRateAvg}
                       </div>
                     </div>
@@ -1143,34 +1126,33 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                         </p>
                       </div>
 
-                      <div className="pt-2 border-t border-zinc-800/80 space-y-2">
-                        <div className="flex items-center justify-between text-xs font-mono">
+                      <div className="pt-2 border-t border-white/10 space-y-2">
+                        <div className="flex items-center justify-between text-xs font-mono tabular-nums">
                           <span className="text-zinc-500">Precio Sugerido:</span>
-                          <span className="text-emerald-400 font-semibold">
+                          <span className="text-[#e5c88b] font-semibold">
                             {formatGs(tpl.defaultPricePack1)}
                           </span>
                         </div>
 
-                        {/* Dual Actions: 1-Click Autopilot (Immediate) or Open Editor */}
                         <div className="grid grid-cols-2 gap-1.5 pt-1">
                           <button
                             type="button"
                             disabled={isSynthesizing}
                             onClick={() => handleLaunchAutopilot(tpl)}
-                            className="w-full py-2 px-2 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer active:scale-95 shadow-sm"
+                            className="w-full py-2 px-2 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer active:scale-95"
                             title="Genera y publica la página inmediatamente sin preguntas"
                           >
-                            <Zap className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
+                            <Zap className="w-3.5 h-3.5" />
                             <span>Autopiloto</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => handleOpenEditorForTemplate(tpl)}
-                            className="w-full py-2 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-xs font-medium flex items-center justify-center gap-1 border border-zinc-700 transition-all cursor-pointer"
+                            className="w-full py-2 px-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 hover:text-white text-xs font-medium flex items-center justify-center gap-1 border border-white/10 transition-all cursor-pointer"
                             title="Abre la maqueta interactiva y el Portavoz IA con DeepSeek Harness"
                           >
-                            <Bot className="w-3.5 h-3.5 text-zinc-400" />
+                            <Bot className="w-3.5 h-3.5 text-[#e5c88b]" />
                             <span>Refinar IA</span>
                           </button>
                         </div>
@@ -1183,8 +1165,8 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
 
             {/* Pagination */}
             {totalTemplatePages > 1 && (
-              <div className="flex items-center justify-between pt-4 border-t border-zinc-800 text-xs text-zinc-400">
-                <span>
+              <div className="flex items-center justify-between pt-4 border-t border-white/10 text-xs text-zinc-400">
+                <span className="font-mono tabular-nums">
                   Página {safeCurrentPage} de {totalTemplatePages} ({filteredTemplates.length} plantillas)
                 </span>
                 <div className="flex items-center gap-1.5">
@@ -1192,7 +1174,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                     type="button"
                     disabled={safeCurrentPage <= 1}
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    className="p-1.5 rounded-lg border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900 disabled:opacity-40 cursor-pointer"
+                    className="p-1.5 rounded-lg border border-white/10 text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-40 cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
@@ -1200,7 +1182,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                     type="button"
                     disabled={safeCurrentPage >= totalTemplatePages}
                     onClick={() => setCurrentPage(prev => Math.min(totalTemplatePages, prev + 1))}
-                    className="p-1.5 rounded-lg border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900 disabled:opacity-40 cursor-pointer"
+                    className="p-1.5 rounded-lg border border-white/10 text-zinc-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-40 cursor-pointer"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1210,35 +1192,27 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
           </div>
         )}
 
-        {/* ============================================================== */}
-        {/* TAB 2: MODO EDITOR EN TIEMPO REAL CON DEEPSEEK & PORTAVOZ IA   */}
-        {/* ============================================================== */}
+        {/* TAB 2: EDITOR EN TIEMPO REAL */}
         {activeStep === 'editor' && (
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
-            {/* Split Screen Container: Left (Chat Agente Portavoz + DeepSeek) / Right (Live Interactive Preview) */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* LEFT: Agente Portavoz IA & Consola DeepSeek Harness */}
-              <div className="lg:col-span-7 flex flex-col h-[75vh] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
-                {/* Spokesperson Header */}
-                <div className="p-4 bg-black border-b border-zinc-800 flex items-center justify-between shrink-0">
+              <div className="lg:col-span-7 flex flex-col h-[75vh] bg-[#07090f]/80 border border-white/10 rounded-2xl overflow-hidden shadow-xl">
+                <div className="p-4 bg-[#0b0e16]/90 border-b border-white/10 flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-3">
-                    <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-800 flex items-center justify-center text-white shadow-md">
+                    <div className="relative w-10 h-10 rounded-xl bg-[#e5c88b]/10 border border-[#e5c88b]/30 flex items-center justify-center text-[#e5c88b]">
                       <Bot className="w-5 h-5" />
-                      {isSpeaking && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-ping" />
-                      )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-white">Agente Portavoz IA</h3>
+                        <h3 className="text-sm font-semibold text-white">Agente Portavoz IA</h3>
                         <a
                           href="https://github.com/deepseek-ai/deepseek-harness"
                           target="_blank"
                           rel="noreferrer"
-                          className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-950/80 hover:bg-emerald-900 text-emerald-400 border border-emerald-800 flex items-center gap-1 transition-colors"
+                          className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/25 flex items-center gap-1 transition-colors"
                           title="deepseek-ai/deepseek-harness en GitHub"
                         >
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                           DeepSeek Harness (Cordis)
                         </a>
                       </div>
@@ -1248,23 +1222,22 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                     </div>
                   </div>
 
-                  {/* Seal Button */}
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       disabled={savingChangesToDb}
                       onClick={handleSealAndSaveFinalProduct}
-                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
+                      className="px-3.5 py-1.5 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                       title="Dar el OK y guardar en base de datos"
                     >
                       <CheckCircle className="w-3.5 h-3.5" />
-                      <span>{savingChangesToDb ? 'Guardando...' : '✓ Dar el OK & Guardar'}</span>
+                      <span>{savingChangesToDb ? 'Guardando...' : 'Dar el OK & Guardar'}</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Conversation History Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-zinc-950/70">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-[#06080d]">
                   {chatHistory.map(msg => (
                     <div
                       key={msg.id}
@@ -1277,7 +1250,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                         {msg.usedEngine && (
                           <>
                             <span>·</span>
-                            <span className="text-emerald-400">{msg.usedEngine}</span>
+                            <span className="text-[#e5c88b]">{msg.usedEngine}</span>
                           </>
                         )}
                       </div>
@@ -1285,15 +1258,15 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       <div
                         className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
                           msg.role === 'user'
-                            ? 'bg-zinc-800 text-white border border-zinc-700'
-                            : 'bg-zinc-900 text-zinc-200 border border-zinc-800/90 shadow-sm'
+                            ? 'bg-white/[0.07] text-white border border-white/15'
+                            : 'bg-[#0b0e16] text-zinc-200 border border-white/10'
                         }`}
                       >
                         <p className="whitespace-pre-line">{msg.text}</p>
 
                         {msg.appliedChanges && msg.appliedChanges.length > 0 && (
-                          <div className="mt-2.5 pt-2 border-t border-zinc-800 space-y-1">
-                            <span className="text-[10px] font-mono text-emerald-400 uppercase font-bold block">
+                          <div className="mt-2.5 pt-2 border-t border-white/10 space-y-1">
+                            <span className="text-[10px] font-mono text-emerald-400 uppercase font-semibold block">
                               Cambios aplicados en la arquitectura:
                             </span>
                             {msg.appliedChanges.map((change, cIdx) => (
@@ -1307,9 +1280,8 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                     </div>
                   ))}
 
-                  {/* Live Coding Notice */}
                   {codingNotice && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-mono text-emerald-400 animate-pulse">
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10 text-xs font-mono text-[#e5c88b]">
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                       <span>{codingNotice}</span>
                     </div>
@@ -1319,7 +1291,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                 </div>
 
                 {/* Quick Recommendation Chips */}
-                <div className="p-2.5 bg-black/60 border-t border-zinc-800/80 overflow-x-auto scrollbar-none flex items-center gap-1.5">
+                <div className="p-2.5 bg-[#07090f] border-t border-white/10 overflow-x-auto scrollbar-none flex items-center gap-1.5">
                   <span className="text-[10px] font-mono text-zinc-500 whitespace-nowrap px-1">
                     Pedir a DeepSeek:
                   </span>
@@ -1338,7 +1310,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       type="button"
                       disabled={isCodingAgentWorking}
                       onClick={() => handleSendInstructionToCodingAgent(chip)}
-                      className="px-2.5 py-1 rounded-full text-[11px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 whitespace-nowrap cursor-pointer transition-all shrink-0 disabled:opacity-50"
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-mono bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/10 whitespace-nowrap cursor-pointer transition-all shrink-0 disabled:opacity-50"
                     >
                       {chip}
                     </button>
@@ -1346,14 +1318,14 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                 </div>
 
                 {/* Input Bar: Audio Mic + Text Prompt */}
-                <div className="p-3 bg-black border-t border-zinc-800 flex items-center gap-2 shrink-0">
+                <div className="p-3 bg-[#0b0e16] border-t border-white/10 flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={toggleMicrophone}
                     className={`p-2.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
                       isListeningMic
-                        ? 'bg-red-950 text-red-400 border-red-700 animate-pulse'
-                        : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
+                        ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                        : 'bg-white/[0.05] text-zinc-300 border-white/10 hover:bg-white/[0.1]'
                     }`}
                     title={isListeningMic ? 'Detener micrófono' : 'Hablar por micrófono con el Portavoz'}
                   >
@@ -1375,14 +1347,14 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                         ? 'Escuchando tu voz...'
                         : 'Pedile cambios a la IA: "Cambiame de color esto", "Poné un sello", "Ajustá el precio"...'
                     }
-                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700"
+                    className="flex-1 bg-[#06080d] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#e5c88b]/60"
                   />
 
                   <button
                     type="button"
                     disabled={!userInputInstruction.trim() || isCodingAgentWorking}
                     onClick={() => handleSendInstructionToCodingAgent()}
-                    className="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-all"
+                    className="px-4 py-2 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-all"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Enviar</span>
@@ -1390,13 +1362,13 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                 </div>
               </div>
 
-              {/* RIGHT: Live Interactive Mobile Preview (Reflected in Real Time) */}
+              {/* RIGHT: Live Interactive Mobile Preview */}
               <div className="lg:col-span-5 space-y-4">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-4">
+                <div className="bg-[#07090f]/80 border border-white/10 rounded-2xl p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Smartphone className="w-4 h-4 text-emerald-400" />
-                      <span className="text-xs font-mono font-bold text-white">
+                      <Smartphone className="w-4 h-4 text-[#e5c88b]" />
+                      <span className="text-xs font-mono font-semibold text-white">
                         Maqueta Móvil (Reflejada en Vivo)
                       </span>
                     </div>
@@ -1406,13 +1378,11 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                   </div>
 
                   {/* Simulated Mobile Frame */}
-                  <div className="mx-auto max-w-xs w-full bg-zinc-950 rounded-3xl border-4 border-zinc-800 overflow-hidden shadow-2xl relative">
-                    {/* Top Notch Bar */}
+                  <div className="mx-auto max-w-xs w-full bg-[#06080d] rounded-3xl border-4 border-zinc-800 overflow-hidden shadow-2xl relative">
                     <div className="h-4 bg-zinc-900 flex items-center justify-center">
                       <div className="w-16 h-2 bg-zinc-950 rounded-full" />
                     </div>
 
-                    {/* Dynamic Theme Banner */}
                     <div
                       className={`p-3 text-center text-xs font-bold ${liveDraft.themeConfig?.topStripBg || 'bg-amber-400 text-black'}`}
                     >
@@ -1422,26 +1392,24 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                           : 'ENTREGA RÁPIDA · PAGO CONTRA ENTREGA')}
                     </div>
 
-                    {/* Product Photo & Real-Time Injected Emblem Badge */}
                     <div className="relative aspect-square w-full bg-black overflow-hidden">
                       <img
                         src={liveDraft.imagen}
                         alt={liveDraft.nombre}
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                       />
 
-                      {/* Emblem Badge injected by DeepSeek Harness dsh-plugin-emblem-hero */}
                       {liveDraft.landingContent?.emblemBadge && (
-                        <div className="absolute top-3 left-3 bg-gradient-to-r from-amber-400 to-yellow-500 text-black px-2.5 py-1 rounded-full shadow-lg border border-yellow-200 flex items-center gap-1.5 animate-bounce">
-                          <span className="text-xs">★</span>
+                        <div className="absolute top-3 left-3 bg-[#e5c88b] text-[#090b10] px-2.5 py-1 rounded-md shadow-lg border border-white/20 flex items-center gap-1.5">
                           <span className="text-[10px] font-black tracking-wider uppercase">
                             {liveDraft.landingContent.emblemBadge.text}
                           </span>
                         </div>
                       )}
 
-                      <div className="absolute bottom-2 left-2 right-2 bg-black/85 backdrop-blur-xs p-2 rounded-xl text-left border border-zinc-800">
-                        <span className="text-[9px] font-mono text-emerald-400 block font-bold">
+                      <div className="absolute bottom-2 left-2 right-2 bg-black/85 backdrop-blur-xs p-2 rounded-xl text-left border border-white/10">
+                        <span className="text-[9px] font-mono text-[#e5c88b] block font-bold">
                           {liveDraft.landingContent?.heroBadge || 'EDICIÓN ESPECIAL'}
                         </span>
                         <h4 className="text-xs font-bold text-white truncate">
@@ -1453,7 +1421,6 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                       </div>
                     </div>
 
-                    {/* Pack Options Preview */}
                     <div className="p-3 space-y-2">
                       <div className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
                         Opciones de Compra Contra Entrega:
@@ -1468,13 +1435,13 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                             key={packNum}
                             className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${
                               isPack2
-                                ? 'bg-emerald-950/40 border-emerald-500 ring-1 ring-emerald-500/50'
-                                : 'bg-zinc-900 border-zinc-800'
+                                ? 'bg-white/[0.06] border-[#e5c88b]/50'
+                                : 'bg-white/[0.02] border-white/10'
                             }`}
                           >
                             <div>
                               <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-white">
+                                <span className="font-semibold text-white">
                                   {packNum === 1
                                     ? '1 Unidad'
                                     : packNum === 2
@@ -1482,7 +1449,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                                     : 'Pack Familiar (3)'}
                                 </span>
                                 {isPack2 && (
-                                  <span className="px-1.5 py-0.2 bg-emerald-500 text-black text-[9px] font-black rounded-full">
+                                  <span className="px-1.5 py-0.5 bg-[#e5c88b] text-[#090b10] text-[9px] font-bold rounded">
                                     MÁS ELEGIDO
                                   </span>
                                 )}
@@ -1493,18 +1460,17 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                                   : 'Pago en efectivo al recibir'}
                               </span>
                             </div>
-                            <span className="font-mono font-bold text-emerald-400">
+                            <span className="font-mono tabular-nums font-bold text-[#e5c88b]">
                               {formatGs(price)}
                             </span>
                           </div>
                         );
                       })}
 
-                      {/* CTA Button with Dynamic Shape */}
                       <div className="pt-2">
                         <button
                           type="button"
-                          className={`w-full py-2.5 px-4 font-bold text-xs uppercase tracking-wider text-black bg-emerald-400 hover:bg-emerald-300 shadow-md ${
+                          className={`w-full py-2.5 px-4 font-bold text-xs uppercase tracking-wider text-[#090b10] bg-[#e5c88b] hover:bg-[#edd49e] shadow-md ${
                             liveDraft.themeConfig?.buttonShape === 'rounded-full'
                               ? 'rounded-full'
                               : liveDraft.themeConfig?.buttonShape === 'rounded-none'
@@ -1521,7 +1487,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                   </div>
 
                   {/* Summary Details */}
-                  <div className="pt-2 text-[11px] font-mono text-zinc-400 space-y-1 border-t border-zinc-800">
+                  <div className="pt-2 text-[11px] font-mono tabular-nums text-zinc-400 space-y-1 border-t border-white/10">
                     <div>
                       <span className="text-zinc-500">WhatsApp Tienda:</span> +{liveDraft.wa}
                     </div>
@@ -1539,13 +1505,13 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                   type="button"
                   disabled={savingChangesToDb}
                   onClick={handleSealAndSaveFinalProduct}
-                  className="w-full py-3.5 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl cursor-pointer transition-all active:scale-95 disabled:opacity-50"
                 >
-                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <CheckCircle className="w-4 h-4" />
                   <span>
                     {savingChangesToDb
                       ? 'GUARDANDO EN BASE DE DATOS...'
-                      : '✓ DAR EL OK & GUARDAR EN BASE DE DATOS'}
+                      : 'DAR EL OK & GUARDAR EN BASE DE DATOS'}
                   </span>
                 </button>
               </div>
@@ -1554,15 +1520,15 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
         )}
       </div>
 
-      {/* SUCCESS PUBLISHED MODAL (Vercel Calm Deployment Card) */}
+      {/* SUCCESS PUBLISHED MODAL */}
       {publishSuccessModal.open && publishSuccessModal.createdPage && (
         <div className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="w-12 h-12 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded-xl flex items-center justify-center mx-auto text-xl font-bold">
+          <div className="w-full max-w-md bg-[#0b0e16]/95 backdrop-blur-2xl border border-white/15 rounded-2xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-xl flex items-center justify-center mx-auto text-xl font-bold">
               ✓
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-white">
+              <h3 className="text-base font-semibold text-white">
                 ¡Página Publicada con Autopiloto!
               </h3>
               <p className="text-xs text-zinc-400">
@@ -1570,7 +1536,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
               </p>
             </div>
 
-            <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-mono text-zinc-300">
+            <div className="p-3 bg-[#07090f] border border-white/10 rounded-xl text-xs font-mono text-[#e5c88b]">
               /?p={publishSuccessModal.createdPage.slug}
             </div>
 
@@ -1582,7 +1548,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                     window.location.href = `/?p=${publishSuccessModal.createdPage?.slug}`;
                   }
                 }}
-                className="w-full py-2.5 px-4 rounded-xl bg-white text-black font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer hover:bg-zinc-200"
+                className="w-full py-2.5 px-4 rounded-xl bg-[#e5c88b] text-[#090b10] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#edd49e]"
               >
                 <Eye className="w-3.5 h-3.5" />
                 <span>Ver Tienda en Vivo</span>
@@ -1594,9 +1560,9 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
                   setPublishSuccessModal({ open: false, createdPage: null });
                   setActiveStep('editor');
                 }}
-                className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-zinc-800"
+                className="w-full py-2.5 px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-white/10"
               >
-                <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                <Bot className="w-3.5 h-3.5 text-[#e5c88b]" />
                 <span>Personalizar con DeepSeek Harness (Portavoz IA)</span>
               </button>
 

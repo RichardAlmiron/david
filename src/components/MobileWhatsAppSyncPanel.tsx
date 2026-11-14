@@ -149,19 +149,18 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
 
   const cardClass = isIos
     ? 'bg-white rounded-2xl border border-black/5 shadow-xs p-4 space-y-3'
-    : 'bg-[#17191e] rounded-2xl border border-zinc-800 p-4 space-y-3';
+    : 'bg-[#0b0e16]/85 backdrop-blur-md rounded-2xl border border-white/10 p-4 space-y-3';
 
   const mutedText = isIos ? 'text-[#8e8e93]' : 'text-zinc-400';
   const primaryText = isIos ? 'text-[#1c1c1e]' : 'text-zinc-100';
 
   return (
     <div className="space-y-4">
-      {/* Header Explanation Card */}
       <div className={cardClass}>
         <div className="flex items-start gap-3">
           <div
             className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              isIos ? 'bg-[#007aff]/10 text-[#007aff]' : 'bg-emerald-500/15 text-emerald-400'
+              isIos ? 'bg-[#007aff]/10 text-[#007aff]' : 'bg-white/[0.06] border border-white/10 text-[#e5c88b]'
             }`}
           >
             <Smartphone className="w-5 h-5" />
@@ -177,7 +176,6 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
         </div>
       </div>
 
-      {/* Session Selector & Create New Line */}
       <div className={cardClass}>
         <div className="flex items-center justify-between gap-2">
           <span className={`text-xs font-semibold uppercase tracking-wide ${mutedText}`}>
@@ -187,10 +185,10 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
             type="button"
             onClick={handleAddLine}
             disabled={addingLine}
-            className={`min-h-[36px] px-3 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap ${
+            className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap ${
               isIos
                 ? 'bg-[#007aff]/10 text-[#007aff] active:bg-[#007aff]/20'
-                : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                : 'bg-white/[0.06] border border-white/10 text-[#e5c88b] hover:bg-white/[0.12]'
             }`}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -212,10 +210,10 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
                     isSelected
                       ? isIos
                         ? 'bg-[#007aff] text-white border-[#007aff]'
-                        : 'bg-emerald-500/15 text-emerald-200 border-emerald-500'
+                        : 'bg-white/[0.08] text-white border-[#e5c88b]'
                       : isIos
                         ? 'bg-[#f2f2f7] text-[#1c1c1e] border-transparent'
-                        : 'bg-zinc-900 text-zinc-300 border-zinc-800'
+                        : 'bg-[#07090f]/80 text-zinc-300 border-white/10'
                   }`}
                 >
                   <div className="text-xs font-semibold truncate">{sess.label}</div>
@@ -245,18 +243,17 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
         )}
       </div>
 
-      {/* Active Session Status & Pairing Code Flow */}
       {activeSession?.status === 'connected' ? (
         <div
           className={
             isIos
               ? 'bg-white rounded-2xl border border-[#34c759]/30 p-5 text-center space-y-2'
-              : 'bg-[#17191e] rounded-2xl border border-emerald-700/50 p-5 text-center space-y-2'
+              : 'bg-[#0b0e16]/85 rounded-2xl border border-white/10 p-5 text-center space-y-2'
           }
         >
           <div
-            className={`w-12 h-12 rounded-full mx-auto flex items-center justify-center ${
-              isIos ? 'bg-[#34c759]/15 text-[#34c759]' : 'bg-emerald-500/20 text-emerald-400'
+            className={`w-12 h-12 rounded-xl mx-auto flex items-center justify-center ${
+              isIos ? 'bg-[#34c759]/15 text-[#34c759]' : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
             }`}
           >
             <CheckCircle2 className="w-6 h-6" />
@@ -264,7 +261,7 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
           <div className={`text-base font-semibold ${primaryText}`}>
             WhatsApp Sincronizado
           </div>
-          <p className={`text-sm font-mono font-medium ${isIos ? 'text-[#34c759]' : 'text-emerald-400'}`}>
+          <p className={`text-sm font-mono tabular-nums font-medium ${isIos ? 'text-[#34c759]' : 'text-[#e5c88b]'}`}>
             {activeSession.connectedPhone || activeSession.connectedName || activeSession.label}
           </p>
           <p className={`text-xs ${mutedText}`}>
@@ -274,8 +271,8 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
       ) : (
         <div className={cardClass}>
           <form onSubmit={handleRequestPairingCode} className="space-y-3">
-            <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-500">
-              <span>Paso 1 · Acá en esta App</span>
+            <div className={`text-[11px] font-mono ${isIos ? 'text-[#007aff]' : 'text-[#e5c88b]'}`}>
+              Paso 1 · En esta aplicación
             </div>
             <label className={`block text-xs font-semibold ${primaryText}`}>
               Escribí tu número de celular y pedí el código:
@@ -287,19 +284,19 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
                 value={phoneInput}
                 onChange={e => setPhoneInput(e.target.value)}
                 placeholder="Ej: 0981 123 456"
-                className={`flex-1 min-h-[44px] px-3.5 py-2.5 rounded-xl text-sm font-mono outline-none border ${
+                className={`flex-1 min-h-[44px] px-3.5 py-2.5 rounded-xl text-sm font-mono tabular-nums outline-none border ${
                   isIos
                     ? 'bg-[#f2f2f7] border-black/10 text-[#1c1c1e] focus:border-[#007aff]'
-                    : 'bg-zinc-900 border-zinc-700 text-zinc-100 focus:border-emerald-500'
+                    : 'bg-[#07090f]/90 border-white/10 text-zinc-100 focus:border-[#e5c88b]/70'
                 }`}
               />
               <button
                 type="submit"
                 disabled={loading || !phoneInput.trim()}
-                className={`min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-colors whitespace-nowrap ${
+                className={`min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-colors whitespace-nowrap ${
                   isIos
                     ? 'bg-[#007aff] text-white active:bg-[#0062cc]'
-                    : 'bg-emerald-500 text-black hover:bg-emerald-400'
+                    : 'bg-[#e5c88b] text-[#090b10] hover:bg-[#edd49e]'
                 }`}
               >
                 {loading && <RefreshCw className="w-4 h-4 animate-spin" />}
@@ -314,10 +311,10 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
                 feedback.type === 'ok'
                   ? isIos
                     ? 'bg-[#34c759]/12 text-[#1e7e34]'
-                    : 'bg-emerald-950/70 text-emerald-300 border border-emerald-800/60'
+                    : 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30'
                   : isIos
                     ? 'bg-[#ff3b30]/12 text-[#c62828]'
-                    : 'bg-red-950/70 text-red-300 border border-red-800/60'
+                    : 'bg-red-950/40 text-red-300 border border-red-500/30'
               }`}
             >
               {feedback.type === 'err' && <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />}
@@ -327,18 +324,18 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
 
           {activeSession?.pairingCode && (
             <div
-              className={`p-4 rounded-2xl text-center space-y-2.5 ${
+              className={`p-4 rounded-xl text-center space-y-2.5 ${
                 isIos
                   ? 'bg-[#f2f2f7] border border-[#007aff]/25'
-                  : 'bg-emerald-950/40 border border-emerald-700/60'
+                  : 'bg-[#07090f]/90 border border-[#e5c88b]/40'
               }`}
             >
               <div className={`text-xs font-medium ${mutedText}`}>
                 Copiá este código para pegar en tu WhatsApp:
               </div>
               <div
-                className={`text-2xl sm:text-3xl font-mono font-bold tracking-[0.2em] ${
-                  isIos ? 'text-[#007aff]' : 'text-emerald-300'
+                className={`text-2xl sm:text-3xl font-mono tabular-nums font-bold tracking-[0.2em] ${
+                  isIos ? 'text-[#007aff]' : 'text-[#e5c88b]'
                 }`}
               >
                 {activeSession.pairingCode}
@@ -346,10 +343,10 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
               <button
                 type="button"
                 onClick={() => handleCopyCode(activeSession.pairingCode!)}
-                className={`min-h-[40px] px-4 py-2 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
                   isIos
                     ? 'bg-[#007aff] text-white'
-                    : 'bg-emerald-500 text-black hover:bg-emerald-400'
+                    : 'bg-[#e5c88b] text-[#090b10] hover:bg-[#edd49e]'
                 }`}
               >
                 {copiedCode ? (
@@ -419,7 +416,8 @@ export const MobileWhatsAppSyncPanel: React.FC<MobileWhatsAppSyncPanelProps> = (
                   <img
                     src={activeSession.qrDataUrl}
                     alt="QR WhatsApp"
-                    className="w-44 h-44 rounded-xl bg-white p-2 border border-zinc-200"
+                    referrerPolicy="no-referrer"
+                    className="w-44 h-44 rounded-xl bg-white p-2 border border-white/15"
                   />
                 ) : (
                   <button

@@ -63,23 +63,23 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
   return (
     <div
       data-testid="autoads-cloudinary-panel"
-      className="p-4 rounded-xl bg-[#0f1115] border border-zinc-800/90 space-y-4"
+      className="p-5 rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 space-y-4"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-zinc-800/80">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-white/10">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/35 flex items-center justify-center text-sky-400">
+          <div className="w-8 h-8 rounded-lg bg-[#e5c88b]/10 border border-[#e5c88b]/25 flex items-center justify-center text-[#e5c88b]">
             <Cloud className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-xs sm:text-sm font-bold text-zinc-100">
+              <h3 className="text-xs sm:text-sm font-semibold text-white">
                 Cloudinary CDN
               </h3>
               <span
-                className={`px-2 py-0.5 rounded-md text-[10px] font-bold border inline-flex items-center gap-1 ${
+                className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border inline-flex items-center gap-1 ${
                   configured
-                    ? 'bg-emerald-950/80 border-emerald-600/60 text-emerald-300'
-                    : 'bg-amber-950/80 border-amber-600/60 text-amber-300'
+                    ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                    : 'bg-[#e5c88b]/10 border-[#e5c88b]/30 text-[#e5c88b]'
                 }`}
               >
                 {configured ? (
@@ -94,7 +94,7 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
                   </>
                 )}
               </span>
-              <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-sky-300">
+              <span className="px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/10 text-[10px] font-mono text-zinc-300">
                 {status?.folder || 'noelux/autoads'}
               </span>
             </div>
@@ -106,7 +106,7 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
             <button
               type="button"
               onClick={() => setShowEnvVars(prev => !prev)}
-              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 font-semibold text-[11px] inline-flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-300 font-medium text-[11px] inline-flex items-center gap-1 cursor-pointer"
             >
               <span>Variables ENV</span>
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showEnvVars ? 'rotate-180' : ''}`} />
@@ -116,83 +116,83 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
             type="button"
             onClick={onRefreshResources}
             disabled={loadingResources}
-            className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-black font-bold text-[11px] inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+            className="px-3.5 py-1.5 rounded-lg bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] font-bold text-[11px] inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
           >
             {loadingResources ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
               <RefreshCw className="w-3.5 h-3.5" />
             )}
-            <span>Actualizar Galería ({resources.length})</span>
+            <span className="font-mono tabular-nums">Actualizar Galería ({resources.length})</span>
           </button>
         </div>
       </div>
 
-      {/* Variables de Entorno listas para pegar en Railway (expandido automáticamente si falta configurar) */}
+      {/* Variables de Entorno listas para pegar en Railway */}
       {shouldShowEnvVars && (
-      <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[11px] font-bold text-zinc-200 uppercase tracking-wider">
-            Variables de Entorno para Railway → Service → Variables
-          </span>
-          <button
-            type="button"
-            onClick={() => onCopyText('cloudinary_env', 'Variables Cloudinary para Railway', envTemplate)}
-            className="px-2.5 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[10px] font-semibold text-zinc-200 inline-flex items-center gap-1 cursor-pointer"
-          >
-            <Copy className="w-3 h-3 text-sky-400" />
-            <span>{copiedKey === 'cloudinary_env' ? '✅ Plantilla Copiada' : 'Copiar Nombres ENV'}</span>
-          </button>
-        </div>
+        <div className="p-3.5 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-zinc-200 uppercase tracking-wider">
+              Variables de Entorno para Railway → Service → Variables
+            </span>
+            <button
+              type="button"
+              onClick={() => onCopyText('cloudinary_env', 'Variables Cloudinary para Railway', envTemplate)}
+              className="px-2.5 py-1 rounded-md bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-[10px] font-semibold text-zinc-200 inline-flex items-center gap-1 cursor-pointer"
+            >
+              <Copy className="w-3 h-3 text-[#e5c88b]" />
+              <span>{copiedKey === 'cloudinary_env' ? 'Plantilla Copiada' : 'Copiar Nombres ENV'}</span>
+            </button>
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px] font-mono">
-          {(status?.requiredEnvVars || [
-            'CLOUDINARY_CLOUD_NAME',
-            'CLOUDINARY_API_KEY',
-            'CLOUDINARY_API_SECRET',
-            'CLOUDINARY_UPLOAD_FOLDER'
-          ]).map(varName => {
-            const isMissing = status?.missingVars?.includes(varName);
-            return (
-              <div
-                key={varName}
-                className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between gap-1.5 ${
-                  varName === 'CLOUDINARY_UPLOAD_FOLDER'
-                    ? 'bg-zinc-900 border-zinc-700 text-zinc-300'
-                    : configured || !isMissing
-                      ? 'bg-emerald-950/40 border-emerald-700/50 text-emerald-300'
-                      : 'bg-amber-950/40 border-amber-700/50 text-amber-300'
-                }`}
-              >
-                <span className="truncate">{varName}</span>
-                <span className="text-[9px] font-sans font-bold uppercase shrink-0">
-                  {varName === 'CLOUDINARY_UPLOAD_FOLDER'
-                    ? 'opcional'
-                    : isMissing
-                      ? 'falta'
-                      : 'ok'}
-                </span>
-              </div>
-            );
-          })}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px] font-mono">
+            {(status?.requiredEnvVars || [
+              'CLOUDINARY_CLOUD_NAME',
+              'CLOUDINARY_API_KEY',
+              'CLOUDINARY_API_SECRET',
+              'CLOUDINARY_UPLOAD_FOLDER'
+            ]).map(varName => {
+              const isMissing = status?.missingVars?.includes(varName);
+              return (
+                <div
+                  key={varName}
+                  className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between gap-1.5 ${
+                    varName === 'CLOUDINARY_UPLOAD_FOLDER'
+                      ? 'bg-white/[0.03] border-white/10 text-zinc-300'
+                      : configured || !isMissing
+                        ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                        : 'bg-[#e5c88b]/10 border-[#e5c88b]/25 text-[#e5c88b]'
+                  }`}
+                >
+                  <span className="truncate">{varName}</span>
+                  <span className="text-[9px] font-sans font-semibold uppercase shrink-0">
+                    {varName === 'CLOUDINARY_UPLOAD_FOLDER'
+                      ? 'opcional'
+                      : isMissing
+                        ? 'falta'
+                        : 'ok'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-zinc-400">
+            También podés pegar únicamente <code className="text-zinc-200">CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME</code> en Railway si preferís usar la URL unificada.
+          </p>
         </div>
-        <p className="text-[10px] text-zinc-500">
-          También podés pegar únicamente <code className="text-zinc-300">CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME</code> en Railway si preferís usar la URL unificada de Cloudinary.
-        </p>
-      </div>
       )}
 
       {/* Galería en Vivo traída desde Cloudinary API */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs font-semibold text-zinc-300">
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between text-xs font-medium text-zinc-300">
           <span className="inline-flex items-center gap-1.5">
-            <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
-            <span>Galería en Vivo desde Cloudinary API ({resources.length} imágenes)</span>
+            <ImageIcon className="w-3.5 h-3.5 text-[#e5c88b]" />
+            <span className="font-mono tabular-nums">Galería en Vivo desde Cloudinary API ({resources.length} imágenes)</span>
           </span>
         </div>
 
         {resources.length === 0 ? (
-          <div className="p-6 rounded-xl border border-dashed border-zinc-800 text-center text-xs text-zinc-400">
+          <div className="p-6 rounded-xl border border-dashed border-white/10 text-center text-xs text-zinc-400">
             {configured
               ? 'Todavía no hay imágenes guardadas en tu carpeta AutoAds de Cloudinary. Al generar o regenerar un anuncio aparecerán aquí automáticamente.'
               : 'Cargá las variables CLOUDINARY_* en Railway (y redesplegá o reiniciá) para activar la nube de imágenes de anuncios.'}
@@ -202,7 +202,7 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
             {resources.map(res => (
               <div
                 key={res.publicId}
-                className="rounded-lg border border-zinc-800 bg-zinc-950 overflow-hidden flex flex-col justify-between"
+                className="rounded-xl border border-white/10 bg-[#07090f]/80 overflow-hidden flex flex-col justify-between"
               >
                 <div className="aspect-square bg-black overflow-hidden">
                   <img
@@ -216,7 +216,7 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
                   <div className="text-[10px] font-mono text-zinc-300 truncate" title={res.publicId}>
                     {res.publicId.split('/').pop()}
                   </div>
-                  <div className="flex items-center justify-between text-[9px] font-mono text-zinc-500">
+                  <div className="flex items-center justify-between text-[9px] font-mono tabular-nums text-zinc-400">
                     <span>
                       {res.width}x{res.height}
                     </span>
@@ -224,7 +224,7 @@ export const AutoAdsCloudinaryPanel: React.FC<AutoAdsCloudinaryPanelProps> = ({
                       href={res.secureUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-sky-400 hover:text-sky-300 inline-flex items-center gap-0.5"
+                      className="text-[#e5c88b] hover:text-[#edd49e] inline-flex items-center gap-0.5"
                     >
                       <span>CDN</span>
                       <ExternalLink className="w-2.5 h-2.5" />

@@ -4,7 +4,7 @@ import {
   Rocket,
   Smartphone,
   LayoutGrid,
-  Sparkles,
+  Wand2,
   Zap,
   Bot,
   Download,
@@ -18,6 +18,7 @@ import { useStore } from '../context/StoreContext';
 import { AdminView, AdminMenuKey } from './AdminView';
 import { useOnlineStatus, usePWAInstall } from '../hooks/usePWAInstall';
 import { MobileWhatsAppSyncPanel } from '../components/MobileWhatsAppSyncPanel';
+import { LuminousOrbsBackdrop } from '../components/LuminousOrbsBackdrop';
 
 export const AndroidAppView: React.FC = () => {
   const { isAdminAuthenticated, loginAdmin, logoutAdmin } = useStore();
@@ -101,16 +102,18 @@ export const AndroidAppView: React.FC = () => {
   // =========================================================
   if (!isAdminAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#111318] text-zinc-100 flex flex-col justify-center px-4 py-8">
-        <div className="w-full max-w-md mx-auto space-y-6">
+      <div className="relative min-h-screen bg-[#06080d] text-zinc-100 flex flex-col justify-center px-4 py-8 overflow-hidden">
+        <LuminousOrbsBackdrop />
+        <div className="relative z-10 w-full max-w-md mx-auto space-y-6">
           <div className="flex flex-col items-center text-center space-y-3">
             <img
               src="/assets/app-android-192.png"
               alt="Noelux Admin Android"
-              className="w-16 h-16 rounded-2xl border border-emerald-500/30 shadow-lg"
+              referrerPolicy="no-referrer"
+              className="w-16 h-16 rounded-2xl border border-[#e5c88b]/30 shadow-lg"
             />
             <div>
-              <div className="text-xs font-medium text-emerald-400">
+              <div className="text-xs font-medium text-[#e5c88b]">
                 Aplicación Oficial Android
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-white mt-0.5">
@@ -124,10 +127,10 @@ export const AndroidAppView: React.FC = () => {
 
           <form
             onSubmit={handleLogin}
-            className="bg-[#1b1e25] border border-zinc-800 rounded-3xl p-6 space-y-4 shadow-xl"
+            className="bg-[#0b0e16]/85 backdrop-blur-md border border-white/10 rounded-3xl p-6 space-y-4 shadow-2xl"
           >
             {error && (
-              <div className="p-3 rounded-xl bg-red-950/60 border border-red-800/70 text-xs font-medium text-red-200">
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs font-medium text-red-200">
                 {error}
               </div>
             )}
@@ -143,7 +146,7 @@ export const AndroidAppView: React.FC = () => {
                 placeholder="tu@correo.com"
                 autoCapitalize="none"
                 autoCorrect="off"
-                className="w-full min-h-[48px] px-4 py-3 rounded-2xl bg-[#111318] border border-zinc-700 text-sm text-white placeholder-zinc-500 focus:border-emerald-400 outline-none"
+                className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#07090f]/80 border border-white/10 text-sm text-white placeholder-zinc-500 focus:border-[#e5c88b]/60 outline-none"
                 disabled={loading}
               />
             </div>
@@ -158,7 +161,7 @@ export const AndroidAppView: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full min-h-[48px] pl-4 pr-12 py-3 rounded-2xl bg-[#111318] border border-zinc-700 text-sm text-white placeholder-zinc-500 focus:border-emerald-400 outline-none"
+                  className="w-full min-h-[48px] pl-4 pr-12 py-3 rounded-xl bg-[#07090f]/80 border border-white/10 text-sm text-white placeholder-zinc-500 focus:border-[#e5c88b]/60 outline-none"
                   disabled={loading}
                 />
                 <button
@@ -175,7 +178,7 @@ export const AndroidAppView: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full min-h-[48px] rounded-full bg-emerald-400 hover:bg-emerald-300 text-[#042317] text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 transition-colors"
+              className="w-full min-h-[48px] rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 transition-colors"
             >
               {loading ? (
                 <>
@@ -192,7 +195,7 @@ export const AndroidAppView: React.FC = () => {
             <button
               type="button"
               onClick={install}
-              className="w-full min-h-[44px] rounded-full bg-[#1b1e25] border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full min-h-[44px] rounded-xl bg-[#0b0e16]/85 border border-[#e5c88b]/35 text-[#e5c88b] text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
             >
               <Download className="w-4 h-4" /> Instalar App en este Android
             </button>
@@ -200,10 +203,10 @@ export const AndroidAppView: React.FC = () => {
         </div>
 
         {installSheetOpen && !isInstalled && (
-          <div className="fixed inset-x-0 bottom-0 z-50 p-4 bg-[#17191f] border-t border-zinc-800 rounded-t-3xl shadow-2xl space-y-3">
+          <div className="fixed inset-x-0 bottom-0 z-50 p-4 bg-[#0b0e16]/95 backdrop-blur-md border-t border-white/10 rounded-t-3xl shadow-2xl space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <img src="/assets/app-android-192.png" alt="Noelux Admin" className="w-11 h-11 rounded-2xl" />
+                <img src="/assets/app-android-192.png" alt="Noelux Admin" referrerPolicy="no-referrer" className="w-11 h-11 rounded-2xl" />
                 <div>
                   <div className="text-sm font-bold text-white">Instalar App Android</div>
                   <div className="text-xs text-zinc-400">Se guarda directo en tu pantalla de inicio</div>
@@ -212,7 +215,7 @@ export const AndroidAppView: React.FC = () => {
               <button
                 type="button"
                 onClick={dismissInstallSheet}
-                className="min-h-[36px] min-w-[36px] rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center cursor-pointer"
+                className="min-h-[36px] min-w-[36px] rounded-xl bg-white/5 border border-white/10 text-zinc-300 flex items-center justify-center cursor-pointer"
                 aria-label="Cerrar"
               >
                 <X className="w-4 h-4" />
@@ -225,16 +228,16 @@ export const AndroidAppView: React.FC = () => {
                   const ok = await install();
                   if (ok) dismissInstallSheet();
                 }}
-                className="w-full min-h-[48px] rounded-full bg-emerald-400 text-[#042317] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full min-h-[48px] rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Download className="w-4 h-4" /> Confirmar e Instalar en tu Android
               </button>
             ) : waitingInstallPrompt ? (
-              <div className="min-h-[44px] rounded-full bg-zinc-800 text-zinc-300 text-xs font-medium flex items-center justify-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" /> Preparando descarga en tu celular...
+              <div className="min-h-[44px] rounded-xl bg-white/5 border border-white/10 text-zinc-300 text-xs font-medium flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-[#e5c88b]" /> Preparando descarga en tu celular...
               </div>
             ) : (
-              <div className="p-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
+              <div className="p-3 rounded-xl bg-[#07090f] border border-white/10 text-xs text-zinc-300">
                 Tocá los <strong>3 puntitos (⋮)</strong> arriba en Chrome y elegí <strong>Instalar aplicación</strong>.
               </div>
             )}
@@ -259,14 +262,15 @@ export const AndroidAppView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#111318] text-zinc-100 flex flex-col">
+    <div className="relative min-h-screen bg-[#06080d] text-zinc-100 flex flex-col">
       {/* Material 3 Top App Bar */}
-      <header className="sticky top-0 z-30 h-14 bg-[#17191f]/95 backdrop-blur-md border-b border-zinc-800/90 px-3 sm:px-5 flex items-center justify-between gap-2 pt-[env(safe-area-inset-top)]">
+      <header className="sticky top-0 z-30 h-14 bg-[#07090f]/90 backdrop-blur-xl border-b border-white/10 px-3 sm:px-5 flex items-center justify-between gap-2 pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-2.5 min-w-0">
           <img
             src="/assets/app-android-192.png"
             alt="Android Admin"
-            className="w-8 h-8 rounded-xl border border-emerald-500/30 shrink-0"
+            referrerPolicy="no-referrer"
+            className="w-8 h-8 rounded-xl border border-[#e5c88b]/30 shrink-0"
           />
           <div className="min-w-0">
             <h1 className="text-sm sm:text-base font-semibold text-white truncate">
@@ -280,7 +284,7 @@ export const AndroidAppView: React.FC = () => {
             <button
               type="button"
               onClick={install}
-              className="min-h-[38px] px-3 rounded-full bg-emerald-400 text-[#042317] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="min-h-[38px] px-3 rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Instalar</span>
@@ -290,7 +294,7 @@ export const AndroidAppView: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowQuickPairingSheet(true)}
-            className="min-h-[38px] px-3 rounded-full bg-[#222630] hover:bg-[#2a2f3b] border border-zinc-700 text-emerald-300 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            className="min-h-[38px] px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[#e5c88b] text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             title="Sincronizar WhatsApp sin escanear QR"
           >
             <Smartphone className="w-3.5 h-3.5" />
@@ -300,7 +304,7 @@ export const AndroidAppView: React.FC = () => {
           <button
             type="button"
             onClick={() => logoutAdmin()}
-            className="min-h-[38px] min-w-[38px] rounded-full bg-[#222630] text-red-400 flex items-center justify-center cursor-pointer"
+            className="min-h-[38px] min-w-[38px] rounded-xl bg-white/5 hover:bg-red-500/15 border border-white/10 text-red-400 flex items-center justify-center cursor-pointer"
             title="Cerrar Sesión"
           >
             <LogOut className="w-4 h-4" />
@@ -309,7 +313,7 @@ export const AndroidAppView: React.FC = () => {
       </header>
 
       {!isOnline && (
-        <div className="bg-amber-950/70 border-b border-amber-700/40 px-4 py-2 text-xs text-amber-200 text-center">
+        <div className="bg-amber-500/10 border-b border-amber-500/25 px-4 py-2 text-xs text-amber-200 text-center">
           Sin conexión a internet · Mostrando última información en caché
         </div>
       )}
@@ -327,11 +331,11 @@ export const AndroidAppView: React.FC = () => {
       {/* Quick Same-Phone WhatsApp Pairing Bottom Sheet (Android Material) */}
       {showQuickPairingSheet && (
         <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
           onClick={() => setShowQuickPairingSheet(false)}
         >
           <div
-            className="w-full max-w-lg bg-[#111318] border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-4 sm:p-5 max-h-[85vh] overflow-y-auto space-y-4"
+            className="w-full max-w-lg bg-[#0b0e16]/95 backdrop-blur-md border border-white/10 rounded-t-3xl sm:rounded-3xl p-4 sm:p-5 max-h-[85vh] overflow-y-auto space-y-4"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -341,7 +345,7 @@ export const AndroidAppView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowQuickPairingSheet(false)}
-                className="min-h-[40px] min-w-[40px] rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center cursor-pointer"
+                className="min-h-[40px] min-w-[40px] rounded-xl bg-white/5 border border-white/10 text-zinc-300 flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -353,10 +357,10 @@ export const AndroidAppView: React.FC = () => {
 
       {/* Direct Install Sheet when launched from Descargar App while already logged in */}
       {installSheetOpen && !isInstalled && (
-        <div className="fixed inset-x-0 bottom-16 z-50 p-4 bg-[#17191f] border-t border-emerald-500/40 rounded-t-3xl shadow-2xl space-y-3">
+        <div className="fixed inset-x-0 bottom-16 z-50 p-4 bg-[#0b0e16]/95 backdrop-blur-md border-t border-[#e5c88b]/30 rounded-t-3xl shadow-2xl space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <img src="/assets/app-android-192.png" alt="Noelux Admin" className="w-11 h-11 rounded-2xl" />
+              <img src="/assets/app-android-192.png" alt="Noelux Admin" referrerPolicy="no-referrer" className="w-11 h-11 rounded-2xl" />
               <div>
                 <div className="text-sm font-bold text-white">Instalar App Android</div>
                 <div className="text-xs text-zinc-400">Confirmá para descargarla en tu pantalla de inicio</div>
@@ -365,7 +369,7 @@ export const AndroidAppView: React.FC = () => {
             <button
               type="button"
               onClick={dismissInstallSheet}
-              className="min-h-[36px] min-w-[36px] rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center cursor-pointer"
+              className="min-h-[36px] min-w-[36px] rounded-xl bg-white/5 border border-white/10 text-zinc-300 flex items-center justify-center cursor-pointer"
               aria-label="Cerrar"
             >
               <X className="w-4 h-4" />
@@ -378,16 +382,16 @@ export const AndroidAppView: React.FC = () => {
                 const ok = await install();
                 if (ok) dismissInstallSheet();
               }}
-              className="w-full min-h-[48px] rounded-full bg-emerald-400 text-[#042317] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full min-h-[48px] rounded-xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
             >
               <Download className="w-4 h-4" /> Confirmar e Instalar en tu Android
             </button>
           ) : waitingInstallPrompt ? (
-            <div className="min-h-[44px] rounded-full bg-zinc-800 text-zinc-300 text-xs font-medium flex items-center justify-center gap-2">
-              <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" /> Preparando descarga en tu celular...
+            <div className="min-h-[44px] rounded-xl bg-white/5 border border-white/10 text-zinc-300 text-xs font-medium flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-[#e5c88b]" /> Preparando descarga en tu celular...
             </div>
           ) : (
-            <div className="p-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
+            <div className="p-3 rounded-xl bg-[#07090f] border border-white/10 text-xs text-zinc-300">
               Si ya la instalaste o tu navegador no mostró el botón directo, tocá los <strong>3 puntitos (⋮)</strong> arriba y elegí <strong>Instalar aplicación</strong>.
             </div>
           )}
@@ -397,14 +401,14 @@ export const AndroidAppView: React.FC = () => {
       {/* Material 3 "Más" Bottom Sheet for All Admin Sections */}
       {showMoreSheet && (
         <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
           onClick={() => setShowMoreSheet(false)}
         >
           <div
-            className="w-full max-w-md bg-[#17191f] border border-zinc-800 rounded-t-3xl sm:rounded-3xl p-5 space-y-3"
+            className="w-full max-w-md bg-[#0b0e16]/95 backdrop-blur-md border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 space-y-3"
             onClick={e => e.stopPropagation()}
           >
-            <div className="w-10 h-1 rounded-full bg-zinc-600 mx-auto mb-2 sm:hidden" />
+            <div className="w-10 h-1 rounded-sm bg-white/20 mx-auto mb-2 sm:hidden" />
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-white">Todos los Módulos Admin</h2>
               <button
@@ -421,7 +425,7 @@ export const AndroidAppView: React.FC = () => {
                 [
                   { id: 'productos', label: 'Productos y Ventas', icon: ShoppingBag },
                   { id: 'creador_rapido', label: 'Creador Rápido', icon: Zap },
-                  { id: 'creador', label: 'Creador IA', icon: Sparkles },
+                  { id: 'creador', label: 'Creador IA', icon: Wand2 },
                   { id: 'pipeboard', label: 'AutoAds', icon: Rocket },
                   { id: 'comentarios', label: 'Comentarios Ads', icon: Bot },
                   { id: 'whatsapp', label: 'WhatsApp Multi-Línea', icon: Smartphone },
@@ -441,8 +445,8 @@ export const AndroidAppView: React.FC = () => {
                     }}
                     className={`min-h-[56px] p-3 rounded-2xl border text-left flex items-center gap-2.5 cursor-pointer transition-colors ${
                       active
-                        ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-300'
-                        : 'bg-[#1f222b] border-zinc-800 text-zinc-200 hover:bg-[#262a35]'
+                        ? 'bg-[#e5c88b]/15 border-[#e5c88b]/50 text-[#e5c88b]'
+                        : 'bg-[#07090f]/80 border-white/10 text-zinc-200 hover:bg-white/10'
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
@@ -458,7 +462,7 @@ export const AndroidAppView: React.FC = () => {
       {/* Material 3 Bottom Navigation Bar */}
       <nav
         aria-label="Navegación Android"
-        className="fixed bottom-0 left-0 right-0 z-40 bg-[#17191f]/95 backdrop-blur-md border-t border-zinc-800 pb-[env(safe-area-inset-bottom)]"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-[#07090f]/95 backdrop-blur-xl border-t border-white/10 pb-[env(safe-area-inset-bottom)]"
       >
         <div className="max-w-3xl mx-auto grid grid-cols-4 h-16 items-center px-1">
           {(
@@ -478,15 +482,15 @@ export const AndroidAppView: React.FC = () => {
                 className="min-h-[52px] flex flex-col items-center justify-center gap-1 cursor-pointer"
               >
                 <div
-                  className={`px-4 py-1 rounded-full transition-colors ${
-                    active ? 'bg-emerald-400/20 text-emerald-300' : 'text-zinc-400'
+                  className={`px-4 py-1 rounded-xl transition-colors ${
+                    active ? 'bg-[#e5c88b]/15 text-[#e5c88b]' : 'text-zinc-400'
                   }`}
                 >
                   <Icon className="w-5 h-5" />
                 </div>
                 <span
                   className={`text-[11px] font-medium ${
-                    active ? 'text-emerald-300' : 'text-zinc-400'
+                    active ? 'text-[#e5c88b]' : 'text-zinc-400'
                   }`}
                 >
                   {tab.label}
@@ -501,9 +505,9 @@ export const AndroidAppView: React.FC = () => {
             className="min-h-[52px] flex flex-col items-center justify-center gap-1 cursor-pointer"
           >
             <div
-              className={`px-4 py-1 rounded-full transition-colors ${
+              className={`px-4 py-1 rounded-xl transition-colors ${
                 ['creador', 'deepgram', 'openrouter'].includes(activeMenu)
-                  ? 'bg-emerald-400/20 text-emerald-300'
+                  ? 'bg-[#e5c88b]/15 text-[#e5c88b]'
                   : 'text-zinc-400'
               }`}
             >
@@ -512,7 +516,7 @@ export const AndroidAppView: React.FC = () => {
             <span
               className={`text-[11px] font-medium ${
                 ['creador', 'deepgram', 'openrouter'].includes(activeMenu)
-                  ? 'text-emerald-300'
+                  ? 'text-[#e5c88b]'
                   : 'text-zinc-400'
               }`}
             >

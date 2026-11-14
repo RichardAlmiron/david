@@ -445,14 +445,14 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
   return (
     <div data-testid="meta-comments-view" className="max-w-7xl mx-auto space-y-6">
       {/* CABECERA HANDS-FREE: SELECTORES + ACTIVAR PILOTO 24/7 */}
-      <section className="rounded-xl bg-[#0c0d12] border border-zinc-800 p-5 sm:p-6 space-y-5">
+      <section className="rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 p-5 sm:p-6 space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-xl font-bold text-white tracking-tight text-balance">
+            <h2 className="text-xl font-semibold text-white tracking-tight text-balance">
               Piloto Automático de Comentarios Meta Ads
             </h2>
             <p className="text-sm text-zinc-400">
-              100% respuestas públicas multi-ángulo para generar avalancha social · Sin Messenger DM · Oculta teléfonos y dispara WhatsApp al instante.
+              Respuestas públicas multi-ángulo para avalancha social · Oculta teléfonos y dispara WhatsApp al instante.
             </p>
           </div>
 
@@ -466,7 +466,7 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                     ? `Permisos faltantes: ${missingCommentPermissions.join(', ')}`
                     : 'Autorizar Meta Graph API'
                 }
-                className="px-3.5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-[#e5c88b]/35 text-[#e5c88b] text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
               >
                 <Lock className="w-4 h-4" />
                 <span>Conectar Facebook</span>
@@ -477,7 +477,7 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
               type="button"
               onClick={handleManualSyncNow}
               disabled={syncing}
-              className="px-3.5 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              className="px-3.5 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-200 text-xs font-semibold flex items-center gap-2 cursor-pointer disabled:opacity-60"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
               <span>{syncing ? 'Leyendo Ads...' : 'Actualizar ahora'}</span>
@@ -488,10 +488,10 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
               data-testid="meta-comments-activate-btn"
               onClick={handleToggleAutoPilot}
               disabled={activating}
-              className={`px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-60 ${
+              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-60 ${
                 config?.enabled
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950'
-                  : 'bg-cyan-500 hover:bg-cyan-400 text-zinc-950'
+                  ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300'
+                  : 'bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10]'
               }`}
             >
               <Power className="w-4 h-4" />
@@ -507,15 +507,15 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
         </div>
 
         {/* CONTROLES DE CONTEXTO Y ESTADO OPERATIVO */}
-        <div className="pt-4 border-t border-zinc-800/80 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div className="pt-4 border-t border-white/10 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
           <div className="md:col-span-5 space-y-1.5">
-            <label className="text-xs font-semibold text-zinc-400 block">
+            <label className="text-xs font-medium text-zinc-400 block">
               Producto principal a cerrar en estos anuncios
             </label>
             <select
               value={selectedProductId}
               onChange={(e) => setSelectedProductId(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-sm text-white"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#07090f]/80 border border-white/10 text-sm text-white outline-none focus:border-[#e5c88b]/60"
             >
               {productPages.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -526,13 +526,13 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
           </div>
 
           <div className="md:col-span-4 space-y-1.5">
-            <label className="text-xs font-semibold text-zinc-400 block">
+            <label className="text-xs font-medium text-zinc-400 block">
               Filtrar por campaña Meta Ads
             </label>
             <select
               value={selectedCampaignId}
               onChange={(e) => setSelectedCampaignId(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-sm text-white"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#07090f]/80 border border-white/10 text-sm text-white outline-none focus:border-[#e5c88b]/60"
             >
               <option value="all">Todas las campañas activas</option>
               {campaignOptions.map((c) => (
@@ -544,12 +544,12 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
           </div>
 
           <div className="md:col-span-3 text-xs text-zinc-400 md:text-right space-y-0.5 pb-1">
-            <div className="font-semibold text-zinc-200">
+            <div className="font-semibold text-zinc-200 font-mono tabular-nums">
               {config?.enabled && autoPilotRunning
                 ? `Escucha activa cada ${config.autoPollingSeconds || 25}s`
                 : 'Piloto en espera'}
             </div>
-            <div>
+            <div className="font-mono tabular-nums">
               {hasOpenRouterKey ? 'OpenRouter IA listo' : 'Falta OPENROUTER_API_KEY'}
               {' · '}
               {config?.lastAutoPollAt
@@ -563,7 +563,7 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
         </div>
 
         {config?.lastAutoPollError && (
-          <div className="text-xs text-amber-300 bg-amber-950/30 border border-amber-800/50 rounded-lg px-3.5 py-2">
+          <div className="text-xs text-[#e5c88b] bg-[#e5c88b]/10 border border-[#e5c88b]/25 rounded-xl px-3.5 py-2">
             Aviso Meta Sync: {config.lastAutoPollError}
           </div>
         )}
@@ -571,26 +571,26 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
 
       {/* MÉTRICAS TABULARES LIMPIAS */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl bg-[#0c0d12] border border-zinc-800 px-4 py-3.5">
+        <div className="rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 px-4 py-3.5">
           <div className="text-xs text-zinc-400">Anuncios monitoreados</div>
           <div className="text-2xl font-bold text-white font-mono tabular-nums mt-1">
             {adCards.length}
           </div>
         </div>
-        <div className="rounded-xl bg-[#0c0d12] border border-zinc-800 px-4 py-3.5">
+        <div className="rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 px-4 py-3.5">
           <div className="text-xs text-zinc-400">Respuestas públicas IA</div>
-          <div className="text-2xl font-bold text-cyan-400 font-mono tabular-nums mt-1">
+          <div className="text-2xl font-bold text-white font-mono tabular-nums mt-1">
             {totals.replied}
             <span className="text-xs text-zinc-500 font-normal"> / {totals.totalComments}</span>
           </div>
         </div>
-        <div className="rounded-xl bg-[#0c0d12] border border-zinc-800 px-4 py-3.5">
+        <div className="rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 px-4 py-3.5">
           <div className="text-xs text-zinc-400">Teléfonos protegidos → WA</div>
-          <div className="text-2xl font-bold text-amber-300 font-mono tabular-nums mt-1">
+          <div className="text-2xl font-bold text-[#e5c88b] font-mono tabular-nums mt-1">
             {totals.phones}
           </div>
         </div>
-        <div className="rounded-xl bg-[#0c0d12] border border-zinc-800 px-4 py-3.5">
+        <div className="rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 px-4 py-3.5">
           <div className="text-xs text-zinc-400">Pedidos atribuidos</div>
           <div className="text-2xl font-bold text-emerald-400 font-mono tabular-nums mt-1">
             {totals.orders}
@@ -600,9 +600,9 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
 
       {/* TARJETAS HORIZONTALES DE ANUNCIOS ACTIVOS */}
       {adCards.length === 0 ? (
-        <div className="rounded-xl bg-[#0c0d12] border border-zinc-800 p-10 text-center space-y-3">
-          <MessageSquare className="w-8 h-8 text-cyan-400 mx-auto" />
-          <h3 className="text-base font-bold text-white">Todavía no hay anuncios activos mapeados</h3>
+        <div className="rounded-2xl bg-[#0b0e16]/80 backdrop-blur-md border border-white/10 p-10 text-center space-y-3">
+          <MessageSquare className="w-8 h-8 text-[#e5c88b] mx-auto" />
+          <h3 className="text-base font-semibold text-white">Todavía no hay anuncios activos mapeados</h3>
           <p className="text-sm text-zinc-400 max-w-xl mx-auto">
             Elegí el producto arriba y presioná <strong className="text-white">Activar Piloto 24/7</strong> para traer tus anuncios de Facebook Ads y empezar a responder automáticamente en los comentarios.
           </p>
@@ -611,7 +611,7 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
         <section className="space-y-3">
           <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
             <span>Anuncios activos en horizontal · Tocá cualquiera para ver comentarios y ángulos IA</span>
-            <span>{adCards.length} anuncios</span>
+            <span className="font-mono tabular-nums">{adCards.length} anuncios</span>
           </div>
 
           <div className="flex flex-col gap-3">
@@ -620,15 +620,16 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                 key={card.key}
                 data-testid={`meta-ad-card-${card.adId || card.key}`}
                 onClick={() => setOpenAdKey(card.key)}
-                className="rounded-xl bg-[#0c0d12] hover:bg-[#11131b] border border-zinc-800 hover:border-zinc-700 p-4 transition-colors cursor-pointer flex flex-col md:flex-row md:items-center gap-4"
+                className="rounded-2xl bg-[#0b0e16]/80 hover:bg-white/[0.04] backdrop-blur-md border border-white/10 hover:border-[#e5c88b]/30 p-4 transition-colors cursor-pointer flex flex-col md:flex-row md:items-center gap-4"
               >
                 {/* Miniatura + Jerarquía */}
                 <div className="flex items-start gap-3.5 flex-1 min-w-0">
-                  <div className="w-16 h-16 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0">
+                  <div className="w-16 h-16 rounded-xl bg-[#07090f] border border-white/10 overflow-hidden shrink-0">
                     {card.adThumbnailUrl ? (
                       <img
                         src={card.adThumbnailUrl}
                         alt={card.adName}
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -641,13 +642,13 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       {card.isWinner && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#e5c88b]">
                           <Trophy className="w-3.5 h-3.5" />
                           ANUNCIO GANADOR
                           <span className="text-zinc-600">·</span>
                         </span>
                       )}
-                      <h3 className="text-sm font-bold text-white truncate">
+                      <h3 className="text-sm font-semibold text-white truncate">
                         {card.adIndex ? `Anuncio #${card.adIndex} · ` : ''}
                         {card.adName}
                       </h3>
@@ -655,7 +656,7 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
 
                     <div className="text-xs text-zinc-400 truncate">
                       {card.campaignName} · {card.adSetName} ·{' '}
-                      <span className="text-cyan-300 font-medium">{card.productName}</span>
+                      <span className="text-[#e5c88b] font-medium">{card.productName}</span>
                     </div>
 
                     {card.adCopy && (
@@ -667,7 +668,7 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                 </div>
 
                 {/* Métricas Horizontales Tabulares */}
-                <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-zinc-800/80">
+                <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-white/10">
                   <div className="text-left md:text-right">
                     <div className="text-[11px] text-zinc-500">Entrantes</div>
                     <div className="text-base font-bold text-white font-mono tabular-nums">
@@ -676,13 +677,13 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                   </div>
                   <div className="text-left md:text-right">
                     <div className="text-[11px] text-zinc-500">Respuestas</div>
-                    <div className="text-base font-bold text-cyan-400 font-mono tabular-nums">
+                    <div className="text-base font-bold text-zinc-200 font-mono tabular-nums">
                       {card.publicRepliesCount}
                     </div>
                   </div>
                   <div className="text-left md:text-right">
                     <div className="text-[11px] text-zinc-500">Teléfonos</div>
-                    <div className="text-base font-bold text-amber-300 font-mono tabular-nums">
+                    <div className="text-base font-bold text-[#e5c88b] font-mono tabular-nums">
                       {card.phonesCapturedCount}
                     </div>
                   </div>
@@ -692,7 +693,7 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                       {card.closedOrdersCount}
                     </div>
                   </div>
-                  <div className="text-xs font-semibold text-cyan-400 pl-2">
+                  <div className="text-xs font-semibold text-[#e5c88b] pl-2">
                     Ver detalle →
                   </div>
                 </div>
@@ -705,27 +706,27 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
       {/* DRAWER / MODAL DE RESUMEN EN VIVO DEL ANUNCIO SELECCIONADO */}
       {selectedAdCard && (
         <div
-          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-end"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-end"
           onClick={() => setOpenAdKey(null)}
         >
           <div
-            className="w-full max-w-2xl h-full bg-[#090a0f] border-l border-zinc-800 flex flex-col overflow-hidden"
+            className="w-full max-w-2xl h-full bg-[#0b0e16]/95 backdrop-blur-2xl border-l border-white/10 flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Cabecera Modal */}
-            <div className="p-5 border-b border-zinc-800 flex items-start justify-between gap-4">
+            <div className="p-5 border-b border-white/10 bg-[#07090f]/80 flex items-start justify-between gap-4">
               <div className="space-y-1 min-w-0">
                 <div className="text-xs text-zinc-400">
                   {selectedAdCard.campaignName} · {selectedAdCard.adSetName}
                 </div>
-                <h3 className="text-lg font-bold text-white truncate">
+                <h3 className="text-lg font-semibold text-white truncate">
                   {selectedAdCard.adName}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setOpenAdKey(null)}
-                className="p-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 cursor-pointer shrink-0"
+                className="p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-300 cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -734,18 +735,19 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
             {/* Cuerpo */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               {/* Contexto del Anuncio + Asignación de Producto */}
-              <div className="rounded-xl bg-[#0c0d12] border border-zinc-800 p-4 space-y-3">
+              <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 space-y-3">
                 <div className="flex items-start gap-3">
                   {selectedAdCard.adThumbnailUrl && (
                     <img
                       src={selectedAdCard.adThumbnailUrl}
                       alt={selectedAdCard.adName}
-                      className="w-14 h-14 rounded-lg object-cover border border-zinc-800 shrink-0"
+                      referrerPolicy="no-referrer"
+                      className="w-14 h-14 rounded-xl object-cover border border-white/10 shrink-0"
                     />
                   )}
                   <div className="flex-1 min-w-0 space-y-1">
                     {selectedAdCard.adHeadline && (
-                      <div className="text-xs font-bold text-zinc-200">
+                      <div className="text-xs font-semibold text-zinc-200">
                         {selectedAdCard.adHeadline}
                       </div>
                     )}
@@ -755,12 +757,12 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="text-xs text-zinc-400">Producto vinculado a este anuncio:</span>
                   <select
                     value={selectedAdCard.productId}
                     onChange={(e) => handleAssignProductToAd(selectedAdCard, e.target.value)}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-700 text-xs font-semibold text-white max-w-xs"
+                    className="px-3 py-1.5 rounded-lg bg-[#07090f] border border-white/15 text-xs font-semibold text-white max-w-xs outline-none focus:border-[#e5c88b]/60"
                   >
                     {productPages.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -787,26 +789,26 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
 
               {/* Cronología de Comentarios Públicos y Respuestas Multi-Ángulo */}
               <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                   Comentarios recibidos y respuestas automáticas ({selectedAdCard.threads.length})
                 </h4>
 
                 {selectedAdCard.threads.length === 0 ? (
-                  <div className="rounded-xl bg-[#0c0d12] border border-zinc-800 p-6 text-center text-sm text-zinc-500">
+                  <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-6 text-center text-sm text-zinc-500">
                     Este anuncio aún no tiene comentarios nuevos. El piloto lo revisa automáticamente cada 25 segundos.
                   </div>
                 ) : (
                   selectedAdCard.threads.map((th) => (
                     <div
                       key={th.id}
-                      className="rounded-xl bg-[#0c0d12] border border-zinc-800 p-4 space-y-3"
+                      className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 space-y-3"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-sm font-bold text-white truncate">
+                          <span className="text-sm font-semibold text-white truncate">
                             {th.authorName}
                           </span>
-                          <span className="text-[11px] text-zinc-500">
+                          <span className="text-[11px] font-mono tabular-nums text-zinc-500">
                             {new Date(th.createdAt).toLocaleString('es-PY', {
                               day: '2-digit',
                               month: '2-digit',
@@ -821,10 +823,10 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                             <button
                               type="button"
                               onClick={() => onJumpToProductOrder?.(th.productId || '', th.orderId)}
-                              className="text-xs font-bold text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                              className="text-xs font-semibold text-[#e5c88b] hover:underline flex items-center gap-1 cursor-pointer"
                             >
                               <ShoppingBag className="w-3.5 h-3.5" />
-                              <span>Pedido {th.orderId}</span>
+                              <span className="font-mono">Pedido {th.orderId}</span>
                             </button>
                           )}
 
@@ -832,10 +834,10 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                             type="button"
                             onClick={() => handleToggleHideComment(th)}
                             title={th.hiddenFromPublic ? 'Mostrar comentario' : 'Ocultar comentario en Facebook'}
-                            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 cursor-pointer"
+                            className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-zinc-300 cursor-pointer"
                           >
                             {th.hiddenFromPublic ? (
-                              <EyeOff className="w-3.5 h-3.5 text-amber-300" />
+                              <EyeOff className="w-3.5 h-3.5 text-[#e5c88b]" />
                             ) : (
                               <Eye className="w-3.5 h-3.5" />
                             )}
@@ -844,10 +846,10 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                       </div>
 
                       {/* Comentario del cliente */}
-                      <div className="text-sm text-zinc-200 bg-zinc-950 border border-zinc-800/80 rounded-lg px-3.5 py-2.5">
+                      <div className="text-sm text-zinc-200 bg-[#07090f]/80 border border-white/10 rounded-xl px-3.5 py-2.5">
                         “{th.commentText}”
                         {th.detectedPhones.length > 0 && (
-                          <div className="mt-1.5 flex items-center gap-2 text-xs text-amber-300 font-mono">
+                          <div className="mt-1.5 flex items-center gap-2 text-xs text-[#e5c88b] font-mono tabular-nums">
                             <Phone className="w-3.5 h-3.5" />
                             <span>
                               +{th.detectedPhones.join(', +')} ·{' '}
@@ -859,7 +861,7 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
 
                       {/* Respuesta pública multi-ángulo */}
                       {th.publicReplyText ? (
-                        <div className="text-sm text-emerald-100 bg-emerald-950/25 border border-emerald-800/40 rounded-lg px-3.5 py-2.5 space-y-1">
+                        <div className="text-sm text-emerald-100 bg-emerald-500/[0.07] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 space-y-1">
                           <div className="flex items-center justify-between text-[11px] text-emerald-400 font-semibold">
                             <span>
                               {th.angleUsed ? ANGLE_LABELS[th.angleUsed] || th.angleUsed : 'Respuesta pública IA'}
@@ -875,7 +877,7 @@ export const MetaCommentsView: React.FC<MetaCommentsViewProps> = ({
                               href={th.expressFormUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:underline pt-1"
+                              className="inline-flex items-center gap-1 text-xs text-[#e5c88b] hover:underline pt-1"
                             >
                               <span>Link directo usado</span>
                               <ExternalLink className="w-3 h-3" />
