@@ -67,7 +67,9 @@ export function createDefaultMetaCommentsState(products: ProductPage[] = []): Me
     config: {
       enabled: true,
       autoPublicReply: true,
-      autoPrivateDm: true,
+      autoPrivateDm: false,
+      publicOnlyMode: true,
+      autoPollingSeconds: 25,
       autoHidePhoneComments: true,
       autoWhatsappOnPhone: true,
       defaultProductId: String(firstProduct?.id || ''),
@@ -76,8 +78,11 @@ export function createDefaultMetaCommentsState(products: ProductPage[] = []): Me
       campaignProductMap: {},
       adProductMap: {},
       postAdMap: {},
+      activeAdsSnapshot: [],
       webhookVerifyToken: String(process.env.META_WEBHOOK_VERIFY_TOKEN || 'noelux_meta_comments_2026').trim(),
-      lastSyncAt: undefined
+      lastSyncAt: undefined,
+      lastAutoPollAt: undefined,
+      lastAutoPollError: undefined
     },
     threads: [],
     adAttributionStats: {},
@@ -106,8 +111,9 @@ export function normalizeCommentsStateShape(
     enabled: typeof srcConfig.enabled === 'boolean' ? srcConfig.enabled : base.config.enabled,
     autoPublicReply:
       typeof srcConfig.autoPublicReply === 'boolean' ? srcConfig.autoPublicReply : base.config.autoPublicReply,
-    autoPrivateDm:
-      typeof srcConfig.autoPrivateDm === 'boolean' ? srcConfig.autoPrivateDm : base.config.autoPrivateDm,
+    autoPrivateDm: false,
+    publicOnlyMode: true,
+    autoPollingSeconds: Math.max(15, Number(srcConfig.autoPollingSeconds || base.config.autoPollingSeconds || 25)),
     autoHidePhoneComments:
       typeof srcConfig.autoHidePhoneComments === 'boolean'
         ? srcConfig.autoHidePhoneComments
@@ -126,8 +132,11 @@ export function normalizeCommentsStateShape(
     adProductMap:
       srcConfig.adProductMap && typeof srcConfig.adProductMap === 'object' ? srcConfig.adProductMap : {},
     postAdMap: srcConfig.postAdMap && typeof srcConfig.postAdMap === 'object' ? srcConfig.postAdMap : {},
+    activeAdsSnapshot: Array.isArray(srcConfig.activeAdsSnapshot) ? srcConfig.activeAdsSnapshot : [],
     webhookVerifyToken: String(srcConfig.webhookVerifyToken || base.config.webhookVerifyToken),
-    lastSyncAt: srcConfig.lastSyncAt ? String(srcConfig.lastSyncAt) : undefined
+    lastSyncAt: srcConfig.lastSyncAt ? String(srcConfig.lastSyncAt) : undefined,
+    lastAutoPollAt: srcConfig.lastAutoPollAt ? String(srcConfig.lastAutoPollAt) : undefined,
+    lastAutoPollError: srcConfig.lastAutoPollError ? String(srcConfig.lastAutoPollError) : undefined
   };
 
   const threads: MetaCommentThreadRecord[] = Array.isArray(raw?.threads)
@@ -472,12 +481,26 @@ export function buildUniversalProductKnowledgePrompt(product: ProductPage): stri
     const pt = product.physicalTruth;
     lines.push(
       `VERDAD FÍSICA DEL PRODUCTO:`,
-      `- Qué trae la caja: ${(pt.boxIncludes || []).join(', ') || 'Unidad principal sellada'}`,
-      ...(pt.powerSource ? [`- Alimentación/Energía: ${pt.powerSource}`] : []),
-      ...(pt.realBenefits?.length ? [`- Beneficios reales: ${pt.realBenefits.join(' · ')}`] : []),
-      ...(pt.honestLimitations?.length
-        ? [`- No inventar / límites honestos: ${pt.honestLimitations.join(' · ')}`]
-        : [])
+      `- Qué trae la caja: ${pt.boxContents || 'Unidad principal sellada'}`,
+      ...(pt.powerSourceLabel || pt.powerSource
+        ? [`- Alimentación/Energía: ${pt.powerSourceLabel || pt.powerSource}`]
+        : []),
+      ...(pt.realDimensions ? [`- Medidas reales: ${pt.realDimensions}`] : []),
+      ...(pt.waterResistance ? [`- Resistencia: ${pt.waterResistance}`] : []),
+      ...(pt.warrantyDays ? [`- Garantía escrita: ${pt.warrantyDays} días`] : [])
+    );
+  }
+
+  if (product.tripwireConfig?.enabled && product.tripwireConfig.entryProductName) {
+    const tc = product.tripwireConfig;
+    const entryGs = Number(tc.entryPriceGs ?? tc.entryProductPriceGs ?? 20000);
+    const delivGs = Number(tc.deliveryFeeGs ?? tc.entryDeliveryFeeGs ?? 40000);
+    lines.push(
+      `OFERTA DE ENTRADA CONGRUENTE (JAMÁS usar tecnicismos como "tripwire" con el cliente):`,
+      `- Producto de entrada anunciado: ${tc.entryProductName}`,
+      `- Descripción corta: ${tc.entryProductDescription || ''}`,
+      `- Precio entrada solo: ${formatParaguayGs(entryGs)} (+ delivery de zona ${formatParaguayGs(delivGs)} si pide solo ese producto)`,
+      `- Si lleva el Paquete Principal (${product.nombre}): este producto de entrada va incluido DE REGALO + ENVÍO GRATIS.`
     );
   }
 
@@ -595,11 +618,15 @@ export async function generateCommentAndDmAiResponses(params: {
   commentText: string;
   detectedPhones: string[];
   adName?: string;
+  adSetName?: string;
+  adCopy?: string;
   campaignName?: string;
+  recentAnglesOnPost?: string[];
   expressFormUrl: string;
   fetchImpl?: typeof fetch;
 }): Promise<{
   intent: MetaCommentThreadRecord['intent'];
+  angleUsed: string;
   publicReply: string;
   privateDm: string;
   whatsappMessage?: string;
@@ -608,42 +635,51 @@ export async function generateCommentAndDmAiResponses(params: {
   const productContext = buildUniversalProductKnowledgePrompt(params.product);
   const firstName = String(params.authorName || 'amigo/a').trim().split(/\s+/)[0] || 'amigo/a';
   const hasPhone = params.detectedPhones.length > 0;
+  const recentAngles = (params.recentAnglesOnPost || []).slice(0, 4).join(', ') || 'ninguno todavía';
 
-  const systemPrompt = `Sos el Vendedor Closer #1 de Paraguay atendiendo comentarios y mensajes de anuncios en Facebook/Instagram.
-Respondés SIEMPRE en español paraguayo natural, cálido, respetuoso, empático y humano (usando "te", "vos", "¡Hola ${firstName}!", cero lenguaje robótico o corporativo acartonado).
-Reglas de oro de conversión:
-1. REGLA UNIVERSAL: Respondé ÚNICAMENTE con los precios, características, envío y beneficios reales de la ficha del producto proporcionada abajo. Prohibido inventar especificaciones, descuentos o garantías que no existan.
-2. RESPUESTA PÚBLICA (prueba social):
-   - Si el cliente preguntó precio/envío/info: Sé amable, generá confianza inmediata mencionando que tiene Envío GRATIS y pago al recibir en la puerta, respondé brevemente su duda, y decile con naturalidad "¡Ya te escribí por privado / Messenger con la promo completa para reservarte el tuyo!"
-   - Si dejó su teléfono en público: Agradecé rápidamente "Por tu seguridad ocultamos tu número de la vista pública, ¡ya te escribimos directo a tu WhatsApp y Messenger para coordinar tu envío!"
-   - Máximo 220 caracteres en publicReply para que sea ágil, humano y con emojis justos (1-2).
-3. MENSAJE PRIVADO MESSENGER (cierre sin fricción):
-   - Saludá por su nombre (${firstName}), resolvé exactamente lo que preguntó con claridad y emoción genuina, mostrale el precio real del Pack 1x y el ahorro del Pack 2x en Guaraníes.
-   - Invitá al cliente de la mano a cerrar en 30 segundos en el Formulario Express directo (SIN mandarlo a leer otra página larga): decile que toque el botón o el enlace de abajo para confirmar nombre, ciudad y ubicación GPS para envío gratis hoy mismo (o que te pase sus datos por aquí mismo si prefiere).
-   - NO pegues la URL cruda repetida si ya va en botón, aunque podés mencionarla amablemente ("te dejo acá el enlace directo"). Máximo 420 caracteres.
-4. Devolvé ÚNICAMENTE JSON válido con las claves:
+  const systemPrompt = `Sos el Vendedor Closer #1 de Paraguay atendiendo comentarios PÚBLICOS en anuncios de Facebook/Instagram.
+NO enviamos mensajes privados por Messenger DM ni decimos "te escribí al inbox/privado". TODA la venta y prueba social ocurre A LA VISTA DE TODOS en los comentarios públicos para crear efecto avalancha cuando otros lectores lean el hilo.
+
+Reglas estrictas de conversión pública:
+1. ESPAÑOL PARAGUAYO NATURAL Y HUMANO: Usá "¡Hola ${firstName}!" y trato cercano ("vos", "te"), cero frases robóticas ni corporativas.
+2. VERDAD FÍSICA Y PRECIOS REALES: Respondé ÚNICAMENTE con los precios en Guaraníes (Gs.) y datos reales del producto. Jamás digas palabras técnicas como "tripwire".
+3. MULTI-ÁNGULO PARA EFECTO AVALANCHA (MUY IMPORTANTE):
+   - No repitas siempre la misma respuesta aburrida. Elegí un ángulo distinto a los recientes (${recentAngles}) que responda al usuario Y convenza a cualquiera que lea los comentarios después:
+     * "precio_y_valor": Precio claro + por qué conviene frente a opciones baratas/descartables.
+     * "cero_riesgo_contra_entrega": Destacá que revisa el paquete en mano antes de pagar en efectivo, QR o transferencia.
+     * "prueba_social_vecinos": Contá con naturalidad cómo está saliendo todos los días para familias en Asunción, Central e interior.
+     * "facilidad_inmediata": Explicá en 1 frase cómo queda funcionando en segundos sin complicaciones.
+     * "escasez_real_hoy": Quedan pocas unidades de la tanda del día para entrega rápida en 24hs.
+     * "gancho_y_completo": Si el producto tiene oferta de entrada + paquete principal completo, explicá con claridad ambos para que el lector entienda la oportunidad sin confusión.
+4. ESTRUCTURA DEL COMENTARIO PÚBLICO ("publicReply", máximo 340 caracteres):
+   - Saludá a ${firstName}, respondé directo su pregunta con un ángulo persuasivo distinto, e invitalo a confirmar en 30 segundos tocando el link directo: ${params.expressFormUrl}
+   - Si el cliente dejó su celular en público (${hasPhone ? 'SÍ dejó teléfono' : 'NO dejó teléfono'}): agradecé rápido diciendo "Por tu seguridad ocultamos tu número de la vista pública, ¡ya te escribimos directo a tu WhatsApp para coordinar tu envío!"
+5. Devolvé ÚNICAMENTE JSON válido:
    {
      "intent": "price_inquiry" | "buy_now" | "phone_drop" | "shipping_question" | "objection" | "other",
+     "angleUsed": "precio_y_valor" | "cero_riesgo_contra_entrega" | "prueba_social_vecinos" | "facilidad_inmediata" | "escasez_real_hoy" | "gancho_y_completo",
      "publicReply": string,
-     "privateDm": string,
      "whatsappMessage": string,
      "shouldHideComment": boolean
    }`;
 
   const userPrompt = `${productContext}
 
-ANUNCIO / ORIGEN:
+CONTEXTO EXACTO DEL ANUNCIO QUE VIO EL CLIENTE:
 - Campaña: ${params.campaignName || 'Campaña Meta Ads'}
+- Conjunto de Anuncios: ${params.adSetName || 'Público general'}
 - Anuncio: ${params.adName || 'Anuncio principal'}
-- Link directo al Formulario Express (NO landing page): ${params.expressFormUrl}
+- Texto/Promesa del Anuncio: ${params.adCopy || '(Basado en el creativo visual del producto)'}
+- Link directo de pedido (sin landing pesada): ${params.expressFormUrl}
+- Ángulos ya usados recientemente en este anuncio (intentá variar): ${recentAngles}
 
 COMENTARIO REAL DEL CLIENTE:
 - Nombre: ${params.authorName || 'Cliente Facebook'}
 - Comentario: "${params.commentText}"
-- Teléfonos detectados en comentario: ${hasPhone ? params.detectedPhones.join(', ') : 'Ninguno'}
+- Teléfonos detectados: ${hasPhone ? params.detectedPhones.join(', ') : 'Ninguno'}
 
-Generá la mejor respuesta pública (social proof) + mensaje privado de Messenger closer${
-    hasPhone ? ' + primer WhatsApp cálido presentándote por el comentario en el anuncio' : ''
+Generá una respuesta PÚBLICA magnética multi-ángulo que cierre al cliente y convenza a todos los demás lectores del anuncio${
+    hasPhone ? ' + mensaje inicial cálido para su WhatsApp' : ''
   }.`;
 
   const parsed = await callOpenRouterJson({
@@ -669,8 +705,9 @@ Generá la mejor respuesta pública (social proof) + mensaje privado de Messenge
 
   return {
     intent,
+    angleUsed: String(parsed?.angleUsed || 'cero_riesgo_contra_entrega').trim(),
     publicReply: String(parsed?.publicReply || '').trim(),
-    privateDm: String(parsed?.privateDm || '').trim(),
+    privateDm: '',
     whatsappMessage: parsed?.whatsappMessage ? String(parsed.whatsappMessage).trim() : undefined,
     shouldHideComment: typeof parsed?.shouldHideComment === 'boolean' ? parsed.shouldHideComment : hasPhone
   };
@@ -950,9 +987,14 @@ export function computeMetaAdCommentStats(
     adId?: string;
     adName?: string;
     adIndex?: number;
+    adSetId?: string;
+    adSetName?: string;
     campaignId?: string;
     campaignName?: string;
     postId?: string;
+    adCopy?: string;
+    adThumbnailUrl?: string;
+    adStatus?: string;
     productId?: string;
     productSlug?: string;
     productName?: string;
@@ -967,9 +1009,14 @@ export function computeMetaAdCommentStats(
         adId,
         adName: String(seed.adName || (seed.postId ? `Post ${seed.postId}` : 'Anuncio sin ID')),
         adIndex: seed.adIndex || extractAdIndexFromName(seed.adName),
+        adSetId: seed.adSetId,
+        adSetName: seed.adSetName,
         campaignId: seed.campaignId,
         campaignName: seed.campaignName,
         postId: seed.postId,
+        adCopy: seed.adCopy,
+        adThumbnailUrl: seed.adThumbnailUrl,
+        adStatus: seed.adStatus || 'ACTIVE',
         productId: seed.productId,
         productSlug: seed.productSlug,
         productName: seed.productName,
@@ -987,7 +1034,11 @@ export function computeMetaAdCommentStats(
       byAd.set(key, cur);
     } else {
       if (!cur.campaignName && seed.campaignName) cur.campaignName = seed.campaignName;
+      if (!cur.adSetName && seed.adSetName) cur.adSetName = seed.adSetName;
       if (!cur.adName && seed.adName) cur.adName = seed.adName;
+      if (!cur.adCopy && seed.adCopy) cur.adCopy = seed.adCopy;
+      if (!cur.adThumbnailUrl && seed.adThumbnailUrl) cur.adThumbnailUrl = seed.adThumbnailUrl;
+      if (!cur.adStatus && seed.adStatus) cur.adStatus = seed.adStatus;
       if (!cur.adIndex && seed.adIndex) cur.adIndex = seed.adIndex;
       if (!cur.productName && seed.productName) cur.productName = seed.productName;
       if (seed.timestamp && new Date(seed.timestamp).getTime() > new Date(cur.lastActivityAt).getTime()) {
@@ -997,14 +1048,39 @@ export function computeMetaAdCommentStats(
     return cur;
   };
 
+  for (const snap of state.config.activeAdsSnapshot || []) {
+    ensureEntry({
+      adId: snap.adId,
+      adName: snap.adName,
+      adIndex: snap.adIndex,
+      adSetId: snap.adSetId,
+      adSetName: snap.adSetName,
+      campaignId: snap.campaignId,
+      campaignName: snap.campaignName,
+      postId: snap.postId,
+      adCopy: snap.adCopy || snap.adHeadline,
+      adThumbnailUrl: snap.adThumbnailUrl,
+      adStatus: snap.adStatus,
+      productId: snap.productId,
+      productSlug: snap.productSlug,
+      productName: snap.productName,
+      timestamp: snap.updatedAt
+    });
+  }
+
   for (const postEntry of Object.values(state.config.postAdMap || {})) {
     ensureEntry({
       adId: postEntry.adId,
       adName: postEntry.adName,
       adIndex: postEntry.adIndex,
+      adSetId: postEntry.adSetId,
+      adSetName: postEntry.adSetName,
       campaignId: postEntry.campaignId,
       campaignName: postEntry.campaignName,
       postId: postEntry.postId,
+      adCopy: postEntry.adCopy || postEntry.adHeadline,
+      adThumbnailUrl: postEntry.adThumbnailUrl,
+      adStatus: postEntry.adStatus,
       productId: postEntry.productId,
       productSlug: postEntry.productSlug,
       productName: postEntry.productName
@@ -1016,9 +1092,13 @@ export function computeMetaAdCommentStats(
       adId: thread.adId,
       adName: thread.adName,
       adIndex: thread.adIndex,
+      adSetId: thread.adSetId,
+      adSetName: thread.adSetName,
       campaignId: thread.campaignId,
       campaignName: thread.campaignName,
       postId: thread.postId,
+      adCopy: thread.adCopy,
+      adThumbnailUrl: thread.adThumbnailUrl,
       productId: thread.productId,
       productSlug: thread.productSlug,
       productName: thread.productName,
@@ -1084,6 +1164,7 @@ export function computeMetaAdCommentStats(
 
 export async function processInboundMetaComment(params: {
   commentId: string;
+  parentCommentId?: string;
   postId: string;
   pageId: string;
   authorId?: string;
@@ -1093,6 +1174,10 @@ export async function processInboundMetaComment(params: {
   adId?: string;
   adName?: string;
   adIndex?: number;
+  adSetId?: string;
+  adSetName?: string;
+  adCopy?: string;
+  adThumbnailUrl?: string;
   campaignId?: string;
   campaignName?: string;
   explicitProductId?: string;
@@ -1124,6 +1209,10 @@ export async function processInboundMetaComment(params: {
   const resolvedAdName = params.adName || mappedPost?.adName || (resolvedAdId ? `Anuncio ${resolvedAdId.slice(-6)}` : 'Anuncio Meta');
   const resolvedAdIndex =
     params.adIndex || mappedPost?.adIndex || extractAdIndexFromName(resolvedAdName);
+  const resolvedAdSetId = params.adSetId || mappedPost?.adSetId || '';
+  const resolvedAdSetName = params.adSetName || mappedPost?.adSetName || '';
+  const resolvedAdCopy = params.adCopy || mappedPost?.adCopy || mappedPost?.adHeadline || '';
+  const resolvedAdThumb = params.adThumbnailUrl || mappedPost?.adThumbnailUrl || '';
   const resolvedCampaignId = params.campaignId || mappedPost?.campaignId || '';
   const resolvedCampaignName = params.campaignName || mappedPost?.campaignName || '';
 
@@ -1162,19 +1251,29 @@ export async function processInboundMetaComment(params: {
     commentId: params.commentId,
     threadId,
     authorName: params.authorName,
-    channel: 'messenger_dm'
+    channel: 'facebook_comment'
   });
+
+  const recentAnglesOnPost = state.threads
+    .filter((t) => (resolvedAdId ? t.adId === resolvedAdId : t.postId === params.postId) && t.angleUsed)
+    .slice(0, 4)
+    .map((t) => String(t.angleUsed));
 
   const now = new Date().toISOString();
   const thread: MetaCommentThreadRecord = {
     id: threadId,
     postId: params.postId,
     commentId: params.commentId,
+    parentCommentId: params.parentCommentId,
     platform: params.platform || 'facebook',
     pageId: params.pageId || OFFICIAL_META_PAGE_ID,
     adId: resolvedAdId || undefined,
     adName: resolvedAdName,
     adIndex: resolvedAdIndex,
+    adSetId: resolvedAdSetId || undefined,
+    adSetName: resolvedAdSetName || undefined,
+    adCopy: resolvedAdCopy || undefined,
+    adThumbnailUrl: resolvedAdThumb || undefined,
     campaignId: resolvedCampaignId || undefined,
     campaignName: resolvedCampaignName || undefined,
     productId: product.id,
@@ -1202,7 +1301,7 @@ export async function processInboundMetaComment(params: {
     updatedAt: now
   };
 
-  // Llamada 100% IA pura OpenRouter para generar respuesta pública + Messenger DM + WhatsApp
+  // Llamada 100% IA pura OpenRouter para respuesta PÚBLICA multi-ángulo (sin Messenger DM)
   const aiResult = await generateCommentAndDmAiResponses({
     openRouterApiKey: params.openRouterApiKey,
     product,
@@ -1210,12 +1309,16 @@ export async function processInboundMetaComment(params: {
     commentText: thread.commentText,
     detectedPhones,
     adName: resolvedAdName,
+    adSetName: resolvedAdSetName,
+    adCopy: resolvedAdCopy,
     campaignName: resolvedCampaignName,
+    recentAnglesOnPost,
     expressFormUrl,
     fetchImpl: params.fetchImpl
   });
 
   thread.intent = aiResult.intent;
+  thread.angleUsed = aiResult.angleUsed;
   const shouldExecuteReal = Boolean(params.executeMetaActions && !params.isSimulation && params.pageAccessToken);
 
   // 1. Ocultar comentario si dejó su teléfono (protección anti-competencia)
@@ -1239,7 +1342,7 @@ export async function processInboundMetaComment(params: {
     }
   }
 
-  // 2. Respuesta pública (Prueba social)
+  // 2. Respuesta pública multi-ángulo (Efecto avalancha debajo del anuncio — ÚNICO canal en Meta)
   if (state.config.autoPublicReply && aiResult.publicReply) {
     thread.publicReplyText = aiResult.publicReply;
     let sentLive = false;
@@ -1272,49 +1375,12 @@ export async function processInboundMetaComment(params: {
       createdAt: thread.publicRepliedAt,
       by: 'ai_public',
       sentToMeta: sentLive,
-      metaMessageId: replyId
-    });
-  }
-
-  // 3. Messenger Private Reply + WebView al Formulario Express
-  if (state.config.autoPrivateDm && aiResult.privateDm) {
-    let dmSentLive = false;
-    let metaMsgId: string | undefined;
-    if (shouldExecuteReal && params.pageAccessToken) {
-      const dmRes = await sendMetaMessengerMessage({
-        pageId: thread.pageId,
-        pageAccessToken: params.pageAccessToken,
-        text: aiResult.privateDm,
-        expressUrl: expressFormUrl,
-        commentId: params.commentId,
-        fetchImpl: params.fetchImpl
-      });
-      if (dmRes.ok) {
-        dmSentLive = true;
-        metaMsgId = dmRes.messageId;
-        if (dmRes.recipientId) thread.psid = dmRes.recipientId;
-        actionsTaken.push(`messenger_dm_sent_live_${dmRes.modeUsed || 'ok'}`);
-      } else if (dmRes.error) {
-        errors.push(`Error Messenger Private Reply: ${dmRes.error}`);
-      }
-    } else if (params.isSimulation) {
-      actionsTaken.push('messenger_dm_generated_ai');
-    }
-
-    thread.dmSentAt = new Date().toISOString();
-    thread.status = 'form_sent';
-    thread.messages.push({
-      id: `msg_${Date.now()}_dm`,
-      direction: 'outbound',
-      channel: params.platform === 'instagram' ? 'instagram_dm' : 'messenger_dm',
-      text: aiResult.privateDm,
-      createdAt: thread.dmSentAt,
-      by: 'ai_dm',
-      sentToMeta: dmSentLive,
-      metaMessageId: metaMsgId,
+      metaMessageId: replyId,
       expressUrl: expressFormUrl
     });
   }
+
+  // 3. Messenger DM descartado por diseño (modo 100% comentarios públicos + WhatsApp directo)
 
   // 4. WhatsApp directo si dejó su número de teléfono real en el comentario
   if (detectedPhones.length > 0 && state.config.autoWhatsappOnPhone && !params.isSimulation) {
@@ -1621,6 +1687,7 @@ export async function syncMetaAdPostsAndComments(params: {
   ok: boolean;
   pageName?: string;
   adsMapped: number;
+  activeAdsCount: number;
   postsScanned: number;
   newCommentsProcessed: number;
   commentsFound: number;
@@ -1642,16 +1709,17 @@ export async function syncMetaAdPostsAndComments(params: {
     return {
       ok: false,
       adsMapped: Object.keys(state.config.postAdMap).length,
+      activeAdsCount: 0,
       postsScanned: 0,
       newCommentsProcessed: 0,
       commentsFound: 0,
       errors: [
-        `No se pudo obtener Page Access Token para la página ${pageId}. Reconectá Facebook OAuth aceptando pages_manage_engagement y pages_messaging.`
+        `No se pudo obtener Page Access Token para la página ${pageId}. Reconectá Facebook con permiso pages_manage_engagement.`
       ]
     };
   }
 
-  // 1. Traer Anuncios reales con su effective_object_story_id (incluye dark posts de campañas de ventas)
+  // 1. Traer Anuncios reales (priorizando ACTIVE) con Campaña, Conjunto y Copy/Miniatura del Creativo
   const postToAdTemp = new Map<
     string,
     {
@@ -1659,16 +1727,24 @@ export async function syncMetaAdPostsAndComments(params: {
       adId: string;
       adName: string;
       adIndex?: number;
+      adStatus?: string;
+      adSetId?: string;
+      adSetName?: string;
       campaignId?: string;
       campaignName?: string;
+      adCopy?: string;
+      adHeadline?: string;
+      adThumbnailUrl?: string;
     }
   >();
+  const activeAdsSnapshots: NonNullable<MetaCommentAutomationConfig['activeAdsSnapshot']> = [];
 
   try {
     const normAcc = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+    const filtering = encodeURIComponent(JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PENDING_REVIEW', 'PREAPPROVED', 'PAUSED'] }]));
     const adsUrl = `${META_GRAPH_BASE}/${encodeURIComponent(
       normAcc
-    )}/ads?fields=id,name,status,campaign{id,name},creative{id,name,effective_object_story_id,object_story_id}&limit=40&access_token=${encodeURIComponent(
+    )}/ads?fields=id,name,effective_status,status,adset{id,name},campaign{id,name},creative{id,name,title,body,thumbnail_url,image_url,effective_object_story_id,object_story_id,object_story_spec}&filtering=${filtering}&limit=60&access_token=${encodeURIComponent(
       params.userAccessToken
     )}`;
     const adsRes = await fetchFn(adsUrl);
@@ -1679,22 +1755,85 @@ export async function syncMetaAdPostsAndComments(params: {
         const storyId = String(
           ad?.creative?.effective_object_story_id || ad?.creative?.object_story_id || ''
         ).trim();
-        if (!storyId) continue;
+        const effStatus = String(ad?.effective_status || ad?.status || 'ACTIVE').toUpperCase();
         const adName = String(ad?.name || ad?.creative?.name || `Anuncio #${idx}`);
-        const mapped = {
-          postId: storyId,
+        const adCopy = String(
+          ad?.creative?.body ||
+            ad?.creative?.object_story_spec?.link_data?.message ||
+            ad?.creative?.object_story_spec?.video_data?.message ||
+            ''
+        ).trim();
+        const adHeadline = String(
+          ad?.creative?.title ||
+            ad?.creative?.object_story_spec?.link_data?.name ||
+            ad?.creative?.object_story_spec?.video_data?.title ||
+            ''
+        ).trim();
+        const adThumbnailUrl = String(
+          ad?.creative?.image_url ||
+            ad?.creative?.thumbnail_url ||
+            ad?.creative?.object_story_spec?.link_data?.picture ||
+            ''
+        ).trim();
+
+        const resolvedProd = resolveProductForCommentContext({
+          products: params.products,
+          config: state.config,
+          adId: String(ad.id),
+          campaignId: ad?.campaign?.id ? String(ad.campaign.id) : undefined,
+          postId: storyId || undefined,
+          adName,
+          campaignName: ad?.campaign?.name ? String(ad.campaign.name) : undefined,
+          commentText: `${adCopy} ${adHeadline}`
+        });
+
+        const snap = {
           adId: String(ad.id),
           adName,
           adIndex: extractAdIndexFromName(adName) || idx,
+          adStatus: effStatus,
+          adSetId: ad?.adset?.id ? String(ad.adset.id) : undefined,
+          adSetName: ad?.adset?.name ? String(ad.adset.name) : undefined,
           campaignId: ad?.campaign?.id ? String(ad.campaign.id) : undefined,
-          campaignName: ad?.campaign?.name ? String(ad.campaign.name) : undefined
+          campaignName: ad?.campaign?.name ? String(ad.campaign.name) : undefined,
+          postId: storyId || undefined,
+          adCopy: adCopy || undefined,
+          adHeadline: adHeadline || undefined,
+          adThumbnailUrl: adThumbnailUrl || undefined,
+          productId: resolvedProd?.id,
+          productSlug: resolvedProd?.slug,
+          productName: resolvedProd?.nombre,
+          updatedAt: new Date().toISOString()
         };
-        postToAdTemp.set(storyId, mapped);
-        const existingMap = state.config.postAdMap[storyId] || {};
-        state.config.postAdMap[storyId] = {
-          ...existingMap,
-          ...mapped
-        };
+        if (effStatus === 'ACTIVE' || effStatus === 'PENDING_REVIEW' || effStatus === 'PREAPPROVED') {
+          activeAdsSnapshots.push(snap);
+        }
+
+        if (storyId) {
+          const mapped = {
+            postId: storyId,
+            adId: String(ad.id),
+            adName,
+            adIndex: snap.adIndex,
+            adStatus: effStatus,
+            adSetId: snap.adSetId,
+            adSetName: snap.adSetName,
+            campaignId: snap.campaignId,
+            campaignName: snap.campaignName,
+            adCopy: snap.adCopy,
+            adHeadline: snap.adHeadline,
+            adThumbnailUrl: snap.adThumbnailUrl
+          };
+          postToAdTemp.set(storyId, mapped);
+          const existingMap = state.config.postAdMap[storyId] || {};
+          state.config.postAdMap[storyId] = {
+            ...existingMap,
+            ...mapped,
+            productId: existingMap.productId || resolvedProd?.id,
+            productSlug: existingMap.productSlug || resolvedProd?.slug,
+            productName: existingMap.productName || resolvedProd?.nombre
+          };
+        }
         idx++;
       }
     } else if (adsJson?.error) {
@@ -1702,6 +1841,10 @@ export async function syncMetaAdPostsAndComments(params: {
     }
   } catch (err: any) {
     errors.push(`Error consultando Ads: ${err?.message || 'unknown'}`);
+  }
+
+  if (activeAdsSnapshots.length > 0) {
+    state.config.activeAdsSnapshot = activeAdsSnapshots;
   }
 
   // 2. Complementar con promotable_posts de la Página (dark posts recientes + orgánicos)
@@ -1724,14 +1867,14 @@ export async function syncMetaAdPostsAndComments(params: {
   let postsScanned = 0;
   let commentsFound = 0;
   let newCommentsProcessed = 0;
-  const maxPerPost = params.maxCommentsPerPost || 15;
+  const maxPerPost = params.maxCommentsPerPost || 20;
 
-  for (const postId of Array.from(postsToInspect).slice(0, 25)) {
+  for (const postId of Array.from(postsToInspect).slice(0, 30)) {
     postsScanned += 1;
     try {
       const cUrl = `${META_GRAPH_BASE}/${encodeURIComponent(
         postId
-      )}/comments?fields=id,message,created_time,from,is_hidden,parent&filter=stream&order=reverse_chronological&limit=${maxPerPost}&access_token=${encodeURIComponent(
+      )}/comments?fields=id,message,created_time,from,is_hidden,parent,comments.limit(5){id,message,created_time,from,is_hidden}&filter=stream&order=reverse_chronological&limit=${maxPerPost}&access_token=${encodeURIComponent(
         pageToken
       )}`;
       const cRes = await fetchFn(cUrl);
@@ -1740,16 +1883,28 @@ export async function syncMetaAdPostsAndComments(params: {
         errors.push(`Post ${postId}: ${cJson.error.message}`);
         continue;
       }
-      const comments: any[] = Array.isArray(cJson?.data) ? cJson.data : [];
-      for (const c of comments) {
+
+      const rawComments: any[] = Array.isArray(cJson?.data) ? cJson.data : [];
+      // Aplanar comentarios raíz + sub-respuestas de clientes (ignorando respuestas de la propia página)
+      const flattenedComments: Array<{ item: any; parentCommentId?: string }> = [];
+      for (const c of rawComments) {
+        flattenedComments.push({ item: c });
+        const subRows: any[] = Array.isArray(c?.comments?.data) ? c.comments.data : [];
+        for (const sub of subRows) {
+          flattenedComments.push({ item: sub, parentCommentId: String(c?.id || '') });
+        }
+      }
+
+      for (const { item: c, parentCommentId } of flattenedComments) {
         const cid = String(c?.id || '').trim();
         const msg = String(c?.message || '').trim();
         const fromId = String(c?.from?.id || '').trim();
         const fromName = String(c?.from?.name || 'Cliente Facebook').trim();
         if (!cid || !msg) continue;
-        // Nunca responder a comentarios escritos por nuestra propia Fanpage ni sub-respuestas del admin
+        // Nunca responder a comentarios propios de nuestra FanPage ni a comentarios de nuestra propia respuesta
         if (fromId && fromId === pageId) continue;
-        if (c?.parent?.id) continue;
+        const alreadyKnownPageReply = state.threads.some((t) => t.publicReplyId === cid);
+        if (alreadyKnownPageReply) continue;
 
         commentsFound += 1;
         const already = state.threads.find((t) => t.commentId === cid);
@@ -1759,6 +1914,7 @@ export async function syncMetaAdPostsAndComments(params: {
         if (params.processWithAi !== false && state.config.enabled && params.openRouterApiKey) {
           const procRes = await processInboundMetaComment({
             commentId: cid,
+            parentCommentId,
             postId,
             pageId,
             authorId: fromId || undefined,
@@ -1768,6 +1924,10 @@ export async function syncMetaAdPostsAndComments(params: {
             adId: adMeta?.adId,
             adName: adMeta?.adName,
             adIndex: adMeta?.adIndex,
+            adSetId: adMeta?.adSetId,
+            adSetName: adMeta?.adSetName,
+            adCopy: adMeta?.adCopy || adMeta?.adHeadline,
+            adThumbnailUrl: adMeta?.adThumbnailUrl,
             campaignId: adMeta?.campaignId,
             campaignName: adMeta?.campaignName,
             products: params.products,
@@ -1781,7 +1941,6 @@ export async function syncMetaAdPostsAndComments(params: {
           if (procRes.createdNew) newCommentsProcessed += 1;
           if (procRes.errors.length > 0) errors.push(...procRes.errors);
         } else {
-          // Registrar comentario en bandeja sin responder automáticamente todavía
           const prod = resolveProductForCommentContext({
             products: params.products,
             config: state.config,
@@ -1798,11 +1957,16 @@ export async function syncMetaAdPostsAndComments(params: {
             id: tid,
             postId,
             commentId: cid,
+            parentCommentId,
             platform: 'facebook',
             pageId,
             adId: adMeta?.adId,
             adName: adMeta?.adName || `Post ${postId}`,
             adIndex: adMeta?.adIndex,
+            adSetId: adMeta?.adSetId,
+            adSetName: adMeta?.adSetName,
+            adCopy: adMeta?.adCopy || adMeta?.adHeadline,
+            adThumbnailUrl: adMeta?.adThumbnailUrl,
             campaignId: adMeta?.campaignId,
             campaignName: adMeta?.campaignName,
             productId: prod?.id,
@@ -1851,14 +2015,88 @@ export async function syncMetaAdPostsAndComments(params: {
   }
 
   state.config.lastSyncAt = new Date().toISOString();
+  state.config.lastAutoPollAt = state.config.lastSyncAt;
+  state.config.lastAutoPollError = errors.length > 0 ? errors[0] : undefined;
   saveMetaCommentsState(state);
 
   return {
     ok: true,
     adsMapped: Object.keys(state.config.postAdMap).length,
+    activeAdsCount: activeAdsSnapshots.length,
     postsScanned,
     newCommentsProcessed,
     commentsFound,
     errors
   };
+}
+
+// ============================================================================
+// PILOTO AUTOMÁTICO 24/7 EN SEGUNDO PLANO (SIN INTERVENCIÓN MANUAL)
+// ============================================================================
+let autoPilotTimer: ReturnType<typeof setInterval> | null = null;
+let autoPilotInFlight = false;
+let autoPilotLastRunAt: string | null = null;
+let autoPilotLastError: string | null = null;
+
+export function getMetaCommentsAutoPilotStatus() {
+  return {
+    running: Boolean(autoPilotTimer),
+    inFlight: autoPilotInFlight,
+    lastRunAt: autoPilotLastRunAt,
+    lastError: autoPilotLastError
+  };
+}
+
+export function stopMetaCommentsAutoPilot(): void {
+  if (autoPilotTimer) {
+    clearInterval(autoPilotTimer);
+    autoPilotTimer = null;
+  }
+}
+
+export function startMetaCommentsAutoPilot(resolveContext: () => Promise<{
+  userAccessToken: string;
+  adAccountId: string;
+  pageId: string;
+  products: ProductPage[];
+  openRouterApiKey: string;
+  publicBaseUrl: string;
+} | null>): void {
+  if (autoPilotTimer) return;
+
+  const runTick = async () => {
+    if (autoPilotInFlight) return;
+    autoPilotInFlight = true;
+    try {
+      const ctx = await resolveContext();
+      if (!ctx || !ctx.userAccessToken) return;
+      const state = loadMetaCommentsState(ctx.products);
+      if (!state.config.enabled) return;
+
+      const res = await syncMetaAdPostsAndComments({
+        userAccessToken: ctx.userAccessToken,
+        adAccountId: ctx.adAccountId,
+        pageId: ctx.pageId,
+        products: ctx.products,
+        openRouterApiKey: ctx.openRouterApiKey,
+        publicBaseUrl: ctx.publicBaseUrl,
+        processWithAi: true,
+        maxCommentsPerPost: 20
+      });
+      autoPilotLastRunAt = new Date().toISOString();
+      autoPilotLastError = res.errors.length > 0 ? res.errors[0] : null;
+    } catch (err: any) {
+      autoPilotLastError = String(err?.message || 'Error en ciclo automático 24/7');
+    } finally {
+      autoPilotInFlight = false;
+    }
+  };
+
+  // Primera pasada ligera tras arrancar y luego cada 25 segundos 24/7
+  setTimeout(() => {
+    void runTick();
+  }, 5000);
+  autoPilotTimer = setInterval(() => {
+    void runTick();
+  }, 25000);
 }

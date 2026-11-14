@@ -14,10 +14,8 @@ import {
   generateCommentAndDmAiResponses,
   linkOrderToMetaCommentThread,
   loadMetaCommentsState,
-  processInboundMessengerDm,
   processInboundMetaComment,
   resolveProductForCommentContext,
-  sendMetaMessengerMessage,
   setMetaCommentsStateFileOverrideForTest,
   syncMetaAdPostsAndComments
 } from '../metaCommentsEngine.ts';
@@ -143,7 +141,7 @@ test('generateCommentAndDmAiResponses exige OPENROUTER_API_KEY real sin fallback
   );
 });
 
-test('Flujo completo: Comentario con teléfono -> OpenRouter IA -> Ocultar Meta -> Respuesta Pública -> Messenger Button Express', async () => {
+test('Flujo completo 100% Comentario Público: Teléfono -> OpenRouter IA Multi-Ángulo -> Ocultar Meta -> Respuesta Pública (Cero DM)', async () => {
   const tmpFile = setupIsolatedCommentsFile();
   try {
     const graphCalls: Array<{ url: string; body: any }> = [];
@@ -160,10 +158,9 @@ test('Flujo completo: Comentario con teléfono -> OpenRouter IA -> Ocultar Meta 
                 message: {
                   content: JSON.stringify({
                     intent: 'phone_drop',
+                    angleUsed: 'cero_riesgo_contra_entrega',
                     publicReply:
-                      '¡Hola Juan! Por seguridad ocultamos tu número, ya te escribimos al Messenger con la promo Envío Gratis.',
-                    privateDm:
-                      '¡Hola Juan! El Proyector Navideño 12 Diseños está Gs. 189.000 (1x) o Pack 2x Gs. 358.000 con Envío GRATIS y pago al recibir.',
+                      '¡Hola Juan! Por seguridad ocultamos tu número y te escribimos al WhatsApp. Lo mejor es que pagás recién al recibir en tu casa con Envío Gratis: https://mi-tienda.up.railway.app/?express=noelux-proyector-navideno-12-disenos',
                     whatsappMessage: 'Hola Juan! Te escribimos por tu comentario.',
                     shouldHideComment: true
                   })
@@ -176,12 +173,6 @@ test('Flujo completo: Comentario con teléfono -> OpenRouter IA -> Ocultar Meta 
       }
 
       graphCalls.push({ url, body: parsedBody });
-      if (url.includes('/messages')) {
-        return new Response(
-          JSON.stringify({ recipient_id: 'psid_juan_77', message_id: 'mid_999' }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
       if (url.includes('/comments')) {
         return new Response(JSON.stringify({ id: 'reply_pub_88' }), {
           status: 200,
@@ -203,6 +194,10 @@ test('Flujo completo: Comentario con teléfono -> OpenRouter IA -> Ocultar Meta 
       commentText: 'Quiero pedir! Pasame info al 0981 999 888',
       adId: 'ad_777',
       adName: 'Anuncio #3 · Video Casa Iluminada',
+      adSetId: 'adset_10',
+      adSetName: 'Conjunto Público Abierto',
+      adCopy: 'Transformá tu fachada en Navidad sin riesgo.',
+      adThumbnailUrl: 'https://cdn.example.com/ad3.jpg',
       campaignId: 'camp_100',
       campaignName: '[META IA] Proyector COD',
       products: SAMPLE_PRODUCTS,
@@ -216,61 +211,28 @@ test('Flujo completo: Comentario con teléfono -> OpenRouter IA -> Ocultar Meta 
 
     assert.equal(res.createdNew, true);
     assert.equal(res.thread.hiddenFromPublic, true);
-    assert.equal(res.thread.psid, 'psid_juan_77');
+    assert.equal(res.thread.angleUsed, 'cero_riesgo_contra_entrega');
+    assert.equal(res.thread.adSetName, 'Conjunto Público Abierto');
+    assert.equal(res.thread.adThumbnailUrl, 'https://cdn.example.com/ad3.jpg');
     assert.deepEqual(res.thread.detectedPhones, ['595981999888']);
     assert.ok(res.thread.expressFormUrl?.includes('?express=noelux-proyector-navideno-12-disenos'));
     assert.ok(res.thread.expressFormUrl?.includes('ad_id=ad_777'));
     assert.ok(res.actionsTaken.includes('comment_hidden_live'));
     assert.ok(res.actionsTaken.includes('public_reply_sent_live'));
-    assert.ok(res.actionsTaken.includes('messenger_dm_sent_live_button_template_webview'));
+    assert.equal(
+      res.actionsTaken.some((a) => a.includes('messenger_dm')),
+      false,
+      'Messenger DM debe estar completamente descartado'
+    );
 
-    // Verificar llamadas exactas a Meta Graph API
     const hideCall = graphCalls.find((c) => c.url.includes('/c_meta_1001?'));
     assert.equal(hideCall?.body?.is_hidden, true);
 
     const dmCall = graphCalls.find((c) => c.url.includes('/messages'));
-    assert.equal(dmCall?.body?.recipient?.comment_id, 'c_meta_1001');
-    assert.equal(dmCall?.body?.message?.attachment?.payload?.template_type, 'button');
-    assert.equal(dmCall?.body?.message?.attachment?.payload?.buttons?.[0]?.type, 'web_url');
-    assert.equal(
-      dmCall?.body?.message?.attachment?.payload?.buttons?.[0]?.webview_height_ratio,
-      'tall'
-    );
+    assert.equal(dmCall, undefined, 'Nunca debe llamar a Messenger /messages');
   } finally {
     teardownIsolatedCommentsFile(tmpFile);
   }
-});
-
-test('sendMetaMessengerMessage hace fallback automático a texto con link si Meta rechaza Template en Private Reply', async () => {
-  let attempt = 0;
-  const mockFetch: typeof fetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
-    attempt += 1;
-    const body = JSON.parse(String(init?.body || '{}'));
-    if (attempt === 1) {
-      assert.equal(body?.message?.attachment?.type, 'template');
-      return new Response(
-        JSON.stringify({ error: { message: 'Unsupported template type for private reply' } }),
-        { status: 400 }
-      );
-    }
-    assert.ok(String(body?.message?.text || '').includes('?express=soporte-lumbar'));
-    return new Response(JSON.stringify({ message_id: 'mid_fallback_1', recipient_id: 'psid_2' }), {
-      status: 200
-    });
-  }) as any;
-
-  const out = await sendMetaMessengerMessage({
-    pageId: '1050835598123904',
-    pageAccessToken: 'EAA_PAGE_OK',
-    text: '¡Hola! Acá podés pedir rápido:',
-    expressUrl: 'https://mi-tienda.up.railway.app/?express=soporte-lumbar',
-    commentId: 'c_123',
-    fetchImpl: mockFetch
-  });
-
-  assert.equal(out.ok, true);
-  assert.equal(out.modeUsed, 'text_with_express_link');
-  assert.equal(attempt, 2);
 });
 
 test('Ranking de Anuncios & Cierre en Tarjeta del Producto: atribuye pedido e identifica Anuncio Ganador', async () => {
@@ -359,7 +321,7 @@ test('Ranking de Anuncios & Cierre en Tarjeta del Producto: atribuye pedido e id
     assert.equal(linked.threadId, t2.thread.id);
 
     const state = loadMetaCommentsState(SAMPLE_PRODUCTS);
-    assert.equal(state.threads.find((t) => t.id === t1.thread.id)?.status, 'form_sent');
+    assert.equal(state.threads.find((t) => t.id === t1.thread.id)?.status, 'public_replied');
     assert.equal(state.threads.find((t) => t.id === t2.thread.id)?.status, 'order_closed');
 
     const stats = computeMetaAdCommentStats(state, [closedOrder]);
@@ -373,54 +335,7 @@ test('Ranking de Anuncios & Cierre en Tarjeta del Producto: atribuye pedido e id
   }
 });
 
-test('processInboundMessengerDm continúa conversación y extrae pedido completo del chat', async () => {
-  const tmpFile = setupIsolatedCommentsFile();
-  try {
-    const mockFetch: typeof fetch = (async () =>
-      new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
-                  replyText: '¡Perfecto Marcos! Ya registré tus datos para enviarte el Pack 2x a San Lorenzo.',
-                  shouldSendExpressButton: false,
-                  extractedOrder: {
-                    ready: true,
-                    nombre: 'Marcos Vera',
-                    whatsapp: '0981444555',
-                    ciudad: 'San Lorenzo',
-                    direccion: 'Ruta 2 Km 14',
-                    pack: 2
-                  }
-                })
-              }
-            }
-          ]
-        }),
-        { status: 200 }
-      )) as any;
-
-    const dmOut = await processInboundMessengerDm({
-      senderPsid: 'psid_marcos_88',
-      recipientPageId: '1050835598123904',
-      messageText: 'Quiero 2 unidades, soy Marcos Vera 0981444555, San Lorenzo Ruta 2 Km 14',
-      referralAdId: 'ad_002',
-      products: SAMPLE_PRODUCTS,
-      openRouterApiKey: 'sk-test',
-      isSimulation: true,
-      fetchImpl: mockFetch
-    });
-
-    assert.equal(dmOut.extractedOrder?.ready, true);
-    assert.equal(dmOut.extractedOrder?.pack, 2);
-    assert.ok(dmOut.thread.messages.length >= 2);
-  } finally {
-    teardownIsolatedCommentsFile(tmpFile);
-  }
-});
-
-test('syncMetaAdPostsAndComments sincroniza posts de Ads y audita permisos Messenger/Comentarios', async () => {
+test('syncMetaAdPostsAndComments mapea activeAdsSnapshot, jerarquía completa y sub-comentarios', async () => {
   const tmpFile = setupIsolatedCommentsFile();
   try {
     const mockSyncFetch: typeof fetch = (async (input: RequestInfo | URL) => {
@@ -440,8 +355,15 @@ test('syncMetaAdPostsAndComments sincroniza posts de Ads y audita permisos Messe
               {
                 id: 'ad_live_5',
                 name: 'Anuncio #5',
+                effective_status: 'ACTIVE',
                 campaign: { id: 'camp_live_1', name: 'Campaña Live' },
-                creative: { effective_object_story_id: '1050835598123904_9001' }
+                adset: { id: 'adset_live_1', name: 'Conjunto Central' },
+                creative: {
+                  effective_object_story_id: '1050835598123904_9001',
+                  title: 'Solo hoy envío gratis',
+                  body: 'Pagás al recibir en tu casa.',
+                  thumbnail_url: 'https://cdn.example.com/ad5.jpg'
+                }
               }
             ]
           }),
@@ -458,11 +380,20 @@ test('syncMetaAdPostsAndComments sincroniza posts de Ads y audita permisos Messe
               {
                 id: 'c_live_1',
                 message: 'Precio por favor?',
-                from: { id: 'cust_1', name: 'Sofía' }
+                from: { id: 'cust_1', name: 'Sofía' },
+                comments: {
+                  data: [
+                    {
+                      id: 'c_sub_1',
+                      message: 'Y cuánto tarda a Luque?',
+                      from: { id: 'cust_2', name: 'Carlos' }
+                    }
+                  ]
+                }
               },
               {
                 id: 'c_own_page',
-                message: '¡Ya te escribimos!',
+                message: '¡Hola! Te paso el detalle.',
                 from: { id: '1050835598123904', name: 'Landingcod Shop' }
               }
             ]
@@ -478,8 +409,8 @@ test('syncMetaAdPostsAndComments sincroniza posts de Ads y audita permisos Messe
                 message: {
                   content: JSON.stringify({
                     intent: 'price_inquiry',
-                    publicReply: '¡Hola Sofía! Ya te pasé la promo al Messenger.',
-                    privateDm: 'El precio es Gs. 189.000 con envío gratis.',
+                    angleUsed: 'precio_y_valor',
+                    publicReply: '¡Hola! Sale Gs. 189.000 con envío gratis y pago al recibir.',
                     shouldHideComment: false
                   })
                 }
@@ -489,7 +420,7 @@ test('syncMetaAdPostsAndComments sincroniza posts de Ads y audita permisos Messe
           { status: 200 }
         );
       }
-      return new Response(JSON.stringify({ id: 'ok_1', message_id: 'mid_1' }), { status: 200 });
+      return new Response(JSON.stringify({ id: 'ok_1' }), { status: 200 });
     }) as any;
 
     const syncRes = await syncMetaAdPostsAndComments({
@@ -501,9 +432,11 @@ test('syncMetaAdPostsAndComments sincroniza posts de Ads y audita permisos Messe
 
     assert.equal(syncRes.ok, true);
     assert.equal(syncRes.adsMapped, 1);
-    // Solo el comentario de Sofía (ignora el propio comentario de la página para cero bucles)
-    assert.equal(syncRes.commentsFound, 1);
-    assert.equal(syncRes.newCommentsProcessed, 1);
+    assert.equal(syncRes.commentsFound, 2);
+    assert.equal(syncRes.newCommentsProcessed, 2);
+    const savedState = loadMetaCommentsState(SAMPLE_PRODUCTS);
+    assert.equal(savedState.config.activeAdsSnapshot?.length, 1);
+    assert.equal(savedState.config.activeAdsSnapshot?.[0]?.adSetName, 'Conjunto Central');
   } finally {
     teardownIsolatedCommentsFile(tmpFile);
   }

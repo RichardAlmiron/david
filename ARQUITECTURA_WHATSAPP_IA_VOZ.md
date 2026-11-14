@@ -167,3 +167,24 @@ Una vez que el pedido está confirmado (`datosConfirmados === true`) y fuera de 
    - Las imágenes entrantes enviadas por clientes (`client_*`) se cachean en el **`localStorage` del navegador** (`noelux_chat_imgs_<orderId>`) sin almacenarse en la base de datos, y se purgan automáticamente al eliminar el pedido.
 4. **Tarjeta Horizontal Fija de Etapa 1/2, Último Mensaje y Temporizador en Vivo:**
    - `getCustomerFollowUpStatus()` y `GET /api/whatsapp/messages` exponen el estado real del temporizador de seguimiento (`5 min` primer recordatorio, `1 hora` sucesivos), renderizado en una tarjeta horizontal fija en `AdminView.tsx` junto a **Último Mensaje Enviado** y una barra descriptiva dinámica con cuenta regresiva en vivo (`src/utils/whatsappChatStatus.ts`).
+
+---
+
+## 11. Embudo Paralelo de Oferta de Entrada (`server/entryEventEngine.ts` — Solo `purchasePath === 'entry_only'`)
+
+Cuando un comprador solicita **únicamente el Producto Complementario de Entrada** (`purchasePath === 'entry_only'`) en un producto con `tripwireConfig.enabled`, `handleNewOrderAutomation()` bifurca **exclusivamente ese pedido** al motor `server/entryEventEngine.ts` (manteniendo al **100% intacto** el flujo `"CORRECTO"` para pedidos normales o `principal_bundle`):
+
+1. **Nota de Voz con Música de Fondo (`mixVoiceWithBackgroundMusic`):**
+   - Toma el audio `Deepgram Aura-2` (`OGG/Opus`) y lo mezcla mediante `/usr/bin/ffmpeg` (`libopus`, `48kHz`) con el preset musical configurado en el **Creador Rápido** (`warm_ambient`, `soft_lounge`, `commercial_pulse` o `none`) a nivel sutil (`volume=0.085`) para enviar una nota de voz humana con identidad de marca sin abrumar al cliente.
+2. **Encuesta Nativa Interactiva de WhatsApp (`buildEntryPollDefinition` + `decryptPollVote`):**
+   - Después de la nota de voz + imagen de oferta, envía una **encuesta real de 1 toque** (sin mencionar jamás la palabra interna `"tripwire"`):
+     - **Opción 1:** Pasarse ahora al **Producto Principal con descuento** + **Complemento de Entrada GRATIS + Envío Gratis** → convierte el pedido en `principal_bundle` y avanza al flujo normal de empaquetado.
+     - **Opción 2:** Anotarse en la **Lista Especial de 10 Cupos (5–6 horas)** sin presión.
+   - Acepta tanto clics nativos sobre la encuesta (`pollUpdateMessage` desencriptado vía `decryptPollVote` de `@whiskeysockets/baileys`) como respuestas por texto o nota de voz (`classifyEntryTextIntent`).
+3. **Respeto al Horario Laboral (Tope Estricto de 2 Intentos) + Avisos Cada 2 Horas + Cierre Transparente (`processDueEntryEvents`):**
+   - **Sin respuesta:** Tras el Intento #1, espera **90 minutos** y envía un único **Intento #2** amable (`attemptsSent = 2`). Si tras otros **90 minutos** sigue sin responder, pasa a **`silenced_until_end`** (silencio absoluto hasta completar las 5–6 horas del evento).
+   - **En Lista de 10 Cupos (`waitlist_enrolled`):** Envía actualizaciones cordiales cada **2 horas** mostrando cupos restantes y tiempo faltante.
+   - **Fin del Evento (`final_dispatched`):** Al vencer `eventEndsAt`, envía la confirmación final del artículo individual transparentando siempre el **delivery (`Gs. 40.000` por defecto, ej. `Gs. 20.000 + Gs. 40.000 = Gs. 60.000 al recibir`)** sin prometer jamás envío gratis en el artículo suelto.
+
+> Detalles completos de arquitectura en [`ARQUITECTURA_CREADOR_UNIVERSAL_Y_EMBUDO_GANCHO.md`](./ARQUITECTURA_CREADOR_UNIVERSAL_Y_EMBUDO_GANCHO.md).
+

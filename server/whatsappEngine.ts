@@ -47,12 +47,27 @@ import {
 import {
   sanitizeConfigPayloadForSupabase
 } from './cloudinaryStore';
+import { upgradeDefaultNoeluxWithVisualPreset } from '../src/data/noeluxVisualPreset';
 import {
   renderWaStageCommercialImage,
   renderPersonalizedOrderWelcomeImage,
   renderPersonalizedOrderConfirmedImage,
   type RenderPersonalizedOrderWelcomeResult
 } from './waStageCommercialRenderer';
+import {
+  isEntryOnlyOrderWithConfig,
+  buildInitialEntryEventState,
+  buildEntryPollDefinition,
+  buildEntryAttemptSpeech,
+  buildWaitlistUpdateSpeech,
+  buildFinalDispatchSpeech,
+  classifyEntryTextIntent,
+  decodeEntryPollVoteSelection,
+  evaluateEntryEventTick,
+  applyEntryChoiceToOrder,
+  mixVoiceWithBackgroundMusic,
+  resolveEntryConfig
+} from './entryEventEngine';
 
 export type AgentChannel = 'audio' | 'texto';
 
@@ -2745,6 +2760,356 @@ export async function syncOrderUpdateToCloud(order: any): Promise<boolean> {
   }
 }
 
+async function resolveEntryCardImageBuffer(
+  matchedProduct: any
+): Promise<{ buffer: Buffer; mime: string; publicUrl?: string } | null> {
+  const candidates = [
+    matchedProduct?.tripwireConfig?.entryProductImage,
+    matchedProduct?.visualLanding?.sheets?.[1]?.imageUrl,
+    matchedProduct?.visualLanding?.sheets?.[0]?.imageUrl,
+    matchedProduct?.imagen
+  ]
+    .map((u) => String(u || '').trim())
+    .filter(Boolean);
+
+  for (const src of candidates) {
+    try {
+      if (src.startsWith('/')) {
+        const abs = path.resolve(process.cwd(), 'public', src.replace(/^\/+/, ''));
+        if (fs.existsSync(abs)) {
+          const buf = fs.readFileSync(abs);
+          if (buf.length >= 1000) {
+            const mime = abs.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+            return { buffer: buf, mime, publicUrl: src };
+          }
+        }
+      } else if (src.startsWith('https://') || src.startsWith('http://')) {
+        const res = await fetch(src, { signal: AbortSignal.timeout(10_000) });
+        if (res.ok) {
+          const buf = Buffer.from(await res.arrayBuffer());
+          if (buf.length >= 1000) {
+            const ct = res.headers.get('content-type') || 'image/jpeg';
+            return { buffer: buf, mime: ct.split(';')[0], publicUrl: src };
+          }
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+async function dispatchEntryEventTurn(params: {
+  cleanPhone: string;
+  ord: any;
+  matchedProduct: any;
+  speechText: string;
+  includeCardImage?: boolean;
+  includePoll?: boolean;
+  captionSummary?: string;
+}): Promise<boolean> {
+  const { cleanPhone, ord, matchedProduct, speechText, includeCardImage, includePoll } = params;
+  const activeSession = pickConnectedSession();
+  if (!activeSession?.sock) return false;
+
+  const voiceId = ord?.vozAgente || matchedProduct?.vozAgente;
+  const tts = await synthesizeSpeechSelfHosted(speechText, voiceId);
+  const bgmPreset =
+    ord?.tripwireEventState?.backgroundMusicPreset ||
+    matchedProduct?.tripwireConfig?.backgroundMusicPreset ||
+    'warm_ambient';
+  const mixed = await mixVoiceWithBackgroundMusic(tts.audioBuffer, bgmPreset);
+  const finalAudioBuf = mixed.audioBuffer || tts.audioBuffer;
+  const finalAudioDataUrl = mixed.audioDataUrl || tts.audioDataUrl;
+  const cardImg = includeCardImage ? await resolveEntryCardImageBuffer(matchedProduct) : null;
+  const pollDef =
+    includePoll && ord?.tripwireEventState
+      ? buildEntryPollDefinition(matchedProduct, ord.tripwireEventState)
+      : null;
+
+  const jid = resolveOutboundWhatsAppJid(cleanPhone);
+  activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 25_000);
+
+  let anySent = false;
+  await withPhoneOutboundLock(cleanPhone, async () => {
+    const sock = activeSession.sock;
+    if (!sock) return;
+    await activeSession.e2eeController?.ensureOutboundSessionReady(jid, cleanPhone).catch(() => {});
+
+    // 1. Audio PTT con música de fondo preseleccionada
+    if (finalAudioBuf && finalAudioBuf.length > 128) {
+      try {
+        const preAudioId = generateMessageIDV2(sock.user?.id);
+        recentlySentMsgIds.add(preAudioId);
+        setTimeout(() => recentlySentMsgIds.delete(preAudioId), 60_000);
+        const sentAudio = await sock.sendMessage(
+          jid,
+          {
+            audio: finalAudioBuf,
+            mimetype: 'audio/ogg; codecs=opus',
+            ptt: true,
+            seconds: tts.durationSeconds,
+            waveform: buildWaveformFromBuffer(finalAudioBuf)
+          } as any,
+          { messageId: preAudioId }
+        );
+        const audioMsgId = sentAudio?.key?.id || preAudioId;
+        recentlySentMsgIds.add(audioMsgId);
+        setTimeout(() => recentlySentMsgIds.delete(audioMsgId), 60_000);
+        if (sentAudio?.message) recordSentProtoMessage(audioMsgId, sentAudio.message);
+        appendChatMessage(cleanPhone, {
+          id: audioMsgId,
+          sender: 'ai',
+          senderName: mixed.mixedWithBgm
+            ? `🎵 ${tts.voiceProfile.name} · Audio Evento`
+            : `🎤 ${tts.voiceProfile.name} · Audio Evento`,
+          text: speechText,
+          status: 'sent',
+          orderId: ord.reservaid,
+          sessionId: activeSession.id,
+          isAudioNote: true,
+          agentChannel: 'audio',
+          voiceEngine: tts.engine,
+          audioDataUrl: finalAudioDataUrl || undefined
+        });
+        anySent = true;
+      } catch (err) {
+        console.warn('[EntryEvent Audio Send Error]:', (err as any)?.message || err);
+      }
+    }
+
+    if (!anySent) {
+      try {
+        const sentTxt = await sock.sendMessage(jid, { text: speechText });
+        if (sentTxt?.key?.id) {
+          recentlySentMsgIds.add(sentTxt.key.id);
+          setTimeout(() => recentlySentMsgIds.delete(sentTxt.key.id!), 60_000);
+        }
+        appendChatMessage(cleanPhone, {
+          sender: 'ai',
+          senderName: '🤖 Asistente de Ofertas',
+          text: speechText,
+          status: 'sent',
+          orderId: ord.reservaid,
+          sessionId: activeSession.id
+        });
+        anySent = true;
+      } catch {}
+    }
+
+    // 2. Tarjeta visual del complemento / propuesta
+    if (cardImg?.buffer) {
+      await new Promise((r) => setTimeout(r, 1100));
+      try {
+        const preImgId = generateMessageIDV2(sock.user?.id);
+        recentlySentMsgIds.add(preImgId);
+        setTimeout(() => recentlySentMsgIds.delete(preImgId), 60_000);
+        const sentImg = await sock.sendMessage(
+          jid,
+          {
+            image: cardImg.buffer,
+            mimetype: cardImg.mime,
+            ...(params.captionSummary ? { caption: params.captionSummary } : {})
+          } as any,
+          { messageId: preImgId }
+        );
+        if (sentImg?.key?.id) {
+          recentlySentMsgIds.add(sentImg.key.id);
+          setTimeout(() => recentlySentMsgIds.delete(sentImg.key.id!), 60_000);
+          recordSentProtoMessage(sentImg.key.id, sentImg.message);
+        }
+      } catch {}
+    }
+
+    // 3. Encuesta Nativa WhatsApp 1-Toque (Poll)
+    if (pollDef && ord?.tripwireEventState) {
+      await new Promise((r) => setTimeout(r, 900));
+      try {
+        const prePollId = generateMessageIDV2(sock.user?.id);
+        recentlySentMsgIds.add(prePollId);
+        setTimeout(() => recentlySentMsgIds.delete(prePollId), 60_000);
+        const sentPoll = await sock.sendMessage(
+          jid,
+          {
+            poll: {
+              name: pollDef.question,
+              values: pollDef.options,
+              selectableCount: 1
+            }
+          } as any,
+          { messageId: prePollId }
+        );
+        const pId = sentPoll?.key?.id || prePollId;
+        recentlySentMsgIds.add(pId);
+        setTimeout(() => recentlySentMsgIds.delete(pId), 60_000);
+        if (sentPoll?.message) {
+          recordSentProtoMessage(pId, sentPoll.message);
+        }
+        const secretBytes = sentPoll?.message?.messageContextInfo?.messageSecret;
+        const secretB64 = secretBytes ? Buffer.from(secretBytes).toString('base64') : '';
+        const creatorJid =
+          (sock.user?.id ? `${String(sock.user.id).split(':')[0].split('@')[0]}@s.whatsapp.net` : '') ||
+          (activeSession.connectedPhone ? `${activeSession.connectedPhone}@s.whatsapp.net` : '');
+
+        ord.tripwireEventState.pollMsgId = pId;
+        if (secretB64) ord.tripwireEventState.pollEncKeyBase64 = secretB64;
+        if (creatorJid) ord.tripwireEventState.pollCreatorJid = creatorJid;
+        ord.tripwireEventState.pollOptionHashes = pollDef.optionHashes;
+
+        appendChatMessage(cleanPhone, {
+          id: pId,
+          sender: 'ai',
+          senderName: '📊 Encuesta Interactiva 1-Toque',
+          text: `${pollDef.question}\n• ${pollDef.options[0]}\n• ${pollDef.options[1]}`,
+          status: 'sent',
+          orderId: ord.reservaid,
+          sessionId: activeSession.id
+        });
+      } catch (pollErr: any) {
+        console.warn('[EntryEvent Poll Send Error]:', pollErr?.message || pollErr);
+      }
+    }
+  });
+
+  if (anySent) {
+    recentOutboundByPhone.set(cleanPhone, {
+      orderId: ord.reservaid,
+      sentAt: Date.now(),
+      sessionId: activeSession.id
+    });
+  }
+  return anySent;
+}
+
+async function handleEntryEventChoice(
+  cleanPhone: string,
+  ord: any,
+  choice: 'option_1_instant' | 'option_2_waitlist',
+  sessionId?: string
+) {
+  const matchedProduct = resolveMatchedProductPageForOrder(ord);
+  const pedidos = loadPedidos();
+  const targetOrd = pedidos.find((p) => p.reservaid === ord.reservaid) || ord;
+  const { state, upgradedToPrincipal } = applyEntryChoiceToOrder(targetOrd, matchedProduct, choice);
+  savePedidos(pedidos);
+  syncOrderUpdateToCloud(targetOrd).catch(() => {});
+
+  const firstName = String(targetOrd.nombre || '').trim().split(/\s+/)[0] || '';
+  if (upgradedToPrincipal) {
+    const cfg = resolveEntryConfig(matchedProduct);
+    const principalName = cfg?.principalName || targetOrd.producto || 'Paquete Principal';
+    const confirmSpeech =
+      `Excelente elección ${firstName}, ya actualizamos tu pedido a ${principalName} completo ` +
+      `con ${state.entryProductName} totalmente gratis y envío sin costo a tu puerta por ` +
+      `${state.instantUpgradePriceGs.toLocaleString('es-PY')} guaraníes al recibir. ` +
+      `Ahora mismo avanzamos con la verificación de tu dirección para el despacho.`;
+    await dispatchEntryEventTurn({
+      cleanPhone,
+      ord: targetOrd,
+      matchedProduct,
+      speechText: confirmSpeech,
+      includeCardImage: false,
+      includePoll: false
+    });
+    // Pasar directamente al flujo normal de confirmación GPS / Dirección del paquete principal
+    await new Promise((r) => setTimeout(r, 1500));
+    await startOrAdvanceVoiceCall(cleanPhone, targetOrd.reservaid, undefined, true, 'audio');
+    return;
+  }
+
+  // Opción 2: Inscripción en lista de 10 cupos (5-6h, avisos cada 2 horas)
+  const waitlistSpeech =
+    `Listo ${firstName}, quedaste anotado en el cupo ${state.slotsTaken} de ${state.slotsTotal} ` +
+    `de nuestro evento especial. Cada dos horas te voy a avisar cómo avanza el cupo por si decidís llevar el paquete completo antes del cierre. ¡Cualquier consulta me escribís por acá!`;
+  await dispatchEntryEventTurn({
+    cleanPhone,
+    ord: targetOrd,
+    matchedProduct,
+    speechText: waitlistSpeech,
+    includeCardImage: false,
+    includePoll: false
+  });
+}
+
+let entrySchedulerRunning = false;
+export async function processDueEntryEvents(nowMs = Date.now()): Promise<number> {
+  if (entrySchedulerRunning) return 0;
+  entrySchedulerRunning = true;
+  let processed = 0;
+  try {
+    const pedidos = loadPedidos();
+    let changed = false;
+    for (const ord of pedidos) {
+      if (!ord?.tripwireEventState || isOrderDeleted(ord?.reservaid)) continue;
+      const decision = evaluateEntryEventTick(ord.tripwireEventState, nowMs);
+      if (decision.action === 'noop') continue;
+
+      const cleanPhone = normalizeWaPhone(ord.celular || ord.telefono || '');
+      if (!cleanPhone) continue;
+      const matchedProduct = resolveMatchedProductPageForOrder(ord);
+      const firstName = String(ord.nombre || '').trim().split(/\s+/)[0] || '';
+
+      ord.tripwireEventState = decision.nextState;
+      changed = true;
+      processed++;
+
+      if (decision.action === 'send_attempt_2') {
+        const speech = buildEntryAttemptSpeech({
+          customerFirstName: firstName,
+          matchedProduct,
+          state: decision.nextState,
+          attemptNumber: 2
+        });
+        await dispatchEntryEventTurn({
+          cleanPhone,
+          ord,
+          matchedProduct,
+          speechText: speech,
+          includeCardImage: false,
+          includePoll: true
+        });
+      } else if (decision.action === 'send_waitlist_2h_update') {
+        const speech = buildWaitlistUpdateSpeech({
+          customerFirstName: firstName,
+          matchedProduct,
+          state: decision.nextState,
+          remainingHours: decision.remainingHours
+        });
+        await dispatchEntryEventTurn({
+          cleanPhone,
+          ord,
+          matchedProduct,
+          speechText: speech,
+          includeCardImage: false,
+          includePoll: true
+        });
+      } else if (decision.action === 'send_final_dispatch') {
+        const speech = buildFinalDispatchSpeech({
+          customerFirstName: firstName,
+          matchedProduct,
+          state: decision.nextState
+        });
+        await dispatchEntryEventTurn({
+          cleanPhone,
+          ord,
+          matchedProduct,
+          speechText: speech,
+          includeCardImage: false,
+          includePoll: false
+        });
+      }
+      syncOrderUpdateToCloud(ord).catch(() => {});
+    }
+    if (changed) {
+      savePedidos(pedidos);
+    }
+  } catch (err) {
+    console.warn('[EntryEvent Scheduler Error]:', (err as any)?.message || err);
+  } finally {
+    entrySchedulerRunning = false;
+  }
+  return processed;
+}
+
 // Automatically trigger chosen channel (Audio or Texto) when a new order arrives if Automático is active
 export async function handleNewOrderAutomation(ord: any) {
   if (!isOfficialRegisteredProductOrder(ord)) return;
@@ -2810,6 +3175,36 @@ export async function handleNewOrderAutomation(ord: any) {
   saveChatsStorage(storage);
 
   if (autoCall || autoChat) {
+    // Rama exclusiva para pedidos de SOLO Artículo de Entrada (purchasePath === 'entry_only'):
+    // NO toca ni altera en nada el flujo normal de pedidos principales ni confirmados.
+    const matchedProduct = resolveMatchedProductPageForOrder(ord);
+    if (isEntryOnlyOrderWithConfig(ord, matchedProduct)) {
+      const pedidosList = loadPedidos();
+      const targetOrd = pedidosList.find((p) => rid && p.reservaid === rid) || ord;
+      if (!targetOrd.tripwireEventState) {
+        targetOrd.tripwireEventState = buildInitialEntryEventState(targetOrd, matchedProduct);
+        targetOrd.atendidoPorIA = true;
+      }
+      const firstName = String(targetOrd.nombre || '').trim().split(/\s+/)[0] || '';
+      const attempt1Speech = buildEntryAttemptSpeech({
+        customerFirstName: firstName,
+        matchedProduct,
+        state: targetOrd.tripwireEventState,
+        attemptNumber: 1
+      });
+      await dispatchEntryEventTurn({
+        cleanPhone,
+        ord: targetOrd,
+        matchedProduct,
+        speechText: attempt1Speech,
+        includeCardImage: true,
+        includePoll: true
+      });
+      savePedidos(pedidosList);
+      syncOrderUpdateToCloud(targetOrd).catch(() => {});
+      return;
+    }
+
     await startOrAdvanceVoiceCall(cleanPhone, ord.reservaid, undefined, false, 'audio');
   }
 }
@@ -3562,7 +3957,13 @@ export function setGlobalAiEngineMode(_mode: 'automatico' | 'manual') {
 export function loadStoreConfig(): any {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8') || '{}');
+      const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8') || '{}');
+      if (parsed && Array.isArray(parsed.productPages)) {
+        parsed.productPages = parsed.productPages.map((p: any) =>
+          upgradeDefaultNoeluxWithVisualPreset(p)
+        );
+      }
+      return parsed;
     }
   } catch (e) { }
   return {};
@@ -10276,6 +10677,61 @@ export async function connectWhatsAppEngine(
             continue;
           }
 
+          // Manejo nativo de Encuesta WhatsApp (Poll Vote) para pedidos con Evento 10 Cupos activo
+          if (innerMsg?.pollUpdateMessage && !isFromAdmin && matchedOrderForPhone?.tripwireEventState) {
+            const evState = matchedOrderForPhone.tripwireEventState;
+            const pollMsgId =
+              String(innerMsg.pollUpdateMessage?.pollCreationMessageKey?.id || evState.pollMsgId || '').trim();
+            if (pollMsgId && evState.pollEncKeyBase64 && Array.isArray(evState.pollOptionHashes)) {
+              const creatorCandidates = Array.from(
+                new Set(
+                  [
+                    evState.pollCreatorJid,
+                    session.connectedPhone ? `${session.connectedPhone}@s.whatsapp.net` : '',
+                    session.sock?.user?.id
+                      ? `${String(session.sock.user.id).split(':')[0].split('@')[0]}@s.whatsapp.net`
+                      : ''
+                  ].filter(Boolean)
+                )
+              ) as string[];
+              const voterCandidates = [
+                remoteJid,
+                String(msg.key?.participant || ''),
+                cleanPhone ? `${cleanPhone}@s.whatsapp.net` : '',
+                rawRemoteDigits ? `${rawRemoteDigits}@lid` : ''
+              ].filter(Boolean);
+
+              let pollChoice: 'option_1_instant' | 'option_2_waitlist' | null = null;
+              for (const cJid of creatorCandidates) {
+                pollChoice = decodeEntryPollVoteSelection({
+                  pollUpdateMsg: innerMsg.pollUpdateMessage,
+                  pollMsgId,
+                  pollEncKeyBase64: evState.pollEncKeyBase64,
+                  pollCreatorJid: cJid,
+                  voterJids: voterCandidates,
+                  optionHashes: evState.pollOptionHashes
+                });
+                if (pollChoice) break;
+              }
+              if (pollChoice) {
+                appendChatMessage(cleanPhone, {
+                  id: msgId,
+                  sender: 'client',
+                  senderName: matchedOrderForPhone.nombre || 'Cliente',
+                  text:
+                    pollChoice === 'option_1_instant'
+                      ? '📊 Seleccionó en encuesta: Opción 1 (Llevar Paquete Principal + Regalo + Envío Gratis)'
+                      : '📊 Seleccionó en encuesta: Opción 2 (Anotarse en lista de 10 cupos)',
+                  status: 'delivered',
+                  orderId: matchedOrderForPhone.reservaid,
+                  sessionId: session.id
+                });
+                await handleEntryEventChoice(cleanPhone, matchedOrderForPhone, pollChoice, session.id);
+                continue;
+              }
+            }
+          }
+
           const isDocumentMsg = Boolean(
             innerMsg?.documentMessage || innerMsg?.documentWithCaptionMessage
           );
@@ -10516,6 +10972,21 @@ export async function connectWhatsAppEngine(
               matchedOrderForPhone.canalIA ||
               storage.preferredChannel ||
               'audio';
+
+            // Intercepción limpia para respuesta por texto/voz (1 / 2 / palabras clave) en Evento de Entrada activo
+            if (
+              isAutoEnabled &&
+              matchedOrderForPhone?.tripwireEventState &&
+              ['pending_choice', 'waitlist_enrolled', 'silenced_until_end'].includes(
+                matchedOrderForPhone.tripwireEventState.stage
+              )
+            ) {
+              const entryIntent = classifyEntryTextIntent(text);
+              if (entryIntent) {
+                await handleEntryEventChoice(cleanPhone, matchedOrderForPhone, entryIntent, session.id);
+                continue;
+              }
+            }
 
             if (isAutoEnabled) {
               const burstInputPiece =
@@ -10943,6 +11414,13 @@ export function autoBootWhatsAppIfSessionExists() {
         if (isYieldingToNewerDeploy()) return;
         pollCloudCommandsAndOrders().catch(() => { });
       }, 3000);
+
+      if (!(globalThis as any).__noeluxEntryEventTimer) {
+        (globalThis as any).__noeluxEntryEventTimer = setInterval(() => {
+          if (isYieldingToNewerDeploy()) return;
+          processDueEntryEvents().catch(() => { });
+        }, 60_000);
+      }
 
       if (isProductionRuntime()) {
         startNasaLeaderWatcher();

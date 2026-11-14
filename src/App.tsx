@@ -2,6 +2,8 @@ import React, { useEffect, Suspense, lazy } from 'react';
 import { useStore } from './context/StoreContext';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
+import { VisualProductLanding } from './components/VisualProductLanding';
+import { EntryHookLandingHero } from './components/EntryHookLandingHero';
 import { InteractiveShowcase } from './components/InteractiveShowcase';
 import { TestimonialsSection } from './components/TestimonialsSection';
 import { FaqSection } from './components/FaqSection';
@@ -148,9 +150,10 @@ export const AppContent: React.FC = () => {
   }
 
   const showAdminPreviewBar = isAdminAuthenticated;
-  const isExpressCheckout =
-    typeof window !== 'undefined' &&
-    Boolean(new URLSearchParams(window.location.search).get('express'));
+  const searchParams =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const isExpressCheckout = Boolean(searchParams?.get('express'));
+  const isEntryLandingMode = searchParams?.get('modo') === 'entrada';
 
   if (isExpressCheckout) {
     const unitGs = Number(currentProductPage?.precios?.[1] || currentProductPage?.precioNormal || 0);
@@ -268,11 +271,29 @@ export const AppContent: React.FC = () => {
       )}
       <Navbar />
       <main className="flex-1">
-        <HeroSection />
-        <InteractiveShowcase />
-        <TestimonialsSection />
-        <OrderForm />
-        <FaqSection />
+        {currentProductPage?.visualLanding?.enabled ? (
+          <>
+            <VisualProductLanding entryFocusedMode={isEntryLandingMode} />
+            <OrderForm />
+            <FaqSection />
+          </>
+        ) : isEntryLandingMode && currentProductPage?.tripwireConfig?.enabled ? (
+          <>
+            <EntryHookLandingHero />
+            <OrderForm />
+            <InteractiveShowcase />
+            <TestimonialsSection />
+            <FaqSection />
+          </>
+        ) : (
+          <>
+            <HeroSection />
+            <InteractiveShowcase />
+            <TestimonialsSection />
+            <OrderForm />
+            <FaqSection />
+          </>
+        )}
       </main>
       <Footer />
       <CartDrawer />

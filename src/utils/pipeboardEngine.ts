@@ -53,6 +53,11 @@ export interface GeneratedAdCreativeAsset {
   angleId?: string;
   hypothesisCode?: string;
   testVariable?: string;
+  isEntryHookAd?: boolean;
+  targetProductId?: string;
+  targetProductSlug?: string;
+  targetProductName?: string;
+  targetLandingUrl?: string;
   videoScenes?: Array<{
     durationSec: number;
     badge: string;
@@ -94,6 +99,11 @@ export interface PipeboardPublishedCampaignRecord {
     hypothesisId?: string;
     angleId?: string;
     replacedFromAdId?: string;
+    isEntryHookAd?: boolean;
+    destinationUrl?: string;
+    targetProductId?: string;
+    targetProductSlug?: string;
+    targetProductName?: string;
     updatedAt?: string;
     name: string;
     formatLabel: string;

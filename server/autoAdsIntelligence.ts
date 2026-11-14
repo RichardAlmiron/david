@@ -40,6 +40,7 @@ export interface RunIntelligenceInput {
   }>;
   openRouterApiKey?: string;
   offlineDeterministicOnly?: boolean;
+  adMode?: 'standard' | 'entry_hook' | 'hybrid';
 }
 
 export interface RunIntelligenceOutput {
@@ -365,15 +366,34 @@ function buildDiverseDynamicHypothesesFallback(params: {
   psychologicalProfile: PsychologicalProfileV2;
   winningSummary: string[];
   losingSummary: string[];
+  adMode?: 'standard' | 'entry_hook' | 'hybrid';
 }): AutoAdsHypothesisV2[] {
-  const name = params.product.nombre;
-  const pricing = resolveProductGuaraniPricing(params.product);
+  const hookCfg = params.product.tripwireConfig;
+  const canUseHook = Boolean(
+    hookCfg?.enabled && hookCfg?.entryProductName && Number(hookCfg?.entryPriceGs) > 0
+  );
+  const mode = params.adMode || (canUseHook ? 'hybrid' : 'standard');
+  const forceAllHook = mode === 'entry_hook' && canUseHook;
+  const hookPricing = canUseHook
+    ? resolveProductGuaraniPricing({
+        precios: { 1: Number(hookCfg!.entryPriceGs) },
+        precioNormal: Number(
+          hookCfg!.entryNormalPriceGs || Math.round(Number(hookCfg!.entryPriceGs) * 2.1)
+        )
+      })
+    : null;
+  const stdPricing = resolveProductGuaraniPricing(params.product);
+  const name = forceAllHook ? String(hookCfg!.entryProductName).trim() : params.product.nombre;
+  const pricing = forceAllHook && hookPricing ? hookPricing : stdPricing;
   const priceFormatted = pricing.p1Gs;
   const truth = params.product.physicalTruth;
   const visualDetail = truth?.realMaterialOrFinish
     ? `real physical texture (${truth.realMaterialOrFinish})`
     : `authentic handheld product photography with natural studio lighting`;
-  const usageDetail = truth?.usageMechanism || params.product.descripcion.slice(0, 120);
+  const usageDetail =
+    forceAllHook && hookCfg?.entryProductDescription
+      ? hookCfg.entryProductDescription.slice(0, 120)
+      : truth?.usageMechanism || params.product.descripcion.slice(0, 120);
   const memoryHint =
     params.winningSummary.length > 0
       ? ` Refuerza señal previa ganadora (${params.winningSummary[0]}).`
@@ -551,21 +571,57 @@ async function synthesizeWithOpenRouter(params: {
   competitors: CompetitorFindingV2[];
   winningSummary: string[];
   losingSummary: string[];
+  adMode?: 'standard' | 'entry_hook' | 'hybrid';
 }): Promise<{ psychologicalProfile: PsychologicalProfileV2; hypotheses: AutoAdsHypothesisV2[] } | null> {
-  const pricing = resolveProductGuaraniPricing(params.product);
+  const hookCfg = params.product.tripwireConfig;
+  const canUseHook = Boolean(
+    hookCfg?.enabled && hookCfg?.entryProductName && Number(hookCfg?.entryPriceGs) > 0
+  );
+  const resolvedMode = params.adMode || (canUseHook ? 'hybrid' : 'standard');
+  const hasAllHook = resolvedMode === 'entry_hook' && canUseHook;
+  const isHybridMix = resolvedMode === 'hybrid' && canUseHook;
+
+  const hookPricingInput = hasAllHook || isHybridMix
+    ? {
+        precios: { 1: Number(hookCfg!.entryPriceGs) },
+        precioNormal: Number(
+          hookCfg!.entryNormalPriceGs || Math.round(Number(hookCfg!.entryPriceGs) * 2.1)
+        )
+      }
+    : params.product;
+  const pricing = resolveProductGuaraniPricing(hasAllHook ? hookPricingInput : params.product);
+  const hookPricing = resolveProductGuaraniPricing(hookPricingInput);
+
+  const hookSectionPrompt = hasAllHook
+    ? `
+ESTRATEGIA OBLIGATORIA DE ANUNCIO GANCHO DE ALTO CLIC (100% OFERTA DE ENTRADA):
+- PRODUCTO PRINCIPAL DE LA TIENDA (congruente): ${params.product.nombre} (${params.product.descripcion})
+- ARTÍCULO PROTAGONISTA DE LOS 6 ANUNCIOS (100% ENFOQUE AQUÍ): "${hookCfg!.entryProductName}"
+- Qué hace este artículo de entrada: ${hookCfg!.entryProductDescription || hookCfg!.entryProductName}
+- PRECIO GANCHO OBLIGATORIO VISIBLE EN COPY Y EN EL PROMPT VISUAL: ${hookPricing.p1Gs} (Precio normal referencia: ${hookPricing.pNormalGs})
+- REGLA INQUEBRANTABLE: Los 6 anuncios deben vender DIRECTAMENTE "${hookCfg!.entryProductName}" a solo ${hookPricing.p1Gs} con Pago Contra Entrega en Paraguay para maximizar CTR. Jamás escribas "tripwire" en ningún campo; usa únicamente "${hookCfg!.entryProductName}".
+`
+    : isHybridMix
+      ? `
+ESTRATEGIA HÍBRIDA ADSET (4 ESTÁNDAR + 2 INYECCIÓN DE ALTO CLIC):
+- HIPÓTESIS H1, H2, H3, H4 (ESTÁNDAR): Venden el PRODUCTO PRINCIPAL "${params.product.nombre}" (${params.product.descripcion}) al precio real ${pricing.p1Gs} (Pack 2: ${pricing.p2Gs}).
+- HIPÓTESIS H5 y H6 (INYECCIÓN GANCHO DE ALTO CLIC): Venden EXCLUSIVAMENTE el ARTÍCULO DE ENTRADA CONGRUENTE "${hookCfg!.entryProductName}" (${hookCfg!.entryProductDescription || hookCfg!.entryProductName}) al precio gancho irresistible ${hookPricing.p1Gs} (Referencia: ${hookPricing.pNormalGs}) para disparar el CTR del AdSet y captar leads calientes hacia "${params.product.nombre}".
+- REGLA INQUEBRANTABLE: Jamás escribas la palabra "tripwire" en ningún campo; llamalo únicamente "${hookCfg!.entryProductName}".
+`
+      : '';
   const prompt = `Sos un director senior de respuesta directa, psicología del consumidor (Eugene Schwartz - Niveles de Conciencia y Sofisticación del Mercado) y pauta Meta Ads COD en Paraguay.
 
 PRODUCTO:
-- Nombre: ${params.product.nombre}
+- Nombre: ${hasAllHook ? hookCfg!.entryProductName : params.product.nombre}
 - Slug: ${params.product.slug}
-- Descripción: ${params.product.descripcion}
-- Precio Pack 1 (REAL): ${pricing.p1Gs}
+- Descripción: ${hasAllHook ? (hookCfg!.entryProductDescription || params.product.descripcion) : params.product.descripcion}
+- Precio Gancho / Pack 1 (REAL): ${pricing.p1Gs}
 - Precio Pack 2 (REAL): ${pricing.p2Gs}
 - Precio Pack 3 (REAL): ${pricing.p3Gs}
 - Precio Normal / Referencia Alta (para contraste o precio tachado): ${pricing.pNormalGs}
 - Contexto IA adicional: ${params.product.contextoIA || 'N/A'}
 - Physical truth: ${JSON.stringify(params.product.physicalTruth || {})}
-
+${hookSectionPrompt}
 COMPETIDORES OBSERVADOS (CON SU NIVEL DE FUENTE REAL):
 ${JSON.stringify(params.competitors.map((c) => ({ pageName: c.pageName, headline: c.headline, angle: c.detectedAngle, tier: c.sourceTier, verified: c.sourceVerified })), null, 2)}
 
@@ -576,7 +632,7 @@ MEMORIA PREVIA DEL CIRCUITO A (ÚNICAMENTE CONVERSIONES DE FORMULARIO Y COSTO PO
 REGLAS OBLIGATORIAS:
 1. Diagnosticá nivel de conciencia y sofisticación de mercado (1..5), dolores viscerales, deseos profundos, objeciones COD Paraguay, mecanismo único del problema y mecanismo único de solución.
 2. Creá EXACTAMENTE 6 hipótesis publicitarias GENUINAMENTE DISTINTAS (NO uses ángulos genéricos repetidos ni textos idénticos; cada hipótesis debe variar targetAvatar, awarenessLevel, objectionTargeted, hookFormula, testVariable, copyFramework, visualArchetype, primaryTextDraft en español rioplatense/paraguayo natural, headlineDraft, ctaDraft, aiImagePrompt específico en inglés fotográfico y videoScriptPrompt).
-3. MONEDA OBLIGATORIA PARAGUAY (100% GUARANÍES — CERO DÓLARES): Está TERMINANTEMENTE PROHIBIDO escribir dólares ("$", "USD", "US$", "dollars", "dólares", "$10", "$80", etc.) en CUALQUIERA de los 6 anuncios (ni en el copy ni en "aiImagePrompt"). Si un "aiImagePrompt" muestra precios, ahorros, costo estimado o comparativas económicas, DEBE imprimir exclusivamente Guaraníes usando el precio real de la web ("${pricing.p1Gs}") y, si muestra un costo alto/bruto para contrastar marketing, usar "${pricing.pNormalGs}" en Guaraníes. Además, dejá el 15% inferior de la imagen limpio y oscuro sin textos ni etiquetas para que no choque con el zócalo inferior.
+3. MONEDA OBLIGATORIA PARAGUAY (100% GUARANÍES — CERO DÓLARES): Está TERMINANTEMENTE PROHIBIDO escribir dólares ("$", "USD", "US$", "dollars", "dólares", "$10", "$80", etc.) en CUALQUIERA de los 6 anuncios (ni en el copy ni en "aiImagePrompt"). Si un "aiImagePrompt" muestra precios, ahorros, costo estimado o comparativas económicas, DEBE imprimir exclusivamente Guaraníes usando el precio real de entrada ("${pricing.p1Gs}") y, si muestra un costo alto/bruto para contrastar marketing, usar "${pricing.pNormalGs}" en Guaraníes. Además, dejá el 15% inferior de la imagen limpio y oscuro sin textos ni etiquetas para que no choque con el zócalo inferior.
 4. NO menciones datos de courier/entregas/devoluciones ni supongas garantías inventadas fuera del producto real.
 5. Respondé ÚNICAMENTE JSON válido con esta estructura exacta:
 {
@@ -745,7 +801,8 @@ export async function runPsychologicalAndHypothesisIntelligence(
       product: input.product,
       competitors: competitorRes.findings,
       winningSummary: memory.winningSummary,
-      losingSummary: memory.losingSummary
+      losingSummary: memory.losingSummary,
+      adMode: input.adMode
     });
   }
 
@@ -756,7 +813,8 @@ export async function runPsychologicalAndHypothesisIntelligence(
       product: input.product,
       psychologicalProfile,
       winningSummary: memory.winningSummary,
-      losingSummary: memory.losingSummary
+      losingSummary: memory.losingSummary,
+      adMode: input.adMode
     });
 
   const nowIso = new Date().toISOString();

@@ -60,6 +60,7 @@ import { ProductTemplateBuilderModal } from '../components/ProductTemplateBuilde
 import { ProductTemplateBuilderStudio } from '../components/ProductTemplateBuilderStudio';
 import { AutoAdsView } from '../components/AutoAdsView';
 import { MetaCommentsView } from '../components/MetaCommentsView';
+import { QuickProductCreatorView } from '../components/QuickProductCreatorView';
 import { AdminSectionGuide } from '../components/AdminSectionGuide';
 import { DownloadAppsModal } from '../components/DownloadAppsModal';
 import { SUBNICHE_TEMPLATES, buildAutoTrainedAgentBrain } from '../data/productTemplatesCatalog';
@@ -147,7 +148,7 @@ const DEFAULT_MING_VOICES = DEFAULT_DEEPGRAM_CATALOG;
 
 const ITEMS_PER_PAGE = 10;
 
-export type AdminMenuKey = 'productos' | 'creador' | 'pipeboard' | 'comentarios' | 'whatsapp' | 'deepgram' | 'openrouter';
+export type AdminMenuKey = 'productos' | 'creador_rapido' | 'creador' | 'pipeboard' | 'comentarios' | 'whatsapp' | 'deepgram' | 'openrouter';
 
 export interface AdminViewProps {
   androidShell?: {
@@ -2291,7 +2292,33 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                 </span>
               </button>
 
-              {/* Menu 2: Creador de Páginas IA */}
+              {/* Menu 2: Creador Rápido Universal GPT-2.6 (Menú e Interfaz Independiente) */}
+              <button
+                data-testid="sidebar-menu-creador-rapido"
+                onClick={() => {
+                  setActiveMenu('creador_rapido');
+                  setMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                  activeMenu === 'creador_rapido'
+                    ? 'bg-zinc-800/60 text-white border-l-2 border-cyan-400'
+                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <Zap
+                    className={`w-4 h-4 shrink-0 ${
+                      activeMenu === 'creador_rapido' ? 'text-cyan-400' : 'text-zinc-500'
+                    }`}
+                  />
+                  <span className="truncate">Creador Rápido</span>
+                </div>
+                <span className="text-[10px] font-mono text-cyan-400">
+                  2.6
+                </span>
+              </button>
+
+              {/* Menu 2b: Creador de Páginas IA */}
               <button
                 data-testid="sidebar-menu-creador"
                 onClick={() => {
@@ -2525,6 +2552,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
               <span className="text-zinc-700 hidden sm:inline">/</span>
               <span className="text-white font-medium truncate max-w-[160px] sm:max-w-none">
                 {activeMenu === 'productos' && 'Páginas & Ventas'}
+                {activeMenu === 'creador_rapido' && 'Creador Rápido IA'}
                 {activeMenu === 'creador' && 'Creador IA'}
                 {activeMenu === 'pipeboard' && 'AutoAds'}
                 {activeMenu === 'comentarios' && 'Comentarios Ads IA'}
@@ -2620,6 +2648,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
         {/* Content View */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-28 lg:pb-8 space-y-5 bg-[#09090b] text-zinc-100">
           {/* ======================================================== */}
+          {/* INTERFAZ INDEPENDIENTE: CREADOR RÁPIDO UNIVERSAL GPT-2.6  */}
+          {/* ======================================================== */}
+          {activeMenu === 'creador_rapido' && (
+            <QuickProductCreatorView
+              defaultWaNumber={selectedProduct?.wa || config.wa || '595973532550'}
+              showToast={showToast}
+              onProductCreated={async (createdPage, openPreview) => {
+                await addProductPage(createdPage, true);
+                setSelectedProductId(createdPage.id);
+                setExpandedProductId(createdPage.id);
+                if (openPreview) {
+                  window.history.pushState({}, '', `/?p=${createdPage.slug}`);
+                  setCurrentView('store');
+                }
+              }}
+            />
+          )}
+
+          {/* ======================================================== */}
           {/* INTERFAZ CREADOR: CONSTRUCTOR DE PÁGINAS IA (1-CLIC)    */}
           {/* ======================================================== */}
           {activeMenu === 'creador' && (
@@ -2677,6 +2724,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ androidShell }) => {
                   setCurrentProductPage(prod);
                   setCurrentView('store');
                 }}
+                onOpenTripwirePageCreator={() => setActiveMenu('creador_rapido')}
                 showToast={showToast}
               />
             </div>

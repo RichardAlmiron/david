@@ -59,6 +59,7 @@ import {
 import { DEFAULT_META_TRACKING_CONFIG } from '../utils/metaPixelEngine';
 import { executeDeepseekHarnessOnDraft } from '../services/deepseekHarnessEngine';
 import { formatGs, formatWaPhone } from '../config';
+import { ensureProductHasMandatoryTripwire } from '../data/noeluxVisualPreset';
 
 export interface ProductTemplateBuilderStudioProps {
   isOpen?: boolean;
@@ -114,9 +115,20 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
 
   const [selectedTemplate, setSelectedTemplate] = useState<SubNicheTemplateDef>(defaultTemplate);
 
-  // Autopilot Quick Launcher inputs
+  // Selector del tipo de página a crear: Dual (Tripwire + Ganador) vs Solo Producto Principal
+  const [templateCreationMode, setTemplateCreationMode] = useState<'dual_tripwire_winner' | 'principal_only'>(
+    initialProduct && !initialProduct.tripwireConfig?.enabled ? 'principal_only' : 'dual_tripwire_winner'
+  );
   const [quickAutopilotQuery, setQuickAutopilotQuery] = useState<string>('');
   const [quickAutopilotPhoto, setQuickAutopilotPhoto] = useState<string>('');
+  const [quickWinnerDesc, setQuickWinnerDesc] = useState<string>('');
+  const [quickWinnerAngle, setQuickWinnerAngle] = useState<string>('');
+  const [quickWinnerPrice1, setQuickWinnerPrice1] = useState<number>(189000);
+  const [quickTripwireName, setQuickTripwireName] = useState<string>('');
+  const [quickTripwireDesc, setQuickTripwireDesc] = useState<string>('');
+  const [quickTripwirePrice, setQuickTripwirePrice] = useState<number>(20000);
+  const [quickTripwireDelivery, setQuickTripwireDelivery] = useState<number>(40000);
+  const [quickTripwirePhoto, setQuickTripwirePhoto] = useState<string>('');
   const [isSynthesizing, setIsSynthesizing] = useState<boolean>(false);
 
   // Audio / Speech State for the AI Interview Agent & Portavoz
@@ -159,7 +171,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
       shippingCostGs: 25000
     });
 
-    return {
+    return ensureProductHasMandatoryTripwire({
       id: `prod-${Date.now()}`,
       slug: (selectedTemplate.idealForProducts[0] || cleanText(selectedTemplate.name))
         .toLowerCase()
@@ -187,7 +199,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
       canalIA: 'audio',
       freeShipping: true,
       shippingCostGs: 25000
-    };
+    });
   });
 
   const [chatHistory, setChatHistory] = useState<AgentChatMessage[]>([
@@ -327,7 +339,9 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
           .replace(/^-+|-+$/g, '') || `producto-${Date.now()}`;
 
       // Calculate psychological 9.000 Gs ladder
-      const p1 = targetTemplate.defaultPricePack1;
+      const p1 = quickAutopilotQuery.trim() && quickWinnerPrice1 >= 35000
+        ? quickWinnerPrice1
+        : targetTemplate.defaultPricePack1;
       const rawP2 = Math.round(p1 * 1.84);
       const p2 = Math.ceil(rawP2 / 10000) * 10000 - 1000;
       const rawP3 = Math.round(p1 * 2.58);
@@ -339,16 +353,21 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
         3: p3
       };
 
+      const winnerDesc = quickWinnerDesc.trim() || targetTemplate.winnerAngleHook;
+      const winnerAngleVal =
+        quickWinnerAngle.trim() ||
+        `Solución completa superior para ${resolvedTitle}`;
+
       const truth: ProductPhysicalTruth = {
         ...targetTemplate.defaultPhysicalTruth
       };
 
       const landingContent = synthesizeCompleteLandingContent({
         productName: resolvedTitle,
-        productDescription: targetTemplate.winnerAngleHook,
+        productDescription: winnerDesc,
         mainImage: resolvedImage,
         prices,
-        normalPrice: targetTemplate.defaultNormalPrice,
+        normalPrice: Math.max(targetTemplate.defaultNormalPrice, Math.round(p1 * 1.3)),
         physicalTruth: truth,
         template: targetTemplate,
         freeShipping: true,
@@ -357,7 +376,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
 
       const { agentBrain, contextoIA } = buildAutoTrainedAgentBrain({
         productName: resolvedTitle,
-        productDescription: targetTemplate.winnerAngleHook,
+        productDescription: winnerDesc,
         prices,
         physicalTruth: truth,
         template: targetTemplate,
@@ -366,14 +385,22 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
         shippingCostGs: 25000
       });
 
-      const newPage: ProductPage = {
+      const resolvedTripwireName =
+        quickTripwireName.trim() ||
+        `Complemento Esencial para ${resolvedTitle.split(/\s+/).slice(0, 3).join(' ')}`;
+      const resolvedTripwirePrice = Math.max(5000, Number(quickTripwirePrice) || 20000);
+      const resolvedTripwireDelivery = Math.max(10000, Number(quickTripwireDelivery) || 40000);
+      const resolvedTripwireImg = quickTripwirePhoto.trim() || resolvedImage;
+
+      const basePage: ProductPage = {
         id: `prod-${Date.now()}`,
         slug,
         nombre: resolvedTitle,
-        descripcion: targetTemplate.winnerAngleHook,
+        descripcion: winnerDesc,
+        winnerAngle: winnerAngleVal,
         imagen: resolvedImage,
         precios: prices,
-        precioNormal: targetTemplate.defaultNormalPrice,
+        precioNormal: Math.max(targetTemplate.defaultNormalPrice, Math.round(p1 * 1.3)),
         wa: defaultWaNumber || '595973532550',
         waNotificacionesVendedor: defaultWaNumber || '595973532550',
         activo: true,
@@ -387,6 +414,28 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
         vozAgente: 'deepgram-estrella',
         agentMode: 'automatico',
         canalIA: 'audio',
+        ...(templateCreationMode === 'dual_tripwire_winner'
+          ? {
+              tripwireConfig: {
+                enabled: true,
+                entryProductName: resolvedTripwireName,
+                entryProductDescription:
+                  quickTripwireDesc.trim() ||
+                  `Artículo de entrada accesible compatible con ${resolvedTitle}.`,
+                entryPriceGs: resolvedTripwirePrice,
+                entryNormalPriceGs: Math.round(resolvedTripwirePrice * 2.2),
+                deliveryFeeGs: resolvedTripwireDelivery,
+                entryProductImage: resolvedTripwireImg,
+                entryImageUrl: resolvedTripwireImg,
+                eventDurationHours: 6,
+                slotsTotal: 10,
+                instantDiscountPercent: 12,
+                backgroundMusicPreset: 'warm_ambient',
+                entryOnlyClarification: `Incluye únicamente 1x ${resolvedTripwireName}. No incluye ${resolvedTitle} ni envío gratis por separado.`,
+                principalBundleClarification: `Incluye ${resolvedTitle} + ${resolvedTripwireName} de regalo + Envío Gratis sin esperar evento.`
+              }
+            }
+          : {}),
         metaTracking: {
           ...DEFAULT_META_TRACKING_CONFIG,
           pixelId: '',
@@ -396,6 +445,11 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
         freeShipping: true,
         shippingCostGs: 25000
       };
+
+      const newPage: ProductPage =
+        templateCreationMode === 'dual_tripwire_winner'
+          ? ensureProductHasMandatoryTripwire(basePage)
+          : basePage;
 
       await onSaveProductPage(newPage, false);
       setLiveDraft(newPage);
@@ -451,7 +505,7 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
       shippingCostGs: 25000
     });
 
-    const draftPage: ProductPage = {
+    const rawDraftPage: ProductPage = {
       id: `prod-${Date.now()}`,
       slug: resolvedTitle
         .toLowerCase()
@@ -480,6 +534,11 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
       freeShipping: true,
       shippingCostGs: 25000
     };
+
+    const draftPage: ProductPage =
+      templateCreationMode === 'dual_tripwire_winner'
+        ? ensureProductHasMandatoryTripwire(rawDraftPage)
+        : rawDraftPage;
 
     setLiveDraft(draftPage);
     setActiveStep('editor');
@@ -595,7 +654,11 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
     setSavingChangesToDb(true);
 
     try {
-      await onSaveProductPage(liveDraft, false);
+      const sealedDraft =
+        liveDraft.tripwireConfig?.enabled || templateCreationMode === 'dual_tripwire_winner'
+          ? ensureProductHasMandatoryTripwire(liveDraft)
+          : { ...liveDraft, tripwireConfig: undefined };
+      await onSaveProductPage(sealedDraft, false);
       const sealMsg: AgentChatMessage = {
         id: `seal-${Date.now()}`,
         role: 'assistant',
@@ -823,44 +886,175 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
         {/* ============================================================== */}
         {activeStep === 'catalogo' && (
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-            {/* VERCEL CALM AUTOPILOT BAR */}
-            <div className="p-4 sm:p-5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-3">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
+            {/* VERCEL CALM AUTOPILOT BAR: MODO DUAL (TRIPWIRE + GANADOR) O SOLO PRODUCTO PRINCIPAL */}
+            <div className="p-4 sm:p-5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-4">
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+                <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
                     <h2 className="text-sm sm:text-base font-semibold text-white tracking-tight">
-                      Lanzador de Autopiloto en 1 Clic
+                      {templateCreationMode === 'principal_only'
+                        ? 'Lanzador Directo: Exclusivamente Producto Principal'
+                        : 'Lanzador Dual: Página Tripwire + Producto Ganador (Misma Página)'}
                     </h2>
                   </div>
                   <p className="text-xs text-zinc-400">
-                    Elegí cualquier plantilla de abajo o pegá el nombre/URL de tu producto. El autopiloto construye la landing, calcula precios psicológicos 9.000 Gs y entrena al cerebro de WhatsApp al instante.
+                    {templateCreationMode === 'principal_only'
+                      ? 'Creá una página enfocada 100% en tu Producto Principal (sin Tripwire) para tus campañas estándar normales.'
+                      : 'Creá en un paso tu bloque Tripwire (Entrada) y tu bloque Producto Ganador (Ángulo Diferente) dentro de la misma página.'}
                   </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto justify-end">
+                  <div className="inline-flex rounded-xl bg-zinc-950 border border-zinc-800 p-1 text-[11px]">
+                    <button
+                      type="button"
+                      data-testid="studio-mode-dual"
+                      onClick={() => setTemplateCreationMode('dual_tripwire_winner')}
+                      className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer ${
+                        templateCreationMode === 'dual_tripwire_winner'
+                          ? 'bg-amber-500 text-black'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Dual (Tripwire + Ganador)
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="studio-mode-principal"
+                      onClick={() => setTemplateCreationMode('principal_only')}
+                      className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer ${
+                        templateCreationMode === 'principal_only'
+                          ? 'bg-emerald-500 text-black'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Solo Producto Principal
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isSynthesizing}
+                    onClick={() => handleLaunchAutopilot(selectedTemplate, quickAutopilotQuery)}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50 shrink-0 shadow-sm"
+                  >
+                    <Sparkles className="w-4 h-4 text-emerald-600" />
+                    <span>
+                      {isSynthesizing
+                        ? 'Publicando...'
+                        : templateCreationMode === 'principal_only'
+                          ? '⚡ Lanzar Producto Principal (1-Clic)'
+                          : '⚡ Lanzar Página Dual (1-Clic)'}
+                    </span>
+                  </button>
                 </div>
               </div>
 
-              {/* Autopilot Instant Input */}
-              <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-1">
-                <div className="relative flex-1 w-full">
-                  <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <div
+                className={`grid grid-cols-1 ${
+                  templateCreationMode === 'dual_tripwire_winner' ? 'lg:grid-cols-2' : ''
+                } gap-3.5`}
+              >
+                {/* Campo A: Para Página Tripwire (solo modo dual) */}
+                {templateCreationMode === 'dual_tripwire_winner' && (
+                <div className="p-3.5 rounded-xl bg-black/70 border border-amber-500/40 space-y-2.5">
+                  <span className="inline-block px-2 py-0.5 rounded bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider">
+                    ESTE ES PARA PÁGINA TRIPWIRE (ENTRADA)
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={quickTripwireName}
+                      onChange={e => setQuickTripwireName(e.target.value)}
+                      placeholder="Nombre Tripwire (ej: Guirnalda LED 10m)"
+                      className="sm:col-span-2 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                    />
+                    <input
+                      type="number"
+                      min={5000}
+                      step={1000}
+                      value={quickTripwirePrice}
+                      onChange={e => setQuickTripwirePrice(Number(e.target.value) || 20000)}
+                      placeholder="Gs. 20000"
+                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-amber-300"
+                    />
+                  </div>
                   <input
                     type="text"
-                    value={quickAutopilotQuery}
-                    onChange={e => setQuickAutopilotQuery(e.target.value)}
-                    placeholder="Escribí el nombre de tu producto o pegá la URL (ej: Freidora de Aire 6L)"
-                    className="w-full bg-black border border-zinc-700/80 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white transition-colors"
+                    value={quickTripwireDesc}
+                    onChange={e => setQuickTripwireDesc(e.target.value)}
+                    placeholder="Descripción Tripwire (medidas, qué incluye)"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
                   />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={quickTripwirePhoto}
+                      onChange={e => setQuickTripwirePhoto(e.target.value)}
+                      placeholder="URL Foto Tripwire"
+                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                    />
+                    <input
+                      type="number"
+                      min={10000}
+                      step={5000}
+                      value={quickTripwireDelivery}
+                      onChange={e => setQuickTripwireDelivery(Number(e.target.value) || 40000)}
+                      placeholder="Delivery Gs."
+                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300"
+                    />
+                  </div>
                 </div>
+                )}
 
-                <button
-                  type="button"
-                  disabled={isSynthesizing}
-                  onClick={() => handleLaunchAutopilot(selectedTemplate, quickAutopilotQuery)}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 disabled:opacity-50 shrink-0 shadow-sm"
-                >
-                  <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>{isSynthesizing ? 'Publicando...' : '⚡ Lanzar Autopiloto (1-Clic)'}</span>
-                </button>
+                {/* Campo B: Para Página Producto Ganador / Exclusivo Principal */}
+                <div className="p-3.5 rounded-xl bg-black/70 border border-emerald-500/40 space-y-2.5">
+                  <span className="inline-block px-2 py-0.5 rounded bg-emerald-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider">
+                    {templateCreationMode === 'principal_only'
+                      ? 'ESTE ES EXCLUSIVAMENTE PARA PÁGINA DE PRODUCTO PRINCIPAL'
+                      : 'ESTE VA A SER PARA PÁGINA PRODUCTO GANADOR (ÁNGULO DIFERENTE)'}
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={quickAutopilotQuery}
+                      onChange={e => setQuickAutopilotQuery(e.target.value)}
+                      placeholder="Producto Ganador (ej: Freidora 6L)"
+                      className="sm:col-span-2 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                    />
+                    <input
+                      type="number"
+                      min={35000}
+                      step={1000}
+                      value={quickWinnerPrice1}
+                      onChange={e => setQuickWinnerPrice1(Number(e.target.value) || 189000)}
+                      placeholder="Gs. 189000"
+                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-300"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={quickWinnerAngle}
+                    onChange={e => setQuickWinnerAngle(e.target.value)}
+                    placeholder="Ángulo diferente del Producto Ganador en esta misma página"
+                    className="w-full bg-zinc-950 border border-emerald-800/60 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={quickAutopilotPhoto}
+                      onChange={e => setQuickAutopilotPhoto(e.target.value)}
+                      placeholder="URL Foto Producto Ganador"
+                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                    />
+                    <input
+                      type="text"
+                      value={quickWinnerDesc}
+                      onChange={e => setQuickWinnerDesc(e.target.value)}
+                      placeholder="Descripción / beneficios clave"
+                      className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

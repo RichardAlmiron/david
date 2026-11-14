@@ -102,6 +102,8 @@ export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
     config,
     selectedPack,
     setSelectedPack,
+    purchasePath,
+    setPurchasePath,
     addOrder,
     currentProductPage,
     orderFormFullscreen,
@@ -196,10 +198,21 @@ export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
   const targetProductId = currentProductPage?.id || 'prod-noelux-01';
   const targetProductName =
     currentProductPage?.nombre || `${config.marca}™ Proyector Navideño 12 Diseños`;
-  const total =
+  const hasEntryHook = Boolean(currentProductPage?.tripwireConfig?.enabled && currentProductPage?.tripwireConfig?.entryProductName);
+  const isEntryOnly = hasEntryHook && purchasePath === 'entry_only';
+  const entryOfferCfg = currentProductPage?.tripwireConfig;
+  const principalTotal =
     currentProductPage?.precios?.[effectivePack] ||
     config.lote[effectivePack] ||
     189000;
+  const total = isEntryOnly
+    ? Number(entryOfferCfg?.entryPriceGs || 20000)
+    : principalTotal;
+  const activeOfferTitle = isEntryOnly
+    ? String(entryOfferCfg?.entryProductName || targetProductName)
+    : hasEntryHook
+    ? `${targetProductName} + ${entryOfferCfg?.entryProductName} DE REGALO`
+    : targetProductName;
 
   const gpsLink =
     gpsLat !== null && gpsLng !== null
@@ -893,8 +906,14 @@ export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
         calle: finalCalle,
         direccion: finalDireccion,
         detalle: pago,
-        cantidad: finalPack,
+        cantidad: isEntryOnly ? 1 : finalPack,
         monto: total,
+        ...(hasEntryHook
+          ? {
+              purchasePath: isEntryOnly ? 'entry_only' : 'principal_bundle',
+              purchaseOfferTitle: activeOfferTitle
+            }
+          : {}),
         ref_code: null,
         estado: 'reservado',
         tipoVivienda,
@@ -1101,8 +1120,55 @@ export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
             </div>
           )}
 
+          {/* ═══ AVISO TRANSPARENTE DE OPCIÓN ELEGIDA (SOLO COMPLEMENTO VS EQUIPO COMPLETO) ═══ */}
+          {!orderComplete && hasEntryHook && entryOfferCfg && (
+            <div
+              data-testid="orderform-dual-path-clarification"
+              className={`rounded-2xl border-2 p-3.5 text-xs sm:text-sm space-y-2 ${
+                isEntryOnly
+                  ? 'bg-amber-50 border-amber-400 text-stone-900'
+                  : 'bg-emerald-50 border-emerald-500 text-stone-900'
+              }`}
+            >
+              <div className="font-black">
+                {isEntryOnly
+                  ? `Opción seleccionada: SOLO ${entryOfferCfg.entryProductName} (${formatGs(entryOfferCfg.entryPriceGs)})`
+                  : `Opción seleccionada: ${targetProductName} + ${entryOfferCfg.entryProductName} DE REGALO`}
+              </div>
+              <p className="text-stone-700 leading-snug">
+                {isEntryOnly
+                  ? `Aclaración importante: esta opción NO incluye ${targetProductName}. Delivery según zona: ${formatGs(
+                      entryOfferCfg.deliveryFeeGs || 40000
+                    )}.`
+                  : `Incluye ${targetProductName} completo + ${entryOfferCfg.entryProductName} GRATIS + Envío Gratis directo a tu puerta (sin lista de espera).`}
+              </p>
+              <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                {isEntryOnly ? (
+                  <button
+                    type="button"
+                    onClick={() => setPurchasePath('principal_bundle')}
+                    className="text-xs font-bold text-[#062319] underline cursor-pointer"
+                  >
+                    Cambiar al equipo completo (con envío gratis + {entryOfferCfg.entryProductName} incluido)
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPurchasePath('entry_only');
+                      setSelectedPack(1);
+                    }}
+                    className="text-xs font-semibold text-stone-600 underline cursor-pointer"
+                  >
+                    Preferir pedir solo {entryOfferCfg.entryProductName} ({formatGs(entryOfferCfg.entryPriceGs)})
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ═══ PACK SELECTOR — Con números y precios grandes ═══ */}
-          {!orderComplete && (
+          {!orderComplete && !isEntryOnly && (
             <div className="bg-gradient-to-br from-[#f8f6f0] to-[#f0ede4] border-2 border-[#dfdad0] rounded-2xl p-3">
               <div className="flex items-center justify-between text-sm sm:text-base font-black uppercase text-stone-800 mb-2.5 px-1">
                 <span>Elegí tu cantidad:</span>

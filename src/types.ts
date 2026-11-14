@@ -211,6 +211,38 @@ export interface Order {
   packagingCostPyg?: number;
   returnCostPyg?: number;
   purchaseCapiStatus?: string;
+  // Ruta de compra dual (Producto de entrada vs Paquete principal completo) y Evento WhatsApp 10 cupos
+  purchasePath?: 'entry_only' | 'principal_bundle';
+  purchaseOfferTitle?: string;
+  tripwireEventState?: {
+    stage:
+      | 'pending_choice'
+      | 'instant_upgraded'
+      | 'waitlist_enrolled'
+      | 'silenced_until_end'
+      | 'final_dispatched';
+    attemptsSent: number;
+    enrolledAt?: string;
+    lastAttemptAt?: string;
+    nextFollowUpAt?: string;
+    lastNoticeAt?: string;
+    silenceStartedAt?: string;
+    eventEndsAt: string;
+    slotsTotal: number;
+    slotsTaken: number;
+    entryProductName: string;
+    entryPriceGs: number;
+    deliveryFeeGs: number;
+    instantUpgradePriceGs: number;
+    waitlistPriceGs: number;
+    backgroundMusicPreset?: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
+    pollMsgId?: string;
+    pollEncKeyBase64?: string;
+    pollCreatorJid?: string;
+    pollVoterJid?: string;
+    pollOptionHashes?: string[];
+    selectedOption?: 'option_1_instant' | 'option_2_waitlist';
+  };
 }
 
 export type MetaCommentChannel =
@@ -277,6 +309,12 @@ export interface MetaCommentThreadRecord {
   whatsappNotifiedAt?: string;
   status: 'new' | 'public_replied' | 'dm_active' | 'form_sent' | 'order_closed' | 'ignored';
   intent?: 'price_inquiry' | 'buy_now' | 'phone_drop' | 'shipping_question' | 'objection' | 'other';
+  angleUsed?: string;
+  adSetId?: string;
+  adSetName?: string;
+  adHeadline?: string;
+  adCopy?: string;
+  adThumbnailUrl?: string;
   messages: MetaCommentChatMessage[];
   orderId?: string;
   orderTotalPyg?: number;
@@ -290,9 +328,14 @@ export interface MetaCommentAdStats {
   adId: string;
   adName: string;
   adIndex?: number;
+  adSetId?: string;
+  adSetName?: string;
   campaignId?: string;
   campaignName?: string;
   postId?: string;
+  adCopy?: string;
+  adThumbnailUrl?: string;
+  adStatus?: string;
   productId?: string;
   productSlug?: string;
   productName?: string;
@@ -308,10 +351,32 @@ export interface MetaCommentAdStats {
   isWinner?: boolean;
 }
 
+export interface MetaActiveAdSnapshot {
+  adId: string;
+  adName: string;
+  adIndex?: number;
+  adStatus?: string;
+  effectiveStatus?: string;
+  adSetId?: string;
+  adSetName?: string;
+  campaignId?: string;
+  campaignName?: string;
+  postId?: string;
+  adCopy?: string;
+  adHeadline?: string;
+  adThumbnailUrl?: string;
+  productId?: string;
+  productSlug?: string;
+  productName?: string;
+  updatedAt: string;
+}
+
 export interface MetaCommentAutomationConfig {
   enabled: boolean;
   autoPublicReply: boolean;
   autoPrivateDm: boolean;
+  publicOnlyMode?: boolean;
+  autoPollingSeconds?: number;
   autoHidePhoneComments: boolean;
   autoWhatsappOnPhone: boolean;
   defaultProductId: string;
@@ -326,15 +391,24 @@ export interface MetaCommentAutomationConfig {
       adId: string;
       adName: string;
       adIndex?: number;
+      adSetId?: string;
+      adSetName?: string;
       campaignId?: string;
       campaignName?: string;
+      adCopy?: string;
+      adHeadline?: string;
+      adThumbnailUrl?: string;
+      adStatus?: string;
       productId?: string;
       productSlug?: string;
       productName?: string;
     }
   >;
+  activeAdsSnapshot?: MetaActiveAdSnapshot[];
   webhookVerifyToken: string;
   lastSyncAt?: string;
+  lastAutoPollAt?: string;
+  lastAutoPollError?: string;
 }
 
 export interface AppConfig {
@@ -615,6 +689,64 @@ export interface ProductPage {
   shippingCostGs?: number;
   waStageCommercialsEnabled?: boolean;
   waStageCommercials?: ProductWaStageCommercialMap;
+  winnerAngle?: string;
+  tripwireConfig?: ProductTripwireOfferConfig;
+  visualLanding?: ProductVisualLandingConfig;
+}
+
+export interface ProductTripwireOfferConfig {
+  enabled: boolean;
+  entryProductName: string;
+  entryProductDescription: string;
+  entryPriceGs: number;
+  entryNormalPriceGs?: number;
+  entryProductPriceGs?: number;
+  deliveryFeeGs: number;
+  entryDeliveryFeeGs?: number;
+  entryProductImage?: string;
+  entryImageUrl?: string;
+  entrySourceUrl?: string;
+  sourceUrl?: string;
+  eventDurationHours: number;
+  slotsTotal: number;
+  eventSlotsCount?: number;
+  instantDiscountPercent: number;
+  backgroundMusicPreset?: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
+  entryOnlyClarification?: string;
+  principalBundleClarification?: string;
+}
+
+export interface ProductVisualLandingSheet {
+  id: string;
+  title: string;
+  subtitle?: string;
+  caption?: string;
+  imageUrl: string;
+  aspectRatio?: '3:4' | '9:16' | '1:1' | '4:5';
+  placement?: 'hero_sheet' | 'comparison_sheet' | 'proof_sheet';
+  role?: 'hero_presentation' | 'comparison_need' | 'social_trust_specs';
+  promptUsed?: string;
+}
+
+export interface ProductVisualLandingConfig {
+  enabled: boolean;
+  mode?: 'sober_graphic_2sheet' | 'sober_graphic_3sheet';
+  generatorModel?: string;
+  topNoticeText?: string;
+  sobrietyHeadline?: string;
+  subheadline?: string;
+  reversePsychologyHook?: string;
+  reversePsychologyNote?: string;
+  winnerAngleHeadline?: string;
+  winnerAngleDescription?: string;
+  entryCtaLabel?: string;
+  entryButtonLabel?: string;
+  entryDisclaimer?: string;
+  principalCtaLabel?: string;
+  bundleButtonLabel?: string;
+  bundleDisclaimer?: string;
+  sheets: ProductVisualLandingSheet[];
+  generatedAt?: string;
 }
 
 export interface AIAgentSettings {

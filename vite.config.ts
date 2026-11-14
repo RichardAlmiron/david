@@ -127,27 +127,32 @@ import {
 } from './server/cloudinaryStore.ts';
 import {
   fetchLiveMetaCampaignHierarchy,
-  replacePublishedAdInMeta
+  replacePublishedAdInMeta,
+  resolveCreativeTargetLandingUrl
 } from './server/metaCampaignOps.ts';
+import { upgradeDefaultNoeluxWithVisualPreset } from './src/data/noeluxVisualPreset.ts';
 import {
   buildExpressCheckoutUrl,
   computeMetaAdCommentStats,
   detectParaguayPhonesInText,
   generateCommentAndDmAiResponses,
-  generateMessengerChatReply,
+  getMetaCommentsAutoPilotStatus,
   hydrateMetaCommentsStateFromSupabase,
   linkOrderToMetaCommentThread,
   loadMetaCommentsState,
   postMetaCommentReply,
-  processInboundMessengerDm,
   processInboundMetaComment,
   resolveMetaPageAccessToken,
   resolveProductForCommentContext,
   saveMetaCommentsState,
-  sendMetaMessengerMessage,
   setMetaCommentHidden,
+  startMetaCommentsAutoPilot,
   syncMetaAdPostsAndComments
 } from './server/metaCommentsEngine.ts';
+import {
+  generateUniversalVisualProductPage,
+  scrapeEntryProductUrlInfo
+} from './server/visualLandingGenerator.ts';
 
 const RUNTIME_PERSISTENT_PATHS = getPersistentDataPaths();
 function getPedidosFilePath() {
@@ -514,8 +519,9 @@ function registerApiServerMiddlewares(server: any) {
 
       let updatedAny = false;
       const nextPages: any[] = [];
-      for (const prod of pages) {
-        if (!prod?.id) continue;
+      for (const rawProd of pages) {
+        if (!rawProd?.id) continue;
+        const prod = upgradeDefaultNoeluxWithVisualPreset(rawProd);
         const waStageCommercials = await renderFullProductCommercialMatrixOnServer(prod);
         nextPages.push({
           ...prod,
@@ -546,6 +552,28 @@ function registerApiServerMiddlewares(server: any) {
       envWriter: saveKeyToEnvFile,
       forceRefresh: true
     }).catch(() => {});
+    try {
+      startMetaCommentsAutoPilot(async () => {
+        const cfg = loadStoreConfig();
+        const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+        const { token } = await resolveActiveMetaUserToken();
+        const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+        const rawOrigin = String(
+          process.env.PUBLIC_URL || process.env.RAILWAY_PUBLIC_DOMAIN || 'https://noelux.shop'
+        ).trim();
+        const publicBaseUrl = rawOrigin.startsWith('http') ? rawOrigin : `https://${rawOrigin}`;
+        return {
+          userAccessToken: token || '',
+          adAccountId: String(cfg?.metaDirectConfig?.adAccountId || OFFICIAL_META_AD_ACCOUNT_ID),
+          pageId: String(cfg?.pipeboardConfig?.selectedFacebookPageId || OFFICIAL_META_PAGE_ID),
+          products,
+          openRouterApiKey,
+          publicBaseUrl
+        };
+      });
+    } catch (e) {
+      console.warn('[MetaComments AutoPilot Boot]:', e);
+    }
   }, 900);
 
   // Activar servidor gemelo para responder tanto en 8080 como en 3000 simultáneamente en Railway
@@ -567,6 +595,24 @@ function registerApiServerMiddlewares(server: any) {
         timestamp: new Date().toISOString()
       }));
       return;
+    }
+
+    // Servidor binario directo para /assets/visual-pages/* (láminas gráficas generadas con gpt-image-2.6-sunburst)
+    if (req.method === 'GET' && rawUrl && rawUrl.startsWith('/assets/visual-pages/')) {
+      try {
+        const cleanFileName = path.basename(decodeURIComponent(rawUrl.slice('/assets/visual-pages/'.length)));
+        const visDir = path.resolve(__dirname, 'public/assets/visual-pages');
+        const targetPath = path.join(visDir, cleanFileName);
+        if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
+          const ext = path.extname(cleanFileName).toLowerCase();
+          const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+          res.setHeader('Content-Type', mime);
+          res.setHeader('Cache-Control', 'public, max-age=31536000');
+          res.statusCode = 200;
+          res.end(fs.readFileSync(targetPath));
+          return;
+        }
+      } catch {}
     }
 
     // Servidor binario directo y auto-reparable para /assets/ai-ads/* (evita que Vite devuelva index.html text/html cuando un contenedor en Railway se reinicia)
@@ -2487,7 +2533,7 @@ function registerApiServerMiddlewares(server: any) {
               if (Array.isArray(safeCfg.productPages)) {
                 safeCfg.productPages = safeCfg.productPages.map((p: any) => {
                   if (!p || typeof p !== 'object') return p;
-                  const clonedProd = { ...p };
+                  const clonedProd = upgradeDefaultNoeluxWithVisualPreset({ ...p });
                   if (clonedProd.metaTracking && typeof clonedProd.metaTracking === 'object') {
                     clonedProd.metaTracking = {
                       ...clonedProd.metaTracking,
@@ -3424,6 +3470,49 @@ function registerApiServerMiddlewares(server: any) {
                   } catch {}
                 }
 
+                if (parsed.entryHookOverride && typeof parsed.entryHookOverride === 'object') {
+                  product = {
+                    ...product,
+                    tripwireConfig: {
+                      ...(product.tripwireConfig || {}),
+                      ...parsed.entryHookOverride,
+                      enabled: true
+                    }
+                  };
+                }
+
+                const requestedAdMode: 'standard' | 'entry_hook' | 'hybrid' =
+                  parsed.adMode === 'standard' || parsed.adMode === 'entry_hook' || parsed.adMode === 'hybrid'
+                    ? parsed.adMode
+                    : product.tripwireConfig?.enabled &&
+                        product.tripwireConfig?.entryProductName &&
+                        Number(product.tripwireConfig?.entryPriceGs) > 0
+                      ? 'hybrid'
+                      : 'standard';
+
+                const hookCfgTrain = product.tripwireConfig;
+                const hasHookConfiguredTrain = Boolean(
+                  hookCfgTrain?.enabled &&
+                    hookCfgTrain?.entryProductName &&
+                    Number(hookCfgTrain?.entryPriceGs) > 0
+                );
+                if (requestedAdMode === 'entry_hook' && hasHookConfiguredTrain) {
+                  const ePrice = Number(hookCfgTrain.entryPriceGs);
+                  const eNormal = Number(hookCfgTrain.entryNormalPriceGs || Math.round((ePrice * 2.1) / 1000) * 1000);
+                  product = {
+                    ...product,
+                    nombre: String(hookCfgTrain.entryProductName).trim(),
+                    descripcion: String(hookCfgTrain.entryProductDescription || product.descripcion || '').trim(),
+                    imagen: String(hookCfgTrain.entryImageUrl || product.imagen || '').trim(),
+                    precios: {
+                      1: ePrice,
+                      2: Math.round((ePrice * 1.9) / 1000) * 1000,
+                      3: Math.round((ePrice * 2.7) / 1000) * 1000
+                    },
+                    precioNormal: eNormal
+                  };
+                }
+
                 const rawProdName = String(product.nombre || 'Producto').trim();
                 const cleanNoSymbols = rawProdName.replace(/[™®©]/g, '').replace(/\s+/g, ' ').trim();
                 const nameWords = cleanNoSymbols.split(' ').filter(Boolean);
@@ -3741,7 +3830,8 @@ function registerApiServerMiddlewares(server: any) {
                       market: 'PY',
                       metaAccessToken: String(activeCapiToken || readKeyFromEnvFile('META_ACCESS_TOKEN') || '').trim(),
                       manualCompetitors: Array.isArray(parsed.manualCompetitors) ? parsed.manualCompetitors : undefined,
-                      openRouterApiKey: openRouterKey
+                      openRouterApiKey: openRouterKey,
+                      adMode: requestedAdMode
                     });
 
                     const v2Profile = v2Out.brainProfileCompatible;
@@ -3765,28 +3855,42 @@ function registerApiServerMiddlewares(server: any) {
                       avgLongevityDays: verifiedOrManualCount > 0 ? 14 : 0
                     };
 
-                    const sanitizedBriefs = (v2Profile.creativeBriefs || []).map((brief: any, bIdx: number) => ({
-                      ...brief,
-                      index: bIdx,
-                      type: brief.type || (bIdx < 3 ? 'feed_1x1' : bIdx === 3 ? 'story_9x16' : 'reel_9x16'),
-                      format: brief.format || (bIdx < 3 ? '1:1' : '9:16'),
-                      themeIndex: brief.themeIndex ?? bIdx % 4,
-                      archetypeName: brief.angleName || brief.hypothesisCode || `Hipótesis ${bIdx + 1}`,
-                      avatarTarget: brief.targetAvatar || 'Comprador COD Paraguay',
-                      angleType: 'offer',
-                      hook3s: sanitizeServerAdCopy(brief.hook || '', bIdx, true),
-                      hookBadge: brief.badge || brief.hypothesisCode || `H${bIdx + 1}`,
-                      headline: sanitizeServerAdCopy(brief.headline || prodName, bIdx, true),
-                      primaryText: sanitizeServerAdCopy(brief.primaryText || '', bIdx, true),
-                      descriptionText: sanitizeServerAdCopy('Entrega en 48 a 72 hs · Pagás cuando recibís', bIdx, true),
-                      ctaType: 'ORDER_NOW',
-                      ctaLabel: String(brief.ctaLabel || 'PAGÁS CUANDO RECIBÍS')
-                        .replace(/pedir\s+contra\s+entrega/gi, 'PAGÁS CUANDO RECIBÍS')
-                        .replace(/contra\s+entrega/gi, 'PAGÁS CUANDO RECIBÍS')
-                        .trim(),
-                      aiImagePrompt: sanitizePromptUsdToGuaranies(brief.aiImagePrompt || '', product, { isImagePrompt: true }),
-                      videoScriptPrompt: sanitizePromptUsdToGuaranies(brief.videoScriptPrompt || '', product)
-                    }));
+                    const sanitizedBriefs = (v2Profile.creativeBriefs || []).map((brief: any, bIdx: number) => {
+                      const slotUsesHook =
+                        hasHookConfiguredTrain &&
+                        (requestedAdMode === 'entry_hook' || (requestedAdMode === 'hybrid' && bIdx >= 4));
+                      const pricingForSlot = slotUsesHook
+                        ? {
+                            precios: { 1: Number(hookCfgTrain!.entryPriceGs) },
+                            precioNormal: Number(
+                              hookCfgTrain!.entryNormalPriceGs || Math.round(Number(hookCfgTrain!.entryPriceGs) * 2.1)
+                            )
+                          }
+                        : product;
+                      return {
+                        ...brief,
+                        index: bIdx,
+                        type: brief.type || (bIdx < 3 ? 'feed_1x1' : bIdx === 3 ? 'story_9x16' : 'reel_9x16'),
+                        format: brief.format || (bIdx < 3 ? '1:1' : '9:16'),
+                        themeIndex: brief.themeIndex ?? bIdx % 4,
+                        archetypeName: brief.angleName || brief.hypothesisCode || `Hipótesis ${bIdx + 1}`,
+                        avatarTarget: brief.targetAvatar || 'Comprador COD Paraguay',
+                        angleType: 'offer',
+                        isEntryHookAd: slotUsesHook,
+                        hook3s: sanitizeServerAdCopy(brief.hook || '', bIdx, true),
+                        hookBadge: brief.badge || brief.hypothesisCode || `H${bIdx + 1}`,
+                        headline: sanitizeServerAdCopy(brief.headline || prodName, bIdx, true),
+                        primaryText: sanitizeServerAdCopy(brief.primaryText || '', bIdx, true),
+                        descriptionText: sanitizeServerAdCopy('Entrega en 48 a 72 hs · Pagás cuando recibís', bIdx, true),
+                        ctaType: 'ORDER_NOW',
+                        ctaLabel: String(brief.ctaLabel || 'PAGÁS CUANDO RECIBÍS')
+                          .replace(/pedir\s+contra\s+entrega/gi, 'PAGÁS CUANDO RECIBÍS')
+                          .replace(/contra\s+entrega/gi, 'PAGÁS CUANDO RECIBÍS')
+                          .trim(),
+                        aiImagePrompt: sanitizePromptUsdToGuaranies(brief.aiImagePrompt || '', pricingForSlot, { isImagePrompt: true }),
+                        videoScriptPrompt: sanitizePromptUsdToGuaranies(brief.videoScriptPrompt || '', pricingForSlot)
+                      };
+                    });
 
                     const v2Avatars = v2Out.hypotheses.slice(0, 3).map((h: any, idx: number) => ({
                       id: `av_${idx + 1}`,
@@ -4945,8 +5049,45 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
             req.on('end', async () => {
               try {
                 const parsed = JSON.parse(body || '{}');
-                const product = parsed.product || {};
+                let product = parsed.product || {};
                 const inputBriefs = Array.isArray(parsed.creativeBriefs) ? parsed.creativeBriefs : [];
+                const imgAdMode: 'standard' | 'entry_hook' | 'hybrid' =
+                  parsed.adMode === 'standard' || parsed.adMode === 'entry_hook' || parsed.adMode === 'hybrid'
+                    ? parsed.adMode
+                    : 'standard';
+                const cardModesMap: Record<number, string> =
+                  parsed.cardModes && typeof parsed.cardModes === 'object' ? parsed.cardModes : {};
+                const hookCfgImg = product.tripwireConfig;
+                const canUseHookImg = Boolean(
+                  hookCfgImg?.enabled &&
+                    hookCfgImg?.entryProductName &&
+                    Number(hookCfgImg?.entryPriceGs) > 0
+                );
+                const firstTargetIdx = Array.isArray(parsed.targetIndices) && parsed.targetIndices.length > 0
+                  ? Number(parsed.targetIndices[0])
+                  : -1;
+                const targetSlotUsesHook =
+                  canUseHookImg &&
+                  (imgAdMode === 'entry_hook' ||
+                    (firstTargetIdx >= 0 && cardModesMap[firstTargetIdx] === 'entry_hook') ||
+                    (firstTargetIdx >= 0 && inputBriefs[firstTargetIdx]?.isEntryHookAd === true) ||
+                    (imgAdMode === 'hybrid' && firstTargetIdx >= 4));
+                if (targetSlotUsesHook) {
+                  const ePrice = Number(hookCfgImg.entryPriceGs);
+                  product = {
+                    ...product,
+                    nombre: String(hookCfgImg.entryProductName).trim(),
+                    descripcion: String(hookCfgImg.entryProductDescription || product.descripcion || '').trim(),
+                    precios: {
+                      1: ePrice,
+                      2: Math.round((ePrice * 1.9) / 1000) * 1000,
+                      3: Math.round((ePrice * 2.7) / 1000) * 1000
+                    },
+                    precioNormal: Number(
+                      hookCfgImg.entryNormalPriceGs || Math.round((ePrice * 2.1) / 1000) * 1000
+                    )
+                  };
+                }
                 const rawProdName = String(product.nombre || 'Producto').trim();
                 const cleanNoSymbols = rawProdName.replace(/[™®©]/g, '').replace(/\s+/g, ' ').trim();
                 const nameWords = cleanNoSymbols.split(' ').filter(Boolean);
@@ -5471,13 +5612,44 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
             req.on('end', async () => {
               try {
                 const parsed = JSON.parse(body || '{}');
-                const product = parsed.product || {};
+                let product = parsed.product || {};
                 const adIndex = Number(parsed.adIndex || 0);
                 const variationSeed = Number(parsed.variationSeed || 1);
                 const currentHeadline = String(parsed.currentHeadline || '').trim();
                 const customImagePromptInput = String(parsed.customImagePrompt || '').trim();
                 const imageOnlyMode = Boolean(parsed.imageOnly || parsed.videoOnly);
                 const onlyImagesMode = Boolean(parsed.onlyImagesMode);
+                const injectMode: 'standard' | 'entry_hook' =
+                  parsed.injectMode === 'entry_hook' ? 'entry_hook' : 'standard';
+                if (
+                  injectMode === 'entry_hook' &&
+                  product.tripwireConfig?.entryProductName &&
+                  Number(product.tripwireConfig?.entryPriceGs) > 0
+                ) {
+                  const ePrice = Number(product.tripwireConfig.entryPriceGs);
+                  const eNormal = Number(
+                    product.tripwireConfig.entryNormalPriceGs || Math.round((ePrice * 2.1) / 1000) * 1000
+                  );
+                  product = {
+                    ...product,
+                    nombre: String(product.tripwireConfig.entryProductName).trim(),
+                    descripcion: String(
+                      product.tripwireConfig.entryProductDescription || product.descripcion || ''
+                    ).trim(),
+                    imagen: String(
+                      product.tripwireConfig.entryImageUrl ||
+                        product.tripwireConfig.entryProductImage ||
+                        product.imagen ||
+                        ''
+                    ).trim(),
+                    precios: {
+                      1: ePrice,
+                      2: Math.round((ePrice * 1.9) / 1000) * 1000,
+                      3: Math.round((ePrice * 2.7) / 1000) * 1000
+                    },
+                    precioNormal: eNormal
+                  };
+                }
                 const incomingRegenKey = String(parsed.openRouterApiKey || '').trim();
                 if (isValidOpenRouterKey(incomingRegenKey)) {
                   saveKeyToEnvFile('OPENROUTER_API_KEY', incomingRegenKey);
@@ -7689,7 +7861,11 @@ setTimeout(()=>window.close(),5000);
                     });
                   }
 
-                  // 3b: Crear Ad Creative con `url_tags`
+                  // 3b: Crear Ad Creative con `url_tags` y URL destino específica del anuncio (ej: Página Tripwire elegida ?modo=entrada vs Estándar)
+                  const cleanAdLandingUrl = resolveCreativeTargetLandingUrl({
+                    campaignLandingUrl: landingUrl,
+                    creative: cr
+                  });
                   let creativeId = '';
                   if ((imageHash || videoId) && adSetId) {
                     try {
@@ -7705,7 +7881,7 @@ setTimeout(()=>window.close(),5000);
                                 link_description: cr.descriptionText || '',
                                 call_to_action: {
                                   type: cr.ctaType || 'ORDER_NOW',
-                                  value: { link: landingUrl }
+                                  value: { link: cleanAdLandingUrl }
                                 }
                               }
                             }
@@ -7713,13 +7889,13 @@ setTimeout(()=>window.close(),5000);
                               page_id: facebookPageId,
                               link_data: {
                                 image_hash: imageHash,
-                                link: landingUrl,
+                                link: cleanAdLandingUrl,
                                 message: cr.primaryText || '',
                                 name: cr.headline || prodName,
                                 description: cr.descriptionText || '',
                                 call_to_action: {
                                   type: cr.ctaType || 'ORDER_NOW',
-                                  value: { link: landingUrl }
+                                  value: { link: cleanAdLandingUrl }
                                 }
                               }
                             };
@@ -7790,7 +7966,7 @@ setTimeout(()=>window.close(),5000);
 
                   if (adId || creativeId) {
                     registerAdEntitySnapshot({
-                      productSlug: String(product.slug || 'producto'),
+                      productSlug: String(cr?.targetProductSlug || product.slug || 'producto'),
                       publisher: 'meta_direct',
                       adAccountId,
                       accountCurrency: preflight.accountCurrency,
@@ -7806,10 +7982,16 @@ setTimeout(()=>window.close(),5000);
                       headline: cr.headline,
                       primaryText: cr.primaryText,
                       ctaLabel: cr.ctaLabel,
-                      destinationUrl: landingUrl,
+                      destinationUrl: cleanAdLandingUrl,
                       urlTags,
                       preflightStatus: preflight.readyToPublish ? 'ok' : 'warnings',
-                      payloadSnapshot: { optimizationEvent: preflight.optimizationEvent }
+                      payloadSnapshot: {
+                        optimizationEvent: preflight.optimizationEvent,
+                        isEntryHookAd: Boolean(cr?.isEntryHookAd),
+                        targetProductId: cr?.targetProductId || null,
+                        targetProductSlug: cr?.targetProductSlug || null,
+                        targetProductName: cr?.targetProductName || null
+                      }
                     });
                   }
 
@@ -7833,6 +8015,11 @@ setTimeout(()=>window.close(),5000);
                     aaCid,
                     hypothesisId: cr.hypothesisId,
                     angleId: cr.angleId,
+                    isEntryHookAd: Boolean(cr?.isEntryHookAd),
+                    destinationUrl: cleanAdLandingUrl,
+                    targetProductId: cr?.targetProductId || undefined,
+                    targetProductSlug: cr?.targetProductSlug || undefined,
+                    targetProductName: cr?.targetProductName || undefined,
                     updatedAt: nowIso,
                     name: `Anuncio #${i + 1} · ${cr.formatLabel || 'Anuncio'}`,
                     formatLabel: cr.formatLabel || '',
@@ -7867,12 +8054,28 @@ setTimeout(()=>window.close(),5000);
                   )}`
                 };
 
-                // Guardar registro en store_config.json
+                // Guardar registro + sincronizar tripwireConfig en store_config.json si existe
                 try {
                   const prevList = Array.isArray(cfg.pipeboardPublishedCampaigns)
                     ? cfg.pipeboardPublishedCampaigns
                     : [];
                   cfg.pipeboardPublishedCampaigns = [record, ...prevList].slice(0, 30);
+                  if (product?.tripwireConfig?.enabled && Array.isArray(cfg.productPages)) {
+                    const pIdx = cfg.productPages.findIndex(
+                      (p: any) =>
+                        (product.id && p.id === product.id) ||
+                        (product.slug && p.slug === product.slug)
+                    );
+                    if (pIdx >= 0) {
+                      cfg.productPages[pIdx] = {
+                        ...cfg.productPages[pIdx],
+                        tripwireConfig: {
+                          ...(cfg.productPages[pIdx].tripwireConfig || {}),
+                          ...product.tripwireConfig
+                        }
+                      };
+                    }
+                  }
                   fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
                 } catch {}
 
@@ -8080,6 +8283,7 @@ setTimeout(()=>window.close(),5000);
                   campaignId: parsed.campaignId || campaignRecord?.campaignId,
                   adSetId,
                   oldAdId: parsed.oldAdId,
+                  appendNew: Boolean(parsed.appendNew),
                   adIndex,
                   product: parsed.product || {},
                   creative: parsed.creative || {},
@@ -8096,10 +8300,31 @@ setTimeout(()=>window.close(),5000);
                   return;
                 }
 
-                if (result.updatedCampaignRecord && targetCampIdx >= 0) {
-                  const nextList = [...prevList];
-                  nextList[targetCampIdx] = result.updatedCampaignRecord;
-                  cfg.pipeboardPublishedCampaigns = nextList;
+                if (
+                  (result.updatedCampaignRecord && targetCampIdx >= 0) ||
+                  parsed.product?.tripwireConfig?.enabled
+                ) {
+                  if (result.updatedCampaignRecord && targetCampIdx >= 0) {
+                    const nextList = [...prevList];
+                    nextList[targetCampIdx] = result.updatedCampaignRecord;
+                    cfg.pipeboardPublishedCampaigns = nextList;
+                  }
+                  if (parsed.product?.tripwireConfig?.enabled && Array.isArray(cfg.productPages)) {
+                    const pIdx = cfg.productPages.findIndex(
+                      (p: any) =>
+                        (parsed.product.id && p.id === parsed.product.id) ||
+                        (parsed.product.slug && p.slug === parsed.product.slug)
+                    );
+                    if (pIdx >= 0) {
+                      cfg.productPages[pIdx] = {
+                        ...cfg.productPages[pIdx],
+                        tripwireConfig: {
+                          ...(cfg.productPages[pIdx].tripwireConfig || {}),
+                          ...parsed.product.tripwireConfig
+                        }
+                      };
+                    }
+                  }
                   try {
                     fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
                   } catch {}
@@ -8622,7 +8847,11 @@ setTimeout(()=>window.close(),5000);
                 for (let i = 0; i < creatives.length; i++) {
                   const cr = creatives[i];
                   const aaCid = generateAaCid();
-                  const trackedLink = appendTrackingParamsToUrl(landingUrl, {
+                  const baseAdUrl = resolveCreativeTargetLandingUrl({
+                    campaignLandingUrl: landingUrl,
+                    creative: cr
+                  });
+                  const trackedLink = appendTrackingParamsToUrl(baseAdUrl, {
                     aaCid,
                     hypothesisId: cr.hypothesisId,
                     angleId: cr.angleId,
@@ -8662,7 +8891,7 @@ setTimeout(()=>window.close(),5000);
 
                   if (adId || creativeId) {
                     registerAdEntitySnapshot({
-                      productSlug: String(product.slug || 'producto'),
+                      productSlug: String(cr?.targetProductSlug || product.slug || 'producto'),
                       publisher: 'pipeboard',
                       adAccountId,
                       accountCurrency: pbPreflight.accountCurrency,
@@ -8681,7 +8910,13 @@ setTimeout(()=>window.close(),5000);
                       destinationUrl: trackedLink,
                       urlTags: undefined,
                       preflightStatus: pbPreflight.readyToPublish ? 'ok' : 'warnings',
-                      payloadSnapshot: { trackingLinkMode: pbPreflight.trackingLinkMode }
+                      payloadSnapshot: {
+                        trackingLinkMode: pbPreflight.trackingLinkMode,
+                        isEntryHookAd: Boolean(cr?.isEntryHookAd),
+                        targetProductId: cr?.targetProductId || null,
+                        targetProductSlug: cr?.targetProductSlug || null,
+                        targetProductName: cr?.targetProductName || null
+                      }
                     });
                   }
 
@@ -8701,6 +8936,11 @@ setTimeout(()=>window.close(),5000);
                     aaCid,
                     hypothesisId: cr.hypothesisId,
                     angleId: cr.angleId,
+                    isEntryHookAd: Boolean(cr?.isEntryHookAd),
+                    destinationUrl: trackedLink,
+                    targetProductId: cr?.targetProductId || undefined,
+                    targetProductSlug: cr?.targetProductSlug || undefined,
+                    targetProductName: cr?.targetProductName || undefined,
                     updatedAt: nowIso,
                     name: `Anuncio #${i + 1} · ${cr.formatLabel}`,
                     formatLabel: cr.formatLabel,
@@ -8766,6 +9006,22 @@ setTimeout(()=>window.close(),5000);
                     ? cfg.pipeboardPublishedCampaigns
                     : [];
                   cfg.pipeboardPublishedCampaigns = [record, ...prevList].slice(0, 30);
+                  if (product?.tripwireConfig?.enabled && Array.isArray(cfg.productPages)) {
+                    const pIdx = cfg.productPages.findIndex(
+                      (p: any) =>
+                        (product.id && p.id === product.id) ||
+                        (product.slug && p.slug === product.slug)
+                    );
+                    if (pIdx >= 0) {
+                      cfg.productPages[pIdx] = {
+                        ...cfg.productPages[pIdx],
+                        tripwireConfig: {
+                          ...(cfg.productPages[pIdx].tripwireConfig || {}),
+                          ...product.tripwireConfig
+                        }
+                      };
+                    }
+                  }
                   fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf-8');
                 } catch {}
 
@@ -9060,6 +9316,118 @@ setTimeout(()=>window.close(),5000);
           }
 
           // =========================================================================
+          // 10B. CREADOR RÁPIDO UNIVERSAL (LÁMINAS GPT-2.6 + PRODUCTO COMPLEMENTARIO)
+          // =========================================================================
+          if (req.method === 'POST' && url === '/api/products/analyze-hook-url') {
+            const auth = verifyAdminToken(req.headers['authorization'], req.headers['cookie']);
+            if (!auth.valid) {
+              res.statusCode = 401;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: 'Autenticación admin requerida.' }));
+              return;
+            }
+            let body = '';
+            req.on('data', (c: any) => (body += c));
+            req.on('end', async () => {
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const scraped = await scrapeEntryProductUrlInfo(String(parsed?.url || ''));
+                res.statusCode = scraped.ok ? 200 : 400;
+                res.end(JSON.stringify({ success: scraped.ok, ...scraped }));
+              } catch (err: any) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ success: false, error: err?.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/api/products/quick-create-visual') {
+            const auth = verifyAdminToken(req.headers['authorization'], req.headers['cookie']);
+            if (!auth.valid) {
+              res.statusCode = 401;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: 'Autenticación admin requerida.' }));
+              return;
+            }
+            let body = '';
+            req.on('data', (c: any) => (body += c));
+            req.on('end', async () => {
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                const incoming = JSON.parse(body || '{}');
+                const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+                if (!openRouterApiKey) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      error: 'Falta OPENROUTER_API_KEY configurada para generar las láminas GPT-2.6.'
+                    })
+                  );
+                  return;
+                }
+                const cfg = loadStoreConfig();
+                const result = await generateUniversalVisualProductPage({
+                  openRouterApiKey,
+                  pageCreationMode:
+                    incoming.pageCreationMode === 'principal_only'
+                      ? 'principal_only'
+                      : 'dual_tripwire_winner',
+                  productName: String(incoming.productName || '').trim(),
+                  productDescription: String(incoming.productDescription || '').trim(),
+                  winnerAngle: String(incoming.winnerAngle || '').trim() || undefined,
+                  price1Gs: Number(incoming.price1Gs) || 189000,
+                  price2Gs: incoming.price2Gs ? Number(incoming.price2Gs) : undefined,
+                  price3Gs: incoming.price3Gs ? Number(incoming.price3Gs) : undefined,
+                  normalPriceGs: incoming.normalPriceGs ? Number(incoming.normalPriceGs) : undefined,
+                  productImageInput: String(incoming.productImageInput || '').trim(),
+                  entryProductName: String(incoming.entryProductName || '').trim(),
+                  entryProductDescription: String(incoming.entryProductDescription || '').trim(),
+                  entryPriceGs: Number(incoming.entryPriceGs) || 20000,
+                  entryNormalPriceGs: incoming.entryNormalPriceGs ? Number(incoming.entryNormalPriceGs) : undefined,
+                  entryDeliveryFeeGs: Number(incoming.entryDeliveryFeeGs) || 40000,
+                  entryProductImageInput: String(incoming.entryProductImageInput || '').trim(),
+                  entrySourceUrl: String(incoming.entrySourceUrl || '').trim() || undefined,
+                  instantDiscountPercent: Number(incoming.instantDiscountPercent) || 12,
+                  eventDurationHours: Number(incoming.eventDurationHours) || 6,
+                  slotsTotal: Number(incoming.slotsTotal) || 10,
+                  backgroundMusicPreset: incoming.backgroundMusicPreset || 'warm_ambient',
+                  sheetCount: incoming.sheetCount === 3 ? 3 : 2,
+                  waNumber: String(incoming.waNumber || cfg?.wa || '595973532550').trim(),
+                  referer: getOpenRouterReferer(req)
+                });
+
+                try {
+                  const matrix = await renderFullProductCommercialMatrixOnServer(result.product).catch(() => null);
+                  if (matrix) {
+                    result.product.waStageCommercialsEnabled = true;
+                    result.product.waStageCommercials = matrix;
+                  }
+                } catch {}
+
+                const existingPages = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                cfg.productPages = [result.product, ...existingPages.filter((p: any) => p.id !== result.product.id)];
+                fs.writeFileSync(getStoreConfigFilePath(), JSON.stringify(cfg, null, 2), 'utf-8');
+
+                res.statusCode = 200;
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    product: result.product,
+                    strategySummary: result.strategySummary
+                  })
+                );
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: err?.message || 'Error generando producto visual' }));
+              }
+            });
+            return;
+          }
+
+          // =========================================================================
           // 11. COMENTARIOS META ADS IA CLOSER + MESSENGER + EXPRESS CHECKOUT
           // =========================================================================
           const resolveRequestOrigin = () => {
@@ -9180,31 +9548,7 @@ setTimeout(()=>window.close(),5000);
                           isSimulation: false
                         }).catch((e) => console.error('[MetaWebhook comment error]:', e));
                       }
-
-                      // 2. Mensajes entrantes de Messenger DM (clientes respondiendo el Private Reply o escribiendo directo desde Ad)
-                      const messagingList: any[] = Array.isArray(entry?.messaging) ? entry.messaging : [];
-                      for (const mEvt of messagingList) {
-                        if (mEvt?.message?.is_echo) continue;
-                        const senderPsid = String(mEvt?.sender?.id || '').trim();
-                        const text = String(mEvt?.message?.text || '').trim();
-                        const referralAdId = String(
-                          mEvt?.referral?.ad_id || mEvt?.postback?.referral?.ad_id || ''
-                        ).trim();
-                        if (!senderPsid || senderPsid === entryPageId || !text || !openRouterApiKey) continue;
-
-                        await processInboundMessengerDm({
-                          senderPsid,
-                          recipientPageId: entryPageId,
-                          messageText: text,
-                          referralAdId: referralAdId || undefined,
-                          products,
-                          openRouterApiKey,
-                          pageAccessToken: effectivePageToken,
-                          publicBaseUrl,
-                          executeMetaActions: true,
-                          isSimulation: false
-                        }).catch((e) => console.error('[MetaWebhook dm error]:', e));
-                      }
+                      // Messenger DM descartado por decisión operativa (100% comentarios públicos multi-ángulo)
                     }
                   } catch (err) {
                     console.error('[POST /api/meta/comments-webhook Error]:', err);
@@ -9280,6 +9624,7 @@ setTimeout(()=>window.close(),5000);
                       threads: state.threads,
                       adStats,
                       campaigns,
+                      autoPilotStatus: getMetaCommentsAutoPilotStatus(),
                       hasOpenRouterKey,
                       hasMetaToken: Boolean(token),
                       commentsPermissionsReady: permissionsAudit ? Boolean(permissionsAudit.commentsPermissionsReady) : false,
@@ -9292,6 +9637,81 @@ setTimeout(()=>window.close(),5000);
                   res.end(JSON.stringify({ success: false, error: err?.message || 'Error leyendo Comentarios Ads' }));
                 }
               })();
+              return;
+            }
+
+            if (req.method === 'POST' && url === '/api/meta/comments/activate') {
+              let body = '';
+              req.on('data', (c: any) => (body += c));
+              req.on('end', async () => {
+                res.setHeader('Content-Type', 'application/json');
+                try {
+                  const incoming = JSON.parse(body || '{}');
+                  const cfg = loadStoreConfig();
+                  const products: ProductPage[] = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+                  const state = await hydrateMetaCommentsStateFromSupabase(products);
+
+                  const prod =
+                    products.find((p) => p.id === incoming.productId) ||
+                    products.find((p) => p.slug === incoming.productSlug) ||
+                    products[0];
+
+                  const nextEnabled = typeof incoming.enabled === 'boolean' ? incoming.enabled : true;
+
+                  if (prod) {
+                    state.config.defaultProductId = prod.id;
+                    state.config.defaultProductSlug = prod.slug;
+                    if (incoming.campaignId) {
+                      state.config.campaignProductMap[String(incoming.campaignId)] = {
+                        productId: prod.id,
+                        productSlug: prod.slug,
+                        productName: prod.nombre
+                      };
+                    }
+                  }
+
+                  state.config.enabled = nextEnabled;
+                  state.config.autoPublicReply = true;
+                  state.config.autoPrivateDm = false;
+                  state.config.publicOnlyMode = true;
+                  state.config.autoPollingSeconds = Math.max(15, Number(incoming.autoPollingSeconds) || 25);
+                  state.config.publicBaseUrl = resolveRequestOrigin();
+                  saveMetaCommentsState(state);
+
+                  let syncRes: any = null;
+                  if (nextEnabled) {
+                    const { token } = await resolveActiveMetaUserToken();
+                    const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
+                    if (token) {
+                      syncRes = await syncMetaAdPostsAndComments({
+                        userAccessToken: token,
+                        adAccountId: String(cfg?.metaDirectConfig?.adAccountId || OFFICIAL_META_AD_ACCOUNT_ID),
+                        pageId: String(cfg?.pipeboardConfig?.selectedFacebookPageId || OFFICIAL_META_PAGE_ID),
+                        products,
+                        openRouterApiKey,
+                        publicBaseUrl: resolveRequestOrigin(),
+                        processWithAi: Boolean(openRouterApiKey)
+                      }).catch((e: any) => ({ ok: false, error: e?.message }));
+                    }
+                  }
+
+                  const updatedState = loadMetaCommentsState(products);
+                  const pedidos = loadPedidos();
+                  res.end(
+                    JSON.stringify({
+                      success: true,
+                      syncRes,
+                      config: updatedState.config,
+                      threads: updatedState.threads,
+                      adStats: computeMetaAdCommentStats(updatedState, pedidos),
+                      autoPilotStatus: getMetaCommentsAutoPilotStatus()
+                    })
+                  );
+                } catch (err: any) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ success: false, error: err?.message }));
+                }
+              });
               return;
             }
 
@@ -9310,7 +9730,11 @@ setTimeout(()=>window.close(),5000);
                     ...(typeof incoming.autoPublicReply === 'boolean'
                       ? { autoPublicReply: incoming.autoPublicReply }
                       : {}),
-                    ...(typeof incoming.autoPrivateDm === 'boolean' ? { autoPrivateDm: incoming.autoPrivateDm } : {}),
+                    autoPrivateDm: false,
+                    publicOnlyMode: true,
+                    ...(typeof incoming.autoPollingSeconds === 'number'
+                      ? { autoPollingSeconds: Math.max(15, incoming.autoPollingSeconds) }
+                      : {}),
                     ...(typeof incoming.autoHidePhoneComments === 'boolean'
                       ? { autoHidePhoneComments: incoming.autoHidePhoneComments }
                       : {}),
@@ -9486,39 +9910,6 @@ setTimeout(()=>window.close(),5000);
                   }
                   const cfg = loadStoreConfig();
                   const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
-                  const mode = String(incoming.mode || 'comment');
-
-                  if (mode === 'customer_dm' && incoming.threadId) {
-                    const state = loadMetaCommentsState(products);
-                    const target = state.threads.find((t) => t.id === incoming.threadId);
-                    if (!target) {
-                      res.statusCode = 404;
-                      res.end(JSON.stringify({ success: false, error: 'Hilo no encontrado.' }));
-                      return;
-                    }
-                    if (!target.psid) target.psid = `sim_psid_${target.id}`;
-                    const dmRes = await processInboundMessengerDm({
-                      senderPsid: target.psid,
-                      recipientPageId: target.pageId,
-                      messageText: String(incoming.messageText || 'Quiero 2 unidades para Asunción'),
-                      products,
-                      openRouterApiKey,
-                      publicBaseUrl: resolveRequestOrigin(),
-                      executeMetaActions: false,
-                      isSimulation: true
-                    });
-                    const pedidos = loadPedidos();
-                    res.end(
-                      JSON.stringify({
-                        success: true,
-                        thread: dmRes.thread,
-                        extractedOrder: dmRes.extractedOrder,
-                        threads: loadMetaCommentsState(products).threads,
-                        adStats: computeMetaAdCommentStats(loadMetaCommentsState(products), pedidos)
-                      })
-                    );
-                    return;
-                  }
 
                   const simCommentId = `sim_comment_${Date.now()}`;
                   const simPostId = String(incoming.postId || `${OFFICIAL_META_PAGE_ID}_sim_post`);
@@ -9668,139 +10059,14 @@ setTimeout(()=>window.close(),5000);
             }
 
             if (req.method === 'POST' && url === '/api/meta/comments/dm') {
-              let body = '';
-              req.on('data', (c: any) => (body += c));
-              req.on('end', async () => {
-                res.setHeader('Content-Type', 'application/json');
-                try {
-                  const incoming = JSON.parse(body || '{}');
-                  const cfg = loadStoreConfig();
-                  const products = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
-                  const state = loadMetaCommentsState(products);
-                  const thread = state.threads.find((t) => t.id === incoming.threadId);
-                  if (!thread) {
-                    res.statusCode = 404;
-                    res.end(JSON.stringify({ success: false, error: 'Hilo no encontrado.' }));
-                    return;
-                  }
-                  const prod =
-                    resolveProductForCommentContext({
-                      products,
-                      config: state.config,
-                      explicitProductId: thread.productId,
-                      explicitProductSlug: thread.productSlug
-                    }) || products[0];
-                  const expressUrl =
-                    thread.expressFormUrl ||
-                    buildExpressCheckoutUrl({
-                      baseUrl: state.config.publicBaseUrl || resolveRequestOrigin(),
-                      productSlug: prod?.slug,
-                      productId: prod?.id,
-                      adId: thread.adId,
-                      adName: thread.adName,
-                      adIndex: thread.adIndex,
-                      campaignId: thread.campaignId,
-                      campaignName: thread.campaignName,
-                      postId: thread.postId,
-                      commentId: thread.commentId,
-                      threadId: thread.id,
-                      authorName: thread.authorName,
-                      channel: 'messenger_dm'
-                    });
-                  thread.expressFormUrl = expressUrl;
-
-                  let dmText = String(incoming.message || '').trim();
-                  if (incoming.generateWithAi) {
-                    const openRouterApiKey = String(readKeyFromEnvFile('OPENROUTER_API_KEY') || '').trim();
-                    const lastInbound =
-                      [...thread.messages].reverse().find((m) => m.direction === 'inbound')?.text ||
-                      thread.commentText;
-                    const aiRes = await generateMessengerChatReply({
-                      openRouterApiKey,
-                      product: prod,
-                      thread,
-                      incomingText: lastInbound,
-                      expressFormUrl: expressUrl
-                    });
-                    dmText = aiRes.replyText;
-                    if (!incoming.sendNow) {
-                      res.end(
-                        JSON.stringify({
-                          success: true,
-                          draft: dmText,
-                          extractedOrder: aiRes.extractedOrder
-                        })
-                      );
-                      return;
-                    }
-                  }
-
-                  if (!dmText) {
-                    res.statusCode = 400;
-                    res.end(JSON.stringify({ success: false, error: 'Mensaje Messenger vacío.' }));
-                    return;
-                  }
-
-                  const attachExpress = incoming.includeExpressForm !== false;
-                  let sentLive = false;
-                  let metaMsgId: string | undefined;
-                  let warning: string | undefined;
-
-                  if (!thread.isSimulation) {
-                    const { token } = await resolveActiveMetaUserToken();
-                    const pageToken = token
-                      ? await resolveMetaPageAccessToken({ userAccessToken: token, pageId: thread.pageId })
-                      : null;
-                    if (pageToken) {
-                      const sendRes = await sendMetaMessengerMessage({
-                        pageId: thread.pageId,
-                        pageAccessToken: pageToken,
-                        text: dmText,
-                        expressUrl: attachExpress ? expressUrl : undefined,
-                        psid: thread.psid,
-                        commentId: thread.psid ? undefined : thread.commentId
-                      });
-                      sentLive = sendRes.ok;
-                      metaMsgId = sendRes.messageId;
-                      if (sendRes.recipientId && !thread.psid) thread.psid = sendRes.recipientId;
-                      if (!sendRes.ok) warning = sendRes.error;
-                    } else {
-                      warning = 'Sin Page Access Token activo.';
-                    }
-                  }
-
-                  const now = new Date().toISOString();
-                  thread.dmSentAt = now;
-                  if (attachExpress && thread.status !== 'order_closed') thread.status = 'form_sent';
-                  else if (thread.status !== 'order_closed') thread.status = 'dm_active';
-                  thread.updatedAt = now;
-                  thread.messages.push({
-                    id: `msg_${Date.now()}_dm_man`,
-                    direction: 'outbound',
-                    channel: 'messenger_dm',
-                    text: dmText,
-                    createdAt: now,
-                    by: 'admin',
-                    sentToMeta: sentLive,
-                    metaMessageId: metaMsgId,
-                    expressUrl: attachExpress ? expressUrl : undefined
-                  });
-                  saveMetaCommentsState(state);
-
-                  res.end(
-                    JSON.stringify({
-                      success: true,
-                      sentLive,
-                      warning,
-                      thread,
-                      threads: state.threads
-                    })
-                  );
-                } catch (err: any) {
-                  res.statusCode = 500;
-                  res.end(JSON.stringify({ success: false, error: err?.message }));
-                }
-              });
+              res.statusCode = 410;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(
+                JSON.stringify({
+                  success: false,
+                  error: 'Messenger DM fue desactivado permanentemente. El módulo opera 100% en comentarios públicos multi-ángulo.'
+                })
+              );
               return;
             }
 
@@ -10098,6 +10364,7 @@ export default defineConfig({
         '**/wa_auth_session/**',
         '**/wa_sessions_multi/**',
         '**/public/assets/wa-commercials/**',
+        '**/public/assets/visual-pages/**',
         '**/public/assets/ai-ads/**',
         '**/*.tmp.*',
         '**/.env',

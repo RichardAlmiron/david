@@ -220,3 +220,27 @@ Para no mezclar la contabilidad del negocio con el aprendizaje de formularios de
 - AutoAds & Aprendizaje (Circuito A): `POST /api/autoads/brain-train`, `POST /api/autoads/generate-ad-images`, `POST /api/autoads/regenerate-ad`, `POST /api/autoads/replace-published-ad`, `POST /api/autoads/preflight`, `GET /api/meta/campaigns-live`, `POST /api/meta/publish-direct`, `POST /api/pipeboard/publish-campaign`, `POST /api/autoads/insights/sync`, `GET /api/autoads/learning-dashboard`, `GET|POST /api/autoads/feature-flags`.
 - Cloudinary Media API: `GET /api/cloudinary/status`, `GET /api/cloudinary/resources`, `POST /api/cloudinary/upload`.
 - ERP & Finanzas (Circuito B, protegidas con sesión admin): `GET|POST /api/erp/costs`, `POST /api/erp/fx-rates`, `POST /api/erp/settlements`, `POST /api/erp/settlements/import-csv`, `GET /api/erp/profitability`.
+- Creador Rápido & Comentarios Públicos: `POST /api/products/quick-create-visual`, `GET|POST /api/meta-comments/*`.
+
+---
+
+## 8. Estrategia Híbrida (Estándar + Oferta de Entrada), Inyección en Vivo y Enrutamiento `?modo=entrada`
+
+Para disparar el CTR dentro del algoritmo **Meta Andromeda** sin abandonar los anuncios clásicos de producto principal:
+
+1. **Modos de Campaña y Toggle por Creativo (`server/autoAdsIntelligence.ts`, `src/components/AutoAdsView.tsx`):**
+   - El operador elige entre **`100% Estándar`** (flujo clásico intacto), **`Mixto (4 Estándar + 2 Oferta de Entrada)`** o **`100% Oferta de Entrada`**.
+   - Cada tarjeta individual permite alternar **`Estándar` | `Gancho`** (`isEntryHookAd`) de forma independiente.
+2. **Inyección de Anuncios en Conjuntos Activos (`server/metaCampaignOps.ts`, `src/components/AutoAdsCampaignsPanel.tsx`):**
+   - Desde cualquier campaña publicada en vivo, el botón **`+ Inyectar Nuevo Anuncio`** invoca `POST /api/autoads/replace-published-ad` con **`appendNew: true`**, publicando un nuevo anuncio (Estándar o Gancho) dentro del mismo AdSet activo **sin eliminar (`DELETE`) los anuncios existentes**.
+3. **Enrutamiento Dedicado por Anuncio (`?modo=entrada`) y Auto-Sincronización `tripwireConfig`:**
+   - Tanto `executeMetaDirectPublish`, `replacePublishedAdInMeta` como `/api/pipeboard/publish-campaign` inspeccionan `creative.isEntryHookAd`:
+     - Si **`isEntryHookAd === false`** → dirige a `https://dominio/?p=<slug>` (Landing completa / Paquete Principal).
+     - Si **`isEntryHookAd === true`** → dirige a **`https://dominio/?p=<slug>&modo=entrada`** (Hero dedicado de Oferta de Entrada + alternativa al Paquete Principal, **jamás** exponiendo `"tripwire"` en URL, copy ni comentarios).
+   - Al publicar o inyectar anuncios de entrada sobre productos legados, el backend persiste automáticamente `tripwireConfig` en `store_config.json` para que `?modo=entrada` cargue de inmediato.
+   - *Nota técnica de pujas en Meta `OUTCOME_LEADS`:* Dentro de un mismo AdSet compartido, Meta tiende a concentrar presupuesto en los anuncios con mayor CTR / menor CPL (normalmente los de Oferta de Entrada); si el operador desea proteger un gasto mínimo garantizado para los creativos Estándar, puede aislarlos en un AdSet paralelo bajo ABO.
+4. **Comentarios Públicos Autónomos (`server/metaCommentsEngine.ts`):**
+   - Opera **100% en comentarios públicos** (cero Messenger DM) leyendo `Campaña → Conjunto → Anuncio`, ocultando números `09xx` por privacidad y respondiendo multi-ángulo con **`openai/gpt-4o`** hacia WhatsApp / `?express=<slug>`.
+
+> Especificación completa de las 4 piezas integradas en [`ARQUITECTURA_CREADOR_UNIVERSAL_Y_EMBUDO_GANCHO.md`](./ARQUITECTURA_CREADOR_UNIVERSAL_Y_EMBUDO_GANCHO.md).
+

@@ -29,6 +29,9 @@ import {
   normalizeOrderGpsFields,
   parseFiniteCoord
 } from '../utils/paraguayGeo';
+import {
+  upgradeDefaultNoeluxWithVisualPreset
+} from '../data/noeluxVisualPreset';
 
 interface StoreContextType {
   config: AppConfig;
@@ -44,11 +47,14 @@ interface StoreContextType {
   setCurrentView: (view: ViewType) => void;
   selectedPack: number;
   setSelectedPack: (pack: number) => void;
+  purchasePath: 'entry_only' | 'principal_bundle';
+  setPurchasePath: (path: 'entry_only' | 'principal_bundle') => void;
   cartDrawerOpen: boolean;
   setCartDrawerOpen: (open: boolean) => void;
   orderFormFullscreen: boolean;
   setOrderFormFullscreen: (open: boolean) => void;
   openOrderFormFullscreen: (packOverride?: number) => void;
+  openPurchaseOrderForm: (path: 'entry_only' | 'principal_bundle', packOverride?: number) => void;
   viralModalOpen: boolean;
   setViralModalOpen: (open: boolean) => void;
   policyModal: PolicyType | null;
@@ -151,7 +157,7 @@ const INITIAL_EVENTS: PublicEvent[] = [
   }
 ];
 
-const DEFAULT_PRODUCTS: ProductPage[] = [
+const DEFAULT_PRODUCTS_RAW: ProductPage[] = [
   {
     id: 'prod-noelux-01',
     nombre: 'Noelux™ Proyector Navideño 12 Diseños',
@@ -221,6 +227,10 @@ FICHA DE CONOCIMIENTO PARA EL AGENTE:
 - Pago 100% Contra Entrega al recibir (Efectivo, QR o POS).`
   }
 ];
+
+const DEFAULT_PRODUCTS: ProductPage[] = DEFAULT_PRODUCTS_RAW.map(p =>
+  upgradeDefaultNoeluxWithVisualPreset(p)
+);
 
 function normalizeSingleStageCommercials(
   rawMatrix: ProductPage['waStageCommercials'],
@@ -297,6 +307,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [currentView, setCurrentView] = useState<ViewType>('store');
   const [selectedPack, setSelectedPackState] = useState<number>(0);
+  const [purchasePath, setPurchasePath] = useState<'entry_only' | 'principal_bundle'>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const m = new URLSearchParams(window.location.search).get('modo');
+        if (m === 'entrada') return 'entry_only';
+      }
+    } catch {}
+    return 'principal_bundle';
+  });
 
   const setSelectedPack = (pack: number) => {
     const validPack = Math.max(0, Math.min(config.maxCant || 10, pack));
@@ -323,6 +342,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const openOrderFormFullscreen = (packOverride?: number) => {
     if (typeof packOverride === 'number' && packOverride > 0) {
+      setSelectedPack(packOverride);
+    } else if (selectedPack === 0) {
+      setSelectedPack(1);
+    }
+    setCartDrawerOpen(false);
+    setOrderFormFullscreen(true);
+  };
+
+  const openPurchaseOrderForm = (path: 'entry_only' | 'principal_bundle', packOverride?: number) => {
+    setPurchasePath(path);
+    if (path === 'entry_only') {
+      setSelectedPack(1);
+    } else if (typeof packOverride === 'number' && packOverride > 0) {
       setSelectedPack(packOverride);
     } else if (selectedPack === 0) {
       setSelectedPack(1);
@@ -668,7 +700,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     ''
                 };
                 const seedMatch = DEFAULT_PRODUCTS.find(dp => dp.id === p.id);
-                return {
+                return upgradeDefaultNoeluxWithVisualPreset({
                   ...seedMatch,
                   ...localMatch,
                   ...p,
@@ -681,7 +713,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   wa: formatWaPhone(p.wa || cleanRemoteWa || ''),
                   ...(resolvedVoz ? { vozAgente: resolvedVoz } : {}),
                   ...(resolvedVozNombre ? { vozAgenteNombre: resolvedVozNombre } : {})
-                };
+                });
               });
 
             // Preservar cualquier página creada localmente que aún no esté en remoteMapped (salvo que haya sido eliminada)
@@ -2148,11 +2180,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setCurrentView,
         selectedPack,
         setSelectedPack,
+        purchasePath,
+        setPurchasePath,
         cartDrawerOpen,
         setCartDrawerOpen,
         orderFormFullscreen,
         setOrderFormFullscreen,
         openOrderFormFullscreen,
+        openPurchaseOrderForm,
         viralModalOpen,
         setViralModalOpen,
         policyModal,

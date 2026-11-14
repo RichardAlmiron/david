@@ -250,6 +250,7 @@ export const AndroidAppView: React.FC = () => {
   const menuTitleMap: Record<AdminMenuKey, string> = {
     productos: 'Productos y Ventas',
     creador: 'Creador IA',
+    creador_rapido: 'Creador Rápido',
     pipeboard: 'AutoAds',
     comentarios: 'Comentarios Ads',
     whatsapp: 'WhatsApp',
@@ -419,8 +420,10 @@ export const AndroidAppView: React.FC = () => {
               {(
                 [
                   { id: 'productos', label: 'Productos y Ventas', icon: ShoppingBag },
+                  { id: 'creador_rapido', label: 'Creador Rápido', icon: Zap },
                   { id: 'creador', label: 'Creador IA', icon: Sparkles },
                   { id: 'pipeboard', label: 'AutoAds', icon: Rocket },
+                  { id: 'comentarios', label: 'Comentarios Ads', icon: Bot },
                   { id: 'whatsapp', label: 'WhatsApp Multi-Línea', icon: Smartphone },
                   { id: 'deepgram', label: 'Deepgram Voz', icon: Zap },
                   { id: 'openrouter', label: 'Cerebro LLM', icon: Bot }

@@ -14,12 +14,15 @@ import {
   Target,
   FolderOpen,
   Image as ImageIcon,
-  X
+  X,
+  Plus
 } from 'lucide-react';
 import {
   GeneratedAdCreativeAsset,
   PipeboardPublishedCampaignRecord
 } from '../utils/autoAdsBrainEngine';
+import type { ProductPage } from '../types';
+import { formatGs } from '../config';
 import type { CloudinaryMediaClient } from './AutoAdsCloudinaryPanel';
 
 export interface CampaignAdReplaceResultInfo {
@@ -30,12 +33,25 @@ export interface CampaignAdReplaceResultInfo {
   replacedAt: string;
 }
 
+export interface CampaignHookOverrideInput {
+  entryProductName?: string;
+  entryProductDescription?: string;
+  entryPriceGs?: number;
+  entryImageUrl?: string;
+  targetProductId?: string;
+  targetProductSlug?: string;
+  targetProductName?: string;
+  targetLandingUrl?: string;
+}
+
 interface AutoAdsCampaignsPanelProps {
   campaigns: PipeboardPublishedCampaignRecord[];
+  productPages: ProductPage[];
   selectedCampaign: PipeboardPublishedCampaignRecord | null;
   onSelectCampaign: (camp: PipeboardPublishedCampaignRecord | null) => void;
   onBackToInicio?: () => void;
   onGoToCreateCampaign: () => void;
+  onOpenTripwirePageCreator?: () => void;
   onSyncLiveCampaigns: () => void;
   syncingCampaigns: boolean;
   cloudinaryResources: CloudinaryMediaClient[];
@@ -44,17 +60,21 @@ interface AutoAdsCampaignsPanelProps {
   regeneratingAdKey: string | null;
   replacingAdKey: string | null;
   replacedInfoByKey: Record<string, CampaignAdReplaceResultInfo>;
+  defaultHookInfo?: CampaignHookOverrideInput;
   onRegenerateCampaignAd: (
     camp: PipeboardPublishedCampaignRecord,
     adIdx: number,
-    existingAd: any
+    existingAd: any,
+    injectMode?: 'standard' | 'entry_hook',
+    hookOverride?: CampaignHookOverrideInput
   ) => void;
   onDiscardDraft: (adKey: string) => void;
   onLaunchReplaceAd: (
     camp: PipeboardPublishedCampaignRecord,
     adIdx: number,
     existingAd: any,
-    draftCreative: GeneratedAdCreativeAsset
+    draftCreative: GeneratedAdCreativeAsset,
+    options?: { appendNew?: boolean }
   ) => void;
   onLoadCampaignInCreator: (camp: PipeboardPublishedCampaignRecord) => void;
 }
@@ -115,10 +135,12 @@ export function resolveCampaignAdImageCandidates(
 
 export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
   campaigns,
+  productPages,
   selectedCampaign,
   onSelectCampaign,
   onBackToInicio,
   onGoToCreateCampaign,
+  onOpenTripwirePageCreator,
   onSyncLiveCampaigns,
   syncingCampaigns,
   cloudinaryResources,
@@ -127,6 +149,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
   regeneratingAdKey,
   replacingAdKey,
   replacedInfoByKey,
+  defaultHookInfo,
   onRegenerateCampaignAd,
   onDiscardDraft,
   onLaunchReplaceAd,
@@ -135,10 +158,80 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
   const [campaignSubTab, setCampaignSubTab] = useState<'anuncios' | 'grupo' | 'campana'>('anuncios');
   const [listFilterTab, setListFilterTab] = useState<'todas' | 'activas'>('todas');
   const [failedUrls, setFailedUrls] = useState<Record<string, true>>({});
+  const [slotInjectModes, setSlotInjectModes] = useState<Record<string, 'standard' | 'entry_hook'>>({});
+  const [slotTripwirePageIds, setSlotTripwirePageIds] = useState<Record<string, string>>({});
+  const [showPlusMenuInPanel, setShowPlusMenuInPanel] = useState<boolean>(false);
+  const [newAdInjectMode, setNewAdInjectMode] = useState<'standard' | 'entry_hook'>('entry_hook');
+
+  const tripwirePages = (Array.isArray(productPages) ? productPages : []).filter(p =>
+    Boolean(p?.tripwireConfig?.enabled && p?.tripwireConfig?.entryProductName)
+  );
+  const [selectedTripwirePageId, setSelectedTripwirePageId] = useState<string>(
+    tripwirePages[0]?.id || ''
+  );
+  const selectedTripwirePage =
+    tripwirePages.find(p => p.id === selectedTripwirePageId) || tripwirePages[0] || null;
+
+  const [inlineHookName, setInlineHookName] = useState<string>(
+    selectedTripwirePage?.tripwireConfig?.entryProductName || defaultHookInfo?.entryProductName || ''
+  );
+  const [inlineHookDesc, setInlineHookDesc] = useState<string>(
+    selectedTripwirePage?.tripwireConfig?.entryProductDescription ||
+      defaultHookInfo?.entryProductDescription ||
+      ''
+  );
+  const [inlineHookPrice, setInlineHookPrice] = useState<string>(
+    selectedTripwirePage?.tripwireConfig?.entryPriceGs
+      ? String(selectedTripwirePage.tripwireConfig.entryPriceGs)
+      : defaultHookInfo?.entryPriceGs
+        ? String(defaultHookInfo.entryPriceGs)
+        : '20000'
+  );
+
+  const buildTripwireDestinationUrl = (page: ProductPage | null, fallbackLandingUrl: string): string => {
+    if (page?.slug && typeof window !== 'undefined') {
+      return `${window.location.origin}/?p=${page.slug}&modo=entrada`;
+    }
+    if (page?.slug) {
+      return `https://autoads360.up.railway.app/?p=${page.slug}&modo=entrada`;
+    }
+    const base = String(fallbackLandingUrl || '').trim();
+    if (!base) return '/?modo=entrada';
+    return `${base}${base.includes('?') ? '&' : '?'}modo=entrada`;
+  };
+
+  const applyTripwirePageSelection = (pageId: string) => {
+    setSelectedTripwirePageId(pageId);
+    const chosen = tripwirePages.find(p => p.id === pageId);
+    if (chosen?.tripwireConfig) {
+      setInlineHookName(chosen.tripwireConfig.entryProductName || '');
+      setInlineHookDesc(chosen.tripwireConfig.entryProductDescription || '');
+      if (Number(chosen.tripwireConfig.entryPriceGs) > 0) {
+        setInlineHookPrice(String(chosen.tripwireConfig.entryPriceGs));
+      }
+    }
+  };
 
   useEffect(() => {
     setCampaignSubTab('anuncios');
-  }, [selectedCampaign?.campaignId, selectedCampaign?.id]);
+    if (selectedTripwirePage?.tripwireConfig) {
+      setInlineHookName(selectedTripwirePage.tripwireConfig.entryProductName || '');
+      setInlineHookDesc(selectedTripwirePage.tripwireConfig.entryProductDescription || '');
+      if (Number(selectedTripwirePage.tripwireConfig.entryPriceGs) > 0) {
+        setInlineHookPrice(String(selectedTripwirePage.tripwireConfig.entryPriceGs));
+      }
+    } else {
+      if (defaultHookInfo?.entryProductName) setInlineHookName(defaultHookInfo.entryProductName);
+      if (defaultHookInfo?.entryProductDescription) setInlineHookDesc(defaultHookInfo.entryProductDescription);
+      if (defaultHookInfo?.entryPriceGs) setInlineHookPrice(String(defaultHookInfo.entryPriceGs));
+    }
+  }, [
+    selectedCampaign?.campaignId,
+    selectedCampaign?.id,
+    selectedTripwirePage?.id,
+    defaultHookInfo?.entryProductName,
+    defaultHookInfo?.entryPriceGs
+  ]);
 
   const pickWorkingUrl = (candidates: string[]): string =>
     candidates.find(u => !failedUrls[u]) || '';
@@ -273,9 +366,251 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
 
         {/* Contenido Exclusivo según la Pestaña Interna Activa */}
         <div className="p-4 sm:p-5">
-          {/* PESTAÑA 1: ANUNCIOS (VISTA DIRECTA SIN CAJAS REDUNDANTES ARRIBA) */}
-          {campaignSubTab === 'anuncios' && (
-            <div>
+          {/* PESTAÑA 1: ANUNCIOS (VISTA DIRECTA + INYECCIÓN EN EL CONJUNTO) */}
+          {campaignSubTab === 'anuncios' && (() => {
+            const nextInjectSlot = adsList.length;
+            const appendAdKey = buildCampaignAdKey(selectedCampaign.campaignId, nextInjectSlot, 'new_inject');
+            const appendDraft = pendingDraftsByKey[appendAdKey];
+            const isRegeneratingAppend = regeneratingAdKey === appendAdKey;
+            const isReplacingAppend = replacingAdKey === appendAdKey;
+            const resolvedAppendTargetUrl = buildTripwireDestinationUrl(
+              selectedTripwirePage,
+              selectedCampaign.landingUrl
+            );
+            const currentHookOverride: CampaignHookOverrideInput = {
+              entryProductName:
+                inlineHookName.trim() || selectedTripwirePage?.tripwireConfig?.entryProductName || '',
+              entryProductDescription:
+                inlineHookDesc.trim() ||
+                selectedTripwirePage?.tripwireConfig?.entryProductDescription ||
+                '',
+              entryPriceGs: Number(
+                inlineHookPrice || selectedTripwirePage?.tripwireConfig?.entryPriceGs || 0
+              ),
+              entryImageUrl: selectedTripwirePage?.tripwireConfig?.entryImageUrl || '',
+              targetProductId: selectedTripwirePage?.id || undefined,
+              targetProductSlug: selectedTripwirePage?.slug || undefined,
+              targetProductName: selectedTripwirePage?.nombre || undefined,
+              targetLandingUrl: resolvedAppendTargetUrl
+            };
+
+            return (
+            <div className="space-y-4">
+              {/* Botón "+" Ilimitado para Inyectar Nuevo Anuncio (Crear Anuncio o Crear Anuncio Tripwire) sin borrar los existentes */}
+              <div className="p-3.5 rounded-xl bg-[#11141a] border border-zinc-800 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold text-white">
+                      Grupo de Anuncios Activo ({adsList.length} anuncios) · Agregá sin límite
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">
+                      Tocá <strong className="text-emerald-300">+</strong> para sumar la cantidad que quieras (Crear Anuncio normal o Crear Anuncio Tripwire) sin reemplazar los actuales.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="campaign-plus-add-ad-btn"
+                    onClick={() => setShowPlusMenuInPanel(v => !v)}
+                    className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Sumar Anuncio #{nextInjectSlot + 1}</span>
+                  </button>
+                </div>
+
+                {showPlusMenuInPanel && (
+                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
+                    {/* Selector Explícito de Página Tripwire Destino ANTES de generar o lanzar */}
+                    <div className="p-3 rounded-xl bg-[#0d1016] border border-amber-500/40 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wide">
+                          1. Elegí la Página Tripwire de Destino (para Anuncio Tripwire)
+                        </span>
+                        {onOpenTripwirePageCreator && (
+                          <button
+                            type="button"
+                            onClick={onOpenTripwirePageCreator}
+                            className="px-2.5 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/50 text-[11px] font-bold text-amber-300 cursor-pointer"
+                          >
+                            + Crear Página Tripwire
+                          </button>
+                        )}
+                      </div>
+
+                      {tripwirePages.length > 0 ? (
+                        <div className="space-y-2">
+                          <select
+                            data-testid="campaign-tripwire-page-select"
+                            value={selectedTripwirePage?.id || ''}
+                            onChange={e => applyTripwirePageSelection(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-amber-500/50 text-xs font-semibold text-white outline-none focus:border-amber-400 cursor-pointer"
+                          >
+                            {tripwirePages.map(tp => (
+                              <option key={tp.id} value={tp.id} className="bg-zinc-900 text-white">
+                                {tp.nombre} — Gancho: {tp.tripwireConfig?.entryProductName} ({formatGs(tp.tripwireConfig?.entryPriceGs || 20000)}) → /?p={tp.slug}&modo=entrada
+                              </option>
+                            ))}
+                          </select>
+
+                          <div className="px-3 py-2 rounded-lg bg-emerald-950/50 border border-emerald-600/50 text-[11px] space-y-0.5">
+                            <div className="text-emerald-200 font-semibold">
+                              ✅ Página Tripwire seleccionada: <span className="text-white">{selectedTripwirePage?.nombre}</span>
+                            </div>
+                            <div className="font-mono text-amber-300 break-all">
+                              🔗 URL Meta Ads al dar clic: {resolvedAppendTargetUrl}
+                            </div>
+                            <div className="text-[10px] text-zinc-400">
+                              Los anuncios estándar de esta campaña siguen yendo a: <span className="font-mono text-zinc-300">{selectedCampaign.landingUrl}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-500/40 text-[11px] text-amber-200 space-y-1">
+                          <div>
+                            Todavía no creaste ninguna Página Tripwire en el Creador Rápido. Creala primero para seleccionarla acá y redirigir el anuncio Tripwire a su propia página.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        value={inlineHookName}
+                        onChange={e => setInlineHookName(e.target.value)}
+                        placeholder="Nombre producto entrada (ej: Guirnalda 10m)"
+                        className="px-3 py-1.5 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs text-white placeholder-zinc-500 outline-none focus:border-amber-400"
+                      />
+                      <input
+                        type="text"
+                        value={inlineHookDesc}
+                        onChange={e => setInlineHookDesc(e.target.value)}
+                        placeholder="Beneficio corto del artículo de entrada"
+                        className="px-3 py-1.5 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs text-white placeholder-zinc-500 outline-none focus:border-amber-400"
+                      />
+                      <input
+                        type="number"
+                        min={5000}
+                        step={1000}
+                        value={inlineHookPrice}
+                        onChange={e => setInlineHookPrice(e.target.value)}
+                        placeholder="Precio Gs. (ej: 20000)"
+                        className="px-3 py-1.5 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs text-amber-300 font-mono placeholder-zinc-500 outline-none focus:border-amber-400"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        type="button"
+                        data-testid="campaign-create-standard-ad-btn"
+                        disabled={isRegeneratingAppend || isReplacingAppend}
+                        onClick={() => {
+                          setNewAdInjectMode('standard');
+                          onRegenerateCampaignAd(
+                            selectedCampaign,
+                            nextInjectSlot,
+                            { adId: 'new_inject' },
+                            'standard'
+                          );
+                        }}
+                        className="px-4 py-2 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isRegeneratingAppend && newAdInjectMode === 'standard' ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="w-3.5 h-3.5" />
+                        )}
+                        <span>Crear Anuncio (Estándar Principal)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="campaign-inject-new-ad-btn"
+                        disabled={isRegeneratingAppend || isReplacingAppend}
+                        onClick={() => {
+                          setNewAdInjectMode('entry_hook');
+                          onRegenerateCampaignAd(
+                            selectedCampaign,
+                            nextInjectSlot,
+                            { adId: 'new_inject' },
+                            'entry_hook',
+                            currentHookOverride
+                          );
+                        }}
+                        className="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isRegeneratingAppend && newAdInjectMode === 'entry_hook' ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="w-3.5 h-3.5" />
+                        )}
+                        <span>Crear Anuncio Tripwire</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {appendDraft && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 flex flex-col sm:flex-row items-center gap-3">
+                    {appendDraft.aiGeneratedImageUrl && (
+                      <img
+                        src={appendDraft.aiGeneratedImageUrl}
+                        alt={appendDraft.headline}
+                        referrerPolicy="no-referrer"
+                        className="w-20 h-20 rounded-lg object-cover border border-zinc-800 shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="text-xs font-bold text-amber-200 truncate">
+                        Borrador Nuevo Anuncio #{nextInjectSlot + 1} listo · {appendDraft.headline}
+                      </div>
+                      <p className="text-[11px] text-zinc-300 line-clamp-2">{appendDraft.primaryText}</p>
+                      <div className="text-[10px] font-mono text-emerald-300 break-all">
+                        Destino al lanzar en Meta Ads:{' '}
+                        <strong>
+                          {appendDraft.targetLandingUrl ||
+                            (appendDraft.isEntryHookAd ? resolvedAppendTargetUrl : selectedCampaign.landingUrl)}
+                        </strong>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onDiscardDraft(appendAdKey)}
+                        disabled={isReplacingAppend}
+                        className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="campaign-launch-inject-new-ad-btn"
+                        onClick={() =>
+                          onLaunchReplaceAd(
+                            selectedCampaign,
+                            nextInjectSlot,
+                            { adId: 'new_inject' },
+                            appendDraft,
+                            { appendNew: true }
+                          )
+                        }
+                        disabled={isReplacingAppend}
+                        className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                      >
+                        {isReplacingAppend ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Send className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {isReplacingAppend ? 'Publicando en Meta...' : 'Lanzar Nuevo Ad en este Grupo'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {adsList.length === 0 ? (
                 <div className="p-8 rounded-xl border border-dashed border-zinc-800 text-center text-xs text-zinc-400">
                   No se registraron anuncios individuales en esta campaña.
@@ -289,6 +624,37 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                     const isRegenerating = regeneratingAdKey === adKey;
                     const isReplacing = replacingAdKey === adKey;
                     const replaceResult = replacedInfoByKey[adKey];
+                    const selectedSlotMode: 'standard' | 'entry_hook' =
+                      slotInjectModes[adKey] || (ad.isEntryHookAd ? 'entry_hook' : 'standard');
+                    const slotChosenTripwirePage =
+                      tripwirePages.find(
+                        p => p.id === (slotTripwirePageIds[adKey] || selectedTripwirePage?.id || '')
+                      ) || selectedTripwirePage;
+                    const slotTargetUrlPreview =
+                      selectedSlotMode === 'entry_hook'
+                        ? buildTripwireDestinationUrl(slotChosenTripwirePage, selectedCampaign.landingUrl)
+                        : selectedCampaign.landingUrl;
+                    const slotHookOverride: CampaignHookOverrideInput | undefined =
+                      selectedSlotMode === 'entry_hook'
+                        ? {
+                            entryProductName:
+                              slotChosenTripwirePage?.tripwireConfig?.entryProductName ||
+                              inlineHookName.trim(),
+                            entryProductDescription:
+                              slotChosenTripwirePage?.tripwireConfig?.entryProductDescription ||
+                              inlineHookDesc.trim(),
+                            entryPriceGs: Number(
+                              slotChosenTripwirePage?.tripwireConfig?.entryPriceGs ||
+                                inlineHookPrice ||
+                                0
+                            ),
+                            entryImageUrl: slotChosenTripwirePage?.tripwireConfig?.entryImageUrl || '',
+                            targetProductId: slotChosenTripwirePage?.id || undefined,
+                            targetProductSlug: slotChosenTripwirePage?.slug || undefined,
+                            targetProductName: slotChosenTripwirePage?.nombre || undefined,
+                            targetLandingUrl: slotTargetUrlPreview
+                          }
+                        : undefined;
 
                     const imgCandidates = resolveCampaignAdImageCandidates(
                       selectedCampaign,
@@ -317,46 +683,122 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                         }`}
                       >
                         {/* Header compacto del anuncio */}
-                        <div className="px-3 py-2.5 bg-[#0f1115] border-b border-zinc-800 flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[11px] font-bold text-emerald-400 font-mono">
-                              Anuncio #{slotIdx + 1}
-                            </span>
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                ad.status === 'ACTIVE'
-                                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60'
-                                  : 'bg-zinc-800 text-zinc-300'
-                              }`}
-                            >
-                              {ad.status || 'ACTIVE'}
-                            </span>
-                            {isCloudinary && (
-                              <span className="px-1.5 py-0.5 rounded bg-sky-950/70 border border-sky-700/60 text-sky-300 text-[9px] font-semibold inline-flex items-center gap-0.5">
-                                <Cloud className="w-2.5 h-2.5" />
-                                <span>Cloudinary</span>
+                        <div className="px-3 py-2.5 bg-[#0f1115] border-b border-zinc-800 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-bold text-emerald-400 font-mono">
+                                Anuncio #{slotIdx + 1}
                               </span>
-                            )}
-                            {ad.adId && (
                               <span
-                                className="text-[10px] font-mono text-zinc-500"
-                                title={`Ad ID: ${ad.adId}`}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  ad.status === 'ACTIVE'
+                                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60'
+                                    : 'bg-zinc-800 text-zinc-300'
+                                }`}
                               >
-                                ••{String(ad.adId).slice(-5)}
+                                {ad.status || 'ACTIVE'}
                               </span>
-                            )}
+                              {isCloudinary && (
+                                <span className="px-1.5 py-0.5 rounded bg-sky-950/70 border border-sky-700/60 text-sky-300 text-[9px] font-semibold inline-flex items-center gap-0.5">
+                                  <Cloud className="w-2.5 h-2.5" />
+                                  <span>Cloudinary</span>
+                                </span>
+                              )}
+                              {ad.adId && (
+                                <span
+                                  className="text-[10px] font-mono text-zinc-500"
+                                  title={`Ad ID: ${ad.adId}`}
+                                >
+                                  ••{String(ad.adId).slice(-5)}
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              data-testid={`campaign-regenerate-ad-btn-${slotIdx}`}
+                              onClick={() =>
+                                onRegenerateCampaignAd(
+                                  selectedCampaign,
+                                  slotIdx,
+                                  ad,
+                                  selectedSlotMode,
+                                  slotHookOverride
+                                )
+                              }
+                              disabled={isRegenerating || isReplacing}
+                              className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0"
+                            >
+                              <RotateCw className={`w-3 h-3 text-emerald-400 ${isRegenerating ? 'animate-spin' : ''}`} />
+                              <span>{isRegenerating ? 'Regenerando...' : 'Regenerar'}</span>
+                            </button>
                           </div>
 
-                          <button
-                            type="button"
-                            data-testid={`campaign-regenerate-ad-btn-${slotIdx}`}
-                            onClick={() => onRegenerateCampaignAd(selectedCampaign, slotIdx, ad)}
-                            disabled={isRegenerating || isReplacing}
-                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0"
-                          >
-                            <RotateCw className={`w-3 h-3 text-emerald-400 ${isRegenerating ? 'animate-spin' : ''}`} />
-                            <span>{isRegenerating ? 'Regenerando...' : 'Regenerar'}</span>
-                          </button>
+                          <div className="flex items-center justify-between gap-2 text-[10px]">
+                            <span className="text-zinc-400">Modo:</span>
+                            <div className="inline-flex rounded-md bg-zinc-950 border border-zinc-800 p-0.5">
+                              <button
+                                type="button"
+                                onClick={() => setSlotInjectModes(prev => ({ ...prev, [adKey]: 'standard' }))}
+                                className={`px-2 py-0.5 rounded font-semibold cursor-pointer ${
+                                  selectedSlotMode === 'standard'
+                                    ? 'bg-zinc-200 text-black'
+                                    : 'text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                Estándar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSlotInjectModes(prev => ({ ...prev, [adKey]: 'entry_hook' }))}
+                                className={`px-2 py-0.5 rounded font-semibold cursor-pointer ${
+                                  selectedSlotMode === 'entry_hook'
+                                    ? 'bg-amber-400 text-black'
+                                    : 'text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                Tripwire
+                              </button>
+                            </div>
+                          </div>
+
+                          {selectedSlotMode === 'entry_hook' && (
+                            <div className="space-y-1">
+                              {tripwirePages.length > 0 ? (
+                                <select
+                                  value={slotChosenTripwirePage?.id || ''}
+                                  onChange={e =>
+                                    setSlotTripwirePageIds(prev => ({
+                                      ...prev,
+                                      [adKey]: e.target.value
+                                    }))
+                                  }
+                                  className="w-full px-2 py-1 rounded bg-zinc-950 border border-amber-500/40 text-[10px] text-amber-200 font-medium outline-none cursor-pointer"
+                                >
+                                  {tripwirePages.map(tp => (
+                                    <option key={tp.id} value={tp.id} className="bg-zinc-900 text-white">
+                                      Destino Tripwire: {tp.nombre} (/?p={tp.slug}&modo=entrada)
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : onOpenTripwirePageCreator ? (
+                                <button
+                                  type="button"
+                                  onClick={onOpenTripwirePageCreator}
+                                  className="w-full py-1 rounded bg-amber-400/15 border border-amber-400/40 text-[10px] font-bold text-amber-300 cursor-pointer"
+                                >
+                                  + Crear Página Tripwire primero
+                                </button>
+                              ) : null}
+                            </div>
+                          )}
+
+                          <div className="text-[10px] font-mono text-zinc-400 truncate" title={draft?.targetLandingUrl || ad.destinationUrl || slotTargetUrlPreview}>
+                            Destino:{' '}
+                            <span className={selectedSlotMode === 'entry_hook' ? 'text-amber-300' : 'text-emerald-300'}>
+                              {draft?.targetLandingUrl || ad.destinationUrl || slotTargetUrlPreview}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Imagen del anuncio con fallback automático si falla la URL */}
@@ -379,7 +821,15 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                               </p>
                               <button
                                 type="button"
-                                onClick={() => onRegenerateCampaignAd(selectedCampaign, slotIdx, ad)}
+                                onClick={() =>
+                                  onRegenerateCampaignAd(
+                                    selectedCampaign,
+                                    slotIdx,
+                                    ad,
+                                    selectedSlotMode,
+                                    slotHookOverride
+                                  )
+                                }
                                 disabled={isRegenerating || isReplacing}
                                 className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
                               >
@@ -437,7 +887,10 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                           {draft && (
                             <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/40 space-y-2">
                               <p className="text-[10px] text-amber-200 leading-snug">
-                                Al lanzar se elimina el Ad anterior en Meta y queda publicado este nuevo Anuncio #{slotIdx + 1}.
+                                Al lanzar se elimina el Ad anterior en Meta y este Ad #{slotIdx + 1} apuntará a:{' '}
+                                <span className="font-mono text-white break-all">
+                                  {draft.targetLandingUrl || slotTargetUrlPreview}
+                                </span>
                               </p>
                               <div className="flex items-center gap-1.5">
                                 <button
@@ -477,7 +930,8 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* PESTAÑA 2: GRUPO DE ANUNCIOS (AD SET) */}
           {campaignSubTab === 'grupo' && (

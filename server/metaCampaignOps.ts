@@ -17,6 +17,51 @@ const LOCKED_AD_ACCOUNT_ID = 'act_1048211497774834';
 const LOCKED_PAGE_ID = '1050835598123904';
 const LOCKED_PIXEL_ID = '1276031534651377';
 
+/**
+ * Resolves the exact destination URL for an individual Meta Ad creative.
+ * Priority:
+ * 1. Explicit `creative.targetLandingUrl` (e.g. chosen Tripwire page URL)
+ * 2. Explicit `creative.targetProductSlug` applied to `campaignLandingUrl` (`?p=<slug>`)
+ * 3. Campaign's default `campaignLandingUrl`
+ * Whenever `creative.isEntryHookAd` is true, enforces `?modo=entrada`.
+ */
+export function resolveCreativeTargetLandingUrl(params: {
+  campaignLandingUrl: string;
+  creative?: any;
+}): string {
+  const fallbackUrl = String(params.campaignLandingUrl || '').trim();
+  const cr = params.creative || {};
+  const explicitTargetUrl = String(cr.targetLandingUrl || '').trim();
+  const explicitTargetSlug = String(cr.targetProductSlug || '').trim();
+
+  let resolved = fallbackUrl;
+  if (explicitTargetUrl) {
+    resolved = explicitTargetUrl;
+  } else if (explicitTargetSlug) {
+    try {
+      const base = new URL(fallbackUrl || 'https://autoads360.up.railway.app/');
+      base.searchParams.set('p', explicitTargetSlug);
+      resolved = base.toString();
+    } catch {
+      const basePath = (fallbackUrl || 'https://autoads360.up.railway.app/').split('?')[0];
+      resolved = `${basePath}?p=${encodeURIComponent(explicitTargetSlug)}`;
+    }
+  }
+
+  if (cr?.isEntryHookAd) {
+    try {
+      const u = new URL(resolved);
+      u.searchParams.set('modo', 'entrada');
+      return u.toString();
+    } catch {
+      if (resolved.includes('modo=')) return resolved;
+      const sep = resolved.includes('?') ? '&' : '?';
+      return `${resolved}${sep}modo=entrada`;
+    }
+  }
+  return resolved;
+}
+
 async function resolveImagePayloadForMeta(
   creative: any,
   aiAdsPublicDir: string,
@@ -82,6 +127,7 @@ export async function replacePublishedAdInMeta(params: {
   campaignId?: string;
   adSetId: string;
   oldAdId?: string;
+  appendNew?: boolean;
   adIndex: number;
   product: any;
   creative: any;
@@ -97,6 +143,7 @@ export async function replacePublishedAdInMeta(params: {
   error?: string;
   deletedAdId?: string;
   deletedFromMeta: boolean;
+  appendedNew?: boolean;
   newAdId?: string;
   newCreativeId?: string;
   imageHash?: string;
@@ -111,7 +158,8 @@ export async function replacePublishedAdInMeta(params: {
   const accessToken = String(params.accessToken || '').trim();
   const adSetId = String(params.adSetId || params.campaignRecord?.adSetId || '').trim();
   const campaignId = String(params.campaignId || params.campaignRecord?.campaignId || '').trim();
-  const oldAdId = String(params.oldAdId || '').trim();
+  const appendNew = Boolean(params.appendNew);
+  const oldAdId = appendNew ? '' : String(params.oldAdId || '').trim();
   const adIndex = Number(params.adIndex || 0);
   const publishStatus: 'ACTIVE' | 'PAUSED' = params.publishStatus === 'PAUSED' ? 'PAUSED' : 'ACTIVE';
   const product = params.product || {};
@@ -158,7 +206,7 @@ export async function replacePublishedAdInMeta(params: {
       : imgPayload.sourceUrl;
     const cldUp = await uploadImageToCloudinary({
       source: upSource,
-      productSlug: String(product.slug || params.campaignRecord?.productSlug || 'producto'),
+      productSlug: String(cr?.targetProductSlug || product.slug || params.campaignRecord?.productSlug || 'producto'),
       campaignId,
       adIndex,
       envReader: params.envReader
@@ -203,7 +251,7 @@ export async function replacePublishedAdInMeta(params: {
 
   // Step 1: Upload replacement image to Meta Ad Account library
   const imgBody: Record<string, any> = {
-    name: `${product.slug || 'prod'}-replace-ad${adIndex + 1}-${Date.now()}.png`
+    name: `${product.slug || 'prod'}-${appendNew ? 'inject' : 'replace'}-ad${adIndex + 1}-${Date.now()}.png`
   };
   if (imgPayload.bytes) imgBody.bytes = imgPayload.bytes;
   else if (imgPayload.url) imgBody.url = imgPayload.url;
@@ -217,11 +265,16 @@ export async function replacePublishedAdInMeta(params: {
       ok: false,
       statusCode: 400,
       deletedFromMeta: false,
-      error: `Meta rechazó la subida de imagen al reemplazar Anuncio #${adIndex + 1}: ${imgRes?.error?.message || 'sin image_hash'}`
+      error: `Meta rechazó la subida de imagen al publicar Anuncio #${adIndex + 1}: ${imgRes?.error?.message || 'sin image_hash'}`
     };
   }
 
   // Step 2: Create new AdCreative BEFORE touching the old live ad
+  const adLandingUrl = resolveCreativeTargetLandingUrl({
+    campaignLandingUrl: landingUrl,
+    creative: cr
+  });
+
   const aaCid = generateAaCid();
   const urlTags = buildMetaAttributionUrlTags({
     aaCid,
@@ -233,18 +286,18 @@ export async function replacePublishedAdInMeta(params: {
     page_id: facebookPageId,
     link_data: {
       image_hash: imageHash,
-      link: landingUrl,
+      link: adLandingUrl,
       message: cr.primaryText || '',
       name: cr.headline || prodName,
       description: cr.descriptionText || '',
       call_to_action: {
         type: cr.ctaType || 'ORDER_NOW',
-        value: { link: landingUrl }
+        value: { link: adLandingUrl }
       }
     }
   };
   const crRes: any = await callMeta(`${adAccountId}/adcreatives`, 'POST', {
-    name: `Creative #${adIndex + 1} (Reemplazo) · ${cr.angleTitle || cr.formatLabel || 'Anuncio'}`,
+    name: `Creative #${adIndex + 1} (${appendNew ? 'Inyección' : 'Reemplazo'}) · ${cr.angleTitle || cr.formatLabel || 'Anuncio'}`,
     object_story_spec: JSON.stringify(storySpec),
     url_tags: urlTags
   });
@@ -258,9 +311,9 @@ export async function replacePublishedAdInMeta(params: {
     };
   }
 
-  // Step 3: Delete old Ad from Meta Ads (`DELETE /v21.0/<oldAdId>`) now that replacement image & creative are ready
+  // Step 3: Delete old Ad from Meta Ads (`DELETE /v21.0/<oldAdId>`) ONLY if replacing (never when appendNew=true)
   let deletedFromMeta = false;
-  const isRealOldMetaAdId = Boolean(oldAdId && /^\d+$/.test(oldAdId));
+  const isRealOldMetaAdId = Boolean(!appendNew && oldAdId && /^\d+$/.test(oldAdId));
   if (isRealOldMetaAdId) {
     try {
       const delRes: any = await callMeta(oldAdId, 'DELETE');
@@ -270,7 +323,7 @@ export async function replacePublishedAdInMeta(params: {
     }
   }
 
-  // Step 4: Create the new replacement Ad inside the exact same Ad Set
+  // Step 4: Create the new Ad inside the exact same Ad Set
   const adName = `Anuncio #${adIndex + 1} · ${cr.formatLabel || 'Feed IA'}`;
   const adRes: any = await callMeta(`${adAccountId}/ads`, 'POST', {
     adset_id: adSetId,
@@ -293,7 +346,7 @@ export async function replacePublishedAdInMeta(params: {
   }
 
   registerAdEntitySnapshot({
-    productSlug: String(product.slug || params.campaignRecord?.productSlug || 'producto'),
+    productSlug: String(cr?.targetProductSlug || product.slug || params.campaignRecord?.productSlug || 'producto'),
     publisher: 'meta_direct',
     adAccountId,
     accountCurrency: String(params.campaignRecord?.accountCurrency || 'USD'),
@@ -309,11 +362,16 @@ export async function replacePublishedAdInMeta(params: {
     headline: cr.headline,
     primaryText: cr.primaryText,
     ctaLabel: cr.ctaLabel,
-    destinationUrl: landingUrl,
+    destinationUrl: adLandingUrl,
     urlTags,
     preflightStatus: 'ok',
     payloadSnapshot: {
       replacedFromAdId: oldAdId || null,
+      appendedNew: appendNew,
+      isEntryHookAd: Boolean(cr?.isEntryHookAd),
+      targetProductId: cr?.targetProductId || null,
+      targetProductSlug: cr?.targetProductSlug || null,
+      targetProductName: cr?.targetProductName || null,
       cloudinaryImageUrl: finalImageUrl || null,
       cloudinaryPublicId: cloudinaryPublicId || null
     }
@@ -337,6 +395,11 @@ export async function replacePublishedAdInMeta(params: {
     hypothesisId: cr.hypothesisId,
     angleId: cr.angleId,
     replacedFromAdId: oldAdId || undefined,
+    isEntryHookAd: Boolean(cr?.isEntryHookAd),
+    destinationUrl: adLandingUrl,
+    targetProductId: cr?.targetProductId || undefined,
+    targetProductSlug: cr?.targetProductSlug || undefined,
+    targetProductName: cr?.targetProductName || undefined,
     updatedAt: nowIso,
     name: adName,
     formatLabel: cr.formatLabel || '',
@@ -348,16 +411,20 @@ export async function replacePublishedAdInMeta(params: {
     const prevAds: any[] = Array.isArray(updatedCampaignRecord.publishedAds)
       ? [...updatedCampaignRecord.publishedAds]
       : [];
-    const matchIdx = prevAds.findIndex(
-      (a, idx) =>
-        (oldAdId && a?.adId === oldAdId) ||
-        a?.adIndex === adIndex ||
-        idx === adIndex
-    );
-    if (matchIdx >= 0) {
-      prevAds[matchIdx] = { ...prevAds[matchIdx], ...updatedAdEntry };
-    } else {
+    if (appendNew) {
       prevAds.push(updatedAdEntry);
+    } else {
+      const matchIdx = prevAds.findIndex(
+        (a, idx) =>
+          (oldAdId && a?.adId === oldAdId) ||
+          a?.adIndex === adIndex ||
+          idx === adIndex
+      );
+      if (matchIdx >= 0) {
+        prevAds[matchIdx] = { ...prevAds[matchIdx], ...updatedAdEntry };
+      } else {
+        prevAds.push(updatedAdEntry);
+      }
     }
     updatedCampaignRecord.publishedAds = prevAds;
     const prevLogs = Array.isArray(updatedCampaignRecord.mcpStepLogs)
@@ -367,9 +434,11 @@ export async function replacePublishedAdInMeta(params: {
       ...prevLogs,
       {
         step: prevLogs.length + 1,
-        action: 'replace_published_ad',
+        action: appendNew ? 'inject_ad_into_adset' : 'replace_published_ad',
         status: 'success',
-        summary: `Anuncio #${adIndex + 1} reemplazado en Meta (${oldAdId || 'anterior'} -> ${newAdId})`,
+        summary: appendNew
+          ? `Anuncio #${adIndex + 1} inyectado al Grupo de Anuncios Meta (${newAdId})`
+          : `Anuncio #${adIndex + 1} reemplazado en Meta (${oldAdId || 'anterior'} -> ${newAdId})`,
         timestamp: nowIso
       }
     ];
@@ -380,6 +449,7 @@ export async function replacePublishedAdInMeta(params: {
     statusCode: 200,
     deletedAdId: isRealOldMetaAdId ? oldAdId : undefined,
     deletedFromMeta,
+    appendedNew: appendNew,
     newAdId,
     newCreativeId,
     imageHash,

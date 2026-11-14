@@ -64,6 +64,9 @@ export const Navbar: React.FC = () => {
   const brandInitial = (brandDisplay || 'N').charAt(0).toUpperCase();
   const headerGradient = customTheme?.headerBg || 'from-[#041a12] via-[#083022] to-[#041a12]';
   const topStripClasses = customTheme?.topStripBg || 'bg-[#e8b23a] text-[#062319]';
+  const isEntryModeUrl =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('modo') === 'entrada';
   const ctaGradient = customTheme?.ctaGradient || 'from-[#1ea856] to-[#16a34a]';
 
   const dynamicStories = customLanding?.galleryItems?.length
@@ -97,17 +100,19 @@ export const Navbar: React.FC = () => {
     <>
       {/* Native Mobile-App Sticky App Bar */}
       <header className={`sticky top-0 z-40 bg-gradient-to-r ${headerGradient} text-white shadow-[0_8px_28px_rgba(4,26,18,0.35)] border-b border-[#e8b23a]/35`}>
-        {/* Top Live Status Strip */}
-        <div className={`${topStripClasses} py-1.5 px-2 text-center font-black text-[11px] sm:text-sm tracking-tight`}>
-          <div className="app-container flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap">
-            <span className="inline-flex items-center gap-1 bg-black/85 text-[#ffd778] px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-black uppercase shrink-0">
-              <Flame className="w-3.5 h-3.5 fill-[#ffd778]" /> {customLanding?.topBarBadge || '25% OFF HOY'}
-            </span>
-            <span className="font-black truncate">
-              {customLanding?.topBarText || 'ENVÍO GRATIS · PAGÁS AL RECIBIR'}
-            </span>
+        {/* Top Live Status Strip (suprimida en páginas gráficas sobrias o ?modo=entrada) */}
+        {!currentProductPage?.visualLanding?.enabled && !isEntryModeUrl && (
+          <div className={`${topStripClasses} py-1.5 px-2 text-center font-black text-[11px] sm:text-sm tracking-tight`}>
+            <div className="app-container flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap">
+              <span className="inline-flex items-center gap-1 bg-black/85 text-[#ffd778] px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-black uppercase shrink-0">
+                <Flame className="w-3.5 h-3.5 fill-[#ffd778]" /> {customLanding?.topBarBadge || '25% OFF HOY'}
+              </span>
+              <span className="font-black truncate">
+                {customLanding?.topBarText || 'ENVÍO GRATIS · PAGÁS AL RECIBIR'}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Main App Navigation Bar */}
         <div className="app-container h-16 sm:h-18 flex items-center justify-between gap-1.5 sm:gap-4">
@@ -130,8 +135,8 @@ export const Navbar: React.FC = () => {
                 </span>
               </div>
               <span className="block text-[11px] sm:text-sm font-bold text-[#ffd778] mt-0.5 truncate">
-                {currentProductPage?.freeShipping === false
-                  ? 'Pago en Puerta · Entrega Rápida'
+                {currentProductPage?.freeShipping === false || isEntryModeUrl
+                  ? 'Pago en Puerta · Entrega en todo Paraguay'
                   : 'Pago en Puerta · Envío Gratis'}
               </span>
             </div>
@@ -166,8 +171,8 @@ export const Navbar: React.FC = () => {
         </div>
       </header>
 
-      {/* Native Mobile-App "Stories / Visual Quick Launcher" Bar */}
-      {currentView === 'store' && (
+      {/* Native Mobile-App "Stories / Visual Quick Launcher" Bar (solo páginas clásicas, oculto en páginas gráficas) */}
+      {currentView === 'store' && !currentProductPage?.visualLanding?.enabled && (
         <div className="bg-white border-b border-[#e2ddd2] shadow-xs">
           <div className="app-container py-3">
             <div className="flex items-center justify-between sm:justify-center gap-3 sm:gap-6 overflow-x-auto no-scrollbar px-1">
