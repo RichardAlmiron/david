@@ -946,6 +946,97 @@ test('generateUniversalVisualProductPage soporta sheetCount auto y aplica visual
   }
 });
 
+test('dual_tripwire_winner ordena 3 actos progresivos: Lámina 1 100% entrada sin spoilear Principal, Lámina 2 calentamiento, Lámina 3 explosión Principal y sin envío gratis en entrada', async () => {
+  const createdTempFiles: string[] = [];
+  const capturedChatPayloads: any[] = [];
+  const fakeJpgB64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46]).toString('base64');
+
+  const mockFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/chat/completions')) {
+      capturedChatPayloads.push(JSON.parse(String(init?.body || '{}')));
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  strategySummary: 'Arquitectura 3 actos sin rogar compra',
+                  recommendedAudioPreset: 'warm_ambient',
+                  sobrietyHeadline: 'Iluminación instantánea con un toque',
+                  subheadline: 'Diseño magnético directo para tu entrada.',
+                  winnerAngleHeadline: 'La transformación nocturna definitiva para toda tu casa',
+                  winnerAngleDescription: 'Pensado para quien busca el resultado definitivo y desea solicitarlo por convicción.',
+                  reversePsychologyHook: 'Al solicitar la solución completa, la guirnalda de entrada va de regalo.',
+                  entryButtonLabel: 'Solicitar Guirnalda LED (Gs. 20.000)',
+                  bundleButtonLabel: 'Solicitar Proyector Definitivo + Guirnalda GRATIS (Gs. 189.000)',
+                  bundleDisclaimer: 'Incluye Proyector completo + Guirnalda DE REGALO + Envío Gratis.',
+                  sheetPrompts: [
+                    { role: 'hero_presentation', title: 'Guirnalda LED', caption: 'Entrada pura', imagePrompt: 'Only entry item' },
+                    { role: 'comparison_need', title: 'El clic mental', caption: 'Calentamiento', imagePrompt: 'Warming bridge' },
+                    { role: 'social_trust_specs', title: 'Solución Definitiva', caption: 'Explosión final', imagePrompt: 'Explosive principal reveal' }
+                  ],
+                  faq: [{ q: '¿Cómo solicito?', a: 'Completando el formulario.' }],
+                  agentContext: 'Precios exactos.'
+                })
+              }
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    }
+    return new Response(JSON.stringify({ data: [{ b64_json: fakeJpgB64 }] }), { status: 200 });
+  }) as any;
+
+  try {
+    const res = await generateUniversalVisualProductPage({
+      openRouterApiKey: 'test-key',
+      pageCreationMode: 'dual_tripwire_winner',
+      productName: 'Proyector Láser Pro',
+      productDescription: 'Cobertura arquitectónica total resistente al agua',
+      price1Gs: 189000,
+      entryProductName: 'Guirnalda LED 10m',
+      entryPriceGs: 20000,
+      entryDeliveryFeeGs: 40000,
+      sheetCount: 'auto',
+      fetchImpl: mockFetch
+    });
+
+    for (const sh of res.product.visualLanding?.sheets || []) {
+      if (sh.imageUrl.startsWith('/assets/visual-pages/')) {
+        createdTempFiles.push(path.resolve(process.cwd(), 'public', sh.imageUrl.replace(/^\//, '')));
+      }
+    }
+
+    assert.equal(res.product.visualLanding?.sheets.length, 3);
+    const sysPrompt = String(capturedChatPayloads[0]?.messages?.[0]?.content || '');
+    const userPrompt = String(capturedChatPayloads[0]?.messages?.[1]?.content || '');
+    assert.ok(sysPrompt.includes('CERO ROGAR COMPRA'), 'Debe exigir autoridad y prohibir rogar compra');
+    assert.ok(sysPrompt.includes('ACTO 1 (ARRIBA AL ATERRIZAR): 100%'), 'Debe exigir Acto 1 exclusivo de entrada arriba');
+    assert.ok(sysPrompt.includes('ACTO 2 (ZONA MEDIA): Calentamiento progresivo'), 'Debe exigir calentamiento progresivo en Acto 2');
+    assert.ok(sysPrompt.includes('ACTO 3 (EXPLOSIÓN INFERIOR)'), 'Debe exigir explosión del Producto Principal en Acto 3');
+    assert.ok(userPrompt.includes("DO NOT depict, name, or spoil 'Proyector Láser Pro'"), 'Lámina 1 debe prohibir mostrar el producto principal');
+    assert.ok(userPrompt.includes("DO NOT write 'Envío Gratis' or any delivery charge"), 'Lámina 1 no debe prometer envío gratis ni recargo');
+    assert.ok(
+      res.product.visualLanding?.entryDisclaimer?.toLowerCase().includes('no incluye'),
+      'Fallback entryDisclaimer debe aclarar que no incluye el principal ni envío gratuito'
+    );
+    assert.equal(
+      res.product.visualLanding?.entryDisclaimer?.includes('40.000'),
+      false,
+      'La landing Tripwire no debe anticipar el monto del delivery antes del evento'
+    );
+  } finally {
+    for (const abs of createdTempFiles) {
+      try {
+        if (fs.existsSync(abs)) fs.unlinkSync(abs);
+      } catch {}
+    }
+  }
+});
+
+
 
 
 

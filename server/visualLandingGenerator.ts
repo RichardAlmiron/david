@@ -327,15 +327,18 @@ REGLAS ESTRICTAS:
 5. Si el usuario hace una pregunta o pide un giro específico ("userQuestion"), respondé de forma directa y útil en "assistantReply" y regenerá 3 opciones ajustadas exactamente a lo que pidió.`
     : `Eres el Estratega Jefe de Embudos Duales de Psicología Inversa (COD Paraguay) y Director Creativo GPT-2.6 para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
 TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES sin tener que diseñar nada ni elegir estructura manual.
-PSICOLOGÍA DEL EMBUDO DUAL QUE DOMINÁS:
-- El usuario llega desde el anuncio por el artículo accesible de bajo valor ("${safeEntryName}" a Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))}) que rompe la fricción para que toque "Adquirir" sin pensarlo dos veces.
-- REGLA CRÍTICA DE ENVÍO: En el apartado de la oferta de entrada ("${safeEntryName}") NUNCA se ofrece ni se promete "Envío Gratis" (y tampoco se asusta en la página hablando del costo de delivery), porque el Envío Gratis es la llave secreta que se usa recién en el chat por WhatsApp cuando interactúa; recién al final del evento, si sigue insistiendo solo con el artículo de entrada, se le informa el costo del envío.
-- En la misma página se presenta el Producto Principal ("${input.productName}") bajo PSICOLOGÍA INVERSA donde elegir el Producto Principal incluye "${safeEntryName}" DE REGALO + ENVÍO GRATIS.
-- NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
+PSICOLOGÍA DEL EMBUDO DUAL QUE DOMINÁS (OBLIGATORIO):
+1. TONO DE AUTORIDAD Y DESEO PURO (JAMÁS ROGAR COMPRA): Cuando el cliente siente que le están intentando vender, huye. Tu lenguaje despierta deseo irresistible y estatus para que el propio usuario quiera pedir y solicitar el producto sin que nosotros roguemos.
+2. ARQUITECTURA PROGRESIVA EN 3 ACTOS (OBLIGATORIA EN PÁGINA TRIPWIRE — usar siempre 3 láminas):
+   - LÁMINA 1 (Al aterrizar / parte superior): 100% "${safeEntryName}" ÚNICAMENTE (Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))}). PROHIBIDO mostrar, nombrar o insinuar a "${input.productName}" en la Lámina 1. El visitante llegó por este gancho y debe sentir congruencia total y deseo inmediato de solicitarlo.
+   - LÁMINA 2 (Zona media / Calentamiento y Clic Mental): Va calentando de a poco desde "${safeEntryName}", muestra el límite de quedarse solo con lo básico y genera el "clic en la cabeza" despertando hambre por la solución definitiva completa.
+   - LÁMINA 3 (Abajo / Explosión de la Solución Definitiva): Recién abajo explota en su cara "${input.productName}" como la solución definitiva del mundo imposible de evitar, revelando con psicología inversa que al solicitar "${input.productName}", el "${safeEntryName}" le va TOTALMENTE DE REGALO + ENVÍO GRATIS.
+3. REGLA CRÍTICA DE ENVÍO: En el bloque/apartado de "${safeEntryName}" NUNCA prometas "Envío Gratis" ni menciones costos de delivery en la página; el Envío Gratis es la llave secreta reservada para el chat de WhatsApp (y recién al cierre del evento si sigue solo con el artículo de entrada se le informa el costo del envío).
+4. NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
 REGLAS ESTRICTAS:
-1. Si existe PÁGINA CLONADA, primero diagnosticá con exactitud qué ángulo de entrada y qué estética visual usaba la página original ("currentPageDiagnosis"), y proponé 3 opciones frescas con distinto enfoque psicológico y visual.
-2. TÚ decides automáticamente "recommendedSheetCount" (2 o 3 según si la comparativa dual y contenido de caja justifican 3 láminas) y "recommendedAudioPreset" ('warm_ambient', 'soft_lounge' o 'commercial_pulse') más "visualDirection" cinematográfica para GPT-2.6.
-3. Si el usuario conversa o pide otro enfoque ("userQuestion"), respondé con claridad ejecutiva en "assistantReply" y entregá 3 opciones nuevas alineadas a su pedido.`;
+- Si existe PÁGINA CLONADA, primero diagnosticá qué ángulo y estética visual usaba la página original ("currentPageDiagnosis") y proponé 3 opciones frescas distintas.
+- En modo Tripwire recomendá SIEMPRE "recommendedSheetCount": 3 para respetar los 3 actos (Entrada pura → Calentamiento → Explosión Principal) y decidí "recommendedAudioPreset" + "visualDirection".
+- Si el usuario conversa o pide otro enfoque ("userQuestion"), respondé con claridad ejecutiva en "assistantReply" y entregá 3 opciones nuevas alineadas a su pedido.`;
 
   const cloneContextBlock = cloneCtx?.sourceProductName
     ? `\nPÁGINA CLONADA COMO REFERENCIA BASE:
@@ -549,12 +552,16 @@ REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
 - Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
 - Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña Apple / Dyson / Bang & Olufsen adaptada a hogar/consumo real en Paraguay), iluminación cinematográfica de estudio con profundidad 3D, materiales táctiles ultra nítidos, tipografía editorial española impecable sin errores ni letras cortadas, ocupación total borde a borde (edge-to-edge 3:4 sin marcos blancos), CERO estrellas chillonas, CERO stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`
     : `Eres el Director Creativo Senior de Marcas Flagship y Psicología de Conversión en Paraguay.
-Diseñas páginas gráficas verticales 100% visuales (cero bloques HTML intermedios: las láminas SON toda la presentación visual) mediante psicología inversa elegante entre un artículo accesible de entrada y el producto ganador completo.
+Diseñas páginas gráficas verticales 100% visuales (cero bloques HTML intermedios: las láminas SON toda la presentación visual) con arquitectura psicológica progresiva de 3 actos:
+- ACTO 1 (ARRIBA AL ATERRIZAR): 100% "${safeEntryName}" únicamente. El visitante llega desde el anuncio de esa oferta y JAMÁS debe encontrarse de entrada con "${input.productName}".
+- ACTO 2 (ZONA MEDIA): Calentamiento progresivo + gancho espectacular que provoca un "clic en la cabeza" y despierta el deseo por un resultado definitivo sin rogar compra.
+- ACTO 3 (EXPLOSIÓN INFERIOR): Recién hacia abajo explota en su cara "${input.productName}" como la solución definitiva del mundo imposible de ignorar, revelando que al solicitarla se lleva "${safeEntryName}" GRATIS.
 
-REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
+REGLA INQUEBRANTABLE DE TONO, LENGUAJE Y CALIDAD GPT-2.6:
+- CERO ROGAR COMPRA: Nunca supliques ni grites venta ("¡Comprá ya!", "No te pierdas"). Cuando el cliente siente que le quieren vender, huye. El diseño y los textos deben hacer que el usuario desee solicitarlo por estatus y convicción propia.
 - JAMÁS escribas la palabra "tripwire", "gancho trampa" ni jerga técnica. Refiérete siempre al artículo de entrada por su nombre real: "${safeEntryName}".
 - Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
-- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña flagship internacional adaptada a Paraguay), iluminación de estudio dramática y limpia, fotografía comercial realista de alto impacto visual y tipografía española nítida integrando la oferta sin parecer folleto barato, ocupación total borde a borde (edge-to-edge 3:4 sin marcos ni bordes blancos), CERO estrellas ni stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`;
+- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña flagship internacional adaptada a Paraguay), iluminación de estudio dramática y limpia, fotografía comercial realista de alto impacto visual y tipografía española nítida, ocupación total borde a borde (edge-to-edge 3:4 sin marcos ni bordes blancos), CERO estrellas ni stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`;
 
   const promptUserContent = isPrincipalOnly
     ? `PRODUCTO GANADOR ÚNICO (PÁGINA DIRECTA SIN ARTÍCULO SECUNDARIO):
@@ -643,23 +650,23 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   "sheetPrompts": [
     {
       "role": "hero_presentation",
-      "title": "Presentación de oferta y producto ganador",
-      "caption": "Pie corto sobrio",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero composition showcasing both '${safeEntryName}' (entry option at Gs. ${formatParaguayGs(entryPrice)}) and flagship '${input.productName}' (${cleanAngleInput || 'solución completa'}) in ${visualDirectionInput || 'a modern upscale setting with dramatic commercial lighting'}, sharp editorial typography reading clearly in Spanish, refined badge 'Pago al Recibir · Paraguay', edge-to-edge zero white border."
+      "title": "Oferta de entrada ${safeEntryName}",
+      "caption": "Primera impresión exclusiva del artículo de entrada",
+      "imagePrompt": "Flagship full-bleed 3:4 commercial hero poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: CRITICAL COMPOSITION RULE — show and mention EXCLUSIVELY '${safeEntryName}' at Gs. ${formatParaguayGs(entryPrice)}. DO NOT depict, name, or spoil '${input.productName}' anywhere on this first poster. DO NOT write 'Envío Gratis' or any delivery charge. Studio-lit luxury macro product photography in ${visualDirectionInput || 'a moody architectural editorial lighting setup'}, effortless magnetic appeal and calm non-needy authority headline so the visitor wants to request it immediately without feeling sold to, edge-to-edge artwork with zero white frame."
     },
     {
       "role": "comparison_need",
-      "title": "Comparativa clara de ambas opciones",
-      "caption": "Comparación racional y visual",
-      "imagePrompt": "Flagship full-bleed 3:4 editorial comparison sheet for openai/gpt-image-2.6-sunburst in crisp Spanish: clean visual split contrasting Option 1 Solo '${safeEntryName}' (Gs. ${formatParaguayGs(entryPrice)} · Artículo individual) vs Option 2 Paquete Completo '${input.productName}' (Gs. ${formatParaguayGs(price1)} con '${safeEntryName}' DE REGALO + Envío Gratis), ultra sharp Spanish labels, luxury commercial studio photography, zero cartoon icons, edge-to-edge."
+      "title": "El clic mental: de lo básico a la solución definitiva",
+      "caption": "Calentamiento progresivo hacia el nivel superior",
+      "imagePrompt": "Flagship full-bleed 3:4 editorial storytelling poster for openai/gpt-image-2.6-sunburst in crisp Spanish: gradual desire-warming transition starting from using '${safeEntryName}' alone and smoothly exposing the incomplete everyday gap that sparks a powerful mental click ('cuando probás lo básico, descubrís lo que realmente te falta'), teasing the superior complete transformation of '${input.productName}' in ${visualDirectionInput || 'dramatic high-contrast studio lighting'}, calm authoritative typography that never begs to buy, zero cartoon icons, edge-to-edge."
     }${
       requestedSheetCount === 3 || sheetCountMode === 'auto'
         ? `,
     {
       "role": "social_trust_specs",
-      "title": "Garantía y contenido real en caja",
-      "caption": "Lo que recibís en tu puerta",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial studio poster for openai/gpt-image-2.6-sunburst in crisp Spanish: crisp tabletop presentation showing exact contents of '${input.productName}' alongside '${safeEntryName}', clean verified seal 'Garantía Escrita 7 Días · Pagás en Efectivo o QR al Recibir', luxury lighting, edge-to-edge."
+      "title": "La Solución Definitiva: ${input.productName} + ${safeEntryName} GRATIS",
+      "caption": "Explosión de la oferta principal congruente",
+      "imagePrompt": "Flagship full-bleed 3:4 explosive climax poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: breathtaking center-stage reveal of '${input.productName}' (${cleanAngleInput || 'solución definitiva'}) presented as the undisputed ultimate solution in its category (Gs. ${formatParaguayGs(price1)}), featuring crisp editorial reverse-psychology reveal 'Solicitando ${input.productName} llevás ${safeEntryName} TOTALMENTE DE REGALO + Envío Gratis · Pagás al Recibir', irresistible status and desire without begging, luxury studio lighting, edge-to-edge."
     }`
         : ''
     }

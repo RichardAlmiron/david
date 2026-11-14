@@ -782,13 +782,13 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       };
     }
     return {
-      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire',
+      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (3 Actos Progresivos)',
       whatYouDo:
-        'La IA prepara tu Página Tripwire respetando la psicología inversa: el cliente siente que llegó por el gancho económico (sin promesa de envío gratis) y descubre el Producto Principal con el gancho gratis + envío gratis.',
+        'La IA arma tu página en 3 actos sin rogar compra: arriba 100% Tripwire (cero spoiler del principal), al medio va calentando hasta dar un clic mental, y abajo explota el Producto Principal como la solución definitiva con el Tripwire gratis.',
       whyItMatters:
-        'Si el comprador solo pide el Tripwire en esta página, tu sistema de mensajes lo ataca por WhatsApp usando el Envío Gratis como llave de cierre y recién le informa el costo del envío al final del evento si mantiene solo el gancho.',
+        'Así el usuario pide el producto por puro deseo propio (nosotros nunca gritamos venta). Y si en la página solo solicita el Tripwire, WhatsApp usa el Envío Gratis como llave en el chat y recién al final del evento le informa el costo del envío si sigue solo con el gancho.',
       unlockHint:
-        'Tocá "Lanzar Página Tripwire" para generar la página visual completa y conectarla a tus campañas.'
+        'Tocá "Lanzar Página Tripwire" para generar la página progresiva en GPT-2.6 y conectarla a tus campañas.'
     };
   }, [
     wizardStep,
@@ -814,8 +814,8 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       ]
     : [
         'Recabando ficha de tu Oferta Gancho y Producto Principal...',
-        'Armando psicología inversa: Tripwire de entrada sin envío gratis → Principal con Gancho gratis...',
-        'Preparando ángulos y regla secreta del Envío Gratis en el chat...'
+        'Diseñando Acto 1 (100% Tripwire arriba) → Acto 2 (Calentamiento) → Acto 3 (Explosión Principal)...',
+        'Ajustando tono magnético sin rogar compra y llave secreta de Envío Gratis en el chat...'
       ];
 
   return (
@@ -999,36 +999,36 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                 </button>
               </div>
 
-              {/* Desglose claro de la lógica Tripwire (psicología inversa + clave de envío gratis en el chat) */}
+              {/* Desglose claro de la lógica Tripwire (3 actos progresivos + tono sin rogar + llave del envío en chat) */}
               <div
                 data-testid="quick-creator-tripwire-logic-guide"
                 className="p-5 sm:p-6 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-4"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/10 pb-3">
                   <h3 className="text-xs sm:text-sm font-bold text-white">
-                    Cómo funciona la lógica Tripwire (y por qué el Producto Principal va adentro)
+                    Cómo crea tu página el algoritmo Tripwire (sin rogar compra y de arriba hacia abajo)
                   </h3>
                   <span className="text-[11px] font-mono text-[#e5c88b]">
-                    Estándar = directo · Tripwire = psicología inversa + chat
+                    Arriba: 100% Tripwire · Abajo: Explosión Principal
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs leading-relaxed">
                   <div className="space-y-1.5">
                     <div className="font-semibold text-white">
-                      1. Oferta gancho que rompe la fricción
+                      1. Arriba (1ra mitad): 100% Tripwire sin spoiler
                     </div>
                     <p className="text-zinc-400">
-                      El Tripwire es un artículo de bajo valor tan accesible que el usuario no piensa dos veces en interactuar y presionar el botón de adquirir o solicitar. Siente que entró exactamente por la oferta del anuncio.
+                      Cuando el cliente viene del anuncio Tripwire y aterriza en la página, NO ve el Producto Principal arriba. Ve una oferta de bajo valor tan atractiva que quiere tocar «Solicitar» sin pensarlo dos veces, con cero tono de vendedor rogando.
                     </p>
                   </div>
 
                   <div className="space-y-1.5">
                     <div className="font-semibold text-white">
-                      2. Producto Principal con psicología inversa
+                      2. Al medio y abajo: Calentamiento → Explosión
                     </div>
                     <p className="text-zinc-400">
-                      Adentro de esa misma página le mostramos tu Producto Principal con psicología inversa para que descubra que llevando el Producto Principal se lleva ese Tripwire totalmente GRATIS.
+                      Mientras baja, la página va calentando de a poco y provocando el clic mental hasta que abajo explota el Producto Principal como la solución definitiva del mundo: el cliente grita de deseo por pedirlo y se lleva gratis el Tripwire que vino a buscar.
                     </p>
                   </div>
 
@@ -1037,7 +1037,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                       3. Envío Gratis es la llave secreta del chat
                     </div>
                     <p className="text-zinc-400">
-                      En la oferta Tripwire NO se promete envío gratuito. Si el usuario solo pide el Tripwire en la página, lo atacamos por mensajes en el chat ofreciéndole el Producto Principal con Envío Gratis; y si sigue firme con solo el Tripwire hasta el cierre del evento, recién al final se le informa que paga el envío.
+                      En la oferta Tripwire NO se promete envío gratuito. Si pide solo el Tripwire, lo atacamos por WhatsApp usando el Envío Gratis como llave para subirlo al Producto Principal; y si sigue firme solo con el Tripwire hasta el final del evento, recién ahí se le dice que paga el envío.
                     </p>
                   </div>
                 </div>

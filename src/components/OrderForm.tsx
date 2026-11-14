@@ -95,8 +95,12 @@ function tileFloatToLatLng(xFloat: number, yFloat: number, zoom: number) {
   return { lat, lng };
 }
 
-export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
-  expressDirectMode = false
+export const OrderForm: React.FC<{
+  expressDirectMode?: boolean;
+  hidePrincipalUpgradeHint?: boolean;
+}> = ({
+  expressDirectMode = false,
+  hidePrincipalUpgradeHint = false
 }) => {
   const {
     config,
@@ -1121,7 +1125,7 @@ export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
           )}
 
           {/* ═══ AVISO TRANSPARENTE DE OPCIÓN ELEGIDA (SOLO COMPLEMENTO VS EQUIPO COMPLETO) ═══ */}
-          {!orderComplete && hasEntryHook && entryOfferCfg && (
+          {!orderComplete && hasEntryHook && entryOfferCfg && !hidePrincipalUpgradeHint && (
             <div
               data-testid="orderform-dual-path-clarification"
               className={`rounded-2xl border-2 p-3.5 text-xs sm:text-sm space-y-2 ${
