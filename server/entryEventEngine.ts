@@ -39,6 +39,11 @@ export interface EntryEventState {
   pollCreatorJid?: string;
   pollVoterJid?: string;
   pollOptionHashes?: string[];
+  pollHistory?: Array<{
+    pollMsgId: string;
+    pollEncKeyBase64: string;
+    pollCreatorJid?: string;
+  }>;
   selectedOption?: 'option_1_instant' | 'option_2_waitlist';
 }
 
@@ -180,7 +185,8 @@ export function buildEntryAttemptSpeech(params: {
       `En cambio, si decidís llevar hoy el ${principalName} con descuento preferencial a ${params.state.instantUpgradePriceGs.toLocaleString('es-PY')} guaraníes, ` +
       `el ${params.state.entryProductName} te va totalmente DE REGALO y activás el ENVÍO GRATIS directo hasta tu puerta. ` +
       `Y si hoy preferís pensarlo tranquilo, también podés anotarte en el evento privado de ${params.state.slotsTotal} cupos que dura ${durationHours} horas. ` +
-      `Abajo te dejo una encuesta de un toque para que elijas lo que te quede más cómodo.`
+      `Importante: no hace falta responder escribiendo palabras ni con notas de voz, porque nuestro sistema informático recibe y registra tu decisión únicamente tocando uno de los dos botones de la encuesta de acá abajo: ` +
+      `el botón uno para llevarte el paquete completo con regalo y envío gratis, o el botón dos para anotarte en la lista especial.`
     );
   }
 
@@ -188,7 +194,7 @@ export function buildEntryAttemptSpeech(params: {
     `Hola de nuevo ${firstName}, un saludo cortito para no molestarte en tu horario. ` +
     `Todavía tenés activa la opción de aprovechar el ${principalName} completo con envío gratis y el ${params.state.entryProductName} de regalo, ` +
     `o reservar tu lugar en los ${params.state.slotsTotal} cupos del evento antes de cerrar la lista. ` +
-    `Podés tocar directamente la opción en la encuesta acá abajo cuando tengas un minutito.`
+    `Acordate que no hace falta enviar palabras ni audios: nuestro sistema informático toma tu confirmación únicamente tocando el botón uno o el botón dos en la encuesta de acá abajo.`
   );
 }
 
@@ -426,6 +432,8 @@ export function buildEntryEventBrainPrompt(params: {
   matchedProduct: any;
   state: EntryEventState;
   contextoIA: string;
+  incomingChannelLabel?: 'audio' | 'texto';
+  wasUnclearAudio?: boolean;
 }): string {
   const cfg = resolveEntryConfig(params.matchedProduct);
   const principalName = cfg?.principalName || String(params.matchedProduct?.nombre || 'Paquete Principal');
@@ -437,33 +445,43 @@ export function buildEntryEventBrainPrompt(params: {
       ? params.state.waitlistPriceGs
       : params.state.instantUpgradePriceGs;
   const totalIndividualWithDelivery = params.state.entryPriceGs + params.state.deliveryFeeGs;
+  const channelDesc =
+    params.incomingChannelLabel === 'audio' ? 'una nota de voz (audio)' : 'un mensaje de texto escrito';
+  const isWaitlistAlready = params.state.stage === 'waitlist_enrolled';
 
-  return `Sos un asesor comercial humano real de Paraguay (hablás con "vos", "tenés", "podés", cálido y respetuoso). Tu respuesta en "reply" se convierte directamente a NOTA DE VOZ (TTS), así que está PROHIBIDO usar emojis, asteriscos, enlaces URL o abreviaturas raras. Escribí todos los montos en letras con la palabra "guaraníes" y jamás digas la palabra prohibida "tripwire".
+  return `Sos un asesor comercial humano real de Paraguay (hablás con "vos", "tenés", "podés", muy inteligente, cálido, empático y persuasivo). Tu respuesta en "reply" se convierte directamente a NOTA DE VOZ (TTS), así que está PROHIBIDO usar emojis, asteriscos, viñetas, enlaces URL o abreviaturas raras. Escribí todos los montos en letras con la palabra "guaraníes" y jamás digas la palabra prohibida "tripwire".
 
-SITUACIÓN EXACTA DEL CLIENTE (MUY IMPORTANTE):
+SITUACIÓN EXACTA DEL CLIENTE (CRÍTICO):
 - Este cliente (${params.customerFirstName || 'cliente'}) llenó el formulario eligiendo ÚNICAMENTE el artículo de entrada: "${entryName}" (${entryDesc}) a ${params.state.entryPriceGs.toLocaleString('es-PY')} guaraníes.
 - Todavía NO compró el Paquete Maestro ("${principalName}").
-- Etapa actual del evento: "${params.state.stage}" (cupos actuales: ${params.state.slotsTaken} de ${params.state.slotsTotal}, evento de ${durationHours} horas).
-- Condición real del artículo individual: llevar solo "${entryName}" NO tiene envío gratis; el delivery individual cuesta ${params.state.deliveryFeeGs.toLocaleString('es-PY')} guaraníes (total individual al recibir: ${totalIndividualWithDelivery.toLocaleString('es-PY')} guaraníes), y su despacho individual sale recién al cerrar la ventana de ${durationHours} horas si no eligió el paquete completo.
-- PROPUESTA ESTRELLA DEL PAQUETE MAESTRO: Si decide llevar hoy el "${principalName}" completo a ${upgradePrice.toLocaleString('es-PY')} guaraníes, el "${entryName}" le sale TOTALMENTE GRATIS DE REGALO y activa ENVÍO GRATIS en todo Paraguay directo a su puerta.
+- Etapa actual: "${params.state.stage}" (cupos actuales: ${params.state.slotsTaken} de ${params.state.slotsTotal}, evento de ${durationHours} horas).
+- Condición real del artículo individual: llevar solo "${entryName}" NO tiene envío gratis; el delivery individual cuesta ${params.state.deliveryFeeGs.toLocaleString('es-PY')} guaraníes (total individual al recibir: ${totalIndividualWithDelivery.toLocaleString('es-PY')} guaraníes), y su despacho individual sale recién al cerrar la ventana de ${durationHours} horas si no elige el paquete completo.
+- PROPUESTA ESTRELLA DEL PAQUETE MAESTRO: Si decide llevar hoy el "${principalName}" completo a ${upgradePrice.toLocaleString('es-PY')} guaraníes, el "${entryName}" le va TOTALMENTE GRATIS DE REGALO y activa ENVÍO GRATIS en todo Paraguay directo a su puerta.
 
-CONOCIMIENTO COMPLETO DEL PRODUCTO PRINCIPAL ("${principalName}"):
+LO QUE ACABA DE PASAR:
+- En lugar de tocar uno de los botones de la encuesta de WhatsApp, el cliente decidió enviar ${channelDesc}.${
+    params.wasUnclearAudio
+      ? ' Además, ese audio no se escuchó con claridad.'
+      : ''
+  }
+
+CONOCIMIENTO COMPLETO DEL PRODUCTO PRINCIPAL ("${principalName}") Y DEL ARTÍCULO DE ENTRADA ("${entryName}"):
 ${params.contextoIA}
 
-TU OBJETIVO SEGÚN LO QUE RESPONDA EL CLIENTE:
-1. "UPGRADE_PRINCIPAL": Si el cliente acepta claramente o dice que prefiere llevar el "${principalName}" / el paquete completo / el grande / aprovechar el regalo y envío gratis (aunque diga "dale quiero el completo", "sí pasame al grande", "mejor llevo el proyector", etc.):
-   - Poné "intent": "UPGRADE_PRINCIPAL" y en "reply" felicitalo con calidez, confirmále el cambio a "${principalName}" con "${entryName}" de regalo y envío gratis por ${upgradePrice.toLocaleString('es-PY')} guaraníes al recibir, y decile que acá abajo le pasás su tarjeta actualizada para confirmar con la palabra correcto.
-2. "ENROLL_WAITLIST": Si prefiere anotarse a pensar / esperar / anotarse en la lista de ${params.state.slotsTotal} cupos del evento:
-   - Poné "intent": "ENROLL_WAITLIST" y en "reply" confirmále su lugar en la lista (${params.state.slotsTaken + 1} de ${params.state.slotsTotal}) avisándole que cada dos horas le escribimos por si decide aprovecharlo.
-3. "KEEP_OR_QUESTION": Si hace preguntas sobre "${entryName}" o sobre "${principalName}", pregunta por qué se cobra delivery en el artículo solo, duda del precio o pide confirmar solo el artículo de entrada:
-   - Poné "intent": "KEEP_OR_QUESTION".
-   - Respondé con total honestidad y calidez su duda concreta usando el conocimiento de ambos productos.
-   - Recordále con tacto que el envío individual de "${entryName}" cuesta ${params.state.deliveryFeeGs.toLocaleString('es-PY')} guaraníes (total ${totalIndividualWithDelivery.toLocaleString('es-PY')} guaraníes), mientras que con "${principalName}" a ${upgradePrice.toLocaleString('es-PY')} guaraníes ahorra todo el envío y se lleva "${entryName}" de regalo; invitále a tocar la opción 1 o 2 en la encuesta de arriba o decinos si quiere cambiar al paquete completo. Si insiste en esperar solo por "${entryName}", aseguralo con respeto que apenas cierre la ventana de ${durationHours} horas queda listo su despacho individual sin problema.
+REGLA OBLIGATORIA DE RESPUESTA INTELIGENTE + INSTRUCCIÓN DE BOTONES DE ENCUESTA:
+1. Primero respondé de forma 100% inteligente, humana y precisa a lo que preguntó, comentó o pidió el cliente en su audio o texto (aclará dudas de funcionamiento, garantía, pago contra entrega, diferencia entre ambos productos, o costo de delivery individual frente al envío gratis del paquete completo; si mandó un audio poco claro, disculpate amablemente diciendo que no se escuchó bien).
+2. ${
+    isWaitlistAlready
+      ? `Como ya está anotado en el cupo ${params.state.slotsTaken} de ${params.state.slotsTotal} de la lista especial, confirmale tranquilo que su lugar sigue reservado y explicále con claridad que si quiere aprovechar ahora el "${principalName}" con "${entryName}" de regalo y envío gratis (o si eligió mediante palabras/audio), nuestro sistema informático recibe y procesa esa confirmación ÚNICAMENTE tocando el botón uno de la encuesta que le volvemos a dejar acá abajo.`
+      : `INCLUSO si en su audio o texto el cliente escribió o dijo "quiero el completo", "sí", "1", "2", "anotame" o "solo quiero el primero", NO des por registrada la elección por texto ni por audio. Explicále con mucha amabilidad pero con total claridad que este paso no funciona mandando palabras escritas ni notas de voz, porque nuestro sistema informático recibe y procesa su respuesta ÚNICAMENTE eligiendo y tocando uno de los dos botones de la encuesta que le volvemos a dejar acá abajo:`
+  }
+   - Botón uno: llevar "${principalName}" completo a ${upgradePrice.toLocaleString('es-PY')} guaraníes con "${entryName}" gratis y envío gratis.
+   - Botón dos: anotarse en la lista de ${params.state.slotsTotal} cupos del evento para recibir las novedades especiales.
+3. Jamás digas "decime por acá" ni "escribime tu opción"; siempre guiá a tocar el botón uno o el botón dos de la encuesta de acá abajo.
 
 Devolvé EXCLUSIVAMENTE JSON válido:
 {
-  "intent": "UPGRADE_PRINCIPAL" | "ENROLL_WAITLIST" | "KEEP_OR_QUESTION",
-  "reply": "Audio natural paraguayo de 2 a 4 oraciones claras sin emojis ni URLs."
+  "reply": "Audio natural paraguayo de 3 a 4 oraciones claras, respondiendo su consulta e instruyendo con precisión que nuestro sistema informático solo registra la respuesta eligiendo el botón uno o el botón dos de la encuesta que aparece justo abajo."
 }`;
 }
 
@@ -471,6 +489,8 @@ export function buildEntryEventConversationalFallback(params: {
   customerFirstName: string;
   matchedProduct: any;
   state: EntryEventState;
+  isFromAudio?: boolean;
+  wasUnclearAudio?: boolean;
 }): string {
   const cfg = resolveEntryConfig(params.matchedProduct);
   const principalName = cfg?.principalName || String(params.matchedProduct?.nombre || 'el paquete completo');
@@ -480,14 +500,29 @@ export function buildEntryEventConversationalFallback(params: {
       ? params.state.waitlistPriceGs
       : params.state.instantUpgradePriceGs;
   const totalWithDelivery = params.state.entryPriceGs + params.state.deliveryFeeGs;
+  const introChannel = params.wasUnclearAudio
+    ? `Hola ${firstName}, recibí tu audio pero lamentablemente no se escuchó con claridad.`
+    : params.isFromAudio
+      ? `Escuché tu audio, ${firstName}, y te aclaro al instante cómo funciona.`
+      : `Leí tu mensaje, ${firstName}, y te aclaro al instante cómo funciona.`;
+
+  if (params.state.stage === 'waitlist_enrolled') {
+    return (
+      `${introChannel} Tu lugar sigue reservado en la lista de ${params.state.slotsTotal} cupos ` +
+      `para el evento de ${params.state.entryProductName}. ` +
+      `Acordate que si decidís pasar ya mismo a ${principalName} completo a ${upgradePrice.toLocaleString('es-PY')} guaraníes ` +
+      `con ${params.state.entryProductName} gratis y envío sin costo, no es mandando palabras ni audios: ` +
+      `nuestro sistema informático registra esa confirmación únicamente tocando el botón uno en la encuesta que te dejo acá abajo.`
+    );
+  }
 
   return (
-    `Con gusto te aclaro ${firstName}. Ahora mismo tenés reservado únicamente ${params.state.entryProductName} a ` +
+    `${introChannel} Tenés reservado únicamente ${params.state.entryProductName} a ` +
     `${params.state.entryPriceGs.toLocaleString('es-PY')} guaraníes más ${params.state.deliveryFeeGs.toLocaleString('es-PY')} ` +
-    `guaraníes de delivery al finalizar el evento, sumando ${totalWithDelivery.toLocaleString('es-PY')} guaraníes al recibir. ` +
-    `Pero si preferís aprovechar hoy ${principalName} completo a ${upgradePrice.toLocaleString('es-PY')} guaraníes, ` +
-    `el ${params.state.entryProductName} te va totalmente gratis de regalo y el envío es sin costo hasta tu casa. ` +
-    `Podés tocar la primera o segunda opción en la encuesta de arriba, o simplemente decime acá si querés cambiar al paquete completo.`
+    `guaraníes de delivery al cerrar el evento, total ${totalWithDelivery.toLocaleString('es-PY')} guaraníes al recibir, ` +
+    `o podés llevar hoy ${principalName} completo a ${upgradePrice.toLocaleString('es-PY')} guaraníes con ` +
+    `${params.state.entryProductName} gratis y envío gratis. ` +
+    `Para avanzar no hace falta mandar palabras ni notas de voz, porque nuestro sistema informático recibe tu respuesta únicamente eligiendo el botón uno o el botón dos en la encuesta que te dejo justo acá abajo.`
   );
 }
 

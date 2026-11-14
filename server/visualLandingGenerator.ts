@@ -8,6 +8,7 @@ import type {
 } from '../src/types';
 import { formatParaguayGs } from './metaCommentsEngine';
 import { uploadImageToCloudinary } from './cloudinaryStore';
+import { preRenderOrderFormBannersForProduct } from './orderFormBannerRenderer';
 
 export const VISUAL_CREATOR_TEXT_MODEL = 'openai/gpt-4o';
 export const VISUAL_CREATOR_IMAGE_MODEL = 'openai/gpt-image-2.6-sunburst';
@@ -1721,6 +1722,8 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       }
     }
   };
+
+  await preRenderOrderFormBannersForProduct(product).catch(() => {});
 
   return {
     product,

@@ -61,7 +61,6 @@ import {
   buildEntryAttemptSpeech,
   buildWaitlistUpdateSpeech,
   buildFinalDispatchSpeech,
-  classifyEntryTextIntent,
   decodeEntryPollVoteSelection,
   evaluateEntryEventTick,
   applyEntryChoiceToOrder,
@@ -2800,6 +2799,119 @@ async function resolveEntryCardImageBuffer(
   return null;
 }
 
+async function sendNativeEntryPollViaSocket(params: {
+  sock: any;
+  activeSession: { id: string; connectedPhone?: string | null; sock?: any; [key: string]: any };
+  cleanPhone: string;
+  jid: string;
+  ord: any;
+  matchedProduct: any;
+}): Promise<boolean> {
+  const { sock, activeSession, cleanPhone, jid, ord, matchedProduct } = params;
+  if (!sock || !ord?.tripwireEventState) return false;
+  const pollDef = buildEntryPollDefinition(matchedProduct, ord.tripwireEventState);
+  if (!pollDef) return false;
+
+  try {
+    const prePollId = generateMessageIDV2(sock.user?.id);
+    recentlySentMsgIds.add(prePollId);
+    setTimeout(() => recentlySentMsgIds.delete(prePollId), 60_000);
+    const sentPoll = await sock.sendMessage(
+      jid,
+      {
+        poll: {
+          name: pollDef.question,
+          values: pollDef.options,
+          selectableCount: 1
+        }
+      } as any,
+      { messageId: prePollId }
+    );
+    const pId = sentPoll?.key?.id || prePollId;
+    recentlySentMsgIds.add(pId);
+    setTimeout(() => recentlySentMsgIds.delete(pId), 60_000);
+    if (sentPoll?.message) {
+      recordSentProtoMessage(pId, sentPoll.message);
+    }
+    const secretBytes = sentPoll?.message?.messageContextInfo?.messageSecret;
+    const secretB64 = secretBytes ? Buffer.from(secretBytes).toString('base64') : '';
+    const creatorJid =
+      (sock.user?.id ? `${String(sock.user.id).split(':')[0].split('@')[0]}@s.whatsapp.net` : '') ||
+      (activeSession.connectedPhone ? `${activeSession.connectedPhone}@s.whatsapp.net` : '');
+
+    ord.tripwireEventState.pollMsgId = pId;
+    if (secretB64) ord.tripwireEventState.pollEncKeyBase64 = secretB64;
+    if (creatorJid) ord.tripwireEventState.pollCreatorJid = creatorJid;
+    ord.tripwireEventState.pollOptionHashes = pollDef.optionHashes;
+    if (secretB64) {
+      const prevHist = Array.isArray(ord.tripwireEventState.pollHistory)
+        ? ord.tripwireEventState.pollHistory.filter((h: any) => h?.pollMsgId && h.pollMsgId !== pId)
+        : [];
+      ord.tripwireEventState.pollHistory = [
+        ...prevHist.slice(-7),
+        creatorJid
+          ? { pollMsgId: pId, pollEncKeyBase64: secretB64, pollCreatorJid: creatorJid }
+          : { pollMsgId: pId, pollEncKeyBase64: secretB64 }
+      ];
+    }
+
+    appendChatMessage(cleanPhone, {
+      id: pId,
+      sender: 'ai',
+      senderName: '📊 Encuesta Interactiva 1-Toque',
+      text: `${pollDef.question}\n• ${pollDef.options[0]}\n• ${pollDef.options[1]}`,
+      status: 'sent',
+      orderId: ord.reservaid,
+      sessionId: activeSession.id
+    });
+    return true;
+  } catch (pollErr: any) {
+    console.warn('[EntryEvent Poll Send Error]:', pollErr?.message || pollErr);
+    return false;
+  }
+}
+
+async function reDispatchEntryPollForOrder(
+  cleanPhone: string,
+  orderId?: string,
+  preferredSessionId?: string
+): Promise<void> {
+  const activeSession = pickConnectedSession(preferredSessionId);
+  if (!activeSession?.sock) return;
+  const pedidos = loadPedidos();
+  const targetOrd =
+    (orderId && pedidos.find((p) => p.reservaid === orderId)) ||
+    findActiveOrderForPhone(cleanPhone);
+  if (
+    !targetOrd ||
+    !targetOrd.tripwireEventState ||
+    targetOrd.tripwireEventState.stage === 'instant_upgraded' ||
+    targetOrd.tripwireEventState.stage === 'final_dispatched'
+  ) {
+    return;
+  }
+  const matchedProduct = resolveMatchedProductPageForOrder(targetOrd);
+  if (!resolveEntryConfig(matchedProduct)) return;
+  const jid = resolveOutboundWhatsAppJid(cleanPhone);
+  await withPhoneOutboundLock(cleanPhone, async () => {
+    const sock = activeSession.sock;
+    if (!sock) return;
+    await activeSession.e2eeController?.ensureOutboundSessionReady(jid, cleanPhone).catch(() => {});
+    const sent = await sendNativeEntryPollViaSocket({
+      sock,
+      activeSession,
+      cleanPhone,
+      jid,
+      ord: targetOrd,
+      matchedProduct
+    });
+    if (sent) {
+      savePedidos(pedidos);
+      syncOrderUpdateToCloud(targetOrd).catch(() => {});
+    }
+  });
+}
+
 async function dispatchEntryEventTurn(params: {
   cleanPhone: string;
   ord: any;
@@ -2823,10 +2935,7 @@ async function dispatchEntryEventTurn(params: {
   const finalAudioBuf = mixed.audioBuffer || tts.audioBuffer;
   const finalAudioDataUrl = mixed.audioDataUrl || tts.audioDataUrl;
   const cardImg = includeCardImage ? await resolveEntryCardImageBuffer(matchedProduct) : null;
-  const pollDef =
-    includePoll && ord?.tripwireEventState
-      ? buildEntryPollDefinition(matchedProduct, ord.tripwireEventState)
-      : null;
+  const shouldSendPoll = Boolean(includePoll && ord?.tripwireEventState);
 
   const jid = resolveOutboundWhatsAppJid(cleanPhone);
   activeAiOutboundLockByPhone.set(cleanPhone, Date.now() + 25_000);
@@ -2923,52 +3032,16 @@ async function dispatchEntryEventTurn(params: {
     }
 
     // 3. Encuesta Nativa WhatsApp 1-Toque (Poll)
-    if (pollDef && ord?.tripwireEventState) {
+    if (shouldSendPoll) {
       await new Promise((r) => setTimeout(r, 900));
-      try {
-        const prePollId = generateMessageIDV2(sock.user?.id);
-        recentlySentMsgIds.add(prePollId);
-        setTimeout(() => recentlySentMsgIds.delete(prePollId), 60_000);
-        const sentPoll = await sock.sendMessage(
-          jid,
-          {
-            poll: {
-              name: pollDef.question,
-              values: pollDef.options,
-              selectableCount: 1
-            }
-          } as any,
-          { messageId: prePollId }
-        );
-        const pId = sentPoll?.key?.id || prePollId;
-        recentlySentMsgIds.add(pId);
-        setTimeout(() => recentlySentMsgIds.delete(pId), 60_000);
-        if (sentPoll?.message) {
-          recordSentProtoMessage(pId, sentPoll.message);
-        }
-        const secretBytes = sentPoll?.message?.messageContextInfo?.messageSecret;
-        const secretB64 = secretBytes ? Buffer.from(secretBytes).toString('base64') : '';
-        const creatorJid =
-          (sock.user?.id ? `${String(sock.user.id).split(':')[0].split('@')[0]}@s.whatsapp.net` : '') ||
-          (activeSession.connectedPhone ? `${activeSession.connectedPhone}@s.whatsapp.net` : '');
-
-        ord.tripwireEventState.pollMsgId = pId;
-        if (secretB64) ord.tripwireEventState.pollEncKeyBase64 = secretB64;
-        if (creatorJid) ord.tripwireEventState.pollCreatorJid = creatorJid;
-        ord.tripwireEventState.pollOptionHashes = pollDef.optionHashes;
-
-        appendChatMessage(cleanPhone, {
-          id: pId,
-          sender: 'ai',
-          senderName: '📊 Encuesta Interactiva 1-Toque',
-          text: `${pollDef.question}\n• ${pollDef.options[0]}\n• ${pollDef.options[1]}`,
-          status: 'sent',
-          orderId: ord.reservaid,
-          sessionId: activeSession.id
-        });
-      } catch (pollErr: any) {
-        console.warn('[EntryEvent Poll Send Error]:', pollErr?.message || pollErr);
-      }
+      await sendNativeEntryPollViaSocket({
+        sock,
+        activeSession,
+        cleanPhone,
+        jid,
+        ord,
+        matchedProduct
+      });
     }
   });
 
@@ -5686,7 +5759,8 @@ export async function triggerAiConfirmationForOrder(
       secondaryAudioReply,
       locationTextConfirmation,
       convStep,
-      regenerateWelcomeImage
+      regenerateWelcomeImage,
+      reSendEntryPoll
     } = await generateSmartAiReply(
       cleanPhone,
       unansweredClientMsg.text,
@@ -5715,6 +5789,10 @@ export async function triggerAiConfirmationForOrder(
         regenerateWelcomeImage ? 'stage1_welcome' : undefined,
         Boolean(regenerateWelcomeImage)
       );
+      if (reSendEntryPoll && matchedOrder?.reservaid) {
+        await new Promise((r) => setTimeout(r, 1100));
+        await reDispatchEntryPollForOrder(cleanPhone, matchedOrder.reservaid);
+      }
       return;
     }
   }
@@ -6415,7 +6493,8 @@ async function executeStartOrAdvanceVoiceCallSerial(
       locationTextConfirmation,
       matchedOrder: updatedOrder,
       convStep,
-      regenerateWelcomeImage
+      regenerateWelcomeImage,
+      reSendEntryPoll
     } = await generateSmartAiReply(
       cleanPhone,
       customerSpokenText.trim(),
@@ -6450,6 +6529,11 @@ async function executeStartOrAdvanceVoiceCallSerial(
       regenerateWelcomeImage ? 'stage1_welcome' : undefined,
       Boolean(regenerateWelcomeImage)
     );
+
+    if (reSendEntryPoll && updatedOrder?.reservaid) {
+      await new Promise((r) => setTimeout(r, 1100));
+      await reDispatchEntryPollForOrder(cleanPhone, updatedOrder.reservaid);
+    }
 
     return {
       reply,
@@ -6706,6 +6790,7 @@ export async function generateSmartAiReply(
   error?: string;
   forceAudioReply?: boolean;
   regenerateWelcomeImage?: boolean;
+  reSendEntryPoll?: boolean;
 }> {
   return generateContextualAiReply(phone, incomingText, isFromAudio);
 }
@@ -7669,6 +7754,7 @@ export async function generateContextualAiReply(
   error?: string;
   forceAudioReply?: boolean;
   regenerateWelcomeImage?: boolean;
+  reSendEntryPoll?: boolean;
 }> {
   const pedidos = loadPedidos();
   const activeCandidate = findActiveOrderForPhone(phone);
@@ -7937,9 +8023,10 @@ export async function generateContextualAiReply(
 
   // =========================================================================
   // RAMA CEREBRO EXCLUSIVA PARA PEDIDOS DE SOLO ARTÍCULO DE ENTRADA (entry_only)
-  // Mientras no haya pasado a Paquete Maestro ni haya cerrado la ventana final,
-  // el Cerebro entiende 100% qué eligió el cliente, responde preguntas de ambos
-  // productos, persuade al Paquete Maestro y jamás confirma erróneamente con "CORRECTO".
+  // Si el cliente decidió NO tocar un botón de la encuesta y mandó audio o texto,
+  // el Cerebro responde con inteligencia su consulta/mensaje y le instruye con total
+  // claridad que nuestro sistema informático recibe su decisión ÚNICAMENTE tocando
+  // el botón 1 o el botón 2 en la encuesta (que volvemos a dejar justo abajo).
   // =========================================================================
   const matchedProdEarly = resolveMatchedProductPageForOrder(matchedOrder);
   const entryCfgEarly = resolveEntryConfig(matchedProdEarly);
@@ -7957,17 +8044,19 @@ export async function generateContextualAiReply(
     const firstNameEntry = getNaturalFirstName(rawCustomerNameEntry);
     const displayFirstEntry =
       firstNameEntry && firstNameEntry !== 'qué tal' ? firstNameEntry : 'cliente';
+    const incomingChannelLabel: 'audio' | 'texto' = effectiveIsFromAudio ? 'audio' : 'texto';
+    const wasUnclearAudio = Boolean(effectiveIsFromAudio && syntacticCheck.isFailedAudioSignal);
 
-    let brainIntent: 'UPGRADE_PRINCIPAL' | 'ENROLL_WAITLIST' | 'KEEP_OR_QUESTION' = 'KEEP_OR_QUESTION';
     let brainReply = '';
-
     if (deepgramKey) {
       try {
         const entryBrainPrompt = buildEntryEventBrainPrompt({
           customerFirstName: displayFirstEntry,
           matchedProduct: matchedProdEarly,
           state: evState,
-          contextoIA
+          contextoIA,
+          incomingChannelLabel,
+          wasUnclearAudio
         });
         const rawBrainOut = await callDeepgramAgentLLM(
           entryBrainPrompt,
@@ -7982,76 +8071,33 @@ export async function generateContextualAiReply(
             .replace(/^```\s*/i, '')
             .replace(/\s*```$/, '')
             .trim();
-          const parsedBrain = JSON.parse(cleanedBrainJson);
-          const rawIntent = String(parsedBrain.intent || '').trim().toUpperCase();
-          if (rawIntent === 'UPGRADE_PRINCIPAL' || rawIntent === 'ENROLL_WAITLIST') {
-            brainIntent = rawIntent;
+          try {
+            const parsedBrain = JSON.parse(cleanedBrainJson);
+            brainReply = String(parsedBrain.reply || '').trim();
+          } catch {
+            if (cleanedBrainJson && !cleanedBrainJson.startsWith('{')) {
+              brainReply = cleanedBrainJson;
+            }
           }
-          brainReply = String(parsedBrain.reply || '').trim();
+          if (brainReply) {
+            brainReply = brainReply.replace(/tripwire/gi, 'artículo especial');
+          }
         }
       } catch (brainErr: any) {
         console.warn('[EntryEvent Brain LLM Warning]:', brainErr?.message || brainErr);
       }
     }
 
-    if (brainIntent === 'UPGRADE_PRINCIPAL') {
-      const { state: upgradedState } = applyEntryChoiceToOrder(
-        matchedOrder,
-        matchedProdEarly,
-        'option_1_instant'
-      );
-      matchedOrder.waCommercialSentStages = {
-        ...(matchedOrder.waCommercialSentStages || {}),
-        stage1_welcome: false,
-        stage3_confirmed: false
-      };
-      if (orderKeyForStage) {
-        sentWelcomeStageByOrderId.delete(orderKeyForStage);
-        sentConfirmedStageByOrderId.delete(orderKeyForStage);
+    if (brainReply) {
+      const mentionsPollButtons =
+        /\bencuesta\b/i.test(brainReply) && /\bbot[oó]n\b|\bopci[oó]n\b/i.test(brainReply);
+      if (!mentionsPollButtons) {
+        const buttonReminder =
+          evState.stage === 'waitlist_enrolled'
+            ? ' Acordate que nuestro sistema informático procesa tu cambio únicamente tocando el botón uno de la encuesta que te dejo acá abajo, no mandando palabras ni notas de voz.'
+            : ' Acordate que nuestro sistema informático recibe tu respuesta únicamente eligiendo y tocando el botón uno o el botón dos de la encuesta que te dejo acá abajo, sin mandar palabras ni audios.';
+        brainReply = `${brainReply.replace(/[.!?]*$/, '')}.${buttonReminder}`;
       }
-      const confirmUpgradeSpeech =
-        brainReply ||
-        `Excelente elección ${displayFirstEntry}, ya actualizamos tu pedido a ${entryCfgEarly.principalName} completo con ${upgradedState.entryProductName} totalmente gratis y envío sin costo hasta tu puerta por ${upgradedState.instantUpgradePriceGs.toLocaleString('es-PY')} guaraníes al recibir. Acá abajo te paso la imagen con tus datos para que me confirmes con la palabra correcto.`;
-      setOrderConvStep(cleanPhone, matchedOrder, 3);
-      matchedOrder.convStep = 3;
-      matchedOrder.atendidoPorIA = true;
-      matchedOrder.ultimoMensajeIA = confirmUpgradeSpeech;
-      matchedOrder.actualizado_en = new Date().toISOString();
-      savePedidos(pedidos);
-      syncOrderUpdateToCloud(matchedOrder).catch(() => {});
-      return {
-        reply: normalizeParaguayanPhonesInText(confirmUpgradeSpeech),
-        matchedOrder,
-        convStep: 3,
-        forceAudioReply: true,
-        regenerateWelcomeImage: true,
-        error: apiWarning || undefined
-      };
-    }
-
-    if (brainIntent === 'ENROLL_WAITLIST') {
-      const { state: waitState } = applyEntryChoiceToOrder(
-        matchedOrder,
-        matchedProdEarly,
-        'option_2_waitlist'
-      );
-      const waitReply =
-        brainReply ||
-        `Perfecto ${displayFirstEntry}, ya quedaste anotado en el cupo ${waitState.slotsTaken} de ${waitState.slotsTotal} de nuestro evento especial. Cada dos horas te aviso cómo avanza por si decidís llevar el paquete completo antes del cierre.`;
-      setOrderConvStep(cleanPhone, matchedOrder, 3);
-      matchedOrder.convStep = 3;
-      matchedOrder.atendidoPorIA = true;
-      matchedOrder.ultimoMensajeIA = waitReply;
-      matchedOrder.actualizado_en = new Date().toISOString();
-      savePedidos(pedidos);
-      syncOrderUpdateToCloud(matchedOrder).catch(() => {});
-      return {
-        reply: normalizeParaguayanPhonesInText(waitReply),
-        matchedOrder,
-        convStep: 3,
-        forceAudioReply: true,
-        error: apiWarning || undefined
-      };
     }
 
     const finalEntryReply = normalizeParaguayanPhonesInText(
@@ -8059,7 +8105,9 @@ export async function generateContextualAiReply(
         buildEntryEventConversationalFallback({
           customerFirstName: displayFirstEntry,
           matchedProduct: matchedProdEarly,
-          state: evState
+          state: evState,
+          isFromAudio: effectiveIsFromAudio,
+          wasUnclearAudio
         })
     );
     setOrderConvStep(cleanPhone, matchedOrder, 3);
@@ -8074,6 +8122,7 @@ export async function generateContextualAiReply(
       matchedOrder,
       convStep: 3,
       forceAudioReply: true,
+      reSendEntryPoll: true,
       error: apiWarning || undefined
     };
   }
@@ -10932,20 +10981,24 @@ export async function connectWhatsAppEngine(
           // Manejo nativo de Encuesta WhatsApp (Poll Vote) para pedidos con Evento 10 Cupos activo
           if (innerMsg?.pollUpdateMessage && !isFromAdmin && matchedOrderForPhone?.tripwireEventState) {
             const evState = matchedOrderForPhone.tripwireEventState;
-            const pollMsgId =
-              String(innerMsg.pollUpdateMessage?.pollCreationMessageKey?.id || evState.pollMsgId || '').trim();
-            if (pollMsgId && evState.pollEncKeyBase64 && Array.isArray(evState.pollOptionHashes)) {
-              const creatorCandidates = Array.from(
-                new Set(
-                  [
-                    evState.pollCreatorJid,
-                    session.connectedPhone ? `${session.connectedPhone}@s.whatsapp.net` : '',
-                    session.sock?.user?.id
-                      ? `${String(session.sock.user.id).split(':')[0].split('@')[0]}@s.whatsapp.net`
-                      : ''
-                  ].filter(Boolean)
-                )
-              ) as string[];
+            const votedPollId = String(innerMsg.pollUpdateMessage?.pollCreationMessageKey?.id || '').trim();
+            const pollHistoryList: Array<{ pollMsgId: string; pollEncKeyBase64: string; pollCreatorJid?: string }> =
+              Array.isArray(evState.pollHistory) ? [...evState.pollHistory] : [];
+            if (evState.pollMsgId && evState.pollEncKeyBase64) {
+              pollHistoryList.push({
+                pollMsgId: evState.pollMsgId,
+                pollEncKeyBase64: evState.pollEncKeyBase64,
+                pollCreatorJid: evState.pollCreatorJid
+              });
+            }
+
+            // Priorizar la encuesta exacta cuyo ID votó el cliente, y como respaldo probar todas las registradas
+            const orderedEntries = [
+              ...pollHistoryList.filter((h) => votedPollId && h.pollMsgId === votedPollId),
+              ...pollHistoryList.filter((h) => !votedPollId || h.pollMsgId !== votedPollId)
+            ];
+
+            if (orderedEntries.length > 0 && Array.isArray(evState.pollOptionHashes)) {
               const voterCandidates = [
                 remoteJid,
                 String(msg.key?.participant || ''),
@@ -10954,15 +11007,31 @@ export async function connectWhatsAppEngine(
               ].filter(Boolean);
 
               let pollChoice: 'option_1_instant' | 'option_2_waitlist' | null = null;
-              for (const cJid of creatorCandidates) {
-                pollChoice = decodeEntryPollVoteSelection({
-                  pollUpdateMsg: innerMsg.pollUpdateMessage,
-                  pollMsgId,
-                  pollEncKeyBase64: evState.pollEncKeyBase64,
-                  pollCreatorJid: cJid,
-                  voterJids: voterCandidates,
-                  optionHashes: evState.pollOptionHashes
-                });
+              for (const entryPoll of orderedEntries) {
+                if (!entryPoll?.pollEncKeyBase64 || !entryPoll?.pollMsgId) continue;
+                const creatorCandidates = Array.from(
+                  new Set(
+                    [
+                      entryPoll.pollCreatorJid,
+                      evState.pollCreatorJid,
+                      session.connectedPhone ? `${session.connectedPhone}@s.whatsapp.net` : '',
+                      session.sock?.user?.id
+                        ? `${String(session.sock.user.id).split(':')[0].split('@')[0]}@s.whatsapp.net`
+                        : ''
+                    ].filter(Boolean)
+                  )
+                ) as string[];
+                for (const cJid of creatorCandidates) {
+                  pollChoice = decodeEntryPollVoteSelection({
+                    pollUpdateMsg: innerMsg.pollUpdateMessage,
+                    pollMsgId: votedPollId || entryPoll.pollMsgId,
+                    pollEncKeyBase64: entryPoll.pollEncKeyBase64,
+                    pollCreatorJid: cJid,
+                    voterJids: voterCandidates,
+                    optionHashes: evState.pollOptionHashes
+                  });
+                  if (pollChoice) break;
+                }
                 if (pollChoice) break;
               }
               if (pollChoice) {
@@ -11225,20 +11294,9 @@ export async function connectWhatsAppEngine(
               storage.preferredChannel ||
               'audio';
 
-            // Intercepción limpia para respuesta por texto/voz (1 / 2 / palabras clave) en Evento de Entrada activo
-            if (
-              isAutoEnabled &&
-              matchedOrderForPhone?.tripwireEventState &&
-              ['pending_choice', 'waitlist_enrolled', 'silenced_until_end'].includes(
-                matchedOrderForPhone.tripwireEventState.stage
-              )
-            ) {
-              const entryIntent = classifyEntryTextIntent(text);
-              if (entryIntent) {
-                await handleEntryEventChoice(cleanPhone, matchedOrderForPhone, entryIntent, session.id);
-                continue;
-              }
-            }
+            // Todo texto o audio recibido mientras el Evento de Entrada está pendiente pasa por el
+            // Cerebro inteligente (nunca por atajos de texto que salten la encuesta), para responder su duda
+            // con inteligencia e instruir claramente que nuestro sistema solo procesa los 2 botones de la encuesta.
 
             if (isAutoEnabled) {
               const burstInputPiece =
@@ -11322,6 +11380,10 @@ export async function connectWhatsAppEngine(
                         smartRes.regenerateWelcomeImage ? 'stage1_welcome' : undefined,
                         Boolean(smartRes.regenerateWelcomeImage)
                       );
+                      if (smartRes.reSendEntryPoll && matchedOrder?.reservaid) {
+                        await new Promise((r) => setTimeout(r, 1100));
+                        await reDispatchEntryPollForOrder(cleanPhone, matchedOrder.reservaid, session.id);
+                      }
                     }
                   } catch (e) {
                     console.error('[Auto AI Reply Error]:', e);

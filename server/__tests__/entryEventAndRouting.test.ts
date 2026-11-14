@@ -19,6 +19,10 @@ import {
 } from '../entryEventEngine.ts';
 import { extractCustomerShippingSummaryForVisual } from '../waStageCommercialRenderer.ts';
 import {
+  buildOrderFormPackageCopySpec,
+  renderOrderFormPackageBannerPng
+} from '../orderFormBannerRenderer.ts';
+import {
   replacePublishedAdInMeta,
   resolveCreativeTargetLandingUrl
 } from '../metaCampaignOps.ts';
@@ -1321,29 +1325,56 @@ test('Separación completa entry_only vs principal_bundle en Formulario, API, Ta
     PRODUCT_WITH_ENTRY
   );
 
-  // 1. Cerebro del Evento de Entrada conoce ambos productos, precios exactos y no filtra "tripwire"
-  const brainPrompt = buildEntryEventBrainPrompt({
+  // 1. Cerebro del Evento de Entrada conoce ambos productos, precios exactos, no filtra "tripwire"
+  // e instruye que el sistema recibe la elección únicamente tocando botón 1 o botón 2 de la encuesta
+  const brainPromptText = buildEntryEventBrainPrompt({
     customerFirstName: 'Carlos',
     matchedProduct: PRODUCT_WITH_ENTRY,
     state: entryState,
-    contextoIA: 'Proyector de exterior resistente a lluvia.'
+    contextoIA: 'Proyector de exterior resistente a lluvia.',
+    incomingChannelLabel: 'texto'
   });
-  assert.ok(brainPrompt.includes(PRODUCT_WITH_ENTRY.tripwireConfig.entryProductName));
-  assert.ok(brainPrompt.includes(PRODUCT_WITH_ENTRY.nombre));
-  assert.ok(brainPrompt.includes('UPGRADE_PRINCIPAL'));
-  assert.ok(brainPrompt.includes('ENROLL_WAITLIST'));
-  assert.ok(brainPrompt.includes('60.000 guaraníes')); // 20.000 + 40.000 delivery
-  assert.equal(/tripwire/i.test(brainPrompt.replace('jamás digas la palabra prohibida "tripwire"', '')), false);
+  assert.ok(brainPromptText.includes(PRODUCT_WITH_ENTRY.tripwireConfig.entryProductName));
+  assert.ok(brainPromptText.includes(PRODUCT_WITH_ENTRY.nombre));
+  assert.ok(brainPromptText.includes('un mensaje de texto escrito'));
+  assert.ok(brainPromptText.includes('sistema informático recibe y procesa su respuesta ÚNICAMENTE eligiendo y tocando uno de los dos botones'));
+  assert.ok(brainPromptText.includes('60.000 guaraníes')); // 20.000 + 40.000 delivery
+  assert.equal(/tripwire/i.test(brainPromptText.replace('jamás digas la palabra prohibida "tripwire"', '')), false);
 
-  const fallbackSpeech = buildEntryEventConversationalFallback({
+  const brainPromptAudio = buildEntryEventBrainPrompt({
     customerFirstName: 'Carlos',
     matchedProduct: PRODUCT_WITH_ENTRY,
-    state: entryState
+    state: entryState,
+    contextoIA: 'Proyector de exterior resistente a lluvia.',
+    incomingChannelLabel: 'audio',
+    wasUnclearAudio: true
   });
-  assert.ok(fallbackSpeech.includes(PRODUCT_WITH_ENTRY.tripwireConfig.entryProductName));
-  assert.ok(fallbackSpeech.includes(PRODUCT_WITH_ENTRY.nombre));
-  assert.ok(fallbackSpeech.includes('60.000 guaraníes'));
-  assert.equal(/tripwire/i.test(fallbackSpeech), false);
+  assert.ok(brainPromptAudio.includes('una nota de voz (audio)'));
+  assert.ok(brainPromptAudio.includes('no se escuchó con claridad'));
+
+  const fallbackText = buildEntryEventConversationalFallback({
+    customerFirstName: 'Carlos',
+    matchedProduct: PRODUCT_WITH_ENTRY,
+    state: entryState,
+    isFromAudio: false
+  });
+  assert.ok(fallbackText.includes(PRODUCT_WITH_ENTRY.tripwireConfig.entryProductName));
+  assert.ok(fallbackText.includes(PRODUCT_WITH_ENTRY.nombre));
+  assert.ok(fallbackText.includes('60.000 guaraníes'));
+  assert.ok(fallbackText.includes('Leí tu mensaje'));
+  assert.ok(fallbackText.includes('sistema informático recibe tu respuesta únicamente eligiendo el botón uno o el botón dos en la encuesta'));
+  assert.equal(/tripwire/i.test(fallbackText), false);
+
+  const fallbackAudio = buildEntryEventConversationalFallback({
+    customerFirstName: 'Carlos',
+    matchedProduct: PRODUCT_WITH_ENTRY,
+    state: entryState,
+    isFromAudio: true,
+    wasUnclearAudio: true
+  });
+  assert.ok(fallbackAudio.includes('no se escuchó con claridad'));
+  assert.ok(fallbackAudio.includes('no hace falta mandar palabras ni notas de voz'));
+  assert.equal(/tripwire/i.test(fallbackAudio), false);
 
   // 2. Renderizado visual de tarjeta WA respeta imagen y nombre exacto según purchasePath
   const productWithEntryImg = {
@@ -1388,7 +1419,7 @@ test('Separación completa entry_only vs principal_bundle en Formulario, API, Ta
   assert.equal(bundleVisualSummary.productImgRef, '/assets/principal.jpg');
   assert.equal(bundleVisualSummary.packQty, 1);
 
-  // 3. Integridad estructural: OrderForm, POST /api/pedidos y whatsappEngine conectan ambos caminos sin desconexión
+  // 3. Integridad estructural: OrderForm, POST /api/pedidos y whatsappEngine conectan ambos caminos sin atajos de texto que salten la encuesta
   const orderFormSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/OrderForm.tsx'), 'utf8');
   assert.ok(orderFormSrc.includes('producto: orderSubmittedProductName'));
   assert.ok(orderFormSrc.includes('data-testid="orderform-dual-path-clarification"'));
@@ -1399,6 +1430,111 @@ test('Separación completa entry_only vs principal_bundle en Formulario, API, Ta
   const waEngineSrc = fs.readFileSync(path.resolve(process.cwd(), 'server/whatsappEngine.ts'), 'utf8');
   assert.ok(waEngineSrc.includes('isEntryEventActiveNow'));
   assert.ok(waEngineSrc.includes('isMasterBundleOrder'));
+  assert.ok(waEngineSrc.includes('reSendEntryPoll: true'));
+  assert.ok(waEngineSrc.includes('reDispatchEntryPollForOrder'));
+  assert.ok(waEngineSrc.includes('pollHistoryList'));
+  assert.equal(waEngineSrc.includes('classifyEntryTextIntent('), false);
+});
+
+test('Formulario VIP: banner pre-generado por producto sin texto prohibido, guías por paso, auto-scroll solo en blur/focus y botón gráfico sin monto', async () => {
+  const entrySpec = buildOrderFormPackageCopySpec({
+    product: PRODUCT_WITH_ENTRY,
+    purchasePath: 'entry_only',
+    pack: 1
+  });
+  assert.equal(entrySpec.eyebrow, 'ESTE ES EL PAQUETE QUE ESTÁS ADQUIRIENDO');
+  assert.equal(entrySpec.isEntryOnly, true);
+  assert.ok(entrySpec.headlineLines.join(' ').includes('Guirnalda LED Navideña 10m'));
+  assert.ok(entrySpec.ownershipLines.join(' ').includes('1 unidad de tu Guirnalda LED Navideña 10m'));
+  assert.equal(entrySpec.priceText, 'Gs. 20.000');
+  assert.ok(entrySpec.deliveryBannerText.includes('40.000'));
+  assert.equal(JSON.stringify(entrySpec).toLowerCase().includes('solicitud individual'), false);
+  assert.equal(JSON.stringify(entrySpec).toLowerCase().includes('tripwire'), false);
+  assert.equal(/\bun pack\b/i.test(JSON.stringify(entrySpec)), false);
+
+  const bundleSpec = buildOrderFormPackageCopySpec({
+    product: PRODUCT_WITH_ENTRY,
+    purchasePath: 'principal_bundle',
+    pack: 1
+  });
+  assert.equal(bundleSpec.isEntryOnly, false);
+  assert.ok(
+    [...bundleSpec.headlineLines, ...bundleSpec.ownershipLines].join(' ').includes('DE REGALO')
+  );
+  assert.ok(bundleSpec.deliveryBannerText.includes('ENVÍO 100% GRATUITO'));
+  assert.equal(bundleSpec.priceText, 'Gs. 189.000');
+  assert.equal(JSON.stringify(bundleSpec).toLowerCase().includes('solicitud individual'), false);
+  assert.equal(JSON.stringify(bundleSpec).toLowerCase().includes('tripwire'), false);
+
+  const testProd = {
+    ...PRODUCT_WITH_ENTRY,
+    id: 'prod-test-banner-spec',
+    imagen: '',
+    tripwireConfig: {
+      ...PRODUCT_WITH_ENTRY.tripwireConfig,
+      entryProductImage: ''
+    }
+  };
+  const createdBannerFiles: string[] = [];
+  try {
+    const renderedEntry = await renderOrderFormPackageBannerPng({
+      product: testProd,
+      purchasePath: 'entry_only',
+      pack: 1,
+      forceRegenerate: true
+    });
+    createdBannerFiles.push(path.resolve(process.cwd(), 'public', renderedEntry.publicUrl.replace(/^\//, '')));
+    assert.ok(renderedEntry.buffer.length > 5000, 'Debe renderizar PNG real del paquete entrada');
+    assert.equal(renderedEntry.buffer.subarray(0, 4).toString('hex'), '89504e47');
+
+    const renderedBundle = await renderOrderFormPackageBannerPng({
+      product: testProd,
+      purchasePath: 'principal_bundle',
+      pack: 1,
+      forceRegenerate: true
+    });
+    createdBannerFiles.push(path.resolve(process.cwd(), 'public', renderedBundle.publicUrl.replace(/^\//, '')));
+    assert.ok(renderedBundle.buffer.length > 5000, 'Debe renderizar PNG real del paquete maestro');
+    assert.equal(renderedBundle.buffer.subarray(0, 4).toString('hex'), '89504e47');
+  } finally {
+    for (const f of createdBannerFiles) {
+      try {
+        if (fs.existsSync(f)) fs.unlinkSync(f);
+      } catch {}
+    }
+  }
+
+  const orderFormSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/OrderForm.tsx'), 'utf8');
+  assert.ok(orderFormSrc.includes('data-testid="orderform-vip-steps-card"'));
+  assert.ok(orderFormSrc.includes('/api/order-form/package-banner.png'));
+  assert.ok(orderFormSrc.includes('/assets/form-step1-nombre-guide.png'));
+  assert.ok(orderFormSrc.includes('/assets/form-step2-whatsapp-guide.png'));
+  assert.ok(orderFormSrc.includes('/assets/form-step3-entrega-guide.png'));
+  assert.ok(orderFormSrc.includes('/assets/form-confirm-order-cta.png'));
+  assert.ok(orderFormSrc.includes('smoothCenterElement'));
+  assert.equal(/solicitud individual/i.test(orderFormSrc), false, 'OrderForm no debe mostrar Solicitud Individual');
+  assert.equal(
+    orderFormSrc.includes('¡CONFIRMAR MI PEDIDO AHORA!} · {formatGs(total)}'),
+    false,
+    'El botón de confirmación no debe renderizar precio en HTML'
+  );
+
+  // Verificar que los assets gráficos existen en disco
+  for (const rel of [
+    'public/assets/form-confirm-order-cta.png',
+    'public/assets/form-step1-nombre-guide.png',
+    'public/assets/form-step2-whatsapp-guide.png',
+    'public/assets/form-step3-entrega-guide.png'
+  ]) {
+    const abs = path.resolve(process.cwd(), rel);
+    assert.ok(fs.existsSync(abs) && fs.statSync(abs).size > 5000, `Debe existir asset gráfico ${rel}`);
+  }
+
+  // Verificar endpoint y hook de pre-generación en creación de producto
+  const viteSrc = fs.readFileSync(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8');
+  assert.ok(viteSrc.includes('/api/order-form/package-banner.png'));
+  const genSrc = fs.readFileSync(path.resolve(process.cwd(), 'server/visualLandingGenerator.ts'), 'utf8');
+  assert.ok(genSrc.includes('preRenderOrderFormBannersForProduct'));
 });
 
 

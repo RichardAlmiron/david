@@ -61,6 +61,7 @@ import {
   loadStoreConfig,
   queueOrderCloudSync
 } from './server/whatsappEngine';
+import { renderOrderFormPackageBannerPng } from './server/orderFormBannerRenderer';
 import {
   flushPendingSupabaseSyncs,
   getAutoadsSupabaseHealth,
@@ -616,6 +617,58 @@ function registerApiServerMiddlewares(server: any) {
           return;
         }
       } catch {}
+    }
+
+    // Servidor binario directo para banners VIP pre-generados del formulario (/assets/form-banners/*)
+    if (req.method === 'GET' && rawUrl && rawUrl.startsWith('/assets/form-banners/')) {
+      try {
+        const cleanFileName = path.basename(decodeURIComponent(rawUrl.slice('/assets/form-banners/'.length)));
+        const bannersDir = path.resolve(__dirname, 'public/assets/form-banners');
+        const targetPath = path.join(bannersDir, cleanFileName);
+        if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
+          res.setHeader('Content-Type', 'image/png');
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          res.statusCode = 200;
+          res.end(fs.readFileSync(targetPath));
+          return;
+        }
+      } catch {}
+    }
+
+    // Endpoint VIP dinámico/pre-cacheado para la tarjeta visual de producto en el formulario de pedido
+    if (req.method === 'GET' && rawUrl === '/api/order-form/package-banner.png') {
+      (async () => {
+        try {
+          const parsedUrl = new URL(req.url || '/', 'http://localhost');
+          const productId = String(parsedUrl.searchParams.get('productId') || '').trim();
+          const reqPath = parsedUrl.searchParams.get('path') === 'entry_only' ? 'entry_only' : 'principal_bundle';
+          const pack = Math.max(1, Math.min(3, Number(parsedUrl.searchParams.get('pack') || 1) || 1));
+          const cfg = loadStoreConfig();
+          const pages = Array.isArray(cfg?.productPages) ? cfg.productPages : [];
+          const matchedProd =
+            pages.find((p: any) => p.id === productId || p.slug === productId) ||
+            pages[0] || {
+              id: productId || 'prod-noelux-01',
+              nombre: String(cfg?.marca ? `${cfg.marca}™ Proyector Navideño 12 Diseños` : 'Noelux™ Proyector Navideño'),
+              descripcion: 'Proyector LED premium de 12 diseños para fachada y jardín con entrega rápida.',
+              precios: cfg?.lote || { 1: 189000, 2: 358000, 3: 507000 }
+            };
+
+          const rendered = await renderOrderFormPackageBannerPng({
+            product: matchedProd,
+            purchasePath: reqPath,
+            pack
+          });
+          res.setHeader('Content-Type', 'image/png');
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          res.statusCode = 200;
+          res.end(rendered.buffer);
+        } catch (bannerErr: any) {
+          res.statusCode = 500;
+          res.end(bannerErr?.message || 'Error generando imagen del paquete');
+        }
+      })();
+      return;
     }
 
     // Servidor binario directo y auto-reparable para /assets/ai-ads/* (evita que Vite devuelva index.html text/html cuando un contenedor en Railway se reinicia)

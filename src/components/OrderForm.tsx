@@ -165,6 +165,11 @@ export const OrderForm: React.FC<{
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [validationNotice, setValidationNotice] = useState<string>('');
   const [leadEventFired, setLeadEventFired] = useState(false);
+  const [bannerImgError, setBannerImgError] = useState<boolean>(false);
+  const [step1GuideError, setStep1GuideError] = useState<boolean>(false);
+  const [step2GuideError, setStep2GuideError] = useState<boolean>(false);
+  const [step3GuideError, setStep3GuideError] = useState<boolean>(false);
+  const [confirmBtnImgError, setConfirmBtnImgError] = useState<boolean>(false);
 
   // Optional 1-Touch GPS Helper State (Never blocks submission!)
   const [gpsLat, setGpsLat] = useState<number | null>(null);
@@ -193,9 +198,31 @@ export const OrderForm: React.FC<{
   const barrioInputRef = useRef<HTMLInputElement | null>(null);
   const calleInputRef = useRef<HTMLInputElement | null>(null);
   const ubicacionInputRef = useRef<HTMLInputElement | null>(null);
+  const step1CardRef = useRef<HTMLDivElement | null>(null);
+  const step2CardRef = useRef<HTMLDivElement | null>(null);
+  const step3CardRef = useRef<HTMLDivElement | null>(null);
+  const ciudadBoxRef = useRef<HTMLDivElement | null>(null);
+  const barrioBoxRef = useRef<HTMLDivElement | null>(null);
+  const calleBoxRef = useRef<HTMLDivElement | null>(null);
+  const submitAreaRef = useRef<HTMLDivElement | null>(null);
+  const scrollTimerRef = useRef<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const watchTimeoutRef = useRef<number | null>(null);
   const bestAccuracyRef = useRef<number>(999999);
+
+  // Intelligent auto-scroll helper: ONLY called on blur (when finished & leaving field) or explicit focus, NEVER mid-typing
+  const smoothCenterElement = (el: HTMLElement | null) => {
+    if (!el || typeof window === 'undefined') return;
+    if (scrollTimerRef.current) {
+      window.clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = null;
+    }
+    scrollTimerRef.current = window.setTimeout(() => {
+      try {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch {}
+    }, 95);
+  };
 
   const firstName = (nombre || '').trim().split(/\s+/)[0] || '';
   const isBuilding = tipoVivienda === 'edificio';
@@ -235,6 +262,10 @@ export const OrderForm: React.FC<{
     gpsLat !== null && gpsLng !== null
       ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${gpsLat.toFixed(6)},${gpsLng.toFixed(6)}`
       : '';
+
+  useEffect(() => {
+    setBannerImgError(false);
+  }, [targetProductId, isEntryOnly, effectivePack, total]);
 
   // Asegurar limpieza de cualquier borrador antiguo en localStorage (sin persistencia en navegador)
   useEffect(() => {
@@ -1040,16 +1071,16 @@ export const OrderForm: React.FC<{
             : 'bg-white rounded-3xl border-4 border-[#0b3d2e] shadow-2xl overflow-hidden'
         }
       >
-        {/* ═══ Enhanced Header Bar (Letra Grande Alta Visibilidad) ═══ */}
+        {/* ═══ Enhanced Header Bar (VIP Alta Visibilidad) ═══ */}
         <div className="bg-gradient-to-r from-[#041a12] via-[#0b3d2e] to-[#041a12] text-white py-3.5 sm:py-4 px-4 sm:px-6 flex items-center justify-between gap-2 border-b-2 border-[#e8b23a] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-3.5 h-3.5 rounded-full bg-[#25D366] animate-pulse shrink-0" />
+            <ShieldCheck className="w-6 h-6 text-[#ffd778] shrink-0" />
             <div className="min-w-0">
               <span className="text-sm sm:text-base font-black uppercase tracking-wide text-[#ffd778] block truncate">
                 {expressDirectMode ? '⚡ Pedido Express Directo · Pago al Recibir' : 'Pedido Fácil · Pago al Recibir'}
               </span>
               <span className="text-xs sm:text-sm text-emerald-200 font-extrabold block truncate">
-                {expressDirectMode ? 'Captura GPS Automática · Confirmación en 30 seg' : 'Letra Grande · Guía Paso a Paso'}
+                {expressDirectMode ? 'Captura GPS Automática · Confirmación en 30 seg' : 'Guía VIP Paso a Paso'}
               </span>
             </div>
           </div>
@@ -1084,7 +1115,7 @@ export const OrderForm: React.FC<{
             <span className="w-px h-4 bg-emerald-700" />
             <span className="flex items-center gap-1.5 text-xs sm:text-sm font-black text-emerald-300">
               <Truck className="w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0" />
-              <span>{isEntryOnly ? 'Solicitud Directa' : 'Envío Gratis'}</span>
+              <span>{isEntryOnly ? 'Envío Seguro en Mano' : 'Envío Gratis'}</span>
             </span>
             <span className="w-px h-4 bg-emerald-700" />
             <span className="flex items-center gap-1.5 text-xs sm:text-sm font-black text-emerald-300">
@@ -1102,115 +1133,158 @@ export const OrderForm: React.FC<{
               : 'p-4 sm:p-7 space-y-4'
           }
         >
-          {/* ═══ STEP PROGRESS BAR — Guía visual paso a paso en letra grande ═══ */}
+          {/* ═══ TARJETA VIP SUPERIOR — EXPLICACIÓN CLARA + PROGRESO 3 PASOS ═══ */}
           {!orderComplete && (
-            <div className="flex items-center justify-center gap-0 px-2 sm:px-6 pb-1">
-              {[
-                { num: 1, label: '1. Nombre', done: step1Done },
-                { num: 2, label: '2. WhatsApp', done: step2Done },
-                { num: 3, label: '3. Dirección', done: step3Done }
-              ].map((step, idx) => (
-                <React.Fragment key={step.num}>
-                  {idx > 0 && (
-                    <div className={`h-1.5 flex-1 rounded-full mx-2 transition-all duration-700 ${(idx === 1 && step1Done) || (idx === 2 && step2Done)
-                      ? 'bg-[#16a34a]' : 'bg-stone-300'
-                      }`} />
-                  )}
-                  <div className="flex flex-col items-center gap-1">
-                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-base sm:text-lg font-black border-3 transition-all duration-500 ${step.done
-                      ? 'bg-[#16a34a] border-[#16a34a] text-white scale-105'
-                      : activeStep === step.num
-                        ? 'bg-red-600 border-red-300 text-white shadow-lg scale-110'
-                        : 'bg-stone-200 border-stone-300 text-stone-500'
-                      }`}>
-                      {step.done ? <CheckCircle2 className="w-6 h-6" /> : step.num}
+            <div
+              data-testid="orderform-vip-steps-card"
+              className="rounded-2xl bg-gradient-to-br from-[#041a12] via-[#062319] to-[#0b3d2e] border-2 border-[#e8b23a] p-4 sm:p-5 text-white shadow-xl space-y-3.5"
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 bg-[#e8b23a] text-[#062319] text-[11px] sm:text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full">
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>Guía VIP · Solo 3 Datos Rápidos</span>
+                </span>
+                <span className="text-xs font-bold text-emerald-200">
+                  {[step1Done, step2Done, step3Done].filter(Boolean).length} de 3 completados
+                </span>
+              </div>
+
+              <p className="text-xs sm:text-sm text-emerald-50 font-semibold leading-relaxed">
+                Completá en orden estos 3 datos para despachar tu pedido hoy mismo:{' '}
+                <b className="text-[#ffd778]">1° tu Nombre y Apellido</b>,{' '}
+                <b className="text-[#ffd778]">2° tu WhatsApp</b> para enviarte el seguimiento, y{' '}
+                <b className="text-[#ffd778]">3° tu Dirección exacta</b> de entrega. Abajo ves cada paso en verde al completarlo:
+              </p>
+
+              <div className="flex items-center justify-center gap-0 pt-1">
+                {[
+                  { num: 1, label: '1. Nombre', done: step1Done },
+                  { num: 2, label: '2. WhatsApp', done: step2Done },
+                  { num: 3, label: '3. Dirección', done: step3Done }
+                ].map((step, idx) => (
+                  <React.Fragment key={step.num}>
+                    {idx > 0 && (
+                      <div
+                        className={`h-1.5 flex-1 rounded-full mx-2 transition-all duration-700 ${
+                          (idx === 1 && step1Done) || (idx === 2 && step2Done)
+                            ? 'bg-[#22c55e]'
+                            : 'bg-white/20'
+                        }`}
+                      />
+                    )}
+                    <div className="flex flex-col items-center gap-1">
+                      <div
+                        className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-base sm:text-lg font-black border-2 transition-all duration-500 ${
+                          step.done
+                            ? 'bg-[#22c55e] border-emerald-200 text-white scale-105 shadow-[0_0_12px_rgba(34,197,94,0.45)]'
+                            : activeStep === step.num
+                              ? 'bg-[#e8b23a] border-[#fff1b8] text-[#062319] shadow-lg scale-110'
+                              : 'bg-white/10 border-white/25 text-emerald-200/70'
+                        }`}
+                      >
+                        {step.done ? <CheckCircle2 className="w-6 h-6" /> : step.num}
+                      </div>
+                      <span
+                        className={`text-xs sm:text-sm font-black transition-colors duration-300 ${
+                          step.done
+                            ? 'text-[#86efac]'
+                            : activeStep === step.num
+                              ? 'text-[#ffd778]'
+                              : 'text-emerald-200/60'
+                        }`}
+                      >
+                        {step.label}
+                      </span>
                     </div>
-                    <span className={`text-xs sm:text-sm font-black transition-colors duration-300 ${step.done ? 'text-[#16a34a]' : activeStep === step.num ? 'text-red-700' : 'text-stone-500'
-                      }`}>
-                      {step.label}
-                    </span>
-                  </div>
-                </React.Fragment>
-              ))}
+                  </React.Fragment>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* ═══ RESUMEN EXACTO DE LA OPCIÓN SELECCIONADA (SOLO ARTÍCULO DE ENTRADA VS PAQUETE MAESTRO) ═══ */}
-          {!orderComplete && hasEntryHook && entryOfferCfg && (
-            <div
-              data-testid="orderform-dual-path-clarification"
-              className={`rounded-2xl border-2 p-3.5 text-xs sm:text-sm space-y-2.5 ${
-                isEntryOnly
-                  ? 'bg-[#0B132B] border-[#D4AF37] text-white'
-                  : 'bg-emerald-50 border-emerald-500 text-stone-900'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                {(isEntryOnly ? entryOfferCfg.entryProductImage || currentProductPage?.imagen : currentProductPage?.imagen) && (
-                  <img
-                    src={
-                      isEntryOnly
-                        ? entryOfferCfg.entryProductImage || currentProductPage?.imagen
-                        : currentProductPage?.imagen
-                    }
-                    alt={activeOfferTitle}
-                    className="w-14 h-14 rounded-xl object-cover border-2 border-[#D4AF37] shrink-0 bg-white"
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <span
-                    className={`inline-block text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-1 ${
-                      isEntryOnly
-                        ? 'bg-[#D4AF37] text-[#0B132B]'
-                        : 'bg-[#065f46] text-[#ffd778]'
-                    }`}
-                  >
-                    {isEntryOnly
-                      ? 'Solicitud Individual · 1 Unidad'
-                      : 'Paquete Maestro Completo · Envío Gratis'}
-                  </span>
-                  <div className={`font-black text-sm sm:text-base leading-snug ${isEntryOnly ? 'text-white' : 'text-[#062319]'}`}>
-                    {isEntryOnly
-                      ? `${entryOfferCfg.entryProductName} · ${formatGs(entryOfferCfg.entryPriceGs)}`
-                      : `${targetProductName} + ${entryOfferCfg.entryProductName} DE REGALO`}
+          {/* ═══ IMAGEN VIP PRE-GENERADA DEL PRODUCTO QUE ESTÁ ADQUIRIENDO ═══ */}
+          {!orderComplete && (
+            <div data-testid="orderform-dual-path-clarification" className="space-y-2.5">
+              {!bannerImgError ? (
+                <img
+                  src={`/api/order-form/package-banner.png?productId=${encodeURIComponent(
+                    targetProductId
+                  )}&path=${isEntryOnly ? 'entry_only' : 'principal_bundle'}&pack=${
+                    isEntryOnly ? 1 : effectivePack
+                  }&v=${encodeURIComponent(String(currentProductPage?.creadoEn || total))}`}
+                  alt={`Este es el paquete que estás adquiriendo: ${activeOfferTitle}`}
+                  referrerPolicy="no-referrer"
+                  onError={() => setBannerImgError(true)}
+                  className="w-full h-auto rounded-2xl shadow-xl border-2 border-[#D4AF37]/80 select-none"
+                />
+              ) : (
+                <div
+                  className={`rounded-2xl border-2 p-4 space-y-2 shadow-lg ${
+                    isEntryOnly
+                      ? 'bg-[#0B132B] border-[#D4AF37] text-white'
+                      : 'bg-gradient-to-br from-[#041C14] to-[#0A3526] border-[#D4AF37] text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {(isEntryOnly
+                      ? entryOfferCfg?.entryProductImage || currentProductPage?.imagen
+                      : currentProductPage?.imagen) && (
+                      <img
+                        src={
+                          isEntryOnly
+                            ? entryOfferCfg?.entryProductImage || currentProductPage?.imagen
+                            : currentProductPage?.imagen
+                        }
+                        alt={activeOfferTitle}
+                        className="w-20 h-20 rounded-xl object-cover border-2 border-[#D4AF37] shrink-0 bg-white"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <span className="inline-block bg-[#D4AF37] text-[#062319] text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
+                        Este es el paquete que estás adquiriendo
+                      </span>
+                      <div className="font-black text-base sm:text-lg leading-snug text-white">
+                        {isEntryOnly && entryOfferCfg
+                          ? `${entryOfferCfg.entryProductName} · ${formatGs(entryOfferCfg.entryPriceGs)}`
+                          : hasEntryHook && entryOfferCfg
+                          ? `${targetProductName} + ${entryOfferCfg.entryProductName} DE REGALO · ${formatGs(total)}`
+                          : `${targetProductName} · ${formatGs(total)}`}
+                      </div>
+                      <p className="text-xs sm:text-sm text-emerald-100 leading-snug">
+                        {isEntryOnly && entryOfferCfg
+                          ? `Estás a punto de adquirir 1 unidad de tu ${entryOfferCfg.entryProductName}. Delivery al recibir: ${formatGs(entryOfferCfg.deliveryFeeGs || 40000)}.`
+                          : hasEntryHook && entryOfferCfg
+                          ? `Incluye ${targetProductName} completo + ${entryOfferCfg.entryProductName} DE REGALO + ENVÍO 100% GRATUITO en todo Paraguay.`
+                          : `Estás adquiriendo tu ${targetProductName} completo con ENVÍO 100% GRATUITO a tu puerta.`}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              {!isEntryOnly && (
-                <p className="text-stone-700 leading-snug">
-                  Incluye <b>{targetProductName}</b> completo + <b>{entryOfferCfg.entryProductName} DE REGALO</b> + <b>ENVÍO GRATUITO</b> en todo Paraguay (sin lista de espera).
-                </p>
               )}
 
-              {isEntryOnly && !hidePrincipalUpgradeHint && (
-                <>
-                  <p className="text-slate-200 leading-snug">
-                    Aclaración transparente: pedir solo 1x {entryOfferCfg.entryProductName} NO incluye {targetProductName} ni envío gratuito (abona delivery de {formatGs(entryOfferCfg.deliveryFeeGs || 40000)}). Con el paquete completo el envío es 100% GRATUITO.
-                  </p>
-                  <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setPurchasePath('principal_bundle')}
-                      className="text-xs font-black text-[#ffd778] underline cursor-pointer"
-                    >
-                      Cambiar al Producto Estrella con ENVÍO GRATUITO + {entryOfferCfg.entryProductName} DE REGALO
-                    </button>
-                  </div>
-                </>
+              {hasEntryHook && entryOfferCfg && isEntryOnly && !hidePrincipalUpgradeHint && (
+                <div className="px-1 flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setPurchasePath('principal_bundle')}
+                    className="text-xs sm:text-sm font-black text-[#065f46] hover:text-[#047857] underline cursor-pointer text-center"
+                  >
+                    ¿Preferís el Paquete Completo con ENVÍO GRATUITO + {entryOfferCfg.entryProductName} DE REGALO? Tocá acá
+                  </button>
+                </div>
               )}
 
-              {!isEntryOnly && !hidePrincipalUpgradeHint && (
-                <div className="flex items-center gap-2 flex-wrap pt-0.5">
+              {hasEntryHook && entryOfferCfg && !isEntryOnly && !hidePrincipalUpgradeHint && (
+                <div className="px-1 flex items-center justify-center">
                   <button
                     type="button"
                     onClick={() => {
                       setPurchasePath('entry_only');
                       setSelectedPack(1);
                     }}
-                    className="text-xs font-semibold text-stone-600 underline cursor-pointer"
+                    className="text-xs font-semibold text-stone-600 underline cursor-pointer text-center"
                   >
-                    Preferir pedir solo {entryOfferCfg.entryProductName} ({formatGs(entryOfferCfg.entryPriceGs)} + delivery {formatGs(entryOfferCfg.deliveryFeeGs || 40000)})
+                    Preferir llevar solo {entryOfferCfg.entryProductName} ({formatGs(entryOfferCfg.entryPriceGs)} + delivery {formatGs(entryOfferCfg.deliveryFeeGs || 40000)})
                   </button>
                 </div>
               )}
@@ -1340,34 +1414,43 @@ export const OrderForm: React.FC<{
             /* ═══ FORMULARIO GUIADO CON LETRAS GRANDES Y FLECHAS ROJAS EN MOVIMIENTO PASO A PASO ═══ */
             <form onSubmit={handleSubmit} noValidate className="space-y-4" data-testid="express-order-form">
 
-              {/* ═══ ETAPA 1: Nombre Completo (Nombre y Apellido) ═══ */}
+              {/* ═══ ETAPA 1: Nombre Completo (Imagen guía + campo abajo + auto-scroll solo al salir/blur) ═══ */}
               <div
+                ref={step1CardRef}
                 data-testid="step-card-nombre"
                 className={`rounded-2xl p-4 sm:p-5 transition-all duration-300 ${step1Done
                   ? 'bg-[#f0fdf4] border-3 border-[#16a34a]'
-                  : 'bg-[#fffdf5] border-4 border-red-600 shadow-[0_0_0_4px_rgba(220,38,38,0.15)]'
+                  : 'bg-[#fffdf5] border-3 border-[#D4AF37] shadow-[0_8px_24px_rgba(212,175,55,0.18)]'
                   }`}
               >
-                {/* FLECHA ROJA EN MOVIMIENTO APUNTANDO AL PASO 1 */}
-                {!step1Done && (
+                {!step1Done && !step1GuideError ? (
+                  <div data-testid="red-arrow-step-1" className="mb-3">
+                    <img
+                      src="/assets/form-step1-nombre-guide.png"
+                      alt="Paso 1: Escribí tu Nombre y Apellido acá abajo"
+                      onError={() => setStep1GuideError(true)}
+                      className="w-full max-w-[440px] mx-auto h-auto rounded-xl select-none drop-shadow-md"
+                    />
+                  </div>
+                ) : !step1Done ? (
                   <div
                     data-testid="red-arrow-step-1"
-                    className="mb-3 bg-red-600 text-white rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 shadow-md animate-bounce"
+                    className="mb-3 bg-[#062319] border-2 border-[#D4AF37] text-white rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 shadow-md"
                   >
-                    <ArrowDown className="w-7 h-7 stroke-[3] text-yellow-300 shrink-0" />
+                    <ArrowDown className="w-7 h-7 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
                     <span className="text-base sm:text-lg font-black uppercase tracking-wide leading-tight">
                       PASO 1: Escribí aquí abajo tu Nombre y Apellido
                     </span>
                   </div>
-                )}
+                ) : null}
 
-                <label className="block text-lg sm:text-xl font-black text-stone-950 mb-1.5 flex items-center justify-between gap-2">
+                <label className="block text-lg sm:text-xl font-black text-stone-950 mb-2 flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-base font-black shrink-0 ${step1Done ? 'bg-[#16a34a] text-white' : 'bg-red-600 text-white'
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-base font-black shrink-0 ${step1Done ? 'bg-[#16a34a] text-white' : 'bg-[#062319] text-[#ffd778]'
                       }`}>
                       {step1Done ? '✓' : '1'}
                     </span>
-                    <span>Tu Nombre Completo (Nombre y Apellido)</span>
+                    <span>Tu Nombre y Apellido</span>
                   </span>
                   {step1Done && (
                     <span className="text-sm font-black text-[#16a34a] bg-[#dcfce7] px-3 py-1 rounded-full shrink-0">
@@ -1376,13 +1459,9 @@ export const OrderForm: React.FC<{
                   )}
                 </label>
 
-                <p className="text-sm sm:text-base font-bold text-stone-800 mb-3 leading-snug">
-                  Poné tu <b>Nombre y tu Apellido</b> completos para registrar tu pedido:
-                </p>
-
                 <div className="relative flex items-center">
                   {!step1Done && (
-                    <div className="mr-2 text-red-600 animate-pulse shrink-0">
+                    <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
                       <ArrowRight className="w-8 h-8 stroke-[3.5]" />
                     </div>
                   )}
@@ -1394,9 +1473,14 @@ export const OrderForm: React.FC<{
                       autoComplete="name"
                       value={nombre}
                       onChange={(e) => setNombre(e.target.value)}
+                      onBlur={(e) => {
+                        if (e.currentTarget.value.trim().length >= 3 && celular.replace(/\D/g, '').length < 8) {
+                          smoothCenterElement(step2CardRef.current);
+                        }
+                      }}
                       placeholder="Ej: Juan Carlos López"
                       className={`w-full pl-12 pr-4 py-4 sm:py-4.5 border-3 bg-white rounded-2xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!step1Done
-                        ? 'border-red-600 focus:border-red-700 focus:ring-4 focus:ring-red-500/25'
+                        ? 'border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
                         : 'border-[#16a34a] focus:border-[#0b3d2e]'
                         }`}
                     />
@@ -1404,32 +1488,41 @@ export const OrderForm: React.FC<{
                 </div>
               </div>
 
-              {/* ═══ ETAPA 2: Tu WhatsApp (Se activa cuando completa el Nombre) ═══ */}
+              {/* ═══ ETAPA 2: Tu WhatsApp (Imagen guía explicando cómo escribir sin +595 + auto-scroll al salir) ═══ */}
               <div
+                ref={step2CardRef}
                 data-testid="step-card-whatsapp"
                 className={`rounded-2xl p-4 sm:p-5 transition-all duration-300 ${!step1Done
-                  ? 'bg-stone-100 border-3 border-stone-300 opacity-65'
+                  ? 'bg-stone-100 border-3 border-stone-300 opacity-75'
                   : step2Done
                     ? 'bg-[#f0fdf4] border-3 border-[#16a34a]'
-                    : 'bg-[#fffdf5] border-4 border-red-600 shadow-[0_0_0_4px_rgba(220,38,38,0.15)]'
+                    : 'bg-[#fffdf5] border-3 border-[#D4AF37] shadow-[0_8px_24px_rgba(212,175,55,0.18)]'
                   }`}
               >
-                {/* FLECHA ROJA EN MOVIMIENTO APUNTANDO AL PASO 2 */}
-                {step1Done && !step2Done && (
+                {step1Done && !step2Done && !step2GuideError ? (
+                  <div data-testid="red-arrow-step-2" className="mb-3">
+                    <img
+                      src="/assets/form-step2-whatsapp-guide.png"
+                      alt="Paso 2: Escribí tu número de WhatsApp empezando con 09 sin +595"
+                      onError={() => setStep2GuideError(true)}
+                      className="w-full max-w-[440px] mx-auto h-auto rounded-xl select-none shadow-md border border-[#D4AF37]/60"
+                    />
+                  </div>
+                ) : step1Done && !step2Done ? (
                   <div
                     data-testid="red-arrow-step-2"
-                    className="mb-3 bg-red-600 text-white rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 shadow-md animate-bounce"
+                    className="mb-3 bg-[#062319] border-2 border-[#D4AF37] text-white rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 shadow-md"
                   >
-                    <ArrowDown className="w-7 h-7 stroke-[3] text-yellow-300 shrink-0" />
+                    <ArrowDown className="w-7 h-7 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
                     <span className="text-base sm:text-lg font-black uppercase tracking-wide leading-tight">
-                      PASO 2: Ahora escribí aquí tu número de WhatsApp
+                      PASO 2: Empezá con 09 sin +595 (Ej: 0981 123 456)
                     </span>
                   </div>
-                )}
+                ) : null}
 
-                <label className="block text-lg sm:text-xl font-black text-stone-950 mb-1.5 flex items-center justify-between gap-2">
+                <label className="block text-lg sm:text-xl font-black text-stone-950 mb-2 flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-base font-black shrink-0 ${step2Done ? 'bg-[#16a34a] text-white' : step1Done ? 'bg-red-600 text-white' : 'bg-stone-400 text-white'
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-base font-black shrink-0 ${step2Done ? 'bg-[#16a34a] text-white' : step1Done ? 'bg-[#062319] text-[#ffd778]' : 'bg-stone-400 text-white'
                       }`}>
                       {step2Done ? '✓' : '2'}
                     </span>
@@ -1446,13 +1539,9 @@ export const OrderForm: React.FC<{
                   ) : null}
                 </label>
 
-                <p className="text-sm sm:text-base font-bold text-stone-800 mb-3 leading-snug">
-                  Poné tu número de celular con WhatsApp para enviarte la confirmación:
-                </p>
-
                 <div className="relative flex items-center">
                   {step1Done && !step2Done && (
-                    <div className="mr-2 text-red-600 animate-pulse shrink-0">
+                    <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
                       <ArrowRight className="w-8 h-8 stroke-[3.5]" />
                     </div>
                   )}
@@ -1466,11 +1555,19 @@ export const OrderForm: React.FC<{
                       disabled={!step1Done}
                       value={celular}
                       onChange={(e) => setCelular(e.target.value)}
-                      placeholder={step1Done ? 'Ej: 0981 123 456' : '🔒 Completá primero tu Nombre arriba'}
+                      onFocus={() => {
+                        if (step1Done) smoothCenterElement(step2CardRef.current);
+                      }}
+                      onBlur={(e) => {
+                        if (e.currentTarget.value.replace(/\D/g, '').length >= 8 && !step3Done) {
+                          smoothCenterElement(step3CardRef.current);
+                        }
+                      }}
+                      placeholder={step1Done ? 'Ej: 0981 123 456 (sin +595)' : '🔒 Completá primero tu Nombre arriba'}
                       className={`w-full pl-12 pr-4 py-4 sm:py-4.5 border-3 rounded-2xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!step1Done
                         ? 'bg-stone-200 border-stone-300 text-stone-500 cursor-not-allowed'
                         : !step2Done
-                          ? 'bg-white border-red-600 focus:border-red-700 focus:ring-4 focus:ring-red-500/25'
+                          ? 'bg-white border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
                           : 'bg-white border-[#16a34a] focus:border-[#0b3d2e]'
                         }`}
                     />
@@ -1478,19 +1575,31 @@ export const OrderForm: React.FC<{
                 </div>
               </div>
 
-              {/* ═══ ETAPA 3: Ubicación Paso a Paso (Ciudad -> Barrio -> Calle) ═══ */}
+              {/* ═══ ETAPA 3: ¿Dónde te entregamos? (Imagen descriptiva Casa vs Edificio + Ciudad -> Barrio -> Calle) ═══ */}
               <div
+                ref={step3CardRef}
                 data-testid="step-card-ubicacion"
                 className={`rounded-2xl p-4 sm:p-5 space-y-4 transition-all duration-300 ${!step2Done
-                  ? 'bg-stone-100 border-3 border-stone-300 opacity-65'
+                  ? 'bg-stone-100 border-3 border-stone-300 opacity-75'
                   : step3Done
                     ? 'bg-[#f0fdf4] border-3 border-[#16a34a]'
-                    : 'bg-[#fffdf5] border-4 border-red-600 shadow-[0_0_0_4px_rgba(220,38,38,0.15)]'
+                    : 'bg-[#fffdf5] border-3 border-[#D4AF37] shadow-[0_8px_24px_rgba(212,175,55,0.18)]'
                   }`}
               >
+                {step2Done && !step3Done && !step3GuideError && (
+                  <div className="mb-1">
+                    <img
+                      src="/assets/form-step3-entrega-guide.png"
+                      alt="Paso 3: Elegí Casa o Edificio y escribí Ciudad, Barrio y Calle"
+                      onError={() => setStep3GuideError(true)}
+                      className="w-full max-w-[440px] mx-auto h-auto rounded-xl select-none shadow-md border border-[#D4AF37]/60"
+                    />
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <label className="text-lg sm:text-xl font-black text-stone-950 flex items-center gap-2">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-base font-black shrink-0 ${step3Done ? 'bg-[#16a34a] text-white' : step2Done ? 'bg-red-600 text-white' : 'bg-stone-400 text-white'
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-base font-black shrink-0 ${step3Done ? 'bg-[#16a34a] text-white' : step2Done ? 'bg-[#062319] text-[#ffd778]' : 'bg-stone-400 text-white'
                       }`}>
                       {step3Done ? '✓' : '3'}
                     </span>
@@ -1536,26 +1645,23 @@ export const OrderForm: React.FC<{
                   </div>
                 </div>
 
-                <p className="text-sm sm:text-base font-bold text-stone-800 leading-snug">
-                  Completá uno por uno tu <b>Ciudad</b>, tu <b>Barrio</b> y el <b>Nombre de tu Calle</b>:
-                </p>
-
                 <div className="space-y-4">
                   {/* ── SUB-ETAPA 3.1: CIUDAD ── */}
                   <div
+                    ref={ciudadBoxRef}
                     className={`rounded-2xl p-3.5 transition-all ${!step2Done
                       ? 'bg-stone-200/70 border-2 border-stone-300'
                       : !ciudadDone
-                        ? 'bg-red-50/80 border-3 border-red-600'
+                        ? 'bg-amber-50/70 border-3 border-[#D4AF37]'
                         : 'bg-white border-2 border-[#16a34a]'
                       }`}
                   >
                     {step2Done && !ciudadDone && (
                       <div
                         data-testid="red-arrow-ciudad"
-                        className="mb-2.5 bg-red-600 text-white rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm animate-bounce"
+                        className="mb-2.5 bg-[#062319] border border-[#D4AF37] text-[#ffd778] rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm"
                       >
-                        <ArrowDown className="w-6 h-6 stroke-[3] text-yellow-300 shrink-0" />
+                        <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
                         <span className="text-sm sm:text-base font-black uppercase">
                           PASO 3.1: Escribí aquí el nombre de tu Ciudad
                         </span>
@@ -1571,7 +1677,7 @@ export const OrderForm: React.FC<{
                     </label>
                     <div className="relative flex items-center">
                       {step2Done && !ciudadDone && (
-                        <div className="mr-2 text-red-600 animate-pulse shrink-0">
+                        <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
                           <ArrowRight className="w-7 h-7 stroke-[3.5]" />
                         </div>
                       )}
@@ -1585,11 +1691,19 @@ export const OrderForm: React.FC<{
                           disabled={!step2Done}
                           value={ciudadTexto}
                           onChange={(e) => setCiudadTexto(e.target.value)}
+                          onFocus={() => {
+                            if (step2Done) smoothCenterElement(ciudadBoxRef.current);
+                          }}
+                          onBlur={(e) => {
+                            if (e.currentTarget.value.trim().length >= 2 && barrioTexto.trim().length < 2) {
+                              smoothCenterElement(barrioBoxRef.current);
+                            }
+                          }}
                           placeholder={step2Done ? 'Ej: San Lorenzo, Luque, Asunción...' : '🔒 Completá primero tu WhatsApp'}
                           className={`w-full pl-11 pr-4 py-3.5 sm:py-4 border-3 rounded-xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!step2Done
                             ? 'bg-stone-200 border-stone-300 text-stone-500 cursor-not-allowed'
                             : !ciudadDone
-                              ? 'bg-white border-red-600 focus:border-red-700 focus:ring-4 focus:ring-red-500/25'
+                              ? 'bg-white border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
                               : 'bg-white border-[#16a34a]'
                             }`}
                         />
@@ -1599,19 +1713,20 @@ export const OrderForm: React.FC<{
 
                   {/* ── SUB-ETAPA 3.2: BARRIO (Se activa cuando llena Ciudad) ── */}
                   <div
+                    ref={barrioBoxRef}
                     className={`rounded-2xl p-3.5 transition-all ${!ciudadDone
                       ? 'bg-stone-200/70 border-2 border-stone-300 opacity-70'
                       : !barrioDone
-                        ? 'bg-red-50/80 border-3 border-red-600'
+                        ? 'bg-amber-50/70 border-3 border-[#D4AF37]'
                         : 'bg-white border-2 border-[#16a34a]'
                       }`}
                   >
                     {ciudadDone && !barrioDone && (
                       <div
                         data-testid="red-arrow-barrio"
-                        className="mb-2.5 bg-red-600 text-white rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm animate-bounce"
+                        className="mb-2.5 bg-[#062319] border border-[#D4AF37] text-[#ffd778] rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm"
                       >
-                        <ArrowDown className="w-6 h-6 stroke-[3] text-yellow-300 shrink-0" />
+                        <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
                         <span className="text-sm sm:text-base font-black uppercase">
                           PASO 3.2: Ahora escribí aquí el nombre de tu Barrio
                         </span>
@@ -1631,7 +1746,7 @@ export const OrderForm: React.FC<{
                     </label>
                     <div className="relative flex items-center">
                       {ciudadDone && !barrioDone && (
-                        <div className="mr-2 text-red-600 animate-pulse shrink-0">
+                        <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
                           <ArrowRight className="w-7 h-7 stroke-[3.5]" />
                         </div>
                       )}
@@ -1644,11 +1759,19 @@ export const OrderForm: React.FC<{
                           disabled={!ciudadDone}
                           value={barrioTexto}
                           onChange={(e) => setBarrioTexto(e.target.value)}
+                          onFocus={() => {
+                            if (ciudadDone) smoothCenterElement(barrioBoxRef.current);
+                          }}
+                          onBlur={(e) => {
+                            if (e.currentTarget.value.trim().length >= 2 && calleTexto.trim().length < 2) {
+                              smoothCenterElement(calleBoxRef.current);
+                            }
+                          }}
                           placeholder={ciudadDone ? 'Ej: Barrio Centro, San Miguel...' : '🔒 Escribí primero tu Ciudad arriba'}
                           className={`w-full pl-11 pr-4 py-3.5 sm:py-4 border-3 rounded-xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!ciudadDone
                             ? 'bg-stone-200 border-stone-300 text-stone-500 cursor-not-allowed'
                             : !barrioDone
-                              ? 'bg-white border-red-600 focus:border-red-700 focus:ring-4 focus:ring-red-500/25'
+                              ? 'bg-white border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
                               : 'bg-white border-[#16a34a]'
                             }`}
                         />
@@ -1658,19 +1781,20 @@ export const OrderForm: React.FC<{
 
                   {/* ── SUB-ETAPA 3.3: NOMBRE DE CALLE (Se activa cuando llena Barrio) ── */}
                   <div
+                    ref={calleBoxRef}
                     className={`rounded-2xl p-3.5 transition-all ${!barrioDone
                       ? 'bg-stone-200/70 border-2 border-stone-300 opacity-70'
                       : !calleDone
-                        ? 'bg-red-50/80 border-3 border-red-600'
+                        ? 'bg-amber-50/70 border-3 border-[#D4AF37]'
                         : 'bg-white border-2 border-[#16a34a]'
                       }`}
                   >
                     {barrioDone && !calleDone && (
                       <div
                         data-testid="red-arrow-calle"
-                        className="mb-2.5 bg-red-600 text-white rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm animate-bounce"
+                        className="mb-2.5 bg-[#062319] border border-[#D4AF37] text-[#ffd778] rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm"
                       >
-                        <ArrowDown className="w-6 h-6 stroke-[3] text-yellow-300 shrink-0" />
+                        <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
                         <span className="text-sm sm:text-base font-black uppercase">
                           PASO 3.3: Por último escribí el Nombre de tu Calle
                         </span>
@@ -1690,7 +1814,7 @@ export const OrderForm: React.FC<{
                     </label>
                     <div className="relative flex items-center">
                       {barrioDone && !calleDone && (
-                        <div className="mr-2 text-red-600 animate-pulse shrink-0">
+                        <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
                           <ArrowRight className="w-7 h-7 stroke-[3.5]" />
                         </div>
                       )}
@@ -1704,6 +1828,14 @@ export const OrderForm: React.FC<{
                           disabled={!barrioDone}
                           value={calleTexto}
                           onChange={(e) => setCalleTexto(e.target.value)}
+                          onFocus={() => {
+                            if (barrioDone) smoothCenterElement(calleBoxRef.current);
+                          }}
+                          onBlur={(e) => {
+                            if (e.currentTarget.value.trim().length >= 2) {
+                              smoothCenterElement(submitAreaRef.current);
+                            }
+                          }}
                           placeholder={
                             !barrioDone
                               ? '🔒 Escribí primero tu Barrio arriba'
@@ -1714,7 +1846,7 @@ export const OrderForm: React.FC<{
                           className={`w-full pl-11 pr-4 py-3.5 sm:py-4 border-3 rounded-xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!barrioDone
                             ? 'bg-stone-200 border-stone-300 text-stone-500 cursor-not-allowed'
                             : !calleDone
-                              ? 'bg-white border-red-600 focus:border-red-700 focus:ring-4 focus:ring-red-500/25'
+                              ? 'bg-white border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
                               : 'bg-white border-[#16a34a]'
                             }`}
                         />
@@ -1950,70 +2082,68 @@ export const OrderForm: React.FC<{
                 </div>
               </div>
 
-              {/* ═══ DUAL-FUNCTION CTA — Con Flecha Roja Final cuando todo está listo y Cuenta Regresiva 5s ═══ */}
-              <div className="pt-2">
+              {/* ═══ BOTÓN GRÁFICO ANIMADO CONFIRMAR MI PEDIDO (Transparente sin caja ni monto) ═══ */}
+              <div ref={submitAreaRef} className="pt-2">
                 {step3Done && !submitting && (
                   <div
                     data-testid="red-arrow-submit"
-                    className="mb-3 bg-red-600 text-white rounded-xl px-4 py-3 flex items-center justify-center gap-2.5 shadow-lg animate-bounce"
+                    className="mb-3 bg-[#062319] border-2 border-[#D4AF37] text-[#ffd778] rounded-xl px-4 py-2.5 flex items-center justify-center gap-2.5 shadow-lg animate-pointer-bounce"
                   >
-                    <ArrowDown className="w-7 h-7 stroke-[3] text-yellow-300 shrink-0" />
-                    <span className="text-base sm:text-lg font-black uppercase tracking-wide text-center">
-                      ¡TODO LISTO! TOCÁ EL BOTÓN DE ABAJO PARA ENVIAR TU PEDIDO
+                    <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0" />
+                    <span className="text-sm sm:text-base font-black uppercase tracking-wide text-center">
+                      ¡TODO LISTO! TOCÁ EL BOTÓN DE ABAJO PARA CONFIRMAR
                     </span>
-                    <ArrowDown className="w-7 h-7 stroke-[3] text-yellow-300 shrink-0" />
+                    <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0" />
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  data-testid="btn-dual-submit-order"
-                  disabled={submitting}
-                  className={`relative overflow-hidden w-full bg-gradient-to-r from-[#e8b23a] via-[#ffd778] to-[#f59e0b] hover:from-[#ffd778] hover:to-[#e8b23a] text-[#062319] font-black text-xl sm:text-2xl py-5 sm:py-6 px-4 rounded-2xl shadow-[0_6px_0_#9c7310,0_14px_28px_rgba(232,178,58,0.45)] active:translate-y-0.5 transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer disabled:opacity-95 ${step3Done ? 'ring-4 ring-red-600' : ''
-                    }`}
-                >
-                  {submitting ? (
-                    <>
-                      <div className="flex items-center justify-center gap-3 text-center">
-                        <Crosshair className="w-7 h-7 text-[#062319] animate-spin shrink-0" />
-                        <span>
-                          Preparando tus datos{firstName ? `, ${firstName}` : ''}...{' '}
-                          {submitCountdown > 0 ? `${submitCountdown}s` : '¡Enviando!'}
-                        </span>
-                      </div>
-                      <div className="w-4/5 max-w-xs h-3 bg-[#062319]/20 rounded-full overflow-hidden mt-1.5">
-                        <div
-                          className="h-full bg-[#062319] rounded-full transition-all duration-1000 ease-linear"
-                          style={{
-                            width: `${Math.min(100, Math.max(10, ((5 - submitCountdown) / 5) * 100))}%`
-                          }}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex items-center justify-center gap-2.5 text-center leading-tight">
-                      <Truck className="w-7 h-7 sm:w-8 sm:h-8 text-[#062319] shrink-0" />
+                {submitting ? (
+                  <div
+                    data-testid="btn-dual-submit-order"
+                    className="w-full rounded-2xl bg-gradient-to-r from-[#041a12] via-[#062319] to-[#0b3d2e] border-2 border-[#D4AF37] text-white py-5 px-4 shadow-xl flex flex-col items-center justify-center gap-2"
+                  >
+                    <div className="flex items-center justify-center gap-3 text-center font-black text-lg sm:text-xl text-[#ffd778]">
+                      <Crosshair className="w-7 h-7 text-[#ffd778] animate-spin shrink-0" />
                       <span>
-                        {firstName ? `¡PEDIR AHORA, ${firstName}!` : '¡CONFIRMAR MI PEDIDO AHORA!'} ·{' '}
-                        {formatGs(total)}
+                        Preparando tus datos{firstName ? `, ${firstName}` : ''}...{' '}
+                        {submitCountdown > 0 ? `${submitCountdown}s` : '¡Enviando!'}
                       </span>
                     </div>
-                  )}
-                </button>
-
-                {/* Información clara en letra legible */}
-                <div className="mt-3 flex flex-col items-center gap-1.5">
-                  <p className="text-sm sm:text-base text-center font-bold text-stone-800 flex items-center justify-center gap-1.5">
-                    <MapPin className="w-5 h-5 text-[#16a34a] shrink-0" />
-                    <span>
-                      Al tocar el botón adjuntamos tu ubicación GPS y enviamos tus datos al mismo tiempo.
-                    </span>
-                  </p>
-                  <p className="text-sm text-center font-bold text-stone-700 flex items-center justify-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-[#1ea856] shrink-0" />
-                    <span>Sin riesgos: revisás tu paquete en mano antes de pagar.</span>
-                  </p>
-                </div>
+                    <div className="w-4/5 max-w-xs h-3 bg-white/15 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#e8b23a] rounded-full transition-all duration-1000 ease-linear"
+                        style={{
+                          width: `${Math.min(100, Math.max(10, ((5 - submitCountdown) / 5) * 100))}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="submit"
+                    data-testid="btn-dual-submit-order"
+                    disabled={submitting}
+                    className="w-full bg-transparent border-0 p-0 focus:outline-none cursor-pointer flex items-center justify-center"
+                  >
+                    {!confirmBtnImgError ? (
+                      <img
+                        src="/assets/form-confirm-order-cta.png"
+                        alt="¡Confirmar mi pedido! Al tocar adjuntamos tu ubicación GPS y enviamos tus datos"
+                        onError={() => setConfirmBtnImgError(true)}
+                        className={`w-full max-w-[440px] mx-auto h-auto select-none drop-shadow-[0_12px_22px_rgba(0,0,0,0.28)] transition-transform active:scale-95 ${
+                          step3Done ? 'animate-cta-earthquake' : 'animate-cta-float'
+                        }`}
+                      />
+                    ) : (
+                      <span className="w-full bg-gradient-to-r from-[#065f46] via-[#047857] to-[#065f46] text-[#ffd778] font-black text-xl py-4 px-5 rounded-full border-3 border-[#D4AF37] shadow-xl flex flex-col items-center gap-1">
+                        <span>¡CONFIRMAR MI PEDIDO!</span>
+                        <span className="text-xs font-bold text-emerald-100">
+                          Al tocar adjuntamos tu ubicación GPS y enviamos tus datos · Pago al recibir
+                        </span>
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
             </form>
           )}
