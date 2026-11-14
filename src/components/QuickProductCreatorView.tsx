@@ -276,7 +276,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
     ? sheetCount
     : selectedAiOption?.recommendedSheetCount ||
       aiStrategy?.recommendedSheetCount ||
-      (isStandardMode ? 2 : 3);
+      2;
 
   const effectiveAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none' =
     manualOverrideUsed
@@ -727,9 +727,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       return {
         title: 'Paso 1 de 4 · ¿Qué tipo de página vas a crear hoy?',
         whatYouDo:
-          'Elegí una de las 2 tarjetas de abajo según tu estrategia: Página de Producto Estándar (venta 100% directa de un solo producto) o Página Tripwire (oferta gancho de entrada + producto principal adentro).',
+          'Elegí una de las 2 tarjetas de abajo según tu estrategia: Página de Producto Estándar (venta 100% directa de un solo producto) o Página Tripwire (oferta gancho directa + ruptura chocante + producto principal abajo).',
         whyItMatters:
-          'La Página Estándar va 100% directa a un solo producto. La Página Tripwire arranca arriba solo con el gancho económico (sin mencionar envío todavía) para que solicite sin pensarlo; luego va calentando hacia abajo y al final explota en un BOOM el Producto Estrella con el Tripwire DE REGALO y exhibiendo EN GRANDE que tiene ENVÍO GRATUITO. Así el cliente hace clic solo: descubre abajo que el envío del Tripwire solo sí se paga y decide llevar nomás ya el paquete estrella con envío gratis (y si pidió arriba el Tripwire solo, WhatsApp lo ataca con Envío Gratis como llave).',
+          'La Página Estándar va 100% directa a un solo producto. La Página Tripwire arranca arriba directa y rápida ("bim bam bum": foto del gancho + beneficio + precio único + Botón #1 que abre el formulario recién al darle clic). Justo debajo frena de golpe con un mensaje chocante ("¡ESPERÁ UN RATITO! Estás a punto de llevar solo...") y entra con un diseño totalmente diferente mostrando tu Producto Estrella con ENVÍO GRATUITO + el Tripwire de regalo + Botón #2 al final.',
         unlockHint: pageCreationMode
           ? `Elegiste "${isStandardMode ? 'Página Estándar' : 'Página Tripwire'}". Tocá "Continuar al Paso 2" para avanzar.`
           : 'Tocá una de las 2 tarjetas de abajo para desbloquear el botón Continuar.'
@@ -755,9 +755,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       return {
         title: 'Paso 2 de 4 · Página Tripwire: Elegí tu Producto Principal',
         whatYouDo:
-          'Toda página Tripwire lleva tu Producto Principal adentro para hacer la psicología inversa. Seleccioná acá una Página de Producto Estándar ya hecha para introducirla como Oferta Principal (o elegí cargar todo desde cero).',
+          'Toda página Tripwire lleva tu Producto Principal adentro para hacer el contraste chocante debajo del gancho. Seleccioná acá una Página de Producto Estándar ya hecha para introducirla como Oferta Principal (o elegí cargar todo desde cero).',
         whyItMatters:
-          'Al traer tu Página Estándar ya creada, importamos automático su nombre, fotos, descripción y paquetes para que el cliente que llegó por el anuncio Tripwire descubra el Producto Principal adentro y prefiera llevarlo con el Tripwire de regalo.',
+          'Al traer tu Página Estándar ya creada, importamos automático su nombre, fotos, descripción y paquetes para presentarlo en la Parte 2 de forma brutal y completamente diferenciada visualmente de la Parte 1.',
         unlockHint: !startOrigin
           ? 'Elegí si vas a introducir una Página Estándar ya hecha o cargar todo desde cero.'
           : startOrigin === 'clone' && !clonedFrom
@@ -774,7 +774,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
           whatYouDo:
             'Cargá o ajustá el nombre, descripción, precio 1x, packs 2x/3x y foto de tu único producto estándar.',
           whyItMatters:
-            'Con esta ficha armamos tu página visual estándar y entrenamos automáticamente a tu Agente de WhatsApp y al bot de Comentarios Meta sin inventar precios.',
+            'Con esta ficha armamos tu página visual estándar (con botón directo que abre el formulario limpio en modal) y entrenamos automáticamente a tu Agente de WhatsApp y al bot de Comentarios Meta sin inventar precios.',
           unlockHint: isReadyForLaunchStep
             ? 'Todos los datos obligatorios están completos. Tocá "Ir al Estudio IA y Lanzamiento".'
             : 'Completá los campos marcados arriba en el checklist para habilitar el Estudio IA.'
@@ -805,13 +805,13 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       };
     }
     return {
-      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (3 Actos Progresivos)',
+      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (2 Partes + 2 Botones)',
       whatYouDo:
-        'La IA arma tu página en 3 actos sin rogar compra: arriba 100% Tripwire (cero spoiler del principal y cero mención de envío), al medio va calentando, y abajo explota el Producto Estrella exhibiendo EN GRANDE ENVÍO GRATUITO + el Tripwire gratis.',
+        'La IA arma una página limpia sin HTML innecesario ni formularios abiertos infinitos: Lámina 1 directa y rápida del Gancho + Botón #1 (que fluctúa hasta el fin de la 1ª imagen y abre el formulario al clic), luego ruptura chocante ("¡ESPERÁ!...") y Lámina 2 brutalmente persuasiva y diferente del Producto Estrella con ENVÍO GRATUITO + Botón #2.',
       whyItMatters:
-        'Al llegar abajo al BOOM, el cliente ve en grande que el Producto Estrella tiene ENVÍO GRATUITO y nota que el Tripwire solo sí abona envío: ahí decide solo llevar el paquete estrella. Y si pidió arriba el Tripwire sin bajar, el chat usa Envío Gratis como llave y al final confirma el envío.',
+        'El visitante nunca ve los dos productos mezclados ni un muro de texto: tiene exactamente 2 botones claros y el formulario únicamente aparece al tocar un botón.',
       unlockHint:
-        'Tocá "Lanzar Página Tripwire" para generar la página progresiva en GPT-2.6 y conectarla a tus campañas.'
+        'Tocá "Lanzar Página Tripwire" para generar ambas partes en GPT-2.6 y publicar tu página.'
     };
   }, [
     wizardStep,
@@ -836,9 +836,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
         'Preparando opciones de lanzamiento para tu Página Estándar...'
       ]
     : [
-        'Recabando ficha de tu Oferta Gancho y Producto Principal...',
-        'Diseñando Acto 1 (100% Tripwire arriba) → Acto 2 (Calentamiento) → Acto 3 (Explosión Principal)...',
-        'Ajustando tono magnético sin rogar compra y llave secreta de Envío Gratis en el chat...'
+        'Recabando ficha investigada del Gancho y Producto Principal...',
+        'Diseñando Imagen 1 directa + Botón #1 → Freno chocante "¡ESPERÁ!" → Imagen 2 brutal y diferente + Botón #2...',
+        'Configurando formulario popup limpio al hacer clic y llave de Envío Gratis en el chat...'
       ];
 
   return (

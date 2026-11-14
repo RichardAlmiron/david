@@ -736,19 +736,18 @@ REGLAS ESTRICTAS:
 3. Para cada opción, TÚ decides automáticamente "recommendedSheetCount" (2 para ofertas claras y directas de impulso rápido; 3 cuando el producto requiere más prueba técnica/contenido de caja/confianza) y "recommendedAudioPreset" ('warm_ambient', 'soft_lounge' o 'commercial_pulse'), más "visualDirection" detallando iluminación, paleta y composición editorial para GPT-2.6.
 4. Precios siempre en Guaraníes ("Gs."). Español natural paraguayo/rioplatense comercial sobrio, cero estrellitas ni humo de infoproducto.
 5. Si el usuario hace una pregunta o pide un giro específico ("userQuestion"), respondé de forma directa y útil en "assistantReply" y regenerá 3 opciones ajustadas exactamente a lo que pidió.`
-    : `Eres el Estratega Jefe de Embudos Duales de Psicología Inversa (COD Paraguay) y Director Creativo GPT-2.6 para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
+    : `Eres el Estratega Jefe de Embudos Duales de Ruptura de Patrón (COD Paraguay) y Director Creativo GPT-2.6 para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
 TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES sin tener que diseñar nada ni elegir estructura manual.
 PSICOLOGÍA DEL EMBUDO DUAL QUE DOMINÁS (OBLIGATORIO):
-1. TONO DE AUTORIDAD Y DESEO PURO (JAMÁS ROGAR COMPRA): Cuando el cliente siente que le están intentando vender, huye. Tu lenguaje despierta deseo irresistible y estatus para que el propio usuario quiera pedir y solicitar el producto sin que nosotros roguemos.
-2. ARQUITECTURA PROGRESIVA EN 3 ACTOS (OBLIGATORIA EN PÁGINA TRIPWIRE — usar siempre 3 láminas):
-   - LÁMINA 1 (Al aterrizar / parte superior): 100% "${safeEntryName}" ÚNICAMENTE (Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))}). PROHIBIDO mostrar, nombrar o insinuar a "${input.productName}" en la Lámina 1, y PROHIBIDO hablar de envío (ni gratis ni pago) en esta cabecera. El visitante llegó por este gancho y debe sentir deseo inmediato de solicitarlo sin fricción.
-   - LÁMINA 2 (Zona media / Calentamiento y Clic Mental): Va calentando de a poco desde "${safeEntryName}", muestra el límite de quedarse solo con lo básico y genera el "clic en la cabeza" despertando hambre por la solución definitiva completa.
-   - LÁMINA 3 (Abajo / Explosión BOOM de la Solución Definitiva): Recién abajo explota en su cara "${input.productName}" como la solución definitiva del mundo imposible de evitar, exhibiendo EN GRANDE que incluye **ENVÍO GRATUITO** + el **${safeEntryName} que vino a buscar del anuncio TOTALMENTE DE REGALO** (dejando transparente que pedir solo el artículo individual sí paga envío, para que el cliente haga clic solo: "ah, mejor pido ya el paquete estrella con envío gratis").
-3. REGLA CRÍTICA DE ENVÍO (ARRIBA vs ABAJO + CHAT): Arriba en la cabecera NO se habla de envío ni si es gratis o pago. Abajo en el BOOM del Producto Estrella se exhibe EN GRANDE **ENVÍO GRATUITO** para el Producto Estrella y transparente el envío del gancho individual; y si pidió arriba solo el gancho, el chat de WhatsApp usa Envío Gratis como llave y al cierre confirma el costo de envío si sigue solo con el gancho.
+1. DIRECTO AL GRANO ARRIBA + CONTRASTE BRUTAL ABAJO (CERO ROGAR COMPRA): Cuando el cliente siente que intentan venderle de entrada con drama excesivo, desconfía. Arriba va directo ("bim bam bum"); abajo frenamos en seco y despertamos deseo puro para que el cliente solicite el Producto Ganador por convicción.
+2. ARQUITECTURA DE RUPTURA EN 2 LÁMINAS VISUALMENTE OPUESTAS (POR DEFECTO 2 LÁMINAS):
+   - LÁMINA 1 (Al aterrizar / parte superior — GANCHO DIRECTO): 100% "${safeEntryName}" ÚNICAMENTE (${formatParaguayGs(Number(input.entryPriceGs || 20000))}). Entrada limpia, foto nítida, titular claro, 2-3 beneficios prácticos y precio único. PROHIBIDO exagerar espectacularidad, PROHIBIDO nombrar a "${input.productName}" y PROHIBIDO hablar de envío en la cabecera.
+   - RUPTURA CHOCANTE + LÁMINA 2 (Abajo — ESTÉTICA COMPLETAMENTE DIFERENTE + PERSUASIÓN BRUTAL): Justo debajo del botón del gancho frenamos al cliente con choque visual ("¡ESPERÁ UN RATITO! Estás a punto de llevar solo ${safeEntryName}...") y explotamos con un mundo visual totalmente distinto presentando "${input.productName}" como la solución definitiva superior, exhibiendo EN GRANDE **ENVÍO GRATUITO EN TODO PARAGUAY** + **${safeEntryName} TOTALMENTE DE REGALO** (contrastando de forma transparente que pedir solo el gancho abona envío, para que decida llevar el Producto Estrella).
+3. REGLA CRÍTICA DE MONEDA Y ENVÍO: Nunca dupliques "Gs. Gs." (escribí exactamente "Gs. 189.000"). Arriba NO se menciona el envío; abajo se exhibe en grande ENVÍO GRATUITO para el Producto Principal.
 4. NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
 REGLAS ESTRICTAS:
 - Si existe PÁGINA CLONADA, primero diagnosticá qué ángulo y estética visual usaba la página original ("currentPageDiagnosis") y proponé 3 opciones frescas distintas.
-- En modo Tripwire recomendá SIEMPRE "recommendedSheetCount": 3 para respetar los 3 actos (Entrada pura → Calentamiento → Explosión Principal) y decidí "recommendedAudioPreset" + "visualDirection".
+- En modo Tripwire recomendá "recommendedSheetCount": 2 por defecto (Lámina 1 Gancho Directo → Botón 1 → Ruptura chocante + Lámina 2 Explosión Principal → Botón 2), y decidí "recommendedAudioPreset" + "visualDirection" contrastada para la Parte 2.
 - Si el usuario conversa o pide otro enfoque ("userQuestion"), respondé con claridad ejecutiva en "assistantReply" y entregá 3 opciones nuevas alineadas a su pedido.`;
 
   const cloneContextBlock = cloneCtx?.sourceProductName
@@ -774,12 +773,12 @@ ${cloneCtx.sourceContextoIA ? `- Contexto comercial heredado:\n${cloneCtx.source
 - Producto Principal: ${input.productName}
 - Descripción: ${input.productDescription}
 - Ángulo borrador ingresado (si existe): ${input.winnerAngle || 'Ninguno aún — proponé los mejores'}
-- Precio Principal 1x: Gs. ${formatParaguayGs(Number(input.price1Gs || 189000))} (Normal: Gs. ${formatParaguayGs(Number(input.normalPriceGs || 249000))})
+- Precio Principal 1x: ${formatParaguayGs(Number(input.price1Gs || 189000))} (Normal: ${formatParaguayGs(Number(input.normalPriceGs || 249000))})
 ${
   !isPrincipalOnly
     ? `- Artículo de Entrada (Tripwire): ${safeEntryName}
 - Descripción entrada: ${input.entryProductDescription || safeEntryName}
-- Precio Entrada: Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))} (sin prometer envío gratis en la página; delivery Gs. ${formatParaguayGs(Number(input.entryDeliveryFeeGs || 40000))} reservado solo para el cierre si rechaza el Producto Principal en el chat)`
+- Precio Entrada: ${formatParaguayGs(Number(input.entryPriceGs || 20000))} (sin prometer envío gratis en la cabecera; delivery ${formatParaguayGs(Number(input.entryDeliveryFeeGs || 40000))} contrastado recién en Parte 2 o al cierre del chat si rechaza el Producto Principal)`
     : ''
 }${cloneContextBlock}${historyText}
 ${input.userQuestion ? `\nPREGUNTA O INSTRUCCIÓN ACTUAL DEL OPERADOR: "${input.userQuestion}"` : '\nGENERÁ EL DIAGNÓSTICO INICIAL Y LAS 3 MEJORES OPCIONES LISTAS PARA 1 CLIC.'}
@@ -798,10 +797,10 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
       "archetype": "Recomendada por IA",
       "winnerAngle": "Titular de ángulo listo para vender (máx 13 palabras)",
       "visualDirection": "Dirección artística completa para GPT-2.6 (iluminación, escenario, paleta, encuadre editorial sin humo)",
-      "recommendedSheetCount": 3,
+      "recommendedSheetCount": 2,
       "recommendedAudioPreset": "warm_ambient",
       "whyItConverts": "Por qué este ángulo y visual convierten mejor (y cómo se diferencia del clon si aplica).",
-      "tripwireBridgeNote": "${isPrincipalOnly ? '' : 'Cómo conecta el artículo de entrada con este Producto Ganador en la misma página.'}"
+      "tripwireBridgeNote": "${isPrincipalOnly ? '' : 'Cómo frena el patrón después del gancho directo y contrasta brutalmente con este Producto Ganador.'}"
     },
     {
       "id": "opt_2",
@@ -867,7 +866,13 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
     archetype: String(o?.archetype || (idx === 0 ? 'Recomendada por IA' : `Enfoque ${idx + 1}`)).trim(),
     winnerAngle: String(o?.winnerAngle || input.winnerAngle || input.productName).trim(),
     visualDirection: String(o?.visualDirection || '').trim(),
-    recommendedSheetCount: Number(o?.recommendedSheetCount) === 3 ? 3 : 2,
+    recommendedSheetCount: isPrincipalOnly
+      ? Number(o?.recommendedSheetCount) === 3
+        ? 3
+        : 2
+      : Number(o?.recommendedSheetCount) === 3
+        ? 3
+        : 2,
     recommendedAudioPreset: normalizeAudio(o?.recommendedAudioPreset),
     whyItConverts: String(o?.whyItConverts || '').trim(),
     tripwireBridgeNote: !isPrincipalOnly && o?.tripwireBridgeNote ? String(o.tripwireBridgeNote).trim() : undefined
@@ -883,8 +888,11 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
   return {
     currentPageDiagnosis: String(parsed?.currentPageDiagnosis || '').trim(),
     assistantReply: String(parsed?.assistantReply || '').trim(),
-    recommendedSheetCount:
-      Number(parsed?.recommendedSheetCount) === 3 || matchedRec.recommendedSheetCount === 3 ? 3 : 2,
+    recommendedSheetCount: isPrincipalOnly
+      ? Number(parsed?.recommendedSheetCount) === 3 || matchedRec.recommendedSheetCount === 3
+        ? 3
+        : 2
+      : 2,
     recommendedAudioPreset: normalizeAudio(parsed?.recommendedAudioPreset || matchedRec.recommendedAudioPreset),
     options,
     recommendedOptionId: matchedRec.id
@@ -908,7 +916,7 @@ export async function generateUniversalVisualProductPage(
   const sheetCountMode: 'auto' | 2 | 3 =
     input.sheetCount === 2 ? 2 : input.sheetCount === 3 ? 3 : 'auto';
   const requestedSheetCount: 2 | 3 =
-    sheetCountMode === 'auto' ? (isPrincipalOnly ? 2 : 3) : sheetCountMode;
+    sheetCountMode === 'auto' ? 2 : sheetCountMode;
   const price1 = Math.max(35000, Number(input.price1Gs) || 189000);
   const price2 = Number(input.price2Gs) || Math.round(price1 * 1.85);
   const price3 = Number(input.price3Gs) || Math.round(price1 * 2.65);
@@ -1010,25 +1018,24 @@ REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
 - JAMÁS escribas la palabra "tripwire", "gancho trampa" ni menciones artículos secundarios inexistentes.
 - Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
 - Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña Apple / Dyson / Bang & Olufsen adaptada a hogar/consumo real en Paraguay), iluminación cinematográfica de estudio con profundidad 3D, materiales táctiles ultra nítidos, tipografía editorial española impecable sin errores ni letras cortadas, ocupación total borde a borde (edge-to-edge 3:4 sin marcos blancos), CERO estrellas chillonas, CERO stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`
-    : `Eres el Director Creativo Senior de Marcas Flagship y Psicología de Conversión en Paraguay.
-Diseñas páginas gráficas verticales 100% visuales (cero bloques HTML intermedios: las láminas SON toda la presentación visual) con arquitectura psicológica progresiva de 3 actos:
-- ACTO 1 (ARRIBA AL ATERRIZAR): 100% "${safeEntryName}" únicamente. El visitante llega desde el anuncio de esa oferta y JAMÁS debe encontrarse de entrada con "${input.productName}".
-- ACTO 2 (ZONA MEDIA): Calentamiento progresivo + gancho espectacular que provoca un "clic en la cabeza" y despierta el deseo por un resultado definitivo sin rogar compra.
-- ACTO 3 (EXPLOSIÓN INFERIOR): Recién hacia abajo explota en su cara "${input.productName}" como la solución definitiva del mundo imposible de ignorar, revelando que al solicitarla se lleva "${safeEntryName}" GRATIS.
+    : `Eres el Director Creativo Senior de Respuesta Directa y Psicología de Ruptura de Patrón en Paraguay.
+Diseñas páginas gráficas verticales 100% visuales (sin HTML intermedio: 1ª imagen para el producto gancho + botón, luego choque brusco de ruptura de patrón y 2ª imagen completamente distinta para el Producto Principal + botón final):
+- LÁMINA 1 (GANCHO DIRECTO "BIM BAM BUM" — ARRIBA): Entrada directa, limpia y sin exagerar espectacularidad ni textos largos para convencer. El visitante llegó por el precio bajo del anuncio y ya quiere separarlo: foto comercial nítida del producto exacto "${safeEntryName}", titular limpio, 2-3 beneficios prácticos concretos y precio único (${formatParaguayGs(entryPrice)}). PROHIBIDO nombrar o insinuar a "${input.productName}", PROHIBIDO hablar de envío.
+- RUPTURA CHOCANTE + LÁMINA 2 (CONTRASTE BRUTAL Y VISUALMENTE OPUESTO — ABAJO): Justo debajo del botón del gancho cambia radicalmente el tono, la paleta y la intensidad visual (diseño COMPLETAMENTE DIFERENTE a la Lámina 1 para no mezclar jamás ambos productos). Arranca frenando en seco ("¡ESPERÁ UN RATITO! Estás a punto de llevar solo ${safeEntryName}... Aguardá y leé esto primero") y entra con persuasión brutal de alto impacto presentando "${input.productName}" como la solución definitiva superior, exhibiendo EN GRANDE **ENVÍO GRATUITO EN TODO PARAGUAY** + **${safeEntryName} TOTALMENTE DE REGALO**.
 
-REGLA INQUEBRANTABLE DE TONO, LENGUAJE Y CALIDAD GPT-2.6:
-- CERO ROGAR COMPRA: Nunca supliques ni grites venta ("¡Comprá ya!", "No te pierdas"). Cuando el cliente siente que le quieren vender, huye. El diseño y los textos deben hacer que el usuario desee solicitarlo por estatus y convicción propia.
+REGLA INQUEBRANTABLE DE TONO, MONEDA Y CALIDAD GPT-2.6:
+- MONEDA EXACTA PARAGUAY: Escribí los precios exactamente como se te entregan (ej. "Gs. 189.000"). PROHIBIDO repetir "Gs. Gs." ni usar "$"/USD.
+- CERO ROGAR COMPRA: Persuasión firme, chocante y magnética de contraste directo para que el cliente desee pedirlo por convicción.
 - JAMÁS escribas la palabra "tripwire", "gancho trampa" ni jerga técnica. Refiérete siempre al artículo de entrada por su nombre real: "${safeEntryName}".
-- Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
-- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña flagship internacional adaptada a Paraguay), iluminación de estudio dramática y limpia, fotografía comercial realista de alto impacto visual y tipografía española nítida, ocupación total borde a borde (edge-to-edge 3:4 sin marcos ni bordes blancos), CERO estrellas ni stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`;
+- Ocupación total borde a borde (edge-to-edge 3:4 sin marcos blancos), tipografía española nítida sin faltas ni palabras duplicadas, CERO estrellas chillonas ni stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`;
 
   const promptUserContent = isPrincipalOnly
     ? `PRODUCTO GANADOR ÚNICO (PÁGINA DIRECTA SIN ARTÍCULO SECUNDARIO):
 - Nombre: ${input.productName}
 - Enfoque / ángulo principal: ${cleanAngleInput || input.productDescription}
 - Qué hace / descripción: ${input.productDescription}
-- Precio Normal tachado: Gs. ${formatParaguayGs(normalPrice)}
-- Precio 1x: Gs. ${formatParaguayGs(price1)} (Pack 2x: Gs. ${formatParaguayGs(price2)}, Pack 3x: Gs. ${formatParaguayGs(price3)})
+- Precio Normal tachado: ${formatParaguayGs(normalPrice)}
+- Precio 1x: ${formatParaguayGs(price1)} (Pack 2x: ${formatParaguayGs(price2)}, Pack 3x: ${formatParaguayGs(price3)})
 - Envío Producto Principal: ENVÍO GRATIS en todo Paraguay + Pago en mano al recibir.
 ${visualDirectionInput ? `- Dirección visual asignada: ${visualDirectionInput}` : ''}
 
@@ -1050,13 +1057,13 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "role": "hero_presentation",
       "title": "Presentación del producto principal",
       "caption": "Pie corto sobrio",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero showcase of ${input.productName} (${cleanAngleInput || 'superior result'}) in ${visualDirectionInput || 'dramatic modern architectural lighting'}, razor-sharp bold editorial Spanish headline integrated harmoniously, clean pricing callout 'Gs. ${formatParaguayGs(price1)} · Envío Gratis · Pagás al Recibir', luxury tactile realism, edge-to-edge artwork with zero outer frame."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero showcase of ${input.productName} (${cleanAngleInput || 'superior result'}) in ${visualDirectionInput || 'dramatic modern architectural lighting'}, razor-sharp bold editorial Spanish headline integrated harmoniously, clean pricing callout '${formatParaguayGs(price1)} · Envío Gratis · Pagás al Recibir' (never duplicate 'Gs.'), luxury tactile realism, edge-to-edge artwork with zero outer frame."
     },
     {
       "role": "comparison_need",
       "title": "Beneficios y packs disponibles",
       "caption": "Comparativa clara de packs",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial infographic poster for openai/gpt-image-2.6-sunburst in crisp Spanish: macro visual breakdown of ${input.productName} key benefits and real materials, clean side-by-side comparison of 1 Unidad (Gs. ${formatParaguayGs(price1)}) and Pack 2x Ahorro (Gs. ${formatParaguayGs(price2)}) with 'Envío Gratis Paraguay', high-contrast studio typography, zero cheap stickers, edge-to-edge composition."
+      "imagePrompt": "Flagship full-bleed 3:4 commercial infographic poster for openai/gpt-image-2.6-sunburst in crisp Spanish: macro visual breakdown of ${input.productName} key benefits and real materials, clean side-by-side comparison of 1 Unidad (${formatParaguayGs(price1)}) and Pack 2x Ahorro (${formatParaguayGs(price2)}) with 'Envío Gratis Paraguay', high-contrast studio typography, zero cheap stickers, edge-to-edge composition."
     }${
       requestedSheetCount === 3 || sheetCountMode === 'auto'
         ? `,
@@ -1076,62 +1083,67 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   ],
   "agentContext": "Resumen completo para el agente WhatsApp y de Comentarios con precios exactos en Gs. de ${input.productName} (1x, 2x, 3x), Envío Gratis en todo Paraguay y pago al recibir."
 }`
-    : `PRODUCTO GANADOR (OFERTA PRINCIPAL EN LA MISMA PÁGINA CON ÁNGULO DIFERENTE):
+    : `PRODUCTO GANADOR (PARTE 2 — CHOQUE DE PATRÓN + OFERTA PRINCIPAL BRUTAL EN LA MISMA PÁGINA):
 - Nombre: ${input.productName}
-- Ángulo diferente del Producto Ganador en esta página: ${cleanAngleInput || `Solución definitiva completa superior al artículo de entrada (${input.productDescription})`}
+- Ángulo contundente del Producto Ganador: ${cleanAngleInput || `Solución definitiva completa muy superior al artículo de entrada (${input.productDescription})`}
 - Qué hace / descripción: ${input.productDescription}
-- Precio Normal tachado: Gs. ${formatParaguayGs(normalPrice)}
-- Precio 1x: Gs. ${formatParaguayGs(price1)} (Pack 2x: Gs. ${formatParaguayGs(price2)}, Pack 3x: Gs. ${formatParaguayGs(price3)})
-- Envío Producto Principal: ENVÍO GRATIS en todo Paraguay + Pago al recibir.
-${visualDirectionInput ? `- Dirección visual asignada: ${visualDirectionInput}` : ''}
+- Precio Normal tachado: ${formatParaguayGs(normalPrice)}
+- Precio 1x: ${formatParaguayGs(price1)} (Pack 2x: ${formatParaguayGs(price2)}, Pack 3x: ${formatParaguayGs(price3)})
+- Envío Producto Principal: ENVÍO GRATUITO en todo Paraguay + Pago al recibir.
+${visualDirectionInput ? `- Dirección visual asignada para Parte 2: ${visualDirectionInput}` : ''}
 
-ARTÍCULO COMPLEMENTARIO DE ENTRADA (BLOQUE 1 DE LA MISMA PÁGINA):
+ARTÍCULO DE ENTRADA (PARTE 1 — GANCHO DIRECTO RÁPIDO SIN ESPECTACULARIDAD EXAGERADA):
 - Nombre real investigado: ${safeEntryName}
-- Síntesis investigada de qué hace / incluye (NO copiar textos de proveedor literalmente): ${resolvedEntryDesc || safeEntryName}
-${resolvedEntrySpecs.length > 0 ? `- Especificaciones verificadas: ${resolvedEntrySpecs.join(' | ')}` : ''}
-${resolvedEntryVisualBlueprint ? `- Blueprint visual exacto del producto físico a retratar en estudio limpio (OBLIGATORIO RESPETAR ESTE OBJETO EXACTO en un ángulo editorial impecable): ${resolvedEntryVisualBlueprint}` : ''}
-- Precio ÚNICO cerrado (1 unidad solamente, sin packs 2x/3x ni normal tachado): Gs. ${formatParaguayGs(entryPrice)} (ARRIBA en la Lámina 1 está PROHIBIDO hablar de envío — ni gratis ni pago — para que solicite sin fricción. Recién ABAJO en el BOOM de la Lámina 3 se exhibe en grande **ENVÍO GRATUITO** exclusivo para el Producto Principal junto al ${safeEntryName} DE REGALO, transparentando que llevar solo ${safeEntryName} abona delivery Gs. ${formatParaguayGs(deliveryFee)} para que el propio usuario decida pedir el Producto Principal).
-- REGLA TRANSPARENTE: Si lleva el Producto Principal (${input.productName}), este complemento "${safeEntryName}" que vino a buscar del anuncio le va TOTALMENTE DE REGALO + ENVÍO GRATUITO exhibido en grande.
+- Síntesis investigada (NO copiar textos de proveedor literalmente): ${resolvedEntryDesc || safeEntryName}
+${resolvedEntrySpecs.length > 0 ? `- Especificaciones reales clave: ${resolvedEntrySpecs.join(' | ')}` : ''}
+${resolvedEntryVisualBlueprint ? `- Blueprint visual exacto del producto físico a mostrar limpio en Parte 1: ${resolvedEntryVisualBlueprint}` : ''}
+- Precio ÚNICO cerrado (1 unidad solamente): ${formatParaguayGs(entryPrice)} (ARRIBA en Lámina 1 está PROHIBIDO mencionar a "${input.productName}" y PROHIBIDO hablar de envío. Recién en LÁMINA 2 explota el contraste exhibiendo EN GRANDE **ENVÍO GRATUITO** para ${input.productName} + ${safeEntryName} TOTALMENTE DE REGALO, contrastando que llevar solo ${safeEntryName} abona delivery ${formatParaguayGs(deliveryFee)}).
 
-CANTIDAD DE LÁMINAS A DISEÑAR: ${sheetCountMode === 'auto' ? `Decidí automáticamente entre 2 o 3 láminas según la complejidad de la oferta dual (sugerido: ${requestedSheetCount})` : requestedSheetCount}
+CANTIDAD DE LÁMINAS: ${requestedSheetCount} (${requestedSheetCount === 2 ? 'Lámina 1 = Gancho directo rápido; Lámina 2 = Choque de freno + Explosión brutal y diferente del Producto Principal' : 'Lámina 1 = Gancho directo; Lámina 2 = Choque brusco ¡ESPERÁ! antes de confirmar; Lámina 3 = Explosión brutal Producto Principal'})
 
 Devuelve EXCLUSIVAMENTE este JSON válido:
 {
-  "strategySummary": "Explicación breve interna de la congruencia psicológica usada.",
+  "strategySummary": "Explicación breve interna del contraste chocante directo usado entre Gancho y Producto Principal.",
   "recommendedAudioPreset": "warm_ambient",
   "researchedProductDescription": "Ficha comercial limpia, verificada y redactada desde cero en español para ${input.productName} (cero copia-pega crudo).",
   "researchedEntryDescription": "Ficha comercial propia de ${safeEntryName} redactada limpiamente desde investigación (NUNCA copia-pega crudo del proveedor).",
-  "sobrietyHeadline": "Titular sobrio y elegante que NO ruega compra (máx 10 palabras).",
-  "subheadline": "Bajada clara explicando qué cambia en la casa/vida del cliente en Paraguay (máx 22 palabras).",
-  "winnerAngleHeadline": "Titular del ángulo diferente con el que se presenta el Producto Ganador en esta misma página (máx 12 palabras).",
-  "winnerAngleDescription": "Explicación persuasiva y sobria del ángulo diferente por el cual el Producto Ganador resuelve el problema completo mejor que el artículo individual (máx 32 palabras).",
-  "reversePsychologyHook": "Frase de psicología inversa elegante donde el cliente nota que llevar el producto completo incluye el complemento totalmente gratis y además desbloquea envío sin costo.",
-  "entryButtonLabel": "Solicitar ${safeEntryName} — 1 unidad (Gs. ${formatParaguayGs(entryPrice)})",
+  "sobrietyHeadline": "Titular rápido y directo para ${safeEntryName} (máx 8 palabras).",
+  "subheadline": "Beneficio práctico directo de ${safeEntryName} en una línea clara (máx 16 palabras).",
+  "winnerAngleHeadline": "Titular chocante y brutal para ${input.productName} debajo de la ruptura de patrón (máx 12 palabras).",
+  "winnerAngleDescription": "Contraste directo y persuasivo que explica por qué dar el salto a ${input.productName} resuelve el problema definitivo hoy (máx 32 palabras).",
+  "reversePsychologyHook": "¡Esperá un ratito antes de confirmar! Llevando ${input.productName} te llevás ${safeEntryName} GRATIS y activás Envío Gratuito.",
+  "entryButtonLabel": "SEPARAR ${safeEntryName} — 1 UNIDAD",
   "entryDisclaimer": "Solo incluye 1x ${safeEntryName}. NO incluye ${input.productName} ni envío gratuito.",
-  "bundleButtonLabel": "Llevar ${input.productName} + ${safeEntryName} GRATIS (Gs. ${formatParaguayGs(price1)})",
-  "bundleDisclaimer": "Incluye ${input.productName} completo + ${safeEntryName} DE REGALO + Envío GRATIS sin lista de espera.",
+  "bundleButtonLabel": "LLEVAR ${input.productName} + ${safeEntryName} GRATIS",
+  "bundleDisclaimer": "Incluye ${input.productName} completo + ${safeEntryName} DE REGALO + ENVÍO GRATUITO en todo Paraguay.",
   "sheetPrompts": [
     {
       "role": "hero_presentation",
-      "title": "Oferta de entrada ${safeEntryName}",
-      "caption": "Primera impresión exclusiva del artículo de entrada",
-      "imagePrompt": "Flagship full-bleed 3:4 commercial hero poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: CRITICAL COMPOSITION RULE — show and mention EXCLUSIVELY '${safeEntryName}' at Gs. ${formatParaguayGs(entryPrice)} (single unit, ZERO crossed-out normal price).${resolvedEntryVisualBlueprint ? ` Depict this EXACT researched physical item cleanly from a crisp 3/4 editorial studio angle: ${resolvedEntryVisualBlueprint}.` : ''} DO NOT depict, name, or spoil '${input.productName}' anywhere on this first poster. DO NOT write 'Envío Gratis' or any delivery charge. Studio-lit luxury macro product photography in ${visualDirectionInput || 'a moody architectural editorial lighting setup'}, effortless magnetic appeal and calm non-needy authority headline so the visitor wants to request it immediately without feeling sold to, edge-to-edge artwork with zero white frame."
-    },
-    {
-      "role": "comparison_need",
-      "title": "El clic mental: de lo básico a la solución definitiva",
-      "caption": "Calentamiento progresivo hacia el nivel superior",
-      "imagePrompt": "Flagship full-bleed 3:4 editorial storytelling poster for openai/gpt-image-2.6-sunburst in crisp Spanish: gradual desire-warming transition starting from using '${safeEntryName}' alone and smoothly exposing the incomplete everyday gap that sparks a powerful mental click ('cuando probás lo básico, descubrís lo que realmente te falta'), teasing the superior complete transformation of '${input.productName}' in ${visualDirectionInput || 'dramatic high-contrast studio lighting'}, calm authoritative typography that never begs to buy, zero cartoon icons, edge-to-edge."
+      "title": "Oferta directa ${safeEntryName}",
+      "caption": "Entrada rápida directa sin relleno",
+      "imagePrompt": "Clean direct fast-action 3:4 commercial product sheet for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: CRITICAL COMPOSITION RULE — show EXCLUSIVELY '${safeEntryName}' at exact single price '${formatParaguayGs(entryPrice)}' (never write 'Gs. Gs.' twice, ZERO crossed-out normal price).${resolvedEntryVisualBlueprint ? ` Depict this EXACT researched physical item cleanly on a crisp minimalist clean light/neutral product showcase background: ${resolvedEntryVisualBlueprint}.` : ''} Bim-bam-bum fast clarity: clear product title, 2 to 3 crisp practical specs icons/lines, bold single price '${formatParaguayGs(entryPrice)}'. DO NOT over-dramatize with excessive dark gala clutter, DO NOT mention '${input.productName}', DO NOT mention shipping or delivery anywhere. Edge-to-edge clean 3:4 layout."
     }${
-      requestedSheetCount === 3 || sheetCountMode === 'auto'
+      requestedSheetCount === 3
         ? `,
     {
+      "role": "comparison_need",
+      "title": "¡ESPERÁ UN RATITO! Antes de separarlo, leé esto",
+      "caption": "Ruptura visual chocante antes del producto principal",
+      "imagePrompt": "Stark shocking high-contrast pattern-interrupt 3:4 poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish — COMPLETELY DIFFERENT dark obsidian & sharp crimson/amber visual atmosphere from Sheet 1 (zero festive clutter): giant arresting top headline '¡ESPERÁ UN RATITO! ANTES DE CONFIRMAR TU PEDIDO...', bold stark message 'Estás a punto de llevar solo ${safeEntryName}. Aguardá 10 segundos y mirá lo que te estás perdiendo:', sharp high-impact comparison exposing how incomplete the small hook is alone vs stepping up to '${input.productName}', intense direct-response typography, edge-to-edge."
+    },
+    {
       "role": "social_trust_specs",
-      "title": "La Solución Definitiva: ${input.productName} + ${safeEntryName} GRATIS + ENVÍO GRATUITO",
-      "caption": "Explosión de la oferta estrella con Envío Gratuito",
-      "imagePrompt": "Flagship full-bleed 3:4 explosive BOOM climax poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: breathtaking center-stage reveal of '${input.productName}' (${cleanAngleInput || 'solución definitiva'}) presented as the undisputed ultimate flagship solution (Gs. ${formatParaguayGs(price1)}), featuring a PROMINENT BOLD TYPOGRAPHIC CALLOUT 'ENVÍO GRATUITO EN TODO PARAGUAY' alongside clear reverse-psychology reward 'Solicitando ${input.productName} llevás ${safeEntryName} TOTALMENTE DE REGALO' and transparent bottom comparison noting single '${safeEntryName}' alone pays delivery (Gs. ${formatParaguayGs(deliveryFee)}) while the flagship package ships 100% FREE, irresistible desire without begging, luxury studio lighting, edge-to-edge."
+      "title": "Solución Definitiva: ${input.productName} + ${safeEntryName} GRATIS + ENVÍO GRATUITO",
+      "caption": "Explosión brutal del Producto Principal",
+      "imagePrompt": "Ultra-persuasive dark-obsidian and metallic gold flagship 3:4 direct-response climax poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish — COMPLETELY DIFFERENT luxury dark visual aesthetic from Sheet 1: dominating center-stage studio photography of '${input.productName}' (${cleanAngleInput || 'solución definitiva'}) priced cleanly at '${formatParaguayGs(price1)}' (write '${formatParaguayGs(price1)}' ONCE, never 'Gs. Gs.'), PROMINENT GIANT CALLOUT 'ENVÍO GRATUITO EN TODO PARAGUAY', unmissable seal 'Llevás ${safeEntryName} TOTALMENTE DE REGALO', and stark bottom contrast showing standalone '${safeEntryName}' pays delivery (${formatParaguayGs(deliveryFee)}) while '${input.productName}' ships 100% FREE, razor-sharp Spanish typography with zero spelling mistakes, edge-to-edge."
     }`
-        : ''
+        : `,
+    {
+      "role": "social_trust_specs",
+      "title": "¡ESPERÁ! ${input.productName} + ${safeEntryName} GRATIS + ENVÍO GRATUITO",
+      "caption": "Choque brutal + Oferta Principal con Envío Gratuito",
+      "imagePrompt": "Stark shocking pattern-interrupt + brutal high-impact 3:4 direct-response poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish — COMPLETELY DIFFERENT dark obsidian, crimson-alert & metallic gold visual world from Sheet 1 (zero mixing with Sheet 1 colors): TOP 25% arresting visual shock banner '¡ESPERÁ UN RATITO! Estás a punto de llevar solo ${safeEntryName}... Aguardá y leé esto primero:', MAIN 75% devastating persuasive reveal of '${input.productName}' (${cleanAngleInput || 'la solución definitiva superior'}) as the overwhelming complete transformation at clean price '${formatParaguayGs(price1)}' (exact text '${formatParaguayGs(price1)}', NEVER write 'Gs. Gs.'), PROMINENT UNMISSABLE CALLOUT 'ENVÍO GRATUITO EN TODO PARAGUAY' + '${safeEntryName} TOTALMENTE DE REGALO', plus honest bottom contrast bar showing solo '${safeEntryName}' abona delivery '${formatParaguayGs(deliveryFee)}' vs Paquete Estrella ENVÍO GRATIS, razor-sharp crisp Spanish typography with zero text typos, edge-to-edge."
+    }`
     }
   ],
   "faq": [
@@ -1199,7 +1211,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       !isPrincipalOnly && i === 0 && resolvedEntryVisualBlueprint
         ? `Exact physical entry product geometry & clean studio appearance: ${resolvedEntryVisualBlueprint}.`
         : '',
-      (isPrincipalOnly || i >= 2) && savedPrincipalImg && !savedPrincipalImg.startsWith('/')
+      (isPrincipalOnly || i >= 1) && savedPrincipalImg && !savedPrincipalImg.startsWith('/')
         ? `Reference product style: ${input.productName}.`
         : '',
       'Ultra sharp typography in Spanish, NO English typos, clean modern e-commerce graphic sheet layout filling the entire 3:4 canvas edge-to-edge.'

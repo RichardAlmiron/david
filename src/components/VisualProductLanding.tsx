@@ -1,84 +1,28 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ArrowDown, Check } from 'lucide-react';
+import React from 'react';
+import { ArrowDown, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatGs } from '../config';
 import { OrderForm } from './OrderForm';
 
 /**
- * Full-bleed Visual Landing Page for GPT-2.6 Generated Products.
- * Zero intermediary HTML clutter: displays edge-to-edge graphic sheets covering the viewport.
- * On Tripwire pages, visitors land 100% on the entry offer at the top; as they scroll down through
- * the gradual warming sheet toward the climax sheet, the Principal Product Offer reveals cleanly.
+ * Página Visual Limpia (Cero HTML innecesario, cero formulario infinito abierto):
+ * - Modo Tripwire + Principal:
+ *   1. Lámina 1 (Gancho rápido directo) + Botón #1 que fluctúa con la primera imagen hasta su final.
+ *   2. Freno chocante de ruptura de patrón ("¡ESPERÁ UN RATITO! Estás a punto de llevar...").
+ *   3. Lámina 2+ (Oferta Principal brutalmente persuasiva y diferente) + Botón #2 al final.
+ * - Modo Estándar: Láminas centradas + 1 Botón principal que abre el formulario en modal al hacer clic.
  */
-export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ({
-  entryFocusedMode = false
-}) => {
+export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = () => {
   const {
     currentProductPage,
     selectedPack,
-    setSelectedPack,
     purchasePath,
-    setPurchasePath
+    openPurchaseOrderForm
   } = useStore();
 
   const vis = currentProductPage?.visualLanding;
   const trip = currentProductPage?.tripwireConfig;
   const hasEntryHook = Boolean(trip?.enabled && trip?.entryProductName);
-
-  const revealSheetRef = useRef<HTMLDivElement | null>(null);
-  const [principalRevealed, setPrincipalRevealed] = useState<boolean>(() => !hasEntryHook);
-
-  // Al aterrizar en cualquier Página Tripwire, iniciar siempre en el Gancho de Entrada (sin spoilear el Principal arriba)
-  useEffect(() => {
-    if (!hasEntryHook) {
-      setPrincipalRevealed(true);
-      return;
-    }
-    setPrincipalRevealed(false);
-    setPurchasePath('entry_only');
-    setSelectedPack(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProductPage?.id, hasEntryHook]);
-
-  // Revelar la Oferta Principal recién cuando el usuario baja hacia la zona de calentamiento / explosión final
-  useEffect(() => {
-    if (!hasEntryHook || principalRevealed) return;
-
-    const checkReveal = () => {
-      const targetEl = revealSheetRef.current;
-      if (targetEl) {
-        const rect = targetEl.getBoundingClientRect();
-        if (rect.top <= window.innerHeight * 0.78 && window.scrollY > 120) {
-          setPrincipalRevealed(true);
-          return;
-        }
-      }
-      if (window.scrollY > 420) {
-        setPrincipalRevealed(true);
-      }
-    };
-
-    window.addEventListener('scroll', checkReveal, { passive: true });
-    const observer =
-      typeof IntersectionObserver !== 'undefined' && revealSheetRef.current
-        ? new IntersectionObserver(
-            (entries) => {
-              if (entries.some((e) => e.isIntersecting) && window.scrollY > 80) {
-                setPrincipalRevealed(true);
-              }
-            },
-            { threshold: 0.15 }
-          )
-        : null;
-    if (observer && revealSheetRef.current) {
-      observer.observe(revealSheetRef.current);
-    }
-
-    return () => {
-      window.removeEventListener('scroll', checkReveal);
-      observer?.disconnect();
-    };
-  }, [hasEntryHook, principalRevealed, currentProductPage?.id]);
 
   if (!currentProductPage || !vis?.enabled || !Array.isArray(vis.sheets) || vis.sheets.length === 0) {
     return null;
@@ -92,186 +36,163 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ({
 
   const entryName = trip?.entryProductName || 'Artículo de Entrada';
   const entryPrice = Number(trip?.entryPriceGs ?? trip?.entryProductPriceGs ?? 20000);
-  const entryDelivery = Number(trip?.deliveryFeeGs ?? trip?.entryDeliveryFeeGs ?? 40000);
 
-  const isEntrySelected = hasEntryHook && purchasePath === 'entry_only';
-  const revealIndex = vis.sheets.length >= 3 ? vis.sheets.length - 1 : Math.max(0, vis.sheets.length - 1);
-
-  const scrollToForm = () => {
-    const formEl = document.getElementById('pedido');
-    if (formEl) {
-      formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const scrollToWarming = () => {
-    if (revealSheetRef.current) {
-      revealSheetRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      window.scrollBy({ top: Math.round(window.innerHeight * 0.75), behavior: 'smooth' });
-    }
-  };
-
-  const selectEntryOffer = () => {
-    setPurchasePath('entry_only');
-    setSelectedPack(1);
-    scrollToForm();
-  };
-
-  const selectWinnerBundle = () => {
-    setPrincipalRevealed(true);
-    setPurchasePath('principal_bundle');
-    if (effectivePack < 1) setSelectedPack(1);
-    scrollToForm();
-  };
-
-  const showPrincipalCard = hasEntryHook && (principalRevealed || purchasePath === 'principal_bundle');
+  const firstSheet = vis.sheets[0];
+  const secondPartSheets = vis.sheets.length > 1 ? vis.sheets.slice(1) : [];
 
   return (
     <div
       data-testid="visual-product-landing"
-      className="w-full min-h-screen bg-[#06080d] lg:grid lg:grid-cols-12 items-start"
+      className="w-full min-h-screen bg-[#06080d] text-white"
     >
-      {/* LADO IZQUIERDO (O COMPLETO EN MÓVIL): LÁMINAS GPT-2.6 BORDE A BORDE SIN CÓDIGO HTML INTERMEDIO */}
-      <div className="lg:col-span-7 w-full bg-black">
-        <div className="w-full flex flex-col">
-          {vis.sheets.map((sheet, idx) => (
-            <div
-              key={sheet.id || idx}
-              ref={idx === revealIndex ? revealSheetRef : undefined}
-              className="w-full"
-            >
+      <div className="w-full max-w-[560px] mx-auto bg-[#06080d] shadow-[0_0_80px_rgba(0,0,0,0.9)]">
+        {hasEntryHook ? (
+          <>
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* BLOQUE 1: IMAGEN 1 DIRECTA + BOTÓN #1 (FLUCTÚA HASTA EL FINAL) */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            <section data-testid="landing-hook-section" className="relative w-full">
               <img
+                src={firstSheet.imageUrl}
+                alt={firstSheet.title || entryName}
+                referrerPolicy="no-referrer"
+                loading="eager"
+                className="w-full h-auto block object-cover"
+              />
+
+              {/* ÚNICO BOTÓN #1 (Tripwire): sticky dentro del bloque para fluctuar solo durante la Imagen 1 */}
+              <div className="sticky bottom-3 z-30 px-3 py-3 bg-gradient-to-t from-[#06080d] via-[#06080d]/95 to-transparent">
+                <button
+                  type="button"
+                  data-testid="landing-btn-entry-only"
+                  onClick={() => openPurchaseOrderForm('entry_only', 1)}
+                  className="w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-[#f2cf7e] via-[#e5c88b] to-[#f4dfb0] hover:brightness-105 active:scale-[0.99] text-[#090b10] border-2 border-[#fff3d1] shadow-[0_10px_35px_rgba(229,200,139,0.45)] cursor-pointer transition-all flex items-center justify-between gap-3 animate-pulse"
+                  style={{ animationDuration: '2.4s' }}
+                >
+                  <div className="min-w-0 text-left">
+                    <div className="text-sm sm:text-base font-black leading-tight uppercase tracking-tight">
+                      {vis.entryButtonLabel || `SEPARAR ${entryName} AHORA`}
+                    </div>
+                    <div className="text-xs font-bold text-[#090b10]/80 mt-0.5 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                      <span>1 unidad · Pagás recién al recibir en mano</span>
+                    </div>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1.5 bg-[#090b10] text-[#f4dfb0] px-3 py-2 rounded-xl font-mono tabular-nums font-black text-sm sm:text-base">
+                    <span>{formatGs(entryPrice)}</span>
+                    <ArrowRight className="w-4 h-4 shrink-0" />
+                  </div>
+                </button>
+              </div>
+            </section>
+
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* RUPTURA CHOCANTE DE PATRÓN (DETIENE ANTES DE LA PARTE 2)      */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            <div
+              data-testid="landing-pattern-interrupt"
+              className="w-full bg-[#120608] border-y-2 border-red-500/80 px-5 py-7 text-center space-y-2.5"
+            >
+              <div className="text-[11px] sm:text-xs font-mono font-black uppercase tracking-[0.2em] text-red-400">
+                ¡ESPERÁ UN SEGUNDO! · NO CONFIRMES TODAVÍA
+              </div>
+              <h2 className="text-lg sm:text-2xl font-black text-white leading-tight text-balance">
+                Estás a punto de pedir únicamente «{entryName}»…
+              </h2>
+              <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed max-w-md mx-auto">
+                Aguardame un ratito antes de dar clic y separarlo. Leé esto que viene ahora: va a cambiar por completo tu decisión.
+              </p>
+              <div className="pt-1 flex justify-center text-red-400">
+                <ArrowDown className="w-5 h-5 animate-bounce" />
+              </div>
+            </div>
+
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* BLOQUE 2: IMAGEN PRINCIPAL PERSUASIVA + BOTÓN #2 AL FINAL      */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            <section data-testid="landing-principal-section" className="relative w-full">
+              {secondPartSheets.map((sheet, idx) => (
+                <img
+                  key={sheet.id || idx}
+                  src={sheet.imageUrl}
+                  alt={sheet.title || `${currentProductPage.nombre} presentación ${idx + 2}`}
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  className="w-full h-auto block object-cover"
+                />
+              ))}
+
+              {/* ÚNICO BOTÓN #2 (Oferta Principal + Regalo + Envío Gratuito): al final de la segunda imagen */}
+              <div className="sticky bottom-3 z-30 px-3 py-4 bg-gradient-to-t from-[#06080d] via-[#06080d]/95 to-transparent">
+                <button
+                  type="button"
+                  data-testid="landing-btn-principal-bundle"
+                  onClick={() => openPurchaseOrderForm('principal_bundle', 1)}
+                  className="w-full py-4 sm:py-5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-500 hover:brightness-105 active:scale-[0.99] text-[#031910] border-2 border-emerald-200 shadow-[0_12px_40px_rgba(16,185,129,0.45)] cursor-pointer transition-all flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 text-left space-y-0.5">
+                    <div className="text-[11px] sm:text-xs font-black uppercase tracking-wide text-[#022416]">
+                      ENVÍO GRATUITO + {entryName.toUpperCase()} DE REGALO
+                    </div>
+                    <div className="text-sm sm:text-base font-black leading-tight">
+                      {vis.bundleButtonLabel || `SOLICITAR ${currentProductPage.nombre}`}
+                    </div>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1.5 bg-[#031910] text-emerald-300 px-3.5 py-2.5 rounded-xl font-mono tabular-nums font-black text-sm sm:text-base">
+                    <span>{formatGs(activeBundlePrice)}</span>
+                    <ArrowRight className="w-4 h-4 shrink-0" />
+                  </div>
+                </button>
+              </div>
+            </section>
+          </>
+        ) : (
+          /* ═════════════════════════════════════════════════════════════ */
+          /* MODO ESTÁNDAR (UN SOLO PRODUCTO): LÁMINAS + 1 BOTÓN MODAL     */
+          /* ═════════════════════════════════════════════════════════════ */
+          <section className="relative w-full">
+            {vis.sheets.map((sheet, idx) => (
+              <img
+                key={sheet.id || idx}
                 src={sheet.imageUrl}
                 alt={sheet.title || `${currentProductPage.nombre} vista ${idx + 1}`}
                 referrerPolicy="no-referrer"
                 loading={idx === 0 ? 'eager' : 'lazy'}
                 className="w-full h-auto block object-cover"
               />
-            </div>
-          ))}
-        </div>
-      </div>
+            ))}
 
-      {/* LADO DERECHO (STICKY EN DESKTOP / ABAJO EN MÓVIL): SELECTOR PROGRESIVO + FORMULARIO ABIERTO */}
-      <aside className="lg:col-span-5 w-full bg-[#06080d] lg:sticky lg:top-0 lg:min-h-screen lg:max-h-screen lg:overflow-y-auto lg:border-l lg:border-white/10 px-3 py-5 sm:px-6 sm:py-7 space-y-5">
-        <div className="max-w-xl mx-auto space-y-3">
-          {hasEntryHook ? (
-            <div
-              className={`flex flex-col gap-2.5 ${
-                showPrincipalCard && !entryFocusedMode ? 'flex-col-reverse' : ''
-              }`}
-            >
+            <div className="sticky bottom-3 z-30 px-3 py-4 bg-gradient-to-t from-[#06080d] via-[#06080d]/95 to-transparent">
               <button
                 type="button"
-                data-testid="landing-btn-entry-only"
-                onClick={selectEntryOffer}
-                className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                  isEntrySelected
-                    ? 'bg-[#e5c88b] text-[#090b10] border-[#f4dfb0] shadow-lg'
-                    : 'bg-[#0e121c] hover:bg-[#141926] text-white border-white/15'
-                }`}
+                data-testid="landing-btn-principal-bundle"
+                onClick={() => openPurchaseOrderForm('principal_bundle', 1)}
+                className="w-full py-4 sm:py-5 px-5 rounded-2xl bg-gradient-to-r from-[#f2cf7e] via-[#e5c88b] to-[#f4dfb0] hover:brightness-105 active:scale-[0.99] text-[#090b10] border-2 border-[#fff3d1] shadow-[0_10px_35px_rgba(229,200,139,0.45)] cursor-pointer transition-all flex items-center justify-between gap-3"
               >
-                <div className="min-w-0 space-y-0.5">
-                  <div className="text-sm sm:text-base font-extrabold leading-snug">
-                    {vis.entryButtonLabel || `Solicitar ${entryName}`}
+                <div className="min-w-0 text-left space-y-0.5">
+                  <div className="text-sm sm:text-base font-black leading-tight">
+                    {vis.bundleButtonLabel || `SOLICITAR ${currentProductPage.nombre}`}
                   </div>
-                  <div
-                    className={`text-xs ${
-                      isEntrySelected ? 'text-[#090b10]/80 font-semibold' : 'text-zinc-400'
-                    }`}
-                  >
-                    {showPrincipalCard
-                      ? `Solo ${entryName} · Delivery de zona ${formatGs(entryDelivery)} al recibir`
-                      : 'Oferta promocional de entrada · Solicitud directa'}
+                  <div className="text-xs font-bold text-[#090b10]/80">
+                    Envío Gratis a todo Paraguay · Pagás recién al recibir
                   </div>
                 </div>
-                <div className="shrink-0 flex items-center gap-2">
-                  <span className="font-mono tabular-nums font-black text-base sm:text-lg">
-                    {formatGs(entryPrice)}
-                  </span>
-                  {isEntrySelected && <Check className="w-5 h-5 shrink-0" />}
+                <div className="shrink-0 flex items-center gap-1.5 bg-[#090b10] text-[#f4dfb0] px-3.5 py-2.5 rounded-xl font-mono tabular-nums font-black text-sm sm:text-base">
+                  <span>{formatGs(activeBundlePrice)}</span>
+                  <ArrowRight className="w-4 h-4 shrink-0" />
                 </div>
               </button>
-
-              {showPrincipalCard ? (
-                <button
-                  type="button"
-                  data-testid="landing-btn-principal-bundle"
-                  onClick={selectWinnerBundle}
-                  className={`w-full text-left p-4 sm:p-5 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                    !isEntrySelected
-                      ? 'bg-emerald-500 text-[#041a12] border-emerald-300 shadow-lg'
-                      : 'bg-[#0b1f17] hover:bg-[#0f291e] text-white border-emerald-500/70'
-                  }`}
-                >
-                  <div className="min-w-0 space-y-1">
-                    <div
-                      className={`text-xs sm:text-sm font-black uppercase tracking-wide ${
-                        !isEntrySelected ? 'text-[#041a12]' : 'text-emerald-300'
-                      }`}
-                    >
-                      ENVÍO GRATUITO + {entryName} DE REGALO
-                    </div>
-                    <div className="text-sm sm:text-base font-extrabold leading-snug">
-                      {vis.bundleButtonLabel ||
-                        `Solicitar ${currentProductPage.nombre} + ${entryName} DE REGALO`}
-                    </div>
-                    <div
-                      className={`text-xs ${
-                        !isEntrySelected ? 'text-[#041a12]/85 font-semibold' : 'text-emerald-200/80'
-                      }`}
-                    >
-                      Llevás gratis el producto del anuncio · Envío 100% gratuito en Paraguay
-                    </div>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-2">
-                    <span className="font-mono tabular-nums font-black text-base sm:text-lg">
-                      {formatGs(activeBundlePrice)}
-                    </span>
-                    {!isEntrySelected && <Check className="w-5 h-5 shrink-0" />}
-                  </div>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={scrollToWarming}
-                  className="w-full py-2 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-xs text-zinc-400 hover:text-zinc-200 inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <span>Deslizá hacia abajo para ver la presentación completa</span>
-                  <ArrowDown className="w-3.5 h-3.5 shrink-0" />
-                </button>
-              )}
             </div>
-          ) : (
-            <button
-              type="button"
-              data-testid="landing-btn-principal-bundle"
-              onClick={selectWinnerBundle}
-              className="w-full text-left p-4 rounded-2xl bg-[#e5c88b] hover:bg-[#edd49e] text-[#090b10] border border-[#f4dfb0] transition-all cursor-pointer flex items-center justify-between gap-3"
-            >
-              <div className="min-w-0 space-y-0.5">
-                <div className="text-sm sm:text-base font-extrabold leading-snug">
-                  {vis.bundleButtonLabel || `Solicitar ${currentProductPage.nombre}`}
-                </div>
-                <div className="text-xs font-semibold text-[#090b10]/80 flex items-center gap-1.5">
-                  <span>Envío Gratis a todo Paraguay · Pagás recién al recibir</span>
-                  <ArrowDown className="w-3.5 h-3.5 shrink-0" />
-                </div>
-              </div>
-              <span className="font-mono tabular-nums font-black text-lg shrink-0">
-                {formatGs(activeBundlePrice)}
-              </span>
-            </button>
-          )}
-        </div>
+          </section>
+        )}
+      </div>
 
-        {/* FORMULARIO COMPLETAMENTE ABIERTO EN SU PROPIO ESPACIO */}
-        <OrderForm
-          expressDirectMode
-          hidePrincipalUpgradeHint={hasEntryHook && !showPrincipalCard}
-        />
-      </aside>
+      {/* FORMULARIO: CERO HTML ABIERTO EN PANTALLA — SOLO SE ABRE EN MODAL AL TOCAR UN BOTÓN */}
+      <OrderForm
+        expressDirectMode
+        modalOnly
+        hidePrincipalUpgradeHint={hasEntryHook && purchasePath === 'entry_only'}
+      />
     </div>
   );
 };

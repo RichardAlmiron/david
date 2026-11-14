@@ -791,7 +791,7 @@ test('analyzeQuickCreatorStrategy diagnostica página clonada y propone opciones
                     archetype: 'Recomendada por IA',
                     winnerAngle: 'Transformá tu patio sin cables ni escaleras en menos de un minuto',
                     visualDirection: 'Iluminación arquitectónica nocturna de lujo en patio paraguayo moderno, contraste cálido-ámbar',
-                    recommendedSheetCount: isPrincipal ? 2 : 3,
+                    recommendedSheetCount: 2,
                     recommendedAudioPreset: 'soft_lounge',
                     whyItConverts: 'Ataca directamente la pereza de colgar luces tradicionales.',
                     tripwireBridgeNote: isPrincipal ? '' : 'Compará decorar una esquina vs iluminar toda la casa gratis.'
@@ -876,7 +876,7 @@ test('analyzeQuickCreatorStrategy diagnostica página clonada y propone opciones
     fetchImpl: mockFetch
   });
 
-  assert.equal(dualResult.recommendedSheetCount, 3);
+  assert.equal(dualResult.recommendedSheetCount, 2);
   assert.ok(dualResult.options[0].tripwireBridgeNote && dualResult.options[0].tripwireBridgeNote.length > 5);
 });
 
@@ -952,7 +952,7 @@ test('generateUniversalVisualProductPage soporta sheetCount auto y aplica visual
   }
 });
 
-test('dual_tripwire_winner ordena 3 actos progresivos: Lámina 1 100% entrada sin spoilear Principal, Lámina 2 calentamiento, Lámina 3 explosión Principal y sin envío gratis en entrada', async () => {
+test('dual_tripwire_winner ordena 2 láminas opuestas: Lámina 1 gancho directo bim-bam-bum y Lámina 2 ruptura chocante + Principal con envío gratis (sin Gs. Gs.)', async () => {
   const createdTempFiles: string[] = [];
   const capturedChatPayloads: any[] = [];
   const fakeJpgB64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46]).toString('base64');
@@ -967,22 +967,21 @@ test('dual_tripwire_winner ordena 3 actos progresivos: Lámina 1 100% entrada si
             {
               message: {
                 content: JSON.stringify({
-                  strategySummary: 'Arquitectura 3 actos sin rogar compra',
+                  strategySummary: 'Arquitectura 2 partes sin drama arriba y choque brutal abajo',
                   recommendedAudioPreset: 'warm_ambient',
                   sobrietyHeadline: 'Iluminación instantánea con un toque',
                   subheadline: 'Diseño magnético directo para tu entrada.',
                   winnerAngleHeadline: 'La transformación nocturna definitiva para toda tu casa',
                   winnerAngleDescription: 'Pensado para quien busca el resultado definitivo y desea solicitarlo por convicción.',
-                  reversePsychologyHook: 'Al solicitar la solución completa, la guirnalda de entrada va de regalo.',
-                  entryButtonLabel: 'Solicitar Guirnalda LED (Gs. 20.000)',
-                  bundleButtonLabel: 'Solicitar Proyector Definitivo + Guirnalda GRATIS (Gs. 189.000)',
-                  bundleDisclaimer: 'Incluye Proyector completo + Guirnalda DE REGALO + Envío Gratis.',
+                  reversePsychologyHook: '¡Esperá un ratito! Llevando la solución completa, el artículo de entrada va gratis y activás envío gratuito.',
+                  entryButtonLabel: 'SEPARAR GUIRNALDA LED — 1 UNIDAD',
+                  bundleButtonLabel: 'LLEVAR PROYECTOR + GUIRNALDA GRATIS',
+                  bundleDisclaimer: 'Incluye Proyector completo + Guirnalda DE REGALO + ENVÍO GRATUITO.',
                   sheetPrompts: [
-                    { role: 'hero_presentation', title: 'Guirnalda LED', caption: 'Entrada pura', imagePrompt: 'Only entry item' },
-                    { role: 'comparison_need', title: 'El clic mental', caption: 'Calentamiento', imagePrompt: 'Warming bridge' },
-                    { role: 'social_trust_specs', title: 'Solución Definitiva', caption: 'Explosión final', imagePrompt: 'Explosive principal reveal' }
+                    { role: 'hero_presentation', title: 'Guirnalda LED', caption: 'Entrada directa', imagePrompt: 'Direct fast hook item' },
+                    { role: 'social_trust_specs', title: '¡ESPERÁ! Solución Definitiva', caption: 'Choque + Principal', imagePrompt: 'Shocking pattern interrupt + principal reveal' }
                   ],
-                  faq: [{ q: '¿Cómo solicito?', a: 'Completando el formulario.' }],
+                  faq: [{ q: '¿Cómo solicito?', a: 'Tocando el botón de tu opción.' }],
                   agentContext: 'Precios exactos.'
                 })
               }
@@ -1015,19 +1014,25 @@ test('dual_tripwire_winner ordena 3 actos progresivos: Lámina 1 100% entrada si
       }
     }
 
-    assert.equal(res.product.visualLanding?.sheets.length, 3);
+    assert.equal(res.product.visualLanding?.sheets.length, 2);
     const blueprintPayload = capturedChatPayloads.find((p) =>
       String(p?.messages?.[0]?.content || '').includes('CERO ROGAR COMPRA')
     );
     const sysPrompt = String(blueprintPayload?.messages?.[0]?.content || '');
     const userPrompt = String(blueprintPayload?.messages?.[1]?.content || '');
     assert.ok(sysPrompt.includes('CERO ROGAR COMPRA'), 'Debe exigir autoridad y prohibir rogar compra');
-    assert.ok(sysPrompt.includes('ACTO 1 (ARRIBA AL ATERRIZAR): 100%'), 'Debe exigir Acto 1 exclusivo de entrada arriba');
-    assert.ok(sysPrompt.includes('ACTO 2 (ZONA MEDIA): Calentamiento progresivo'), 'Debe exigir calentamiento progresivo en Acto 2');
-    assert.ok(sysPrompt.includes('ACTO 3 (EXPLOSIÓN INFERIOR)'), 'Debe exigir explosión del Producto Principal en Acto 3');
-    assert.ok(userPrompt.includes("DO NOT depict, name, or spoil 'Proyector Láser Pro'"), 'Lámina 1 debe prohibir mostrar el producto principal');
-    assert.ok(userPrompt.includes("DO NOT write 'Envío Gratis' or any delivery charge"), 'Lámina 1 no debe prometer envío gratis ni recargo');
-    assert.ok(userPrompt.includes('ENVÍO GRATUITO EN TODO PARAGUAY'), 'Lámina 3 (abajo en el BOOM) debe exhibir en grande ENVÍO GRATUITO');
+    assert.ok(sysPrompt.includes('LÁMINA 1 (GANCHO DIRECTO "BIM BAM BUM"'), 'Debe exigir Lámina 1 directa rápida arriba');
+    assert.ok(sysPrompt.includes('RUPTURA CHOCANTE + LÁMINA 2'), 'Debe exigir ruptura chocante y estética opuesta en Lámina 2');
+    assert.ok(userPrompt.includes("DO NOT mention 'Proyector Láser Pro'"), 'Lámina 1 debe prohibir mencionar el producto principal');
+    assert.ok(userPrompt.includes('DO NOT mention shipping or delivery anywhere'), 'Lámina 1 no debe prometer envío gratis ni recargo');
+    assert.ok(userPrompt.includes('ENVÍO GRATUITO EN TODO PARAGUAY'), 'Lámina 2 debe exhibir en grande ENVÍO GRATUITO');
+    assert.equal(/Gs\.\s+Gs\.\s*\d/.test(userPrompt), false, 'No debe duplicar nunca Gs. Gs. antes de un monto en el prompt');
+    assert.equal(/Gs\.\s+Gs\.\s*\d/.test(sysPrompt), false, 'No debe duplicar Gs. Gs. antes de un monto en el prompt de sistema');
+    assert.equal(
+      String(res.product.visualLanding?.entryButtonLabel || '').includes('Gs. Gs.'),
+      false,
+      'Botón de entrada no debe tener Gs. Gs.'
+    );
     assert.ok(
       res.product.visualLanding?.entryDisclaimer?.toLowerCase().includes('no incluye'),
       'Fallback entryDisclaimer debe aclarar que no incluye el principal ni envío gratuito'

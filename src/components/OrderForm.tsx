@@ -98,9 +98,11 @@ function tileFloatToLatLng(xFloat: number, yFloat: number, zoom: number) {
 export const OrderForm: React.FC<{
   expressDirectMode?: boolean;
   hidePrincipalUpgradeHint?: boolean;
+  modalOnly?: boolean;
 }> = ({
   expressDirectMode = false,
-  hidePrincipalUpgradeHint = false
+  hidePrincipalUpgradeHint = false,
+  modalOnly = false
 }) => {
   const {
     config,
@@ -2058,16 +2060,18 @@ export const OrderForm: React.FC<{
         </div>
       )}
 
-      <section
-        id="pedido"
-        className={
-          expressDirectMode
-            ? 'py-3 sm:py-5 max-w-xl mx-auto px-3 sm:px-4'
-            : 'py-8 sm:py-12 max-w-2xl mx-auto app-container'
-        }
-      >
-        {renderFormCardContent(false)}
-      </section>
+      {!modalOnly && (
+        <section
+          id="pedido"
+          className={
+            expressDirectMode
+              ? 'py-3 sm:py-5 max-w-xl mx-auto px-3 sm:px-4'
+              : 'py-8 sm:py-12 max-w-2xl mx-auto app-container'
+          }
+        >
+          {renderFormCardContent(false)}
+        </section>
+      )}
     </>
   );
 };
