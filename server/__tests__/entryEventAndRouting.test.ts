@@ -952,9 +952,10 @@ test('generateUniversalVisualProductPage soporta sheetCount auto y aplica visual
   }
 });
 
-test('dual_tripwire_winner ordena 2 láminas opuestas: Lámina 1 gancho directo bim-bam-bum y Lámina 2 ruptura chocante + Principal con envío gratis (sin Gs. Gs.)', async () => {
+test('dual_tripwire_winner genera 4 imágenes de Carta de Venta: Imagen 1 envolvente de alto impacto para el Tripwire + Imágenes 2, 3 y 4 como 3 secciones exclusivas del Producto Principal con cero fallas de escritura', async () => {
   const createdTempFiles: string[] = [];
   const capturedChatPayloads: any[] = [];
+  const capturedImgPrompts: string[] = [];
   const fakeJpgB64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46]).toString('base64');
 
   const mockFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -967,19 +968,21 @@ test('dual_tripwire_winner ordena 2 láminas opuestas: Lámina 1 gancho directo 
             {
               message: {
                 content: JSON.stringify({
-                  strategySummary: 'Arquitectura 2 partes sin drama arriba y choque brutal abajo',
+                  strategySummary: 'Carta de Venta Visual de 4 imágenes: 1 Gancho Envolvente + 3 Secciones Producto Principal',
                   recommendedAudioPreset: 'warm_ambient',
-                  sobrietyHeadline: 'Iluminación instantánea con un toque',
-                  subheadline: 'Diseño magnético directo para tu entrada.',
+                  sobrietyHeadline: 'Brillo envolvente al instante',
+                  subheadline: 'Diseño magnético de alto impacto para tu entrada.',
                   winnerAngleHeadline: 'La transformación nocturna definitiva para toda tu casa',
                   winnerAngleDescription: 'Pensado para quien busca el resultado definitivo y desea solicitarlo por convicción.',
-                  reversePsychologyHook: '¡Esperá un ratito! Llevando la solución completa, el artículo de entrada va gratis y activás envío gratuito.',
+                  reversePsychologyHook: '¡Esperá un segundo! Llevando la solución completa, el artículo de entrada va gratis y activás envío gratuito.',
                   entryButtonLabel: 'SEPARAR GUIRNALDA LED — 1 UNIDAD',
                   bundleButtonLabel: 'LLEVAR PROYECTOR + GUIRNALDA GRATIS',
                   bundleDisclaimer: 'Incluye Proyector completo + Guirnalda DE REGALO + ENVÍO GRATUITO.',
                   sheetPrompts: [
-                    { role: 'hero_presentation', title: 'Guirnalda LED', caption: 'Entrada directa', imagePrompt: 'Direct fast hook item' },
-                    { role: 'social_trust_specs', title: '¡ESPERÁ! Solución Definitiva', caption: 'Choque + Principal', imagePrompt: 'Shocking pattern interrupt + principal reveal' }
+                    { role: 'hero_presentation', title: 'Lámina 1 · Guirnalda Envolvente', caption: 'Diseño Envolvente 360°', imagePrompt: 'Spectacular wrap-around hook item' },
+                    { role: 'comparison_need', title: 'Lámina 2 · Sección 1 Principal', caption: 'Ruptura + Gran Promesa', imagePrompt: 'Section 1 pattern interrupt + principal hero reveal' },
+                    { role: 'authority_transformation', title: 'Lámina 3 · Sección 2 Principal', caption: 'Poder y Transformación', imagePrompt: 'Section 2 principal power and anatomy' },
+                    { role: 'social_trust_specs', title: 'Lámina 4 · Sección 3 Principal', caption: 'Cierre + Regalo + Envío Gratis', imagePrompt: 'Section 3 full bundle + free shippingGs. Gs. 189.000' }
                   ],
                   faq: [{ q: '¿Cómo solicito?', a: 'Tocando el botón de tu opción.' }],
                   agentContext: 'Precios exactos.'
@@ -991,6 +994,8 @@ test('dual_tripwire_winner ordena 2 láminas opuestas: Lámina 1 gancho directo 
         { status: 200 }
       );
     }
+    const imgBody = JSON.parse(String(init?.body || '{}'));
+    capturedImgPrompts.push(String(imgBody?.prompt || ''));
     return new Response(JSON.stringify({ data: [{ b64_json: fakeJpgB64 }] }), { status: 200 });
   }) as any;
 
@@ -1014,21 +1019,36 @@ test('dual_tripwire_winner ordena 2 láminas opuestas: Lámina 1 gancho directo 
       }
     }
 
-    assert.equal(res.product.visualLanding?.sheets.length, 2);
+    assert.equal(res.product.visualLanding?.mode, 'sober_graphic_4sheet');
+    assert.equal(res.product.visualLanding?.sheets.length, 4, 'Debe generar exactamente 4 imágenes por página');
+    assert.equal(res.product.visualLanding?.sheets[0]?.role, 'hero_presentation');
+    assert.equal(res.product.visualLanding?.sheets[1]?.role, 'comparison_need');
+    assert.equal(res.product.visualLanding?.sheets[2]?.role, 'authority_transformation');
+    assert.equal(res.product.visualLanding?.sheets[3]?.role, 'social_trust_specs');
+
     const blueprintPayload = capturedChatPayloads.find((p) =>
-      String(p?.messages?.[0]?.content || '').includes('E-COMMERCE DE ALTÍSIMO IMPACTO')
+      String(p?.messages?.[0]?.content || '').includes('CARTA DE VENTA')
     );
     const sysPrompt = String(blueprintPayload?.messages?.[0]?.content || '');
     const userPrompt = String(blueprintPayload?.messages?.[1]?.content || '');
-    assert.ok(sysPrompt.includes('E-COMMERCE DE ALTÍSIMO IMPACTO'), 'Debe exigir diseño e-commerce de altísimo nivel');
-    assert.ok(sysPrompt.includes('DIFERENCIACIÓN CROMÁTICA INMEDIATA'), 'Debe diferenciar claramente el color y estética entre ambas láminas');
-    assert.ok(sysPrompt.includes('LÁMINA 2 (PRODUCTO ESTRELLA DE LOCURA — PALETA OSCURA OPUESTA'), 'Debe exigir paleta oscura opuesta + entrada brusca en la imagen 2');
+    assert.ok(sysPrompt.includes('DISEÑO ENVOLVENTE 360° ESPECTACULAR DE ALTO IMPACTO'), 'Imagen 1 del Tripwire debe exigir diseño envolvente espectacular de alto impacto');
+    assert.ok(sysPrompt.includes('LAS 3 SECCIONES DIFERENTES DE E-COMMERCE DE ALTÍSIMO IMPACTO EXCLUSIVAS DEL PRODUCTO PRINCIPAL'), 'Imágenes 2, 3 y 4 deben ser 3 secciones diferentes exclusivas del Producto Principal');
+    assert.ok(sysPrompt.includes('PROHIBIDO EL COPIA Y PEGA'), 'Debe prohibir el copia y pega literal y exigir Carta de Venta persuasiva');
+    assert.ok(sysPrompt.includes('REGLA INQUEBRANTABLE CONTRA FALLAS DE ESCRITURA'), 'Debe exigir frases cortas en mayúsculas para cero fallas de escritura');
     assert.ok(userPrompt.includes("DO NOT mention 'Proyector Láser Pro'"), 'Lámina 1 debe prohibir mencionar el producto principal');
     assert.ok(userPrompt.includes('Tocá el botón de abajo'), 'Lámina 1 debe incluir indicación visual hacia el botón de abajo');
-    assert.ok(userPrompt.includes('Dale clic al botón de abajo'), 'Lámina 2 debe incluir indicación visual hacia el botón de abajo');
-    assert.ok(userPrompt.includes('ENVÍO GRATUITO EN TODO PARAGUAY'), 'Lámina 2 debe exhibir en grande ENVÍO GRATUITO');
+    assert.ok(userPrompt.includes('Dale clic al botón de abajo'), 'Lámina 4 debe incluir indicación visual hacia el botón final');
+    assert.ok(userPrompt.includes('ENVÍO GRATUITO EN TODO PARAGUAY'), 'El cierre de la Carta de Venta debe exhibir en grande ENVÍO GRATUITO');
     assert.equal(/Gs\.\s+Gs\.\s*\d/.test(userPrompt), false, 'No debe duplicar nunca Gs. Gs. antes de un monto en el prompt');
     assert.equal(/Gs\.\s+Gs\.\s*\d/.test(sysPrompt), false, 'No debe duplicar Gs. Gs. antes de un monto en el prompt de sistema');
+    assert.ok(
+      capturedImgPrompts[0]?.includes('SPECTACULAR 360-DEGREE WRAP-AROUND E-COMMERCE DESIGN'),
+      'El prompt final enviado al generador de imagen para la Lámina 1 debe incluir dirección envolvente 360°'
+    );
+    assert.ok(
+      capturedImgPrompts.every((p) => p.includes('STRICT SPANISH ORTHOGRAPHY & ZERO-TYPO RULE') && !p.includes('Gs. Gs.')),
+      'Todas las 4 imágenes deben llevar la regla estricta anti-fallas de escritura y limpiar Gs. Gs.'
+    );
     assert.equal(
       String(res.product.visualLanding?.entryButtonLabel || '').includes('Gs. Gs.'),
       false,

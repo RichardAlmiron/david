@@ -641,7 +641,7 @@ export interface QuickCreatorAngleOption {
   archetype: string;
   winnerAngle: string;
   visualDirection: string;
-  recommendedSheetCount: 2 | 3;
+  recommendedSheetCount: 2 | 3 | 4;
   recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
   whyItConverts: string;
   tripwireBridgeNote?: string;
@@ -669,7 +669,7 @@ export interface QuickCreatorAiStrategyInput {
 export interface QuickCreatorAiStrategyResult {
   currentPageDiagnosis: string;
   assistantReply: string;
-  recommendedSheetCount: 2 | 3;
+  recommendedSheetCount: 2 | 3 | 4;
   recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
   options: QuickCreatorAngleOption[];
   recommendedOptionId: string;
@@ -701,7 +701,7 @@ export interface QuickCreateVisualProductInput {
   eventDurationHours?: number;
   slotsTotal?: number;
   backgroundMusicPreset?: 'auto' | 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
-  sheetCount?: 'auto' | 2 | 3;
+  sheetCount?: 'auto' | 2 | 3 | 4;
   waNumber?: string;
   referer?: string;
   clonedFromContext?: {
@@ -721,6 +721,27 @@ export interface QuickCreateVisualProductInput {
   fetchImpl?: typeof fetch;
 }
 
+export function sanitizeAndEnforceSalesLetterImagePrompt(
+  rawPrompt: string,
+  sheetIndex: number,
+  isPrincipalOnly: boolean
+): string {
+  const cleaned = String(rawPrompt || '')
+    .replace(/Gs\.\s*Gs\./gi, 'Gs.')
+    .replace(/\btripwire\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const sectionAura = !isPrincipalOnly && sheetIndex === 0
+    ? 'SPECTACULAR 360-DEGREE WRAP-AROUND E-COMMERCE DESIGN (DISEÑO ENVOLVENTE DE ALTÍSIMO IMPACTO): vibrant electric sapphire-cobalt, glowing cyan rim light and warm amber-gold volumetric reflections wrapping around the hero product with deep 3D studio presence.'
+    : `HIGH-IMPACT VISUAL SALES LETTER SECTION #${isPrincipalOnly ? sheetIndex + 1 : sheetIndex} (CARTA DE VENTA VISUAL E-COMMERCE DE ALTÍSIMO IMPACTO): deep luxury obsidian, dramatic volumetric lighting, rich 3D depth and persuasive commercial art direction.`;
+
+  const strictOrthographyRule =
+    'STRICT SPANISH ORTHOGRAPHY & ZERO-TYPO RULE: Render ONLY 2 to 3 short, punchy ALL-CAPS Spanish headlines (strictly 2 to 4 words per text block) in bold geometric sans-serif typography. NEVER render long sentences, paragraphs, or small body text inside the image. Verify letter-by-letter that every Spanish word is spelled 100% accurately with zero garbled, merged, or misspelled characters.';
+
+  return `${cleaned} ${sectionAura} ${strictOrthographyRule}`;
+}
+
 export async function analyzeQuickCreatorStrategy(
   input: QuickCreatorAiStrategyInput
 ): Promise<QuickCreatorAiStrategyResult> {
@@ -734,25 +755,30 @@ export async function analyzeQuickCreatorStrategy(
   const safeEntryName = String(input.entryProductName || '').trim() || 'Artículo de Entrada';
 
   const systemPrompt = isPrincipalOnly
-    ? `Eres el Estratega Jefe de Conversión Directa (COD Paraguay) y Director Creativo GPT-2.6 para páginas de PRODUCTO GANADOR ÚNICO (Estándar).
-TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES sin tener que inventar diseños, cantidades de láminas ni prompts visuales.
+    ? `Eres el Estratega Jefe de Conversión Directa (COD Paraguay), Redactor Maestro de Cartas de Venta y Director Creativo GPT-2.6 para páginas de PRODUCTO GANADOR ÚNICO (Estándar).
+TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES con una CARTA DE VENTA VISUAL E-COMMERCE DE ALTÍSIMO IMPACTO dividida en 4 IMÁGENES GENERADAS.
 REGLAS ESTRICTAS:
-1. Modo ESTÁNDAR (Producto Ganador Único): JAMÁS sugieras artículos secundarios ni menciones "tripwire" en textos públicos. Toda la fuerza visual y psicológica recae sobre un único producto.
-2. Si existe PÁGINA CLONADA, primero diagnosticá con precisión qué ángulo, promesa y estética visual está usando la página anterior ("currentPageDiagnosis"), y luego proponé 3 opciones CLARAMENTE DISTINTAS (prohibido repetir el mismo ángulo o atmósfera visual).
-3. Para cada opción, TÚ decides automáticamente "recommendedSheetCount" (2 para ofertas claras y directas de impulso rápido; 3 cuando el producto requiere más prueba técnica/contenido de caja/confianza) y "recommendedAudioPreset" ('warm_ambient', 'soft_lounge' o 'commercial_pulse'), más "visualDirection" detallando iluminación, paleta y composición editorial para GPT-2.6.
-4. Precios siempre en Guaraníes ("Gs."). Español natural paraguayo/rioplatense comercial sobrio, cero estrellitas ni humo de infoproducto.
-5. Si el usuario hace una pregunta o pide un giro específico ("userQuestion"), respondé de forma directa y útil en "assistantReply" y regenerá 3 opciones ajustadas exactamente a lo que pidió.`
-    : `Eres el Estratega Jefe de Embudos Duales y Director Creativo de E-Commerce de Altísimo Impacto (COD Paraguay) para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
-TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES y ambas partes luzcan como piezas gráficas de e-commerce de altísimo nivel.
-REGLA VISUAL Y DE CONVERSIÓN (OBLIGATORIO):
-1. AMBAS PARTES SON E-COMMERCE DE ALTO IMPACTO, CON PALETAS DE COLOR TOTALMENTE DISTINTAS:
-   - LÁMINA 1 (Arriba — E-COMMERCE DIRECTO ALTO IMPACTO EN PALETA CLARA / AZUL COBALTO-BLANCO): 100% "${safeEntryName}" ÚNICAMENTE (${formatParaguayGs(Number(input.entryPriceGs || 20000))}). Visual publicitario e-commerce de primer nivel con fotografía limpia del producto, título gigante legible, 3 tarjetas de características reales con íconos, precio claro e indicación hacia el botón de abajo ("Dale clic al botón de abajo"). SIN tono persuasivo agresivo, SIN nombrar a "${input.productName}" y SIN hablar de envío.
-   - LÁMINA 2 (Abajo — E-COMMERCE DE LOCURA ALTÍSIMO NIVEL EN PALETA OSCURA OPUESTA / OBSIDIANA-ESMERALDA-ORO): Diseño visual completamente distinto en color e intensidad al de arriba. Arranca en la parte superior DENTRO DE LA PROPIA IMAGEN con la entrada brusca ("¡ESPERÁ UN RATITO! Estás a punto de pedir solo ${safeEntryName}..."), y despliega una pieza gráfica descomunal presentando "${input.productName}" como la solución definitiva, exhibiendo EN GRANDE **ENVÍO GRATUITO EN TODO PARAGUAY** + **${safeEntryName} TOTALMENTE DE REGALO** + indicación hacia el botón de abajo.
-2. REGLA CRÍTICA DE MONEDA Y BOTONES: Nunca dupliques "Gs. Gs." (escribí exactamente "Gs. 189.000"). Los botones en página son limpios de una sola línea sin descripciones HTML extra.
-3. NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
+1. Modo ESTÁNDAR (Producto Ganador Único): JAMÁS sugieras artículos secundarios ni menciones "tripwire" en textos públicos. Toda la fuerza visual y persuasiva recae sobre un único producto a lo largo de 4 secciones diferentes de e-commerce de alto impacto (1. Gancho Envolvente y Gran Promesa; 2. Transformación Real y Demostración en Escena; 3. Anatomía Visual y Poder Técnico; 4. Cierre Irresistible de Carta de Venta con Packs + Envío Gratis).
+2. PROHIBIDO EL COPIA Y PEGA: Jamás repitas literalmente las frases crudas del usuario o del proveedor. Redactá ángulos persuasivos de Carta de Venta con psicología real de deseo y transformación.
+3. Si existe PÁGINA CLONADA, primero diagnosticá con precisión qué ángulo, promesa y estética visual está usando la página anterior ("currentPageDiagnosis"), y luego proponé 3 opciones CLARAMENTE DISTINTAS.
+4. Para cada opción recomendá "recommendedSheetCount": 4 (las 4 secciones de la Carta de Venta Visual E-Commerce) y "recommendedAudioPreset" ('warm_ambient', 'soft_lounge' o 'commercial_pulse'), más "visualDirection" detallando iluminación envolvente, paleta y composición editorial para GPT-2.6.
+5. Precios siempre en Guaraníes ("Gs."). Español paraguayo/rioplatense persuasivo de alto impacto.
+6. Si el usuario hace una pregunta o pide un giro específico ("userQuestion"), respondé de forma directa y útil en "assistantReply" y regenerá 3 opciones ajustadas exactamente a lo que pidió.`
+    : `Eres el Estratega Jefe de Embudos Duales, Redactor Maestro de Cartas de Venta (Direct-Response Copywriter) y Director Creativo de E-Commerce de Altísimo Impacto (COD Paraguay) para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
+TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES creando una página de 4 IMÁGENES DE ALTÍSIMO IMPACTO (1 imagen envolvente espectacular para el Tripwire + 3 imágenes de secciones diferentes de Carta de Venta E-Commerce exclusivas para el Producto Principal).
+REGLA VISUAL Y DE CARTA DE VENTA (OBLIGATORIO — 4 LÁMINAS GENERADAS):
+1. PROHIBIDO EL COPIA Y PEGA: Jamás copies y pegues en crudo el título o la descripción pegada por el usuario. Creá promesas persuasivas de Carta de Venta real que despierten deseo inmediato y tengan sentido comercial impecable.
+2. ARQUITECTURA DE 4 IMÁGENES DE ALTÍSIMO IMPACTO CON DIFERENCIACIÓN CROMÁTICA:
+   - IMAGEN 1 (EL TRIPWIRE — DISEÑO ENVOLVENTE 360° ESPECTACULAR DE ALTO IMPACTO EN PALETA ZAFIRO ELÉCTRICO / CIAN / ÁMBAR DORADO): Dedicada 100% a "${safeEntryName}" (${formatParaguayGs(Number(input.entryPriceGs || 20000))}). Diseño envolvente de altísimo impacto visual, iluminación volumétrica 3D espectacular, producto flotante en primer plano, titular corto magnético y 3 insignias envolventes + indicación hacia el botón de abajo ("Tocá el botón de abajo"). SIN nombrar a "${input.productName}" y SIN hablar de envío.
+   - IMÁGENES 2, 3 Y 4 (3 SECCIONES DIFERENTES DE CARTA DE VENTA E-COMMERCE DE ALTÍSIMO IMPACTO EXCLUSIVAS DEL PRODUCTO PRINCIPAL "${input.productName}" EN PALETA OPUESTA OBSIDIANA / CARMESÍ / ESMERALDA / ORO):
+     * IMAGEN 2 (Sección 1 Principal — Ruptura Brusca + Apertura de Carta de Venta y Revelación Heroica): Arranca arriba con "¡ESPERÁ UN SEGUNDO!" y presenta "${input.productName}" en una escena envolvente brutal con la gran promesa persuasiva de la carta de venta.
+     * IMAGEN 3 (Sección 2 Principal — Demostración de Poder, Transformación y Anatomía E-Commerce): Segunda sección exclusiva de "${input.productName}" mostrando cómo transforma la experiencia real, detalles macro de calidad superior y 3 módulos persuasivos de alto impacto.
+     * IMAGEN 4 (Sección 3 Principal — Cierre Explosivo de Carta de Venta + Bono Gratis + ENVÍO GRATUITO en Grande): Cierre irresistible exhibiendo "${input.productName}" + **${safeEntryName} TOTALMENTE DE REGALO** + sello gigante **ENVÍO GRATUITO EN TODO PARAGUAY** + **PAGO AL RECIBIR** + contraste honesto de delivery e indicación hacia el botón final.
+3. REGLA CRÍTICA DE MONEDA Y ORTOGRAFÍA: Nunca dupliques "Gs. Gs." (escribí exactamente "Gs. 189.000"). En las imágenes solo van frases cortas de 2 a 4 palabras en mayúsculas perfectas para garantizar CERO fallas en la escritura.
+4. NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
 REGLAS ESTRICTAS:
 - Si existe PÁGINA CLONADA, primero diagnosticá qué ángulo y estética visual usaba la página original ("currentPageDiagnosis") y proponé 3 opciones frescas distintas.
-- En modo Tripwire recomendá "recommendedSheetCount": 2 por defecto (Lámina 1 E-Commerce Directo Gancho → Botón 1 → Lámina 2 E-Commerce de Locura con Ruptura Brusca + Principal → Botón 2), y decidí "recommendedAudioPreset" + "visualDirection" contrastada para la Parte 2.
+- Recomendá "recommendedSheetCount": 4 por defecto (1 lámina envolvente Tripwire + 3 secciones diferentes de Carta de Venta del Producto Principal).
 - Si el usuario conversa o pide otro enfoque ("userQuestion"), respondé con claridad ejecutiva en "assistantReply" y entregá 3 opciones nuevas alineadas a su pedido.`;
 
   const cloneContextBlock = cloneCtx?.sourceProductName
@@ -773,58 +799,58 @@ ${cloneCtx.sourceContextoIA ? `- Contexto comercial heredado:\n${cloneCtx.source
         .join('\n')}`
     : '';
 
-  const userPrompt = `ANALIZÁ ESTE PRODUCTO Y GENERÁ LA ESTRATEGIA 100% MANOS LIBRES:
-- Modo seleccionado: ${isPrincipalOnly ? 'Producto Ganador Único (Estándar)' : 'Tripwire + Producto Ganador en la misma página'}
+  const userPrompt = `ANALIZÁ ESTE PRODUCTO Y GENERÁ LA ESTRATEGIA DE CARTA DE VENTA VISUAL (4 IMÁGENES DE ALTO IMPACTO) 100% MANOS LIBRES:
+- Modo seleccionado: ${isPrincipalOnly ? 'Producto Ganador Único (Estándar — 4 Secciones de Carta de Venta)' : 'Tripwire + Producto Ganador (1 Imagen Envolvente Tripwire + 3 Secciones de Carta de Venta del Producto Principal)'}
 - Producto Principal: ${input.productName}
-- Descripción: ${input.productDescription}
-- Ángulo borrador ingresado (si existe): ${input.winnerAngle || 'Ninguno aún — proponé los mejores'}
+- Descripción base (NO copiar y pegar literal; transformar en Carta de Venta persuasiva): ${input.productDescription}
+- Ángulo borrador ingresado (si existe): ${input.winnerAngle || 'Ninguno aún — proponé los mejores ángulos persuasivos'}
 - Precio Principal 1x: ${formatParaguayGs(Number(input.price1Gs || 189000))} (Normal: ${formatParaguayGs(Number(input.normalPriceGs || 249000))})
 ${
   !isPrincipalOnly
-    ? `- Artículo de Entrada (Tripwire): ${safeEntryName}
+    ? `- Artículo de Entrada (Imagen 1 Envolvente): ${safeEntryName}
 - Descripción entrada: ${input.entryProductDescription || safeEntryName}
-- Precio Entrada: ${formatParaguayGs(Number(input.entryPriceGs || 20000))} (sin prometer envío gratis en la cabecera; delivery ${formatParaguayGs(Number(input.entryDeliveryFeeGs || 40000))} contrastado recién en Parte 2 o al cierre del chat si rechaza el Producto Principal)`
+- Precio Entrada: ${formatParaguayGs(Number(input.entryPriceGs || 20000))} (sin mencionar envío en Imagen 1; delivery ${formatParaguayGs(Number(input.entryDeliveryFeeGs || 40000))} contrastado en el cierre de la Carta de Venta Principal)`
     : ''
 }${cloneContextBlock}${historyText}
-${input.userQuestion ? `\nPREGUNTA O INSTRUCCIÓN ACTUAL DEL OPERADOR: "${input.userQuestion}"` : '\nGENERÁ EL DIAGNÓSTICO INICIAL Y LAS 3 MEJORES OPCIONES LISTAS PARA 1 CLIC.'}
+${input.userQuestion ? `\nPREGUNTA O INSTRUCCIÓN ACTUAL DEL OPERADOR: "${input.userQuestion}"` : '\nGENERÁ EL DIAGNÓSTICO INICIAL Y LAS 3 MEJORES OPCIONES DE CARTA DE VENTA LISTAS PARA 1 CLIC.'}
 
 Devolvé EXCLUSIVAMENTE este JSON válido:
 {
-  "currentPageDiagnosis": "${cloneCtx?.sourceProductName ? 'Explicación clara de qué ángulo, promesa y estilo visual usa actualmente la página clonada, para no repetirlo.' : 'Diagnóstico breve de cómo posicionaremos este producto desde cero en el mercado paraguayo.'}",
+  "currentPageDiagnosis": "${cloneCtx?.sourceProductName ? 'Explicación clara de qué ángulo, promesa y estilo visual usa actualmente la página clonada, para superarlo con una Carta de Venta nueva.' : 'Diagnóstico breve de cómo estructuraremos esta Carta de Venta de 4 imágenes de alto impacto en Paraguay.'}",
   "assistantReply": "Respuesta directa y clara al operador (2-3 oraciones) explicando por qué la Opción 1 es la recomendación principal o respondiendo a su pregunta.",
-  "recommendedSheetCount": 2,
+  "recommendedSheetCount": 4,
   "recommendedAudioPreset": "warm_ambient",
   "recommendedOptionId": "opt_1",
   "options": [
     {
       "id": "opt_1",
-      "title": "Nombre corto del ángulo (máx 6 palabras)",
+      "title": "Nombre corto del ángulo persuasivo (máx 6 palabras)",
       "archetype": "Recomendada por IA",
-      "winnerAngle": "Titular de ángulo listo para vender (máx 13 palabras)",
-      "visualDirection": "Dirección artística completa para GPT-2.6 (iluminación, escenario, paleta, encuadre editorial sin humo)",
-      "recommendedSheetCount": 2,
+      "winnerAngle": "Promesa persuasiva de Carta de Venta lista para convertir (máx 12 palabras, cero copia-pega)",
+      "visualDirection": "Dirección artística envolvente 3D de altísimo impacto para las 4 imágenes en GPT-2.6",
+      "recommendedSheetCount": 4,
       "recommendedAudioPreset": "warm_ambient",
-      "whyItConverts": "Por qué este ángulo y visual convierten mejor (y cómo se diferencia del clon si aplica).",
-      "tripwireBridgeNote": "${isPrincipalOnly ? '' : 'Cómo frena el patrón después del gancho directo y contrasta brutalmente con este Producto Ganador.'}"
+      "whyItConverts": "Por qué esta Carta de Venta de 4 secciones convierte en frío.",
+      "tripwireBridgeNote": "${isPrincipalOnly ? '' : 'Cómo la Imagen 1 envolvente captura la atención y las Imágenes 2, 3 y 4 construyen una Carta de Venta irresistible para el Producto Principal.'}"
     },
     {
       "id": "opt_2",
-      "title": "Segundo enfoque distinto",
-      "archetype": "Ángulo Emocional / Hogar",
+      "title": "Segundo enfoque de Carta de Venta",
+      "archetype": "Deseo y Transformación",
       "winnerAngle": "...",
       "visualDirection": "...",
-      "recommendedSheetCount": 2,
+      "recommendedSheetCount": 4,
       "recommendedAudioPreset": "soft_lounge",
       "whyItConverts": "...",
       "tripwireBridgeNote": "${isPrincipalOnly ? '' : '...'}"
     },
     {
       "id": "opt_3",
-      "title": "Tercer enfoque disruptivo",
-      "archetype": "Contraste Racional",
+      "title": "Tercer enfoque de Carta de Venta",
+      "archetype": "Superioridad y Ahorro Total",
       "winnerAngle": "...",
       "visualDirection": "...",
-      "recommendedSheetCount": 2,
+      "recommendedSheetCount": 4,
       "recommendedAudioPreset": "commercial_pulse",
       "whyItConverts": "...",
       "tripwireBridgeNote": "${isPrincipalOnly ? '' : '...'}"
@@ -864,6 +890,11 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
   const normalizeAudio = (val: any): 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none' =>
     val === 'soft_lounge' || val === 'commercial_pulse' || val === 'none' ? val : 'warm_ambient';
 
+  const normalizeSheetCount = (val: any, fallback: 2 | 3 | 4 = 4): 2 | 3 | 4 => {
+    const n = Number(val);
+    return n === 2 || n === 3 || n === 4 ? n : fallback;
+  };
+
   const rawOptions: any[] = Array.isArray(parsed?.options) ? parsed.options : [];
   const options: QuickCreatorAngleOption[] = rawOptions.slice(0, 4).map((o, idx) => ({
     id: String(o?.id || `opt_${idx + 1}`),
@@ -871,13 +902,7 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
     archetype: String(o?.archetype || (idx === 0 ? 'Recomendada por IA' : `Enfoque ${idx + 1}`)).trim(),
     winnerAngle: String(o?.winnerAngle || input.winnerAngle || input.productName).trim(),
     visualDirection: String(o?.visualDirection || '').trim(),
-    recommendedSheetCount: isPrincipalOnly
-      ? Number(o?.recommendedSheetCount) === 3
-        ? 3
-        : 2
-      : Number(o?.recommendedSheetCount) === 3
-        ? 3
-        : 2,
+    recommendedSheetCount: normalizeSheetCount(o?.recommendedSheetCount, 4),
     recommendedAudioPreset: normalizeAudio(o?.recommendedAudioPreset),
     whyItConverts: String(o?.whyItConverts || '').trim(),
     tripwireBridgeNote: !isPrincipalOnly && o?.tripwireBridgeNote ? String(o.tripwireBridgeNote).trim() : undefined
@@ -893,11 +918,10 @@ Devolvé EXCLUSIVAMENTE este JSON válido:
   return {
     currentPageDiagnosis: String(parsed?.currentPageDiagnosis || '').trim(),
     assistantReply: String(parsed?.assistantReply || '').trim(),
-    recommendedSheetCount: isPrincipalOnly
-      ? Number(parsed?.recommendedSheetCount) === 3 || matchedRec.recommendedSheetCount === 3
-        ? 3
-        : 2
-      : 2,
+    recommendedSheetCount: normalizeSheetCount(
+      matchedRec.recommendedSheetCount ?? parsed?.recommendedSheetCount,
+      4
+    ),
     recommendedAudioPreset: normalizeAudio(parsed?.recommendedAudioPreset || matchedRec.recommendedAudioPreset),
     options,
     recommendedOptionId: matchedRec.id
@@ -918,10 +942,10 @@ export async function generateUniversalVisualProductPage(
   const pageCreationMode: 'dual_tripwire_winner' | 'principal_only' =
     input.pageCreationMode === 'principal_only' ? 'principal_only' : 'dual_tripwire_winner';
   const isPrincipalOnly = pageCreationMode === 'principal_only';
-  const sheetCountMode: 'auto' | 2 | 3 =
-    input.sheetCount === 2 ? 2 : input.sheetCount === 3 ? 3 : 'auto';
-  const requestedSheetCount: 2 | 3 =
-    sheetCountMode === 'auto' ? 2 : sheetCountMode;
+  const sheetCountMode: 'auto' | 2 | 3 | 4 =
+    input.sheetCount === 2 ? 2 : input.sheetCount === 3 ? 3 : input.sheetCount === 4 ? 4 : 'auto';
+  const requestedSheetCount: 2 | 3 | 4 =
+    sheetCountMode === 'auto' ? 4 : sheetCountMode;
   const price1 = Math.max(35000, Number(input.price1Gs) || 189000);
   const price2 = Number(input.price2Gs) || Math.round(price1 * 1.85);
   const price3 = Number(input.price3Gs) || Math.round(price1 * 2.65);
@@ -1016,109 +1040,130 @@ ${cloneCtx.differentiationNote ? `- NUEVA DIRECCIÓN VISUAL / ÁNGULO SOLICITADO
     : '';
 
   const promptSystemContent = isPrincipalOnly
-    ? `Eres el Director Creativo Senior de Marcas Flagship y Psicología de Conversión en Paraguay.
-Diseñas páginas gráficas verticales 100% visuales (cero bloques HTML intermedios: las láminas SON toda la presentación visual del producto) enfocadas en UN ÚNICO PRODUCTO GANADOR.
+    ? `Eres el Redactor Maestro de Cartas de Venta de Respuesta Directa y Director Creativo Senior de E-Commerce de Altísimo Impacto en Paraguay.
+Diseñas páginas gráficas verticales 100% visuales estructuradas como una CARTA DE VENTA VISUAL DE 4 SECCIONES DE E-COMMERCE DE ALTÍSIMO IMPACTO para UN ÚNICO PRODUCTO GANADOR.
 
-REGLA INQUEBRANTABLE DE LENGUAJE Y CALIDAD GPT-2.6:
-- JAMÁS escribas la palabra "tripwire", "gancho trampa" ni menciones artículos secundarios inexistentes.
-- Precios obligatorios en Guaraníes de Paraguay ("Gs.") jamás en dólares.
-- Dirección de arte obligatoria para openai/gpt-image-2.6-sunburst: diseño editorial comercial de lujo (nivel campaña Apple / Dyson / Bang & Olufsen adaptada a hogar/consumo real en Paraguay), iluminación cinematográfica de estudio con profundidad 3D, materiales táctiles ultra nítidos, tipografía editorial española impecable sin errores ni letras cortadas, ocupación total borde a borde (edge-to-edge 2:3 sin marcos blancos), CERO estrellas chillonas, CERO stickers baratos de infoproducto.${visualDirectionBlock}${cloneDirectiveBlock}`
-    : `Eres el Director Creativo Senior de Piezas Gráficas E-Commerce de Altísimo Impacto en Paraguay (estilo gráficas verticales de conversión MercadoLibre Platinum / Shopify Flagship / Direct Response).
-REGLA MAESTRA DE COMPOSICIÓN PARA openai/gpt-image-2.6-sunburst (VERTICAL 2:3):
-- PROHIBIDO diseñar afiches abstractos de piedra/mármol vacíos o letras minúsculas ilegibles. Usá diseño gráfico E-COMMERCE DE ALTÍSIMO IMPACTO con: titular gigante perfectamente legible, render heroico fotorealista del producto en primer plano ocupando gran parte de la lámina, tarjetas ordenadas con íconos vectoriales limpios y especificaciones cortas de 2-4 palabras, y bloque claro de precio/CTA.
-- AMBAS LÁMINAS SON E-COMMERCE DE ALTÍSIMO NIVEL, CON DIFERENCIACIÓN CROMÁTICA INMEDIATA:
-  1. LÁMINA 1 (GANCHO DIRECTO NO PERSUASIVO — PALETA CLARA/AZUL COBALTO & ÁMBAR): Diseño gráfico e-commerce vibrante y nítido (fondo estudio luminoso en blanco perla + degradado azul eléctrico/cobalto profesional) mostrando EXCLUSIVAMENTE "${safeEntryName}". Estilo informativo directo de alto impacto SIN textos persuasivos ni drama: titular claro del producto, foto real impactante, 3 tarjetas limpias con íconos y datos concretos, precio único destacado (${formatParaguayGs(entryPrice)}) y al pie indicación clara hacia abajo: "Tocá el botón de abajo ↓". PROHIBIDO mencionar a "${input.productName}" y PROHIBIDO hablar de envío.
-  2. LÁMINA 2 (PRODUCTO ESTRELLA DE LOCURA — PALETA OSCURA OPUESTA OBSIDIANA-CRIMSON-ORO + ENTRADA BRUSCA EN LA IMAGEN): Cambio visual radical e imposible de confundir respecto a Lámina 1 (fondo oscuro obsidiana profundo con iluminación neón esmeralda/oro y alerta carmesí superior). En el 20% superior DE LA PROPIA IMAGEN va la entrada brusca ("¡ESPERÁ UN RATITO! Estás a punto de pedir solo ${safeEntryName}..."), seguida por una presentación e-commerce de altísimo nivel de "${input.productName}" en escena real espectacular, 3-4 tarjetas de beneficios contundentes con íconos, sello gigante **ENVÍO GRATUITO EN TODO PARAGUAY** + **${safeEntryName} DE REGALO**, contraste honesto de delivery al pie y flecha inferior: "Dale clic al botón de abajo ↓".
+REGLA INQUEBRANTABLE ANTI COPIA-PEGA Y DE ORTOGRAFÍA PERFECTA EN GPT-2.6:
+- PROHIBIDO COPIAR Y PEGAR: Jamás copies y pegues en crudo el nombre largo o la descripción del usuario dentro de la imagen. Creá titulares persuasivos de Carta de Venta que despierten deseo inmediato.
+- CERO FALLAS EN LA ESCRITURA: Dentro de cada "imagePrompt", exigí que el texto impreso en la imagen consista ÚNICAMENTE en 2 a 3 frases ultra cortas en MAYÚSCULAS SÓLIDAS (de 2 a 4 palabras máximo por línea, ej. "POTENCIA TOTAL EN CASA", "ENVÍO GRATIS PARAGUAY", "PAGÁS AL RECIBIR"). Prohibido incluir párrafos o frases largas que deformen las letras.
+- DISEÑO ENVOLVENTE 360° DE ALTÍSIMO IMPACTO: Cada lámina debe tener profundidad 3D envolvente, iluminación volumétrica cinematográfica, producto fotorealista imponente y módulos gráficos dignos de marca líder mundial.
+- Precios obligatorios en Guaraníes de Paraguay ("Gs."), jamás duplicar "Gs. Gs." y jamás mencionar la palabra "tripwire".${visualDirectionBlock}${cloneDirectiveBlock}`
+    : `Eres el Redactor Maestro de Cartas de Venta (Direct-Response Sales Letter Copywriter) y Director Creativo Senior de Piezas Gráficas E-Commerce de Altísimo Impacto en Paraguay.
+REGLA MAESTRA DE COMPOSICIÓN Y CARTA DE VENTA PARA openai/gpt-image-2.6-sunburst (VERTICAL 2:3 — 4 IMÁGENES GENERADAS):
+- PROHIBIDO EL COPIA Y PEGA Y PROHIBIDO EL DISEÑO BÁSICO: Jamás copies textualmente el borrador crudo del usuario ni hagas láminas planas o aburridas. Toda la página funciona como una CARTA DE VENTA VISUAL DE ALTÍSIMO IMPACTO dividida en 4 IMÁGENES GENERADAS:
+  1. IMAGEN 1 (EL TRIPWIRE — DISEÑO ENVOLVENTE 360° ESPECTACULAR DE ALTO IMPACTO — PALETA ZAFIRO ELÉCTRICO, CIAN NEÓN Y ÁMBAR DORADO):
+     - Prohibido hacer un diseño básico o pálido. Tiene que ser un DISEÑO ENVOLVENTE, ESPECTACULAR Y DE ALTÍSIMO IMPACTO VISUAL centrado 100% en "${safeEntryName}": iluminación volumétrica envolvente 360°, pedestal 3D dinámico con haces de luz cian/ámbar abrazando el producto en primer plano heroico, titular corto magnético en mayúsculas perfectas (máx 4 palabras), 3 cápsulas envolventes con íconos 3D y beneficios de 2-3 palabras, sello de precio único (${formatParaguayGs(entryPrice)}) e indicación al pie: "Tocá el botón de abajo ↓". PROHIBIDO mencionar a "${input.productName}" y PROHIBIDO hablar de envío.
+  2. IMÁGENES 2, 3 Y 4 (LAS 3 SECCIONES DIFERENTES DE E-COMMERCE DE ALTÍSIMO IMPACTO EXCLUSIVAS DEL PRODUCTO PRINCIPAL "${input.productName}" — CARTA DE VENTA EN PALETA OPUESTA OBSIDIANA, CARMESÍ, ESMERALDA Y ORO):
+     - IMAGEN 2 (SECCIÓN 1 DEL PRODUCTO PRINCIPAL — RUPTURA DE PATRÓN + GRAN PROMESA DE CARTA DE VENTA Y REVELACIÓN HEROICA): Cambio cromático radical a negro obsidiana, alerta carmesí y oro metálico. Arriba en la propia imagen abre con el freno persuasivo corto "¡ESPERÁ UN SEGUNDO!" / "MIRÁ ESTO ANTES DE PEDIR", y en el centro despliega una revelación envolvente 3D espectacular de "${input.productName}" con un titular persuasivo de Carta de Venta (2 a 4 palabras en mayúsculas impecables, cero copia-pega) mostrando por qué es la solución definitiva.
+     - IMAGEN 3 (SECCIÓN 2 DEL PRODUCTO PRINCIPAL — DEMOSTRACIÓN DE PODER, TRANSFORMACIÓN EN ESCENA Y ANATOMÍA E-COMMERCE DE ALTO IMPACTO): Segunda sección exclusiva de "${input.productName}" (estética obsidiana, bronce cálido y destellos esmeralda/oro). Muestra el producto principal en plena acción transformadora + acercamientos macro de ingeniería y 3 bloques visuales persuasivos de Carta de Venta (frases de 2 a 3 palabras en mayúsculas perfectas) que destruyen cualquier duda.
+     - IMAGEN 4 (SECCIÓN 3 DEL PRODUCTO PRINCIPAL — CIERRE EXPLOSIVO DE CARTA DE VENTA + REGALO GRATIS + ENVÍO GRATUITO EN GRANDE): Tercera sección exclusiva y clímax de conversión para "${input.productName}" (estética obsidiana, verde esmeralda luminoso y oro imperial). Exhibe el paquete completo de "${input.productName}" + sello destacado mostrando que llevás "${safeEntryName}" GRATIS DE REGALO + cartel gigante inconfundible **"ENVÍO GRATUITO EN TODO PARAGUAY"** + **"PAGO AL RECIBIR"** + precio claro (${formatParaguayGs(price1)}), nota transparente corta de delivery suelto (${formatParaguayGs(deliveryFee)}) e indicación inferior: "Dale clic al botón de abajo ↓".
 
-REGLA INQUEBRANTABLE DE TONO, TEXTOS Y MONEDA PARA GPT-2.6:
-- TEXTOS CORTOS Y EXACTOS EN ESPAÑOL: Dentro de "imagePrompt" escribí textos en español MUY CORTOS y entre comillas exactas (máx 4-5 palabras por titular y 2-3 palabras por tarjeta) para que GPT-2.6 los renderice 100% nítidos sin faltas ortográficas.
+REGLA INQUEBRANTABLE CONTRA FALLAS DE ESCRITURA EN GPT-2.6:
+- TEXTOS ULTRA CORTOS Y EN MAYÚSCULAS EXACTAS: Para evitar cualquier falla en la escritura, cada frase a renderizar dentro de "imagePrompt" debe tener MÁXIMO 2 A 4 PALABRAS en MAYÚSCULAS SÓLIDAS entre comillas. Prohibido meter oraciones largas o párrafos dentro del arte.
 - MONEDA EXACTA PARAGUAY: Escribí los precios exactamente como se te entregan (ej. "Gs. 189.000"). PROHIBIDO repetir "Gs. Gs." ni usar "$"/USD.
-- JAMÁS escribas la palabra "tripwire", "gancho trampa" ni jerga técnica. Refiérete siempre al artículo de entrada por su nombre real: "${safeEntryName}".
-- Ocupación total borde a borde (edge-to-edge 2:3 vertical sin marcos blancos), CERO estrellas chillonas baratas ni textos amontonados.${visualDirectionBlock}${cloneDirectiveBlock}`;
+- JAMÁS escribas la palabra "tripwire" ni "gancho trampa".${visualDirectionBlock}${cloneDirectiveBlock}`;
 
   const promptUserContent = isPrincipalOnly
-    ? `PRODUCTO GANADOR ÚNICO (PÁGINA DIRECTA SIN ARTÍCULO SECUNDARIO):
+    ? `PRODUCTO GANADOR ÚNICO (CARTA DE VENTA VISUAL EN ${requestedSheetCount} SECCIONES DE E-COMMERCE DE ALTÍSIMO IMPACTO):
 - Nombre: ${input.productName}
 - Enfoque / ángulo principal: ${cleanAngleInput || input.productDescription}
-- Qué hace / descripción: ${input.productDescription}
+- Qué hace / descripción base (transformar en copy persuasivo, NO copiar literal): ${input.productDescription}
 - Precio Normal tachado: ${formatParaguayGs(normalPrice)}
 - Precio 1x: ${formatParaguayGs(price1)} (Pack 2x: ${formatParaguayGs(price2)}, Pack 3x: ${formatParaguayGs(price3)})
 - Envío Producto Principal: ENVÍO GRATIS en todo Paraguay + Pago en mano al recibir.
 ${visualDirectionInput ? `- Dirección visual asignada: ${visualDirectionInput}` : ''}
 
-CANTIDAD DE LÁMINAS A DISEÑAR: ${sheetCountMode === 'auto' ? `Decidí automáticamente entre 2 o 3 láminas según el producto (sugerido: ${requestedSheetCount})` : requestedSheetCount}
+CANTIDAD DE LÁMINAS A DISEÑAR: ${requestedSheetCount} secciones diferentes de Carta de Venta E-Commerce de altísimo impacto.
 
 Devuelve EXCLUSIVAMENTE este JSON válido:
 {
-  "strategySummary": "Explicación breve interna del enfoque principal de venta directa.",
+  "strategySummary": "Explicación breve interna del arco persuasivo de Carta de Venta en ${requestedSheetCount} secciones.",
   "recommendedAudioPreset": "warm_ambient",
-  "researchedProductDescription": "Ficha comercial limpia, verificada y redactada desde cero en español (NUNCA copia-pega literal del borrador del usuario).",
-  "sobrietyHeadline": "Titular sobrio y elegante de alto impacto racional (máx 10 palabras).",
-  "subheadline": "Bajada clara explicando qué resuelve en el hogar/vida del cliente en Paraguay (máx 22 palabras).",
-  "winnerAngleHeadline": "Ángulo de valor clave del producto principal (máx 12 palabras).",
-  "winnerAngleDescription": "Explicación clara y honesta de beneficios reales del producto principal (máx 32 palabras).",
-  "bundleButtonLabel": "SOLICITAR ${input.productName} · ${formatParaguayGs(price1)}",
+  "researchedProductDescription": "Ficha comercial persuasiva redactada desde cero en español (NUNCA copia-pega literal del borrador del usuario).",
+  "sobrietyHeadline": "Titular persuasivo de Carta de Venta de alto impacto (máx 9 palabras).",
+  "subheadline": "Bajada persuasiva explicando la transformación real en la vida del cliente en Paraguay (máx 20 palabras).",
+  "winnerAngleHeadline": "Gran promesa central del producto principal (máx 10 palabras).",
+  "winnerAngleDescription": "Argumento persuasivo de beneficios reales del producto principal (máx 30 palabras).",
+  "bundleButtonLabel": "Solicitar ahora · ${formatParaguayGs(price1)}",
   "bundleDisclaimer": "Incluye ${input.productName} original + Envío GRATIS en Paraguay + Pago contra entrega en efectivo o QR.",
   "sheetPrompts": [
     {
       "role": "hero_presentation",
-      "title": "Presentación del producto principal",
-      "caption": "Pie corto sobrio",
-      "imagePrompt": "Flagship full-bleed 2:3 vertical high-impact e-commerce design poster for openai/gpt-image-2.6-sunburst in crisp Paraguayan Spanish: studio-lit hero showcase of ${input.productName} (${cleanAngleInput || 'superior result'}) in ${visualDirectionInput || 'dramatic modern high-contrast lighting'}, razor-sharp giant bold Spanish headline integrated cleanly, clean pricing callout '${formatParaguayGs(price1)} · Envío Gratis · Pagás al Recibir' (never duplicate 'Gs.'), edge-to-edge artwork with zero outer frame."
+      "title": "Sección 1 · Impacto Heroico Envolvente",
+      "caption": "Apertura de Carta de Venta y Gran Promesa",
+      "imagePrompt": "Spectacular 360-degree wrap-around 2:3 vertical high-impact e-commerce hero poster for openai/gpt-image-2.6-sunburst: dramatic volumetric studio showcase of ${input.productName} (${cleanAngleInput || 'transformación inmediata'}) in ${visualDirectionInput || 'obsidian and burnished gold lighting'}, giant ultra-clean ALL-CAPS Spanish headline (3-4 persuasive words, zero typos), 3 floating 3D benefit badges (2-3 words each), bold price '${formatParaguayGs(price1)}' (never duplicate 'Gs.'), full-bleed edge-to-edge 2:3."
     },
     {
       "role": "comparison_need",
-      "title": "Beneficios y packs disponibles",
-      "caption": "Comparativa clara de packs",
-      "imagePrompt": "Flagship full-bleed 2:3 vertical high-impact e-commerce infographic poster for openai/gpt-image-2.6-sunburst in crisp Spanish: macro visual breakdown of ${input.productName} key benefits with structured icon cards, clean side-by-side comparison of 1 Unidad (${formatParaguayGs(price1)}) and Pack 2x Ahorro (${formatParaguayGs(price2)}) with 'Envío Gratis Paraguay', plus clean bottom directional arrow cue 'Dale clic al botón de abajo', high-contrast studio typography, edge-to-edge composition."
+      "title": "Sección 2 · Demostración y Transformación Real",
+      "caption": "El poder del producto en acción",
+      "imagePrompt": "High-impact 2:3 vertical e-commerce visual sales letter section 2 for openai/gpt-image-2.6-sunburst: dynamic split and wrap-around demonstration of ${input.productName} solving the problem effortlessly in a real Paraguayan home, bold ALL-CAPS Spanish persuasive headline (max 4 words, 100% exact spelling), 3 high-contrast visual proof callouts (2-3 words each), full-bleed 2:3."
     }${
-      requestedSheetCount === 3 || sheetCountMode === 'auto'
+      requestedSheetCount >= 3
+        ? `,
+    {
+      "role": "authority_transformation",
+      "title": "Sección 3 · Anatomía Premium y Superioridad",
+      "caption": "Ingeniería y beneficios exclusivos",
+      "imagePrompt": "High-impact 2:3 vertical e-commerce anatomical breakdown poster (Section 3) for openai/gpt-image-2.6-sunburst: macro 3D cutaway and detail callouts of ${input.productName} with glowing pointer lines, bold ALL-CAPS Spanish authority headline (max 4 words, zero spelling errors), 3 structured glassmorphic spec cards with 2-to-3-word uppercase labels, full-bleed 2:3."
+    }`
+        : ''
+    }${
+      requestedSheetCount >= 4
         ? `,
     {
       "role": "social_trust_specs",
-      "title": "Garantía y contenido real en caja",
-      "caption": "Lo que recibís en tu puerta",
-      "imagePrompt": "Flagship full-bleed 2:3 vertical commercial studio poster for openai/gpt-image-2.6-sunburst in crisp Spanish: clean overhead unboxing composition showing exact box contents of ${input.productName}, subtle refined emblem 'Garantía Escrita 7 Días · Pago Efectivo o QR al Recibir en Paraguay', plus bottom cue 'Dale clic al botón de abajo', edge-to-edge."
+      "title": "Sección 4 · Oferta Irresistible y Envío Gratis",
+      "caption": "Cierre de Carta de Venta y Garantía Total",
+      "imagePrompt": "Explosive high-converting 2:3 vertical e-commerce offer-closing poster (Section 4) for openai/gpt-image-2.6-sunburst: complete package showcase of ${input.productName}, giant emerald-and-gold badge 'ENVÍO GRATIS EN PARAGUAY' + 'PAGO AL RECIBIR', clear pack comparison 1x '${formatParaguayGs(price1)}' vs 2x '${formatParaguayGs(price2)}' (never write 'Gs. Gs.'), 'GARANTÍA 7 DÍAS', and bottom arrow cue 'Dale clic al botón de abajo'. Crisp ALL-CAPS Spanish lettering, full-bleed 2:3."
     }`
         : ''
     }
   ],
   "faq": [
-    { "q": "Pregunta clave 1 sobre uso o medidas de ${input.productName}", "a": "Respuesta transparente sin jerga" },
+    { "q": "Pregunta clave 1 sobre uso o ventajas de ${input.productName}", "a": "Respuesta persuasiva y transparente" },
     { "q": "Pregunta clave 2 sobre Envío Gratis y pago al recibir", "a": "Respuesta clara Paraguay" },
     { "q": "Pregunta clave 3 sobre garantía y packs", "a": "Respuesta honesta en guaraníes" }
   ],
   "agentContext": "Resumen completo para el agente WhatsApp y de Comentarios con precios exactos en Gs. de ${input.productName} (1x, 2x, 3x), Envío Gratis en todo Paraguay y pago al recibir."
 }`
-    : `PRODUCTO GANADOR (PARTE 2 — CHOQUE DE PATRÓN + OFERTA PRINCIPAL BRUTAL EN LA MISMA PÁGINA):
+    : `CARTA DE VENTA VISUAL EN ${requestedSheetCount} IMÁGENES DE ALTÍSIMO IMPACTO (IMAGEN 1 = TRIPWIRE ENVOLVENTE ESPECTACULAR; IMÁGENES 2, 3 Y 4 = 3 SECCIONES DIFERENTES EXCLUSIVAS DEL PRODUCTO PRINCIPAL):
+
+PRODUCTO PRINCIPAL EXCLUSIVO (IMÁGENES 2, 3 Y 4 — 3 SECCIONES DIFERENTES DE CARTA DE VENTA E-COMMERCE DE ALTÍSIMO IMPACTO):
 - Nombre: ${input.productName}
-- Ángulo contundente del Producto Ganador: ${cleanAngleInput || `Solución definitiva completa muy superior al artículo de entrada (${input.productDescription})`}
-- Qué hace / descripción: ${input.productDescription}
+- Ángulo persuasivo central: ${cleanAngleInput || `Solución definitiva completa muy superior al artículo inicial (${input.productDescription})`}
+- Información base (PROHIBIDO COPIAR Y PEGAR LITERAL; redactar como Carta de Venta persuasiva): ${input.productDescription}
 - Precio Normal tachado: ${formatParaguayGs(normalPrice)}
 - Precio 1x: ${formatParaguayGs(price1)} (Pack 2x: ${formatParaguayGs(price2)}, Pack 3x: ${formatParaguayGs(price3)})
-- Envío Producto Principal: ENVÍO GRATUITO en todo Paraguay + Pago al recibir.
-${visualDirectionInput ? `- Dirección visual asignada para Parte 2: ${visualDirectionInput}` : ''}
+- Beneficio estrella en Cierre: ENVÍO GRATUITO EN TODO PARAGUAY + ${safeEntryName} GRATIS DE REGALO + Pago al recibir.
+${visualDirectionInput ? `- Dirección visual asignada para el Producto Principal: ${visualDirectionInput}` : ''}
 
-ARTÍCULO DE ENTRADA (PARTE 1 — GANCHO DIRECTO RÁPIDO SIN ESPECTACULARIDAD EXAGERADA):
+ARTÍCULO DE ENTRADA / TRIPWIRE (IMAGEN 1 — DISEÑO ENVOLVENTE 360° ESPECTACULAR DE ALTO IMPACTO):
 - Nombre real investigado: ${safeEntryName}
-- Síntesis investigada (NO copiar textos de proveedor literalmente): ${resolvedEntryDesc || safeEntryName}
+- Síntesis investigada (NO copiar textos en crudo): ${resolvedEntryDesc || safeEntryName}
 ${resolvedEntrySpecs.length > 0 ? `- Especificaciones reales clave: ${resolvedEntrySpecs.join(' | ')}` : ''}
-${resolvedEntryVisualBlueprint ? `- Blueprint visual exacto del producto físico a mostrar limpio en Parte 1: ${resolvedEntryVisualBlueprint}` : ''}
-- Precio ÚNICO cerrado (1 unidad solamente): ${formatParaguayGs(entryPrice)} (ARRIBA en Lámina 1 está PROHIBIDO mencionar a "${input.productName}" y PROHIBIDO hablar de envío. Recién en LÁMINA 2 explota el contraste exhibiendo EN GRANDE **ENVÍO GRATUITO** para ${input.productName} + ${safeEntryName} TOTALMENTE DE REGALO, contrastando que llevar solo ${safeEntryName} abona delivery ${formatParaguayGs(deliveryFee)}).
+${resolvedEntryVisualBlueprint ? `- Blueprint visual exacto del producto físico a lucir espectacular en Imagen 1: ${resolvedEntryVisualBlueprint}` : ''}
+- Precio ÚNICO cerrado (1 unidad): ${formatParaguayGs(entryPrice)} (En Imagen 1 está PROHIBIDO mencionar a "${input.productName}" y PROHIBIDO hablar de envío. El diseño de Imagen 1 debe ser ENVOLVENTE, ESPECTACULAR y de ALTÍSIMO IMPACTO VISUAL en atmósfera Azul Zafiro Eléctrico / Cian Neón / Ámbar Dorado).
 
-CANTIDAD DE LÁMINAS: ${requestedSheetCount} (${requestedSheetCount === 2 ? 'Lámina 1 = Gancho directo rápido; Lámina 2 = Choque de freno + Explosión brutal y diferente del Producto Principal' : 'Lámina 1 = Gancho directo; Lámina 2 = Choque brusco ¡ESPERÁ! antes de confirmar; Lámina 3 = Explosión brutal Producto Principal'})
+CANTIDAD DE IMÁGENES A GENERAR: ${requestedSheetCount} (${
+        requestedSheetCount === 4
+          ? 'Imagen 1 = Tripwire Diseño Envolvente Espectacular; Imagen 2 = Sección 1 Producto Principal: Ruptura ¡ESPERÁ! + Gran Promesa Heroica de Carta de Venta; Imagen 3 = Sección 2 Producto Principal: Demostración de Poder, Transformación y Anatomía E-Commerce; Imagen 4 = Sección 3 Producto Principal: Cierre de Carta de Venta + Regalo Gratis + ENVÍO GRATUITO en Grande'
+          : requestedSheetCount === 3
+            ? 'Imagen 1 = Tripwire Envolvente; Imagen 2 = Sección 1 Principal Ruptura + Promesa; Imagen 3 = Sección 2 Principal Oferta Completa + Envío Gratuito'
+            : 'Imagen 1 = Tripwire Envolvente; Imagen 2 = Carta de Venta Principal con Ruptura + Envío Gratuito'
+      })
 
 Devuelve EXCLUSIVAMENTE este JSON válido:
 {
-  "strategySummary": "Explicación breve interna del contraste chocante directo usado entre Gancho y Producto Principal.",
+  "strategySummary": "Explicación breve interna de la Carta de Venta de ${requestedSheetCount} imágenes (Imagen 1 envolvente + ${Math.max(1, requestedSheetCount - 1)} secciones exclusivas del Producto Principal).",
   "recommendedAudioPreset": "warm_ambient",
-  "researchedProductDescription": "Ficha comercial limpia, verificada y redactada desde cero en español para ${input.productName} (cero copia-pega crudo).",
-  "researchedEntryDescription": "Ficha comercial propia de ${safeEntryName} redactada limpiamente desde investigación (NUNCA copia-pega crudo del proveedor).",
-  "sobrietyHeadline": "Titular rápido y directo para ${safeEntryName} (máx 8 palabras).",
-  "subheadline": "Beneficio práctico directo de ${safeEntryName} en una línea clara (máx 16 palabras).",
-  "winnerAngleHeadline": "Titular chocante y brutal para ${input.productName} debajo de la ruptura de patrón (máx 12 palabras).",
-  "winnerAngleDescription": "Contraste directo y persuasivo que explica por qué dar el salto a ${input.productName} resuelve el problema definitivo hoy (máx 32 palabras).",
-  "reversePsychologyHook": "¡Esperá un ratito antes de confirmar! Llevando ${input.productName} te llevás ${safeEntryName} GRATIS y activás Envío Gratuito.",
+  "researchedProductDescription": "Carta de venta sintetizada, persuasiva y redactada desde cero en español para ${input.productName} (cero copia-pega crudo).",
+  "researchedEntryDescription": "Ficha comercial atractiva de ${safeEntryName} redactada desde cero (cero copia-pega crudo).",
+  "sobrietyHeadline": "Titular magnético de alto impacto para ${safeEntryName} (máx 6 palabras).",
+  "subheadline": "Beneficio envolvente y directo de ${safeEntryName} (máx 14 palabras).",
+  "winnerAngleHeadline": "Gran titular persuasivo de Carta de Venta para ${input.productName} (máx 10 palabras, cero copia-pega).",
+  "winnerAngleDescription": "Argumento persuasivo contundente que demuestra por qué ${input.productName} es la solución definitiva (máx 28 palabras).",
+  "reversePsychologyHook": "¡Esperá un segundo! Llevando ${input.productName} recibís ${safeEntryName} GRATIS y activás Envío Gratuito en todo Paraguay.",
   "entryButtonLabel": "Separar ahora · ${formatParaguayGs(entryPrice)}",
   "entryDisclaimer": "Solo incluye 1x ${safeEntryName}. NO incluye ${input.productName} ni envío gratuito.",
   "bundleButtonLabel": "Solicitar oferta completa · ${formatParaguayGs(price1)}",
@@ -1126,30 +1171,50 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   "sheetPrompts": [
     {
       "role": "hero_presentation",
-      "title": "Presentación E-Commerce ${safeEntryName}",
-      "caption": "Lámina 1 E-Commerce Alto Impacto (Paleta Clara/Azul)",
-      "imagePrompt": "High-impact flagship 2:3 vertical e-commerce product graphic for openai/gpt-image-2.6-sunburst in razor-sharp Paraguayan Spanish (bright clean studio aesthetic — crisp pearl-white & vibrant royal cobalt-blue backdrop with warm amber highlights, COMPLETELY DIFFERENT color palette from Sheet 2): TOP ZONE big bold ultra-legible commercial headline for '${safeEntryName}' (short crisp Spanish title, max 5 words); CENTER HERO huge ultra-detailed studio photograph of ONLY '${safeEntryName}'${resolvedEntryVisualBlueprint ? ` (${resolvedEntryVisualBlueprint})` : ''} with crisp studio lighting and vivid real depth; LOWER-SIDE ZONE 3 clean structured rounded icon-cards with concise 2-to-3-word real factual specs (${resolvedEntrySpecs.slice(0, 3).join(' / ') || 'Uso práctico / Alta calidad / Listo para usar'}); BOTTOM ZONE bold clean single price badge '${formatParaguayGs(entryPrice)}' and clean downward arrow cue 'Tocá el botón de abajo'. Direct informative e-commerce style (NO persuasive sales drama). NEVER write 'Gs. Gs.', DO NOT mention '${input.productName}', DO NOT mention shipping. Full-bleed edge-to-edge 2:3."
+      "title": "Lámina 1 · ${safeEntryName} (Diseño Envolvente Alto Impacto)",
+      "caption": "Presentación E-Commerce Envolvente 360°",
+      "imagePrompt": "Spectacular 360-degree wrap-around high-impact 2:3 vertical e-commerce poster for openai/gpt-image-2.6-sunburst in flawless ALL-CAPS Paraguayan Spanish (immersive electric sapphire-cobalt, glowing cyan rim light & warm amber-gold volumetric studio atmosphere —diseño envolvente espectacular, COMPLETELY DIFFERENT palette from the dark obsidian sheets below): TOP ZONE bold ultra-crisp 3-to-4-word uppercase Spanish hook headline for '${safeEntryName}' (persuasive and magnetic, ZERO copy-paste clutter); CENTER HERO breathtaking floating 3D studio showcase of ONLY '${safeEntryName}'${resolvedEntryVisualBlueprint ? ` (${resolvedEntryVisualBlueprint})` : ''} wrapped in dynamic volumetric light beams and hyper-real surface detail; LOWER-MID ZONE 3 sleek wrap-around 3D glassmorphic icon badges with 2-to-3-word uppercase Spanish benefit labels (${resolvedEntrySpecs.slice(0, 3).join(' / ') || 'ALTA POTENCIA / USO INMEDIATO / CALIDAD PREMIUM'}); BOTTOM ZONE bold glowing price badge '${formatParaguayGs(entryPrice)}' and crisp directional cue 'Tocá el botón de abajo'. NEVER write 'Gs. Gs.', DO NOT mention '${input.productName}', DO NOT mention shipping. Full-bleed edge-to-edge 2:3."
     }${
-      requestedSheetCount === 3
+      requestedSheetCount === 4
         ? `,
     {
       "role": "comparison_need",
-      "title": "¡ESPERÁ UN RATITO! Entrada brusca en imagen",
-      "caption": "Ruptura visual brusca dentro de la imagen",
-      "imagePrompt": "High-impact 2:3 vertical direct-response e-commerce graphic for openai/gpt-image-2.6-sunburst in razor-sharp Spanish — COMPLETELY DIFFERENT dark obsidian & sharp crimson-gold palette from Sheet 1: TOP crimson alert bar '¡ESPERÁ UN RATITO!', bold contrast statement showing only '${safeEntryName}' vs the complete upgrade to '${input.productName}', structured icon comparison boxes, razor-sharp readable Spanish typography, edge-to-edge 2:3."
+      "title": "Lámina 2 · Sección 1 Producto Principal: ¡Esperá! Gran Promesa",
+      "caption": "Ruptura persuasiva + Revelación Heroica del Producto Principal",
+      "imagePrompt": "Explosive ultra high-impact 2:3 vertical e-commerce Visual Sales Letter Section 1 exclusively for '${input.productName}' for openai/gpt-image-2.6-sunburst — COMPLETELY DIFFERENT deep obsidian black, crimson neon alert & molten gold luxury palette: TOP 20% dramatic crimson-gold pattern-interrupt banner integrated inside the artwork with giant flawless ALL-CAPS Spanish text '¡ESPERÁ UN SEGUNDO!' + short 3-word persuasive sub-hook 'MIRÁ ESTO ANTES'; CENTER-BOTTOM 80% monumental 360-degree wrap-around hero reveal of '${input.productName}' in dramatic real-world action with a punchy 3-to-4-word ALL-CAPS persuasive sales-letter headline (no raw copy-paste, 100% exact Spanish spelling) and 2 high-impact gold-bordered callout badges showing why '${input.productName}' is on another level. Zero long paragraphs, zero typos, full-bleed edge-to-edge 2:3."
+    },
+    {
+      "role": "authority_transformation",
+      "title": "Lámina 3 · Sección 2 Producto Principal: Poder y Transformación",
+      "caption": "Demostración E-Commerce y Anatomía de Alto Impacto",
+      "imagePrompt": "Mind-blowing 2:3 vertical e-commerce Visual Sales Letter Section 2 exclusively for '${input.productName}' for openai/gpt-image-2.6-sunburst — deep obsidian, warm bronze & glowing emerald-gold luxury studio aesthetic: TOP bold 3-to-4-word ALL-CAPS persuasive Spanish headline highlighting the transformation and power of '${input.productName}'; CENTER dynamic wrap-around e-commerce composition showing '${input.productName}' transforming a real environment + macro engineering close-up detail; LOWER 3 structured high-impact 3D icon modules with 2-to-3-word ALL-CAPS persuasive Spanish benefit headlines (flawless orthography, zero copy-paste, zero small text). Full-bleed edge-to-edge 2:3."
     },
     {
       "role": "social_trust_specs",
-      "title": "Oferta Estrella de Locura: ${input.productName} + ${safeEntryName} GRATIS",
-      "caption": "E-Commerce Altísimo Nivel con Envío Gratuito",
-      "imagePrompt": "Mind-blowing ultra high-impact flagship 2:3 vertical e-commerce conversion poster for openai/gpt-image-2.6-sunburst in razor-sharp Paraguayan Spanish — COMPLETELY DIFFERENT deep obsidian dark, glowing emerald & burnished gold aesthetic from Sheet 1: giant bold dramatic Spanish headline for '${input.productName}' (${cleanAngleInput || 'solución definitiva'}), huge photorealistic center-stage hero showcase of '${input.productName}' transforming a real modern home environment, 4 crisp structured dark-glass icon feature badges, unmissable emerald-gold banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + '${safeEntryName} DE REGALO', clear price '${formatParaguayGs(price1)}' (write ONCE, never 'Gs. Gs.'), transparent note 'Solo ${safeEntryName} paga delivery ${formatParaguayGs(deliveryFee)}', and bottom downward arrow cue 'Dale clic al botón de abajo'. Edge-to-edge 2:3."
+      "title": "Lámina 4 · Sección 3 Producto Principal: Oferta Irresistible + Envío Gratis",
+      "caption": "Cierre de Carta de Venta con Regalo Incluido y Envío Gratuito",
+      "imagePrompt": "Grand-finale ultra high-impact 2:3 vertical e-commerce Visual Sales Letter Section 3 exclusively for '${input.productName}' for openai/gpt-image-2.6-sunburst — deep obsidian, radiant emerald neon & burnished imperial gold aesthetic: TOP bold ALL-CAPS Spanish closing headline 'OFERTA COMPLETA EXCLUSIVA'; CENTER monumental bundle showcase of '${input.productName}' + glowing gold bonus badge 'LLEVÁS ${safeEntryName.toUpperCase()} GRATIS'; LOWER unmissable giant emerald-gold banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'PAGO AL RECIBIR' + bold price '${formatParaguayGs(price1)}' (write ONCE, never 'Gs. Gs.') + clean contrast note 'Solo artículo suelto: delivery ${formatParaguayGs(deliveryFee)}'; BOTTOM directional arrow cue 'Dale clic al botón de abajo'. 100% flawless uppercase Spanish spelling, zero garbled text, full-bleed edge-to-edge 2:3."
     }`
-        : `,
+        : requestedSheetCount === 3
+          ? `,
+    {
+      "role": "comparison_need",
+      "title": "Lámina 2 · ¡ESPERÁ UN SEGUNDO! Apertura Carta de Venta Principal",
+      "caption": "Ruptura visual brusca + Revelación del Producto Principal",
+      "imagePrompt": "High-impact 2:3 vertical direct-response e-commerce Visual Sales Letter Section 1 for '${input.productName}' for openai/gpt-image-2.6-sunburst — COMPLETELY DIFFERENT dark obsidian & sharp crimson-gold palette from Sheet 1: TOP crimson alert bar '¡ESPERÁ UN SEGUNDO!', bold wrap-around hero reveal of '${input.productName}' with a short 3-to-4-word ALL-CAPS persuasive Spanish headline and 3 structured icon boxes, razor-sharp flawless Spanish typography, edge-to-edge 2:3."
+    },
+    {
+      "role": "social_trust_specs",
+      "title": "Lámina 3 · Cierre Carta de Venta: ${input.productName} + ${safeEntryName} GRATIS",
+      "caption": "E-Commerce Altísimo Nivel con Envío Gratuito",
+      "imagePrompt": "Mind-blowing ultra high-impact flagship 2:3 vertical e-commerce conversion poster for openai/gpt-image-2.6-sunburst in razor-sharp ALL-CAPS Paraguayan Spanish — COMPLETELY DIFFERENT deep obsidian dark, glowing emerald & burnished gold aesthetic from Sheet 1: giant bold 3-to-4-word Spanish headline for '${input.productName}', huge photorealistic center-stage hero showcase of '${input.productName}', 3 crisp dark-glass icon feature badges, unmissable emerald-gold banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + '${safeEntryName} DE REGALO', clear price '${formatParaguayGs(price1)}' (write ONCE, never 'Gs. Gs.'), transparent note 'Solo ${safeEntryName} paga delivery ${formatParaguayGs(deliveryFee)}', and bottom downward arrow cue 'Dale clic al botón de abajo'. Edge-to-edge 2:3."
+    }`
+          : `,
     {
       "role": "social_trust_specs",
       "title": "¡ESPERÁ! ${input.productName} + ${safeEntryName} GRATIS + ENVÍO GRATUITO",
       "caption": "Entrada brusca integrada + Oferta Estrella de Locura",
-      "imagePrompt": "Mind-blowing ultra high-impact flagship 2:3 vertical e-commerce conversion poster for openai/gpt-image-2.6-sunburst in razor-sharp Paraguayan Spanish — COMPLETELY DIFFERENT deep obsidian dark, crimson-alert, glowing emerald & metallic gold aesthetic from Sheet 1: TOP 18% sharp crimson-amber interrupt header integrated directly inside the artwork '¡ESPERÁ UN RATITO!' + 'Estás por pedir solo ${safeEntryName}... Mirá esto antes:'; MIDDLE 58% spectacular photorealistic hero showcase of '${input.productName}' (${cleanAngleInput || 'solución definitiva'}) in dramatic real-world action with giant bold Spanish headline and 3 crisp structured dark-glass icon feature cards; LOWER 16% high-impact emerald-gold offer bar 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'Llevás ${safeEntryName} DE REGALO' + clean price '${formatParaguayGs(price1)}' (never write 'Gs. Gs.') + transparent delivery note 'Solo ${safeEntryName}: delivery ${formatParaguayGs(deliveryFee)}'; BOTTOM 8% clean downward arrow cue 'Dale clic al botón de abajo'. Ultra-crisp legible Spanish typography, zero garbled text, full-bleed edge-to-edge 2:3."
+      "imagePrompt": "Mind-blowing ultra high-impact flagship 2:3 vertical e-commerce conversion poster for openai/gpt-image-2.6-sunburst in razor-sharp Paraguayan Spanish — COMPLETELY DIFFERENT deep obsidian dark, crimson-alert, glowing emerald & metallic gold aesthetic from Sheet 1: TOP 18% sharp crimson-amber interrupt header integrated directly inside the artwork '¡ESPERÁ UN RATITO!' + 'MIRÁ LA OFERTA COMPLETA'; MIDDLE 58% spectacular photorealistic wrap-around hero showcase of '${input.productName}' in dramatic real-world action with giant bold 3-to-4-word ALL-CAPS Spanish headline and 3 crisp structured dark-glass icon feature cards; LOWER 16% high-impact emerald-gold offer bar 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'LLEVÁS ${safeEntryName.toUpperCase()} DE REGALO' + clean price '${formatParaguayGs(price1)}' (never write 'Gs. Gs.') + transparent delivery note 'Solo ${safeEntryName}: delivery ${formatParaguayGs(deliveryFee)}'; BOTTOM 8% clean downward arrow cue 'Dale clic al botón de abajo'. Ultra-crisp legible Spanish typography, zero garbled text, full-bleed edge-to-edge 2:3."
     }`
     }
   ],
@@ -1161,7 +1226,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   "agentContext": "Resumen completo para el agente WhatsApp y de Comentarios con precios exactos en Gs., qué incluye la caja y la regla de las dos opciones (sin decir nunca tripwire)."
 }`;
 
-  // 1. Cerebro OpenRouter GPT-4o: Arquitectura psicológica sobria + prompts de láminas gráficas
+  // 1. Cerebro OpenRouter GPT-4o: Arquitectura de Carta de Venta Visual + prompts de láminas gráficas
   const llmRes = await f('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -1190,14 +1255,68 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   const llmJson: any = await llmRes.json();
   const rawContent = String(llmJson?.choices?.[0]?.message?.content || '').trim();
   const parsed = JSON.parse(rawContent);
-  const rawSheets: any[] = Array.isArray(parsed?.sheetPrompts) ? parsed.sheetPrompts : [];
+  const rawSheets: any[] = Array.isArray(parsed?.sheetPrompts) ? [...parsed.sheetPrompts] : [];
   if (rawSheets.length < 2) {
     throw new Error('OpenRouter GPT-4o no devolvió las láminas gráficas completas.');
   }
 
-  const finalSheetCount: 2 | 3 =
+  // Si se pidieron explícitamente 4 láminas (o GPT-4o devolvió menos de 4 cuando sheetCount === 4), completar las 3 secciones del Producto Principal
+  if (sheetCountMode === 4 && rawSheets.length < 4) {
+    const fallbackPrincipalSections = isPrincipalOnly
+      ? [
+          {
+            role: 'comparison_need',
+            title: `Sección 2 · Demostración Real de ${input.productName}`,
+            caption: 'Transformación inmediata en acción',
+            imagePrompt: `High-impact 2:3 vertical e-commerce visual sales letter section 2 for '${input.productName}': dramatic wrap-around demonstration in action, bold 3-word ALL-CAPS Spanish headline 'POTENCIA SIN LÍMITES', 3 visual benefit cards with 2-word uppercase labels, full-bleed 2:3.`
+          },
+          {
+            role: 'authority_transformation',
+            title: `Sección 3 · Anatomía y Calidad de ${input.productName}`,
+            caption: 'Ingeniería superior al detalle',
+            imagePrompt: `High-impact 2:3 vertical e-commerce visual sales letter section 3 for '${input.productName}': macro 3D detail showcase, bold 3-word ALL-CAPS Spanish headline 'CALIDAD SUPERIOR REAL', 3 glassmorphic spec badges, full-bleed 2:3.`
+          },
+          {
+            role: 'social_trust_specs',
+            title: `Sección 4 · Oferta Completa con Envío Gratis`,
+            caption: 'Cierre de Carta de Venta con Garantía',
+            imagePrompt: `Explosive 2:3 vertical e-commerce offer-closing poster for '${input.productName}': giant emerald-gold banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'PAGO AL RECIBIR', price '${formatParaguayGs(price1)}', bottom arrow 'Dale clic al botón de abajo', full-bleed 2:3.`
+          }
+        ]
+      : [
+          {
+            role: 'comparison_need',
+            title: `Lámina 2 · Sección 1 Principal: ¡Esperá un Segundo!`,
+            caption: 'Ruptura de patrón + Gran Promesa del Producto Principal',
+            imagePrompt: `Explosive 2:3 vertical e-commerce Visual Sales Letter Section 1 for '${input.productName}' in deep obsidian, crimson & gold: top banner '¡ESPERÁ UN SEGUNDO!', monumental 360-degree wrap-around hero reveal of '${input.productName}' with bold 3-word ALL-CAPS Spanish headline 'SOLUCIÓN DEFINITIVA TOTAL', full-bleed 2:3.`
+          },
+          {
+            role: 'authority_transformation',
+            title: `Lámina 3 · Sección 2 Principal: Poder y Transformación`,
+            caption: 'Demostración E-Commerce y Anatomía de Alto Impacto',
+            imagePrompt: `Mind-blowing 2:3 vertical e-commerce Visual Sales Letter Section 2 exclusively for '${input.productName}' in obsidian, bronze & emerald-gold: dynamic action scene + macro detail of '${input.productName}', bold 3-word ALL-CAPS Spanish headline 'RESULTADO PROFESIONAL HOY' and 3 3D icon badges, full-bleed 2:3.`
+          },
+          {
+            role: 'social_trust_specs',
+            title: `Lámina 4 · Sección 3 Principal: Oferta Completa + Envío Gratis`,
+            caption: 'Cierre de Carta de Venta con Regalo y Envío Gratuito',
+            imagePrompt: `Grand-finale 2:3 vertical e-commerce Visual Sales Letter Section 3 exclusively for '${input.productName}' in obsidian, emerald & gold: bundle showcase of '${input.productName}' + '${safeEntryName.toUpperCase()} DE REGALO' + giant banner 'ENVÍO GRATUITO EN TODO PARAGUAY' + 'PAGO AL RECIBIR' + price '${formatParaguayGs(price1)}' + bottom cue 'Dale clic al botón de abajo', full-bleed 2:3.`
+          }
+        ];
+
+    while (rawSheets.length < 4) {
+      const nextIdx = rawSheets.length - 1;
+      rawSheets.push(fallbackPrincipalSections[Math.min(nextIdx, fallbackPrincipalSections.length - 1)]);
+    }
+  }
+
+  const finalSheetCount: 2 | 3 | 4 =
     sheetCountMode === 'auto'
-      ? (rawSheets.length >= 3 ? 3 : 2)
+      ? rawSheets.length >= 4
+        ? 4
+        : rawSheets.length === 3
+          ? 3
+          : 2
       : sheetCountMode;
 
   const resolvedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none' =
@@ -1209,19 +1328,23 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
         ? parsed.recommendedAudioPreset
         : 'warm_ambient';
 
-  // 2. Generar las 2 o 3 imágenes verticales reales en paralelo/turno con openai/gpt-image-2.6-sunburst
+  // 2. Generar las láminas verticales reales (por defecto 4: 1 Tripwire Envolvente + 3 Secciones Producto Principal)
   const generatedSheets: ProductVisualLandingSheet[] = [];
   for (let i = 0; i < Math.min(finalSheetCount, rawSheets.length); i++) {
     const s = rawSheets[i];
-    const extraVisualContext = [
+    const sanitizedPrompt = sanitizeAndEnforceSalesLetterImagePrompt(
       String(s.imagePrompt || ''),
+      i,
+      isPrincipalOnly
+    );
+    const extraVisualContext = [
+      sanitizedPrompt,
       !isPrincipalOnly && i === 0 && resolvedEntryVisualBlueprint
-        ? `Exact physical entry product geometry & clean studio appearance: ${resolvedEntryVisualBlueprint}.`
+        ? `Exact physical entry product geometry & clean wrap-around 3D studio appearance: ${resolvedEntryVisualBlueprint}.`
         : '',
       (isPrincipalOnly || i >= 1) && savedPrincipalImg && !savedPrincipalImg.startsWith('/')
-        ? `Reference product style: ${input.productName}.`
-        : '',
-      'Ultra sharp high-contrast legible Spanish e-commerce typography, crisp vector feature icons, NO garbled words, full-bleed edge-to-edge 2:3 vertical layout with zero white margins.'
+        ? `Reference principal product style: ${input.productName}.`
+        : ''
     ]
       .filter(Boolean)
       .join(' ');
@@ -1235,13 +1358,22 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       fetchImpl: f
     });
 
+    const defaultRole =
+      i === 0
+        ? 'hero_presentation'
+        : i === 1
+          ? 'comparison_need'
+          : i === 2 && finalSheetCount === 4
+            ? 'authority_transformation'
+            : 'social_trust_specs';
+
     generatedSheets.push({
       id: `sheet_${i + 1}`,
-      role: (s.role as any) || (i === 0 ? 'hero_presentation' : i === 1 ? 'comparison_need' : 'social_trust_specs'),
+      role: (s.role as any) || defaultRole,
       imageUrl: imgUrl,
       title: String(s.title || `Lámina ${i + 1}`).trim(),
       caption: String(s.caption || '').trim(),
-      promptUsed: String(s.imagePrompt || '').trim()
+      promptUsed: sanitizedPrompt
     });
   }
 
@@ -1250,6 +1382,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
 
   const cleanPublicText = (raw: string) =>
     String(raw || '')
+      .replace(/Gs\.\s*Gs\./gi, 'Gs.')
       .replace(/\btripwire\b/gi, isPrincipalOnly ? input.productName.trim() : safeEntryName)
       .trim();
 
@@ -1292,7 +1425,12 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
 
   const visualLanding: ProductVisualLandingConfig = {
     enabled: true,
-    mode: finalSheetCount === 3 ? 'sober_graphic_3sheet' : 'sober_graphic_2sheet',
+    mode:
+      finalSheetCount === 4
+        ? 'sober_graphic_4sheet'
+        : finalSheetCount === 3
+          ? 'sober_graphic_3sheet'
+          : 'sober_graphic_2sheet',
     generatorModel: VISUAL_CREATOR_IMAGE_MODEL,
     sheets: generatedSheets,
     sobrietyHeadline: cleanPublicText(parsed?.sobrietyHeadline || input.productName),

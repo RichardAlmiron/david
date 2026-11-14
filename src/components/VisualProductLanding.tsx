@@ -106,7 +106,7 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ()
       <div className="w-full max-w-[560px] mx-auto bg-[#06080d] shadow-[0_0_80px_rgba(0,0,0,0.9)]">
         {hasEntryHook ? (
           <>
-            {/* BLOQUE 1: IMAGEN 1 + BOTÓN #1 ANCLADO JUSTO DEBAJO DE LA FLECHA */}
+            {/* BLOQUE 1: IMAGEN 1 (TRIPWIRE ENVOLVENTE) + BOTÓN #1 ANCLADO JUSTO DEBAJO */}
             <section data-testid="landing-hook-section" className="w-full">
               <img
                 src={firstSheet.imageUrl}
@@ -114,6 +114,7 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ()
                 referrerPolicy="no-referrer"
                 loading="eager"
                 onLoad={() => setLoadedSheetsCount((c) => c + 1)}
+                onError={() => setLoadedSheetsCount((c) => c + 1)}
                 className="w-full h-auto block object-cover"
               />
 
@@ -138,16 +139,17 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ()
               </div>
             </section>
 
-            {/* BLOQUE 2: IMAGEN 2+ + BOTÓN #2 QUE APARECE RECIÉN AL LLEGAR BIEN ABAJO */}
+            {/* BLOQUE 2: IMÁGENES 2, 3 Y 4 (3 SECCIONES DE CARTA DE VENTA DEL PRODUCTO PRINCIPAL) + BOTÓN #2 AL FINAL */}
             <section data-testid="landing-principal-section" className="w-full">
               {secondPartSheets.map((sheet, idx) => (
                 <img
                   key={sheet.id || idx}
                   src={sheet.imageUrl}
-                  alt={sheet.title || `${currentProductPage.nombre} presentación ${idx + 2}`}
+                  alt={sheet.title || `${currentProductPage.nombre} sección ${idx + 1}`}
                   referrerPolicy="no-referrer"
                   loading="eager"
                   onLoad={() => setLoadedSheetsCount((c) => c + 1)}
+                  onError={() => setLoadedSheetsCount((c) => c + 1)}
                   className="w-full h-auto block object-cover"
                 />
               ))}
@@ -182,16 +184,17 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ()
             </section>
           </>
         ) : (
-          /* MODO ESTÁNDAR: LÁMINAS E-COMMERCE + BOTÓN VIP AL FINAL */
+          /* MODO ESTÁNDAR: 4 SECCIONES DE CARTA DE VENTA E-COMMERCE + BOTÓN VIP AL FINAL */
           <section className="w-full">
             {vis.sheets.map((sheet, idx) => (
               <img
                 key={sheet.id || idx}
                 src={sheet.imageUrl}
-                alt={sheet.title || `${currentProductPage.nombre} vista ${idx + 1}`}
+                alt={sheet.title || `${currentProductPage.nombre} sección ${idx + 1}`}
                 referrerPolicy="no-referrer"
                 loading="eager"
                 onLoad={() => setLoadedSheetsCount((c) => c + 1)}
+                onError={() => setLoadedSheetsCount((c) => c + 1)}
                 className="w-full h-auto block object-cover"
               />
             ))}

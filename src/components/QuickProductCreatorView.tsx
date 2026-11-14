@@ -51,7 +51,7 @@ interface AiAngleOption {
   archetype: string;
   winnerAngle: string;
   visualDirection: string;
-  recommendedSheetCount: 2 | 3;
+  recommendedSheetCount: 2 | 3 | 4;
   recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
   whyItConverts: string;
   tripwireBridgeNote?: string;
@@ -60,7 +60,7 @@ interface AiAngleOption {
 interface AiStrategyState {
   currentPageDiagnosis: string;
   assistantReply: string;
-  recommendedSheetCount: 2 | 3;
+  recommendedSheetCount: 2 | 3 | 4;
   recommendedAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none';
   options: AiAngleOption[];
   recommendedOptionId: string;
@@ -179,7 +179,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
   const [strategyError, setStrategyError] = useState<string | null>(null);
   const [aiChatHistory, setAiChatHistory] = useState<AiChatEntry[]>([]);
   const [showManualOverrides, setShowManualOverrides] = useState(false);
-  const [sheetCount, setSheetCount] = useState<2 | 3>(2);
+  const [sheetCount, setSheetCount] = useState<2 | 3 | 4>(4);
   const [manualOverrideUsed, setManualOverrideUsed] = useState(false);
 
   const lastAnalyzedSignatureRef = useRef<string>('');
@@ -285,11 +285,11 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
     return aiStrategy.options.find((o) => o.id === selectedOptionId) || aiStrategy.options[0];
   }, [aiStrategy, selectedOptionId]);
 
-  const effectiveSheetCount: 2 | 3 = manualOverrideUsed
+  const effectiveSheetCount: 2 | 3 | 4 = manualOverrideUsed
     ? sheetCount
     : selectedAiOption?.recommendedSheetCount ||
       aiStrategy?.recommendedSheetCount ||
-      2;
+      4;
 
   const effectiveAudioPreset: 'warm_ambient' | 'soft_lounge' | 'commercial_pulse' | 'none' =
     manualOverrideUsed
@@ -2282,8 +2282,12 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                   {/* Línea silenciosa automática + override opcional */}
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-zinc-400">
                     <div className="flex flex-wrap items-center gap-2 font-mono tabular-nums text-[11px]">
-                      <span className="text-[#e5c88b]">Automático IA:</span>
-                      <span>{effectiveSheetCount} láminas 3:4 full-bleed (GPT-2.6)</span>
+                      <span className="text-[#e5c88b]">Carta de Venta IA:</span>
+                      <span>
+                        {effectiveSheetCount === 4 && isTripwireMode
+                          ? '4 imágenes (1 Gancho Envolvente + 3 Secciones Producto Principal)'
+                          : `${effectiveSheetCount} imágenes de alto impacto (GPT-2.6)`}
+                      </span>
                       <span aria-hidden="true">·</span>
                       <span>Audio: {AUDIO_LABELS[effectiveAudioPreset] || 'Acústica Cálida'}</span>
                     </div>
@@ -2302,10 +2306,10 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-[#07090f]/70 border border-white/10">
                       <div className="space-y-1.5">
                         <label className="text-xs font-medium text-zinc-300 block">
-                          Cantidad de láminas
+                          Cantidad de imágenes generadas
                         </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {([2, 3] as const).map((n) => (
+                        <div className="grid grid-cols-3 gap-2">
+                          {([4, 3, 2] as const).map((n) => (
                             <button
                               key={n}
                               type="button"
@@ -2319,7 +2323,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                                   : 'bg-[#0b0e16] border-white/10 text-zinc-400'
                               }`}
                             >
-                              {n} Láminas (3:4)
+                              {n === 4 ? '4 Imágenes (Carta)' : `${n} Imágenes`}
                             </button>
                           ))}
                         </div>
@@ -2452,8 +2456,8 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {createdResult.product.visualLanding?.sheets.map((sh) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {createdResult.product.visualLanding?.sheets.map((sh, idx) => (
                 <div key={sh.id} className="rounded-xl bg-[#07090f] border border-white/10 overflow-hidden">
                   <img
                     src={sh.imageUrl}
@@ -2461,7 +2465,14 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                     referrerPolicy="no-referrer"
                     className="w-full aspect-[3/4] object-cover"
                   />
-                  <div className="p-3 space-y-0.5">
+                  <div className="p-3 space-y-1">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#e5c88b]">
+                      {createdResult.product.tripwireConfig?.enabled
+                        ? idx === 0
+                          ? 'Imagen 1 · Gancho Envolvente'
+                          : `Imagen ${idx + 1} · Sección ${idx} Principal`
+                        : `Imagen ${idx + 1} · Sección ${idx + 1}`}
+                    </div>
                     <div className="text-xs font-semibold text-white">{sh.title}</div>
                     {sh.caption && <div className="text-[11px] text-zinc-400">{sh.caption}</div>}
                   </div>

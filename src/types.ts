@@ -723,14 +723,14 @@ export interface ProductVisualLandingSheet {
   caption?: string;
   imageUrl: string;
   aspectRatio?: '3:4' | '9:16' | '1:1' | '4:5';
-  placement?: 'hero_sheet' | 'comparison_sheet' | 'proof_sheet';
-  role?: 'hero_presentation' | 'comparison_need' | 'social_trust_specs';
+  placement?: 'hero_sheet' | 'comparison_sheet' | 'proof_sheet' | 'offer_close_sheet';
+  role?: 'hero_presentation' | 'comparison_need' | 'authority_transformation' | 'social_trust_specs';
   promptUsed?: string;
 }
 
 export interface ProductVisualLandingConfig {
   enabled: boolean;
-  mode?: 'sober_graphic_2sheet' | 'sober_graphic_3sheet';
+  mode?: 'sober_graphic_2sheet' | 'sober_graphic_3sheet' | 'sober_graphic_4sheet';
   generatorModel?: string;
   topNoticeText?: string;
   sobrietyHeadline?: string;
