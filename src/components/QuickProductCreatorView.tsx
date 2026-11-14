@@ -818,13 +818,13 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       };
     }
     return {
-      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (2 Partes Alta Gama)',
+      title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire (4 Láminas Realistas COD)',
       whatYouDo:
-        'Ambas imágenes se generan en calidad Alta Gama con estéticas totalmente distintas para no mezclar los productos: Imagen 1 presenta el Gancho e indica tocar el Botón #1; justo después, Imagen 2 ya arranca dentro del arte con la entrada brusca ("¡ESPERÁ!...") y la Oferta Principal con Envío Gratuito hacia el Botón #2.',
+        'Se generan 4 imágenes fotográficas reales con avatares humanos, momentos cotidianos y entornos reales (sin estilo animado ni barullo): Lámina 1 en ambiente claro presenta el Gancho hacia el Botón #1; Láminas 2, 3 y 4 muestran la ruptura limpia ("¡ESPERÁ UN SEGUNDO!") y la Oferta Principal con Envío Gratuito hacia el Botón #2.',
       whyItMatters:
         'Cero descripciones ni muros HTML alrededor de los botones: cada botón es limpio y directo, y al tocarlo se abre el formulario en modal.',
       unlockHint:
-        'Tocá "Lanzar Página Tripwire" para generar ambas partes Alta Gama en GPT-2.6 y publicar tu página.'
+        'Tocá "Lanzar Página Tripwire" para generar las 4 láminas realistas en GPT-2.6 y publicar tu página.'
     };
   }, [
     wizardStep,
@@ -850,7 +850,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       ]
     : [
         'Recabando ficha investigada del Gancho y Producto Principal...',
-        'Diseñando Imagen 1 Alta Gama + Botón #1 → Imagen 2 Alta Gama distinta con entrada brusca integrada + Botón #2...',
+        'Diseñando 4 láminas fotográficas reales con avatares, momentos y lugares reales...',
         'Configurando botones limpios sin texto extra y formulario en modal...'
       ];
 

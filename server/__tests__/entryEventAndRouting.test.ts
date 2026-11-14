@@ -1031,9 +1031,10 @@ test('dual_tripwire_winner genera 4 imágenes de Carta de Venta: Imagen 1 envolv
     );
     const sysPrompt = String(blueprintPayload?.messages?.[0]?.content || '');
     const userPrompt = String(blueprintPayload?.messages?.[1]?.content || '');
-    assert.ok(sysPrompt.includes('DISEÑO ENVOLVENTE 360° ESPECTACULAR DE ALTO IMPACTO'), 'Imagen 1 del Tripwire debe exigir diseño envolvente espectacular de alto impacto');
-    assert.ok(sysPrompt.includes('LAS 3 SECCIONES DIFERENTES DE E-COMMERCE DE ALTÍSIMO IMPACTO EXCLUSIVAS DEL PRODUCTO PRINCIPAL'), 'Imágenes 2, 3 y 4 deben ser 3 secciones diferentes exclusivas del Producto Principal');
+    assert.ok(sysPrompt.includes('AVATAR REALISTA'), 'Imagen 1 del Tripwire debe exigir fotografía realista con avatar realista en entorno real');
+    assert.ok(sysPrompt.includes('LAS 3 SECCIONES DE CARTA DE VENTA EXCLUSIVAS DEL PRODUCTO PRINCIPAL'), 'Imágenes 2, 3 y 4 deben ser 3 secciones diferentes exclusivas del Producto Principal');
     assert.ok(sysPrompt.includes('PROHIBIDO EL COPIA Y PEGA'), 'Debe prohibir el copia y pega literal y exigir Carta de Venta persuasiva');
+    assert.ok(sysPrompt.includes('PROHIBIDO EL DIBUJO ANIMADO'), 'Debe prohibir explícitamente dibujo animado, CGI flotante y barullo neón');
     assert.ok(sysPrompt.includes('REGLA INQUEBRANTABLE CONTRA FALLAS DE ESCRITURA'), 'Debe exigir frases cortas en mayúsculas para cero fallas de escritura');
     assert.ok(userPrompt.includes("DO NOT mention 'Proyector Láser Pro'"), 'Lámina 1 debe prohibir mencionar el producto principal');
     assert.ok(userPrompt.includes('Tocá el botón de abajo'), 'Lámina 1 debe incluir indicación visual hacia el botón de abajo');
@@ -1042,8 +1043,15 @@ test('dual_tripwire_winner genera 4 imágenes de Carta de Venta: Imagen 1 envolv
     assert.equal(/Gs\.\s+Gs\.\s*\d/.test(userPrompt), false, 'No debe duplicar nunca Gs. Gs. antes de un monto en el prompt');
     assert.equal(/Gs\.\s+Gs\.\s*\d/.test(sysPrompt), false, 'No debe duplicar Gs. Gs. antes de un monto en el prompt de sistema');
     assert.ok(
-      capturedImgPrompts[0]?.includes('SPECTACULAR 360-DEGREE WRAP-AROUND E-COMMERCE DESIGN'),
-      'El prompt final enviado al generador de imagen para la Lámina 1 debe incluir dirección envolvente 360°'
+      capturedImgPrompts[0]?.includes('realistic Latin American human avatar') &&
+        capturedImgPrompts[0]?.includes('STRICT REALISM & ZERO-CARTOON RULE'),
+      'El prompt final enviado al generador de imagen para la Lámina 1 debe exigir avatar realista y fotografía DSLR sin dibujo animado'
+    );
+    assert.ok(
+      !capturedImgPrompts[0]?.includes('360-degree wrap-around') &&
+        !capturedImgPrompts[0]?.includes('floating 3D') &&
+        !capturedImgPrompts[0]?.includes('neon rim light'),
+      'El sanitizador debe limpiar cualquier trigger de render 3D/neón/dibujo animado'
     );
     assert.ok(
       capturedImgPrompts.every((p) => p.includes('STRICT SPANISH ORTHOGRAPHY & ZERO-TYPO RULE') && !p.includes('Gs. Gs.')),
