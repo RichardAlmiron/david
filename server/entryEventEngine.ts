@@ -175,11 +175,11 @@ export function buildEntryAttemptSpeech(params: {
   if (params.attemptNumber === 1) {
     return (
       `Hola ${firstName}, ¿cómo estás? Recibimos tu solicitud de ${params.state.entryProductName}. ` +
-      `Antes de preparar tu envío por separado, te cuento algo súper transparente que te conviene saber: ` +
-      `el ${params.state.entryProductName} solo cuesta ${params.state.entryPriceGs.toLocaleString('es-PY')} guaraníes más el delivery de zona. ` +
-      `En cambio, si decidís llevar ahora el ${principalName} con descuento preferencial a ${params.state.instantUpgradePriceGs.toLocaleString('es-PY')} guaraníes, ` +
-      `el ${params.state.entryProductName} te va totalmente de regalo y el envío a domicilio es gratis. ` +
-      `Y si hoy preferís no decidir todavía, también podés sumarte sin compromiso al evento privado de ${params.state.slotsTotal} cupos que dura ${durationHours} horas. ` +
+      `Antes de procesar tu envío individual, te cuento algo súper transparente que te conviene aprovechar: ` +
+      `la oferta individual de ${params.state.entryProductName} a ${params.state.entryPriceGs.toLocaleString('es-PY')} guaraníes no incluye envío gratis. ` +
+      `En cambio, si decidís llevar hoy el ${principalName} con descuento preferencial a ${params.state.instantUpgradePriceGs.toLocaleString('es-PY')} guaraníes, ` +
+      `el ${params.state.entryProductName} te va totalmente DE REGALO y activás el ENVÍO GRATIS directo hasta tu puerta. ` +
+      `Y si hoy preferís pensarlo tranquilo, también podés anotarte en el evento privado de ${params.state.slotsTotal} cupos que dura ${durationHours} horas. ` +
       `Abajo te dejo una encuesta de un toque para que elijas lo que te quede más cómodo.`
     );
   }

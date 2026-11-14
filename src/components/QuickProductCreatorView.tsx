@@ -704,9 +704,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       return {
         title: 'Paso 1 de 4 · ¿Qué tipo de página vas a crear hoy?',
         whatYouDo:
-          'Elegí una de las 2 tarjetas de abajo según lo que querés vender: una Página Estándar (producto único directo) o una Página Tripwire (oferta gancho + producto principal en la misma página).',
+          'Elegí una de las 2 tarjetas de abajo según tu estrategia: Página de Producto Estándar (venta 100% directa de un solo producto) o Página Tripwire (oferta gancho de entrada + producto principal adentro).',
         whyItMatters:
-          'La Página Estándar es 100% directa a un solo producto. La Página Tripwire combina un producto gancho económico con tu Producto Principal adentro de la misma página.',
+          'La Página Estándar es 100% directa a un único producto con envío gratis. En cambio, la Página Tripwire usa una oferta gancho de bajo valor para que el usuario no piense dos veces en tocar el botón de adquirir: llega desde el anuncio creyendo que vino por esa oferta, pero adentro ve tu Producto Principal con psicología inversa (llevando el principal se lleva el gancho gratis). Clave: en el apartado Tripwire NO se ofrece envío gratuito porque el envío gratis es la llave secreta para atacarlo por mensajes en el chat; recién al final del evento, si sigue firme queriendo solo el Tripwire, se le dice que paga el envío.',
         unlockHint: pageCreationMode
           ? `Elegiste "${isStandardMode ? 'Página Estándar' : 'Página Tripwire'}". Tocá "Continuar al Paso 2" para avanzar.`
           : 'Tocá una de las 2 tarjetas de abajo para desbloquear el botón Continuar.'
@@ -732,9 +732,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       return {
         title: 'Paso 2 de 4 · Página Tripwire: Elegí tu Producto Principal',
         whatYouDo:
-          'Toda página Tripwire lleva un gancho arriba y tu Oferta Principal abajo. Seleccioná acá una Página de Producto Estándar ya hecha para meterla dentro de este Tripwire (o elegí crear una nueva desde cero).',
+          'Toda página Tripwire lleva tu Producto Principal adentro para hacer la psicología inversa. Seleccioná acá una Página de Producto Estándar ya hecha para introducirla como Oferta Principal (o elegí cargar todo desde cero).',
         whyItMatters:
-          'Al seleccionar tu Página Estándar ya creada, importamos automático su nombre, fotos, descripción y paquetes para que en el Paso 3 te enfoques solo en tu oferta gancho.',
+          'Al traer tu Página Estándar ya creada, importamos automático su nombre, fotos, descripción y paquetes para que el cliente que llegó por el anuncio Tripwire descubra el Producto Principal adentro y prefiera llevarlo con el Tripwire de regalo.',
         unlockHint: !startOrigin
           ? 'Elegí si vas a introducir una Página Estándar ya hecha o cargar todo desde cero.'
           : startOrigin === 'clone' && !clonedFrom
@@ -760,10 +760,10 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
       return {
         title: 'Paso 3 de 4 · Definí tu Oferta de Gancho (Tripwire)',
         whatYouDo: clonedFrom
-          ? `Tu Oferta Principal ("${productName}") ya quedó conectada a la derecha. Acá a la izquierda definí solamente la oferta económica de gancho que atrae el clic.`
-          : 'A la izquierda cargá tu Oferta de Gancho económica (Tripwire) y a la derecha tu Oferta Principal completa.',
+          ? `Tu Oferta Principal ("${productName}") ya quedó conectada a la derecha. Acá a la izquierda definí tu oferta económica de bajo valor que hace que el usuario no piense dos veces en tocar "Adquirir".`
+          : 'A la izquierda cargá tu Oferta de Gancho de bajo valor (Tripwire) y a la derecha tu Oferta Principal completa.',
         whyItMatters:
-          'En la misma página, el cliente entra por el gancho accesible y descubre que llevando la Oferta Principal se lleva el gancho DE REGALO + Envío Gratis.',
+          'En el bloque Tripwire NO se promete envío gratuito (el envío gratis queda guardado como llave para el chat cuando le escribamos ofertas). Si el usuario insiste en llevar solo el Tripwire hasta el cierre del evento, recién ahí se le cobra el valor de envío que configurás aquí.',
         unlockHint: isReadyForLaunchStep
           ? 'Gancho y Oferta Principal listos. Tocá "Ir al Estudio IA y Lanzamiento".'
           : 'Completá el nombre y precio del Gancho (y de la Oferta Principal si la cargás nueva) para continuar.'
@@ -784,9 +784,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
     return {
       title: 'Paso 4 de 4 · Estudio IA y Lanzamiento Tripwire',
       whatYouDo:
-        'La IA une tu Oferta Gancho con tu Oferta Principal bajo un enfoque de alto impacto. Revisá todo y elegí "Editar precios, paquetes o gancho" o "Lanzar Página Tripwire".',
+        'La IA prepara tu Página Tripwire respetando la psicología inversa: el cliente siente que llegó por el gancho económico (sin promesa de envío gratis) y descubre el Producto Principal con el gancho gratis + envío gratis.',
       whyItMatters:
-        'Al lanzar, GPT-2.6 diseña las láminas visuales conectando ambas ofertas en la misma página con el gancho gratis al elegir la oferta principal.',
+        'Si el comprador solo pide el Tripwire en esta página, tu sistema de mensajes lo ataca por WhatsApp usando el Envío Gratis como llave de cierre y recién le informa el costo del envío al final del evento si mantiene solo el gancho.',
       unlockHint:
         'Tocá "Lanzar Página Tripwire" para generar la página visual completa y conectarla a tus campañas.'
     };
@@ -813,9 +813,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
         'Preparando opciones de lanzamiento para tu Página Estándar...'
       ]
     : [
-        'Recabando ficha de tu Oferta Gancho y Oferta Principal...',
-        'Calculando el puente psicológico Gancho → Regalo + Envío Gratis...',
-        'Preparando ángulos de alto impacto para tu Página Tripwire...'
+        'Recabando ficha de tu Oferta Gancho y Producto Principal...',
+        'Armando psicología inversa: Tripwire de entrada sin envío gratis → Principal con Gancho gratis...',
+        'Preparando ángulos y regla secreta del Envío Gratis en el chat...'
       ];
 
   return (
@@ -989,7 +989,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                       </span>
                     </div>
                     <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
-                      Creás una oferta accesible de gancho (Tripwire) junto a tu Oferta Principal en la misma página. En el Paso 2 podés seleccionar directamente una página estándar que ya tengas hecha para introducirla como Oferta Principal.
+                      Oferta de bajo valor para que el usuario no piense dos veces en tocar «Adquirir». Llega sintiendo que vino por el Tripwire del anuncio, pero adentro encuentra tu Producto Principal con psicología inversa (se lleva el Tripwire gratis) y reservamos el Envío Gratis como llave para el chat.
                     </p>
                   </div>
 
@@ -997,6 +997,50 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                     <span className="text-[#e5c88b] font-semibold">Recorrido Tripwire:</span> Elegir Producto Principal ya hecho → Definir Gancho → Lanzar.
                   </div>
                 </button>
+              </div>
+
+              {/* Desglose claro de la lógica Tripwire (psicología inversa + clave de envío gratis en el chat) */}
+              <div
+                data-testid="quick-creator-tripwire-logic-guide"
+                className="p-5 sm:p-6 rounded-xl bg-[#07090f]/80 border border-white/10 space-y-4"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/10 pb-3">
+                  <h3 className="text-xs sm:text-sm font-bold text-white">
+                    Cómo funciona la lógica Tripwire (y por qué el Producto Principal va adentro)
+                  </h3>
+                  <span className="text-[11px] font-mono text-[#e5c88b]">
+                    Estándar = directo · Tripwire = psicología inversa + chat
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs leading-relaxed">
+                  <div className="space-y-1.5">
+                    <div className="font-semibold text-white">
+                      1. Oferta gancho que rompe la fricción
+                    </div>
+                    <p className="text-zinc-400">
+                      El Tripwire es un artículo de bajo valor tan accesible que el usuario no piensa dos veces en interactuar y presionar el botón de adquirir o solicitar. Siente que entró exactamente por la oferta del anuncio.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="font-semibold text-white">
+                      2. Producto Principal con psicología inversa
+                    </div>
+                    <p className="text-zinc-400">
+                      Adentro de esa misma página le mostramos tu Producto Principal con psicología inversa para que descubra que llevando el Producto Principal se lleva ese Tripwire totalmente GRATIS.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="font-semibold text-[#e5c88b]">
+                      3. Envío Gratis es la llave secreta del chat
+                    </div>
+                    <p className="text-zinc-400">
+                      En la oferta Tripwire NO se promete envío gratuito. Si el usuario solo pide el Tripwire en la página, lo atacamos por mensajes en el chat ofreciéndole el Producto Principal con Envío Gratis; y si sigue firme con solo el Tripwire hasta el cierre del evento, recién al final se le informa que paga el envío.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
@@ -1302,9 +1346,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                       <div className="text-[11px] font-mono uppercase tracking-wider text-[#e5c88b]">
                         Oferta de Gancho · Tripwire
                       </div>
-                      <h3 className="text-base font-bold text-white">Producto Gancho Accesible</h3>
+                      <h3 className="text-base font-bold text-white">Producto Gancho Accesible (Bajo Valor)</h3>
                       <p className="text-xs text-zinc-400">
-                        Es el artículo económico que atrae el clic en tu anuncio y va DE REGALO si llevan la Oferta Principal.
+                        Oferta irresistible que el usuario solicita sin pensarlo dos veces. No ofrece envío gratis en la página (el envío gratis es la llave de cierre en el chat) y va DE REGALO si elige el Producto Principal.
                       </p>
                     </div>
 
@@ -1386,7 +1430,7 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                         />
                       </div>
                       <div className="space-y-1 col-span-2 sm:col-span-1">
-                        <label className="text-xs text-zinc-400 block">Delivery (solo gancho)</label>
+                        <label className="text-xs text-zinc-400 block">Envío al final del evento</label>
                         <input
                           type="number"
                           min={10000}
@@ -1395,6 +1439,9 @@ export const QuickProductCreatorView: React.FC<QuickProductCreatorViewProps> = (
                           onChange={(e) => setEntryDeliveryFeeGs(Number(e.target.value) || 40000)}
                           className={monoInputClass}
                         />
+                        <span className="text-[10px] text-zinc-500 block leading-tight">
+                          No se ofrece envío gratis en Tripwire; solo se cobra al cierre si rechaza el Principal en el chat.
+                        </span>
                       </div>
                     </div>
 

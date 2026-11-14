@@ -328,8 +328,9 @@ REGLAS ESTRICTAS:
     : `Eres el Estratega Jefe de Embudos Duales de Psicología Inversa (COD Paraguay) y Director Creativo GPT-2.6 para páginas TRIPWIRE + PRODUCTO GANADOR EN LA MISMA PÁGINA.
 TU MISIÓN: Que el operador trabaje 100% MANOS LIBRES sin tener que diseñar nada ni elegir estructura manual.
 PSICOLOGÍA DEL EMBUDO DUAL QUE DOMINÁS:
-- En la parte inicial se presenta el artículo accesible de entrada ("${safeEntryName}" a Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))} + delivery) que captura el interés sin fricción.
-- En la misma página se presenta el Producto Ganador ("${input.productName}") bajo un ÁNGULO SUPERIOR donde llevar el Producto Ganador incluye "${safeEntryName}" DE REGALO + ENVÍO GRATIS (psicología inversa racional).
+- El usuario llega desde el anuncio por el artículo accesible de bajo valor ("${safeEntryName}" a Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))}) que rompe la fricción para que toque "Adquirir" sin pensarlo dos veces.
+- REGLA CRÍTICA DE ENVÍO: En el apartado de la oferta de entrada ("${safeEntryName}") NUNCA se ofrece ni se promete "Envío Gratis" (y tampoco se asusta en la página hablando del costo de delivery), porque el Envío Gratis es la llave secreta que se usa recién en el chat por WhatsApp cuando interactúa; recién al final del evento, si sigue insistiendo solo con el artículo de entrada, se le informa el costo del envío.
+- En la misma página se presenta el Producto Principal ("${input.productName}") bajo PSICOLOGÍA INVERSA donde elegir el Producto Principal incluye "${safeEntryName}" DE REGALO + ENVÍO GRATIS.
 - NUNCA uses la palabra "tripwire" ni "gancho trampa" en titulares ni textos orientados al cliente final.
 REGLAS ESTRICTAS:
 1. Si existe PÁGINA CLONADA, primero diagnosticá con exactitud qué ángulo de entrada y qué estética visual usaba la página original ("currentPageDiagnosis"), y proponé 3 opciones frescas con distinto enfoque psicológico y visual.
@@ -364,7 +365,7 @@ ${
   !isPrincipalOnly
     ? `- Artículo de Entrada (Tripwire): ${safeEntryName}
 - Descripción entrada: ${input.entryProductDescription || safeEntryName}
-- Precio Entrada: Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))} + Delivery Gs. ${formatParaguayGs(Number(input.entryDeliveryFeeGs || 40000))}`
+- Precio Entrada: Gs. ${formatParaguayGs(Number(input.entryPriceGs || 20000))} (sin prometer envío gratis en la página; delivery Gs. ${formatParaguayGs(Number(input.entryDeliveryFeeGs || 40000))} reservado solo para el cierre si rechaza el Producto Principal en el chat)`
     : ''
 }${cloneContextBlock}${historyText}
 ${input.userQuestion ? `\nPREGUNTA O INSTRUCCIÓN ACTUAL DEL OPERADOR: "${input.userQuestion}"` : '\nGENERÁ EL DIAGNÓSTICO INICIAL Y LAS 3 MEJORES OPCIONES LISTAS PARA 1 CLIC.'}
@@ -621,7 +622,7 @@ ARTÍCULO COMPLEMENTARIO DE ENTRADA (BLOQUE 1 DE LA MISMA PÁGINA):
 - Nombre real: ${safeEntryName}
 - Qué hace: ${resolvedEntryDesc || safeEntryName}
 - Precio Normal comparativo: Gs. ${formatParaguayGs(entryNormal)}
-- Precio Promo Entrada: Gs. ${formatParaguayGs(entryPrice)} + Delivery según zona (Gs. ${formatParaguayGs(deliveryFee)} aprox.)
+- Precio Promo Entrada: Gs. ${formatParaguayGs(entryPrice)} (NUNCA prometas "Envío Gratis" para este artículo individual, y tampoco menciones recargos de delivery en esta pantalla para no frenar la interacción; el envío gratis queda reservado como llave para el Producto Principal y el chat).
 - REGLA TRANSPARENTE: Si lleva el Producto Principal (${input.productName}), este complemento "${safeEntryName}" le va TOTALMENTE DE REGALO + ENVÍO GRATIS directo a su puerta.
 
 CANTIDAD DE LÁMINAS A DISEÑAR: ${sheetCountMode === 'auto' ? `Decidí automáticamente entre 2 o 3 láminas según la complejidad de la oferta dual (sugerido: ${requestedSheetCount})` : requestedSheetCount}
@@ -634,9 +635,9 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   "subheadline": "Bajada clara explicando qué cambia en la casa/vida del cliente en Paraguay (máx 22 palabras).",
   "winnerAngleHeadline": "Titular del ángulo diferente con el que se presenta el Producto Ganador en esta misma página (máx 12 palabras).",
   "winnerAngleDescription": "Explicación persuasiva y sobria del ángulo diferente por el cual el Producto Ganador resuelve el problema completo mejor que el artículo individual (máx 32 palabras).",
-  "reversePsychologyHook": "Frase de psicología inversa elegante donde el cliente nota que comprar el complemento suelto con envío le sale casi igual que asegurar el sistema completo con todo gratis.",
+  "reversePsychologyHook": "Frase de psicología inversa elegante donde el cliente nota que llevar el producto completo incluye el complemento totalmente gratis y además desbloquea envío sin costo.",
   "entryButtonLabel": "Elegir solo ${safeEntryName} (Gs. ${formatParaguayGs(entryPrice)})",
-  "entryDisclaimer": "Solo incluye 1x ${safeEntryName}. NO incluye ${input.productName}. Se suma delivery de zona (Gs. ${formatParaguayGs(deliveryFee)}).",
+  "entryDisclaimer": "Solo incluye 1x ${safeEntryName}. NO incluye ${input.productName} ni envío gratuito.",
   "bundleButtonLabel": "Llevar ${input.productName} + ${safeEntryName} GRATIS (Gs. ${formatParaguayGs(price1)})",
   "bundleDisclaimer": "Incluye ${input.productName} completo + ${safeEntryName} DE REGALO + Envío GRATIS sin lista de espera.",
   "sheetPrompts": [
@@ -650,7 +651,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       "role": "comparison_need",
       "title": "Comparativa clara de ambas opciones",
       "caption": "Comparación racional y visual",
-      "imagePrompt": "Flagship full-bleed 3:4 editorial comparison sheet for openai/gpt-image-2.6-sunburst in crisp Spanish: clean visual split contrasting Option 1 Solo '${safeEntryName}' (Gs. ${formatParaguayGs(entryPrice)} + Delivery) vs Option 2 Paquete Completo '${input.productName}' (Gs. ${formatParaguayGs(price1)} con '${safeEntryName}' DE REGALO + Envío Gratis), ultra sharp Spanish labels, luxury commercial studio photography, zero cartoon icons, edge-to-edge."
+      "imagePrompt": "Flagship full-bleed 3:4 editorial comparison sheet for openai/gpt-image-2.6-sunburst in crisp Spanish: clean visual split contrasting Option 1 Solo '${safeEntryName}' (Gs. ${formatParaguayGs(entryPrice)} · Artículo individual) vs Option 2 Paquete Completo '${input.productName}' (Gs. ${formatParaguayGs(price1)} con '${safeEntryName}' DE REGALO + Envío Gratis), ultra sharp Spanish labels, luxury commercial studio photography, zero cartoon icons, edge-to-edge."
     }${
       requestedSheetCount === 3 || sheetCountMode === 'auto'
         ? `,
@@ -805,7 +806,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       ? undefined
       : cleanPublicText(
           parsed?.entryDisclaimer ||
-            `Atención: esta opción envía únicamente 1x ${safeEntryName}. No incluye ${input.productName}. Delivery de zona: Gs. ${formatParaguayGs(deliveryFee)}.`
+            `Atención: esta solicitud envía únicamente 1x ${safeEntryName}. No incluye ${input.productName} ni envío gratuito.`
         ),
     bundleButtonLabel: cleanPublicText(
       parsed?.bundleButtonLabel ||

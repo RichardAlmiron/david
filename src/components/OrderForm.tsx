@@ -1040,7 +1040,7 @@ export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {!isFullscreenMode && (
+            {!isFullscreenMode && !isEntryOnly && (
               <span className="text-xs sm:text-sm bg-[#1ea856] px-3 py-1 rounded-full text-white font-black">
                 Envío Gratis
               </span>
@@ -1069,7 +1069,7 @@ export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
             <span className="w-px h-4 bg-emerald-700" />
             <span className="flex items-center gap-1.5 text-xs sm:text-sm font-black text-emerald-300">
               <Truck className="w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0" />
-              <span>Envío Gratis</span>
+              <span>{isEntryOnly ? 'Solicitud Directa' : 'Envío Gratis'}</span>
             </span>
             <span className="w-px h-4 bg-emerald-700" />
             <span className="flex items-center gap-1.5 text-xs sm:text-sm font-black text-emerald-300">
@@ -1137,9 +1137,7 @@ export const OrderForm: React.FC<{ expressDirectMode?: boolean }> = ({
               </div>
               <p className="text-stone-700 leading-snug">
                 {isEntryOnly
-                  ? `Aclaración importante: esta opción NO incluye ${targetProductName}. Delivery según zona: ${formatGs(
-                      entryOfferCfg.deliveryFeeGs || 40000
-                    )}.`
+                  ? `Aclaración importante: esta solicitud incluye únicamente 1x ${entryOfferCfg.entryProductName}. No incluye ${targetProductName} ni envío gratuito.`
                   : `Incluye ${targetProductName} completo + ${entryOfferCfg.entryProductName} GRATIS + Envío Gratis directo a tu puerta (sin lista de espera).`}
               </p>
               <div className="flex items-center gap-2 flex-wrap pt-0.5">

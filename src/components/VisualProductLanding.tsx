@@ -108,7 +108,7 @@ export const VisualProductLanding: React.FC<{ entryFocusedMode?: boolean }> = ({
                       isEntrySelected ? 'text-[#090b10]/80 font-semibold' : 'text-zinc-400'
                     }`}
                   >
-                    Oferta individual · + Delivery {formatGs(entryDelivery)} al recibir
+                    Oferta promocional de entrada · Solicitud directa
                   </div>
                 </div>
                 <div className="shrink-0 flex items-center gap-2">

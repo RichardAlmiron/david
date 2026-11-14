@@ -106,7 +106,9 @@ test('buildEntryPollDefinition y textos hablados jamás filtran la palabra inter
 
   const combined = [poll.question, ...poll.options, speech1, speech2, waitlistSpeech, finalSpeech].join('\n').toLowerCase();
   assert.equal(combined.includes('tripwire'), false, 'Ningún texto orientado al cliente puede contener "tripwire"');
-  assert.ok(finalSpeech.includes('40.000 guaraníes'), 'El cierre individual debe transparentar el delivery de 40.000 guaraníes');
+  assert.equal(speech1.includes('40.000'), false, 'El primer mensaje en el chat no debe anticipar el monto del delivery antes del cierre del evento');
+  assert.ok(speech1.includes('ENVÍO GRATIS'), 'El primer mensaje usa Envío Gratis como llave para subir al Producto Principal');
+  assert.ok(finalSpeech.includes('40.000 guaraníes'), 'El cierre individual debe transparentar el delivery de 40.000 guaraníes recién al final del evento');
   assert.ok(finalSpeech.includes('60.000 guaraníes'), 'El cierre individual debe sumar 20.000 + 40.000 = 60.000 guaraníes');
 });
 
