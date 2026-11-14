@@ -73,13 +73,12 @@ export const NOELUX_VISUAL_LANDING: ProductVisualLandingConfig = {
 
 export function upgradeDefaultNoeluxWithVisualPreset<T extends Record<string, any>>(product: T): T {
   if (!product || product.id !== 'prod-noelux-01') return product;
-  const hasTripwire = Boolean(product.tripwireConfig?.enabled && product.tripwireConfig?.entryProductName);
-  const nextProduct: Record<string, any> = {
-    ...product,
-    tripwireConfig: hasTripwire ? product.tripwireConfig : NOELUX_TRIPWIRE_CONFIG
-  };
+  const nextProduct: Record<string, any> = { ...product };
   if ('visualLanding' in nextProduct) {
     delete nextProduct.visualLanding;
+  }
+  if ('tripwireConfig' in nextProduct) {
+    delete nextProduct.tripwireConfig;
   }
   return nextProduct as T;
 }

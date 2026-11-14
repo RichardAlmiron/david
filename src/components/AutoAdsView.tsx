@@ -24,7 +24,8 @@ import {
   Cloud,
   FolderOpen,
   ArrowLeft,
-  Plus
+  Plus,
+  Minus
 } from 'lucide-react';
 import { ProductPage } from '../types';
 import { formatGs } from '../config';
@@ -56,6 +57,17 @@ import {
   GeneratedAdCreativeAsset
 } from '../utils/autoAdsBrainEngine';
 import { buildHighImpactAdSvgDataUrl } from '../utils/pipeboardEngine';
+import {
+  AutoAdsStrategyMode,
+  AutoAdsSlotMode,
+  clampAdsCount,
+  filterGenuineTripwirePages,
+  computePlannedAdSetCounts,
+  resolveDefaultSlotMode,
+  buildPlannedSlotSpecs,
+  MIN_ADS_PER_TYPE,
+  MAX_ADS_PER_TYPE
+} from '../utils/autoAdsSlotPlanner';
 
 interface AutoAdsViewProps {
   productPages: ProductPage[];
@@ -113,8 +125,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     setOnlyImagesMode(nextValue);
     showToast(
       nextValue
-        ? '🖼️ Modo 100% Solo Imágenes activado: Se evitará crear los 2 Reels de video y todos los anuncios serán de Imagen (Sunburst).'
-        : '🎬 Modo Mixto activado: Se crearán 4 Imágenes (Sunburst) + 2 Videos Reels de 15s con Voz y Producto (Gemini Omni 1.2 Flash).'
+        ? '🖼️ Modo 100% Solo Imágenes activado: Todos los anuncios del grupo serán de Imagen (Sunburst).'
+        : '🎬 Modo Imágenes + Reels activado: Se incluirán Videos Reels en los anuncios estándar #5 y #6 cuando estén presentes.'
     );
   };
 
@@ -253,26 +265,24 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   const [cloudinaryResources, setCloudinaryResources] = useState<CloudinaryMediaClient[]>([]);
   const [loadingCloudinaryResources, setLoadingCloudinaryResources] = useState<boolean>(false);
 
-  // Bloque 1B: Estrategia Mixta / Inyección de Producto Gancho (Estándar vs Gancho vs Híbrido)
-  const [adStrategyMode, setAdStrategyMode] = useState<'standard' | 'hybrid' | 'entry_hook'>('standard');
-  const [entryHookName, setEntryHookName] = useState<string>('');
-  const [entryHookDesc, setEntryHookDesc] = useState<string>('');
-  const [entryHookPriceGs, setEntryHookPriceGs] = useState<number>(20000);
-  const [entryHookImageUrl, setEntryHookImageUrl] = useState<string>('');
-  const [entryHookUrlInput, setEntryHookUrlInput] = useState<string>('');
-  const [analyzingHookUrl, setAnalyzingHookUrl] = useState<boolean>(false);
-  const [cardInjectModes, setCardInjectModes] = useState<Record<number, 'standard' | 'entry_hook'>>({});
+  // Bloque 1B: Estrategia Mixta (Estándar + Tripwire) con cantidades manuales libres y selector puro
+  const [adStrategyMode, setAdStrategyMode] = useState<AutoAdsStrategyMode>('standard');
+  const [standardAdsCount, setStandardAdsCount] = useState<number>(4);
+  const [tripwireAdsCount, setTripwireAdsCount] = useState<number>(1);
+  const [cardInjectModes, setCardInjectModes] = useState<Record<number, AutoAdsSlotMode>>({});
   const [cardTripwirePageIds, setCardTripwirePageIds] = useState<Record<number, string>>({});
   const [selectedTripwirePageId, setSelectedTripwirePageId] = useState<string>('');
   const [showAddExtraMenu, setShowAddExtraMenu] = useState<boolean>(false);
-  const [addingExtraAdMode, setAddingExtraAdMode] = useState<'standard' | 'entry_hook' | null>(null);
+  const [addingExtraAdMode, setAddingExtraAdMode] = useState<AutoAdsSlotMode | null>(null);
 
   const availableTripwirePages = useMemo(
-    () =>
-      (Array.isArray(productPages) ? productPages : []).filter(p =>
-        Boolean(p?.tripwireConfig?.enabled && p?.tripwireConfig?.entryProductName)
-      ),
+    () => filterGenuineTripwirePages(productPages),
     [productPages]
+  );
+
+  const plannedCounts = useMemo(
+    () => computePlannedAdSetCounts(adStrategyMode, standardAdsCount, tripwireAdsCount),
+    [adStrategyMode, standardAdsCount, tripwireAdsCount]
   );
 
   const selectedTripwirePage = useMemo(() => {
@@ -280,11 +290,19 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       const exact = availableTripwirePages.find(p => p.id === selectedTripwirePageId);
       if (exact) return exact;
     }
-    if (activeProduct?.tripwireConfig?.enabled) return activeProduct;
     return availableTripwirePages[0] || null;
-  }, [availableTripwirePages, selectedTripwirePageId, activeProduct]);
+  }, [availableTripwirePages, selectedTripwirePageId]);
 
-  const buildPageLandingUrl = (page: ProductPage | null | undefined, mode: 'standard' | 'entry_hook'): string => {
+  const getDefaultSlotModeForIndex = (idx: number): AutoAdsSlotMode =>
+    resolveDefaultSlotMode(idx, adStrategyMode, plannedCounts.standardCount, cardInjectModes);
+
+  const isReelSlotIndex = (idx: number, slotModeOverride?: AutoAdsSlotMode): boolean => {
+    if (onlyImagesMode) return false;
+    const mode = slotModeOverride || getDefaultSlotModeForIndex(idx);
+    return mode === 'standard' && plannedCounts.standardCount >= 6 && (idx === 4 || idx === 5);
+  };
+
+  const buildPageLandingUrl = (page: ProductPage | null | undefined, mode: AutoAdsSlotMode): string => {
     const origin =
       typeof window !== 'undefined' && window.location?.origin
         ? window.location.origin
@@ -295,12 +313,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       }
       return `${origin}/?p=${activeProduct?.slug || 'producto'}`;
     }
-    const targetSlug = page?.slug || activeProduct?.slug || 'producto';
-    if (!page && sourceMode === 'external_url' && externalUrlInput.trim()) {
-      const base = externalUrlInput.trim();
-      return `${base}${base.includes('?') ? '&' : '?'}modo=entrada`;
+    if (!page) {
+      return '';
     }
-    return `${origin}/?p=${targetSlug}&modo=entrada`;
+    return `${origin}/?p=${page.slug}&modo=entrada`;
   };
 
   const resolveTripwirePageForSlot = (idx?: number): ProductPage | null => {
@@ -313,102 +329,33 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
 
   const applySelectedTripwirePage = (pageId: string) => {
     setSelectedTripwirePageId(pageId);
-    const chosen = availableTripwirePages.find(p => p.id === pageId);
-    if (chosen?.tripwireConfig) {
-      setEntryHookName(chosen.tripwireConfig.entryProductName || '');
-      setEntryHookDesc(chosen.tripwireConfig.entryProductDescription || '');
-      if (Number(chosen.tripwireConfig.entryPriceGs) > 0) {
-        setEntryHookPriceGs(Number(chosen.tripwireConfig.entryPriceGs));
-      }
-      setEntryHookImageUrl(
-        chosen.tripwireConfig.entryImageUrl ||
-          (chosen.tripwireConfig as any).entryProductImage ||
-          ''
-      );
-    }
   };
 
   useEffect(() => {
-    const activeCfg = activeProduct?.tripwireConfig;
-    const fallbackTripwire = availableTripwirePages[0] || null;
-    const sourceForHook = activeCfg?.enabled && activeCfg?.entryProductName ? activeProduct : fallbackTripwire;
-
-    if (sourceForHook?.id) {
-      setSelectedTripwirePageId(sourceForHook.id);
-    }
-    if (sourceForHook?.tripwireConfig?.entryProductName) {
-      const cfg = sourceForHook.tripwireConfig;
-      setEntryHookName(cfg.entryProductName);
-      setEntryHookDesc(cfg.entryProductDescription || '');
-      if (Number(cfg.entryPriceGs) > 0) setEntryHookPriceGs(Number(cfg.entryPriceGs));
-      setEntryHookImageUrl(cfg.entryImageUrl || (cfg as any).entryProductImage || '');
-    } else {
-      setEntryHookName('');
-      setEntryHookDesc('');
-      setEntryHookPriceGs(20000);
-      setEntryHookImageUrl('');
-    }
+    setSelectedTripwirePageId(prev => {
+      if (prev && availableTripwirePages.some(p => p.id === prev)) {
+        return prev;
+      }
+      return availableTripwirePages[0]?.id || '';
+    });
     setCardInjectModes({});
     setCardTripwirePageIds({});
     setShowAddExtraMenu(false);
-  }, [activeProduct?.id, availableTripwirePages.length]);
+  }, [activeProduct?.id, availableTripwirePages]);
 
-  const effectiveProductWithHook: ProductPage = useMemo(() => {
-    const cleanName = entryHookName.trim();
-    const cleanPrice = Number(entryHookPriceGs || 0);
-    if (!cleanName || cleanPrice <= 0) {
-      return activeProduct;
-    }
-    const baseHookCfg = selectedTripwirePage?.tripwireConfig || activeProduct?.tripwireConfig;
-    return {
-      ...activeProduct,
-      tripwireConfig: {
-        ...(baseHookCfg || {}),
-        enabled: true,
-        entryProductName: cleanName,
-        entryProductDescription: entryHookDesc.trim() || cleanName,
-        entryPriceGs: cleanPrice,
-        entryNormalPriceGs: Math.round((cleanPrice * 2.1) / 1000) * 1000,
-        entryImageUrl: entryHookImageUrl.trim(),
-        deliveryFeeGs: baseHookCfg?.deliveryFeeGs || 40000,
-        slotsTotal: baseHookCfg?.slotsTotal || 10,
-        eventDurationHours: baseHookCfg?.eventDurationHours || 6,
-        instantDiscountPercent: baseHookCfg?.instantDiscountPercent || 12
-      }
-    };
-  }, [activeProduct, selectedTripwirePage, entryHookName, entryHookDesc, entryHookPriceGs, entryHookImageUrl]);
-
-  const buildSlotProductPayloadForApi = (idx?: number, forceMode?: 'standard' | 'entry_hook'): ProductPage => {
+  const buildSlotProductPayloadForApi = (idx?: number, forceMode?: AutoAdsSlotMode): ProductPage => {
     const modeForSlot =
       forceMode ||
-      (typeof idx === 'number' ? cardInjectModes[idx] : undefined) ||
-      (adStrategyMode === 'entry_hook' || (adStrategyMode === 'hybrid' && typeof idx === 'number' && idx >= 4)
-        ? 'entry_hook'
-        : 'standard');
+      (typeof idx === 'number' ? getDefaultSlotModeForIndex(idx) : 'standard');
     if (modeForSlot !== 'entry_hook') {
       return activeProduct;
     }
     const tripPage = resolveTripwirePageForSlot(idx);
-    if (tripPage?.tripwireConfig?.entryProductName && Number(tripPage?.tripwireConfig?.entryPriceGs) > 0) {
-      // Si el operador editó manualmente los inputs cuando coincide con la página global, respetar sus cambios; sino usar la página elegida para este slot
-      const useInlineOverride =
-        tripPage.id === selectedTripwirePage?.id && entryHookName.trim() && Number(entryHookPriceGs) > 0;
-      const cfg = useInlineOverride ? effectiveProductWithHook.tripwireConfig : tripPage.tripwireConfig;
-      return {
-        ...tripPage,
-        tripwireConfig: cfg
-      };
-    }
-    return effectiveProductWithHook;
+    return tripPage || activeProduct;
   };
 
-  const resolveProductForSlot = (idx: number, forceMode?: 'standard' | 'entry_hook'): ProductPage => {
-    const modeForSlot =
-      forceMode ||
-      cardInjectModes[idx] ||
-      (adStrategyMode === 'entry_hook' || (adStrategyMode === 'hybrid' && idx >= 4)
-        ? 'entry_hook'
-        : 'standard');
+  const resolveProductForSlot = (idx: number, forceMode?: AutoAdsSlotMode): ProductPage => {
+    const modeForSlot = forceMode || getDefaultSlotModeForIndex(idx);
     const slotBase = buildSlotProductPayloadForApi(idx, modeForSlot);
     const hookCfg = slotBase?.tripwireConfig;
     if (modeForSlot === 'entry_hook' && hookCfg?.entryProductName && Number(hookCfg?.entryPriceGs) > 0) {
@@ -427,48 +374,6 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       };
     }
     return activeProduct;
-  };
-
-  const handleAnalyzeHookUrl = async () => {
-    if (!entryHookUrlInput.trim()) {
-      showToast('Pegá la URL del producto gancho antes de analizar.');
-      return;
-    }
-    setAnalyzingHookUrl(true);
-    try {
-      const res = await fetch('/api/products/analyze-hook-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: entryHookUrlInput.trim() })
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.success) {
-        showToast(`⚠️ ${data?.error || 'No se pudo analizar la URL del producto gancho.'}`);
-        return;
-      }
-      if (data.title) setEntryHookName(data.title);
-      if (data.description) setEntryHookDesc(data.description);
-      if (data.imageUrl) setEntryHookImageUrl(data.imageUrl);
-      if (Number(data.suggestedPriceGs) > 0) setEntryHookPriceGs(Number(data.suggestedPriceGs));
-      showToast('✅ Datos del producto gancho extraídos desde la URL.');
-    } catch {
-      showToast('⚠️ Error de red analizando la URL del gancho.');
-    } finally {
-      setAnalyzingHookUrl(false);
-    }
-  };
-
-  const handleHookImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setEntryHookImageUrl(reader.result);
-        showToast('🖼️ Imagen del producto gancho cargada.');
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   const refreshCloudinaryData = async (productSlug?: string) => {
@@ -534,6 +439,18 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       }
       setAdVariationCounters(ws.adVariationCounters || {});
       setAdPhotoIndexOverride(ws.adPhotoIndexOverride || {});
+      if (ws.adStrategyMode === 'standard' || ws.adStrategyMode === 'hybrid' || ws.adStrategyMode === 'entry_hook') {
+        setAdStrategyMode(ws.adStrategyMode);
+      }
+      if (Number(ws.standardAdsCount) >= MIN_ADS_PER_TYPE) {
+        setStandardAdsCount(clampAdsCount(Number(ws.standardAdsCount), 4));
+      }
+      if (Number(ws.tripwireAdsCount) >= MIN_ADS_PER_TYPE) {
+        setTripwireAdsCount(clampAdsCount(Number(ws.tripwireAdsCount), 1));
+      }
+      if (ws.selectedTripwirePageId) {
+        setSelectedTripwirePageId(String(ws.selectedTripwirePageId));
+      }
       const rawStep = String(ws.workflowStep || 'idle');
       const safeStep =
         rawStep === 'published'
@@ -940,6 +857,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       adVariationCounters,
       adPhotoIndexOverride,
       onlyImagesMode,
+      adStrategyMode,
+      standardAdsCount,
+      tripwireAdsCount,
+      selectedTripwirePageId,
       updatedAt: new Date().toISOString()
     };
 
@@ -981,21 +902,32 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     selectedProductId,
     externalUrlInput,
     onlyImagesMode,
+    adStrategyMode,
+    standardAdsCount,
+    tripwireAdsCount,
+    selectedTripwirePageId,
     scrapedExternalProduct,
     adVariationCounters,
     adPhotoIndexOverride
   ]);
 
-  // Sincronización en tiempo real de precios si el usuario edita los precios del producto en el panel Admin
+  // Sincronización en tiempo real de precios si el usuario edita los precios del producto en el panel Admin (solo sobre anuncios estándar)
   useEffect(() => {
     if (!activeProduct || !brainProfile || creatives.length === 0) return;
     const syncedAssets = buildCreativeAssetsFromBrain(activeProduct, brainProfile);
     setCreatives(prev =>
       prev.map((oldAsset, idx) => {
+        if (oldAsset.isEntryHookAd) return oldAsset;
         const fresh = syncedAssets[idx];
         if (!fresh) return oldAsset;
         return {
           ...fresh,
+          type: oldAsset.type || fresh.type,
+          isEntryHookAd: false,
+          targetProductId: oldAsset.targetProductId || activeProduct.id,
+          targetProductSlug: oldAsset.targetProductSlug || activeProduct.slug,
+          targetProductName: oldAsset.targetProductName || activeProduct.nombre,
+          targetLandingUrl: oldAsset.targetLandingUrl || buildPageLandingUrl(activeProduct, 'standard'),
           aiGeneratedImageUrl: oldAsset.aiGeneratedImageUrl || fresh.aiGeneratedImageUrl,
           aiGeneratedVideoUrl: oldAsset.aiGeneratedVideoUrl || fresh.aiGeneratedVideoUrl,
           videoScenes: fresh.videoScenes || oldAsset.videoScenes
@@ -1237,9 +1169,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       return;
     }
 
-    if (adStrategyMode !== 'standard' && (!entryHookName.trim() || Number(entryHookPriceGs) <= 0)) {
+    if (
+      adStrategyMode !== 'standard' &&
+      (!selectedTripwirePage?.tripwireConfig?.enabled || !selectedTripwirePage?.tripwireConfig?.entryProductName)
+    ) {
       showToast(
-        '⚠️ Completá el Nombre y Precio Gs. del Producto Gancho en el Bloque 1B, o cambiá a modo "100% Estándar".'
+        '⚠️ Todavía no existe una Página Tripwire seleccionada. Creala primero en Creador Rápido o elegí "100% Estándar".'
       );
       return;
     }
@@ -1266,6 +1201,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }, 2500);
 
     try {
+      const researchProductPayload =
+        sourceMode === 'catalog'
+          ? adStrategyMode === 'entry_hook' && selectedTripwirePage
+            ? selectedTripwirePage
+            : activeProduct
+          : {};
       let response: Response | null = null;
       let data: any = null;
       for (let attempt = 1; attempt <= 2; attempt++) {
@@ -1274,12 +1215,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              product: sourceMode === 'catalog' ? effectiveProductWithHook : {},
+              product: researchProductPayload,
               externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
               adMode: adStrategyMode,
               entryHookOverride:
-                entryHookName.trim() && Number(entryHookPriceGs) > 0
-                  ? effectiveProductWithHook.tripwireConfig
+                adStrategyMode !== 'standard' && selectedTripwirePage?.tripwireConfig
+                  ? selectedTripwirePage.tripwireConfig
                   : undefined,
               openRouterModel: AUTOADS_LLM_MODEL,
               openRouterApiKey: getVaultOpenRouterKey()
@@ -1455,52 +1396,78 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // ─────────────────────────────────────────────────────────────────────────────
   const handleStep2GenerateAds = async () => {
     if (!brainProfile || !activeProduct) return;
+    if (
+      adStrategyMode !== 'standard' &&
+      (!selectedTripwirePage?.tripwireConfig?.enabled || !selectedTripwirePage?.tripwireConfig?.entryProductName)
+    ) {
+      showToast('⚠️ Primero seleccioná o creá una Página Tripwire en Creador Rápido.');
+      return;
+    }
+
+    const plannedSlots = buildPlannedSlotSpecs({
+      strategyMode: adStrategyMode,
+      standardAdsCount,
+      tripwireAdsCount,
+      onlyImagesMode,
+      cardInjectModes
+    });
+    const totalTargetCount = plannedSlots.length;
+    const slotModesMap: Record<number, AutoAdsSlotMode> = {};
+    const slotIsReelMap: Record<number, boolean> = {};
+    plannedSlots.forEach(slot => {
+      slotModesMap[slot.adIndex] = slot.slotMode;
+      slotIsReelMap[slot.adIndex] = slot.isReel;
+    });
+
     const existingCreatives = [...creatives];
-    const imageSliceEnd = onlyImagesMode ? 6 : 4;
+    const canResumeCountMatch = existingCreatives.length === totalTargetCount;
     const hasPendingImages =
-      existingCreatives.length > 0 &&
-      existingCreatives.slice(0, imageSliceEnd).some(c => !c.aiGeneratedImageUrl);
+      canResumeCountMatch &&
+      plannedSlots.some(s => !s.isReel && !existingCreatives[s.adIndex]?.aiGeneratedImageUrl);
     const hasPendingVideos =
-      !onlyImagesMode &&
-      existingCreatives.length > 0 &&
-      existingCreatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl);
+      canResumeCountMatch &&
+      plannedSlots.some(s => s.isReel && !existingCreatives[s.adIndex]?.aiGeneratedVideoUrl);
     const isResumeIncomplete = hasPendingImages || hasPendingVideos;
-    const isFullRegenerateAll = existingCreatives.length > 0 && !isResumeIncomplete;
+    const isFullRegenerateAll = canResumeCountMatch && !isResumeIncomplete;
     const vaultKey = getVaultOpenRouterKey();
 
     setWorkflowStep('generating');
+    const plannedImagesCount = plannedSlots.filter(s => !s.isReel).length;
+    const plannedReelsCount = plannedSlots.filter(s => s.isReel).length;
     setGenerationProgressText(
-      onlyImagesMode
-        ? `🖼️ Modo 100% Solo Imágenes: Creando las 6 Imágenes con ${selectedImageModel} (sin crear Reels de video)...`
+      plannedReelsCount === 0
+        ? `🖼️ Generando ${totalTargetCount} Anuncios con ${selectedImageModel}...`
         : hasPendingVideos && !hasPendingImages
-          ? `🎬 Creando directamente los 2 Videos Reels con Avatar de los Anuncios #5 y #6 (${selectedVideoModel})...`
-          : hasPendingImages
-            ? `🎨 Completando las 4 Imágenes (#1-#4 con ${selectedImageModel}) y los 2 Videos Reels (#5-#6 con ${selectedVideoModel})...`
-            : isFullRegenerateAll
-              ? `🧠 Redactando 6 nuevos anuncios persuasivos con OpenRouter (${AUTOADS_LLM_MODEL}) para "${activeProduct.nombre}"...`
-              : `🎨 Creando las 4 Imágenes (#1-#4 con ${selectedImageModel}) y los 2 Videos Reels (#5-#6 con ${selectedVideoModel}) para "${activeProduct.nombre}"...`
+          ? `🎬 Creando directamente los ${plannedReelsCount} Videos Reels (${selectedVideoModel})...`
+          : isFullRegenerateAll
+            ? `🧠 Redactando ${totalTargetCount} nuevos anuncios con OpenRouter (${AUTOADS_LLM_MODEL})...`
+            : `🎨 Creando ${plannedImagesCount} Imágenes (${selectedImageModel}) + ${plannedReelsCount} Videos Reels (${selectedVideoModel})...`
     );
 
     const genTimer1 = setTimeout(() => {
       setGenerationProgressText(
-        onlyImagesMode
-          ? `🎨 Generando paquete 100% de Imágenes con ${selectedImageModel} (Cero Videos Reels)...`
-          : `🎬 Generando 4 Imágenes (${selectedImageModel}) + 2 Videos Reels con Avatar (${selectedVideoModel})...`
+        plannedReelsCount === 0
+          ? `🎨 Generando paquete de ${totalTargetCount} Anuncios en ${selectedImageModel}...`
+          : `🎬 Generando ${plannedImagesCount} Imágenes (${selectedImageModel}) + ${plannedReelsCount} Reels (${selectedVideoModel})...`
       );
     }, 2200);
 
     try {
       let currentBrain = brainProfile;
 
-      // Solo pedimos 6 textos nuevos si todas las tarjetas previas ya estaban completas y el usuario quiere regenerar todo desde cero
       if (isFullRegenerateAll) {
         try {
           const trainRes = await fetch('/api/autoads/brain-train', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              product: activeProduct,
+              product: adStrategyMode === 'entry_hook' && selectedTripwirePage ? selectedTripwirePage : activeProduct,
               externalUrl: sourceMode === 'external_url' ? externalUrlInput.trim() : '',
+              adMode: adStrategyMode,
+              entryHookOverride:
+                adStrategyMode !== 'standard' && selectedTripwirePage?.tripwireConfig
+                  ? selectedTripwirePage.tripwireConfig
+                  : undefined,
               openRouterModel: AUTOADS_LLM_MODEL,
               openRouterApiKey: vaultKey,
               variationTimestamp: Date.now()
@@ -1527,7 +1494,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       }
 
       const policyGuardOnly = currentBrain?.strategyMode === 'hypothesis_v2';
-      const baseAssets = buildCreativeAssetsFromBrain(effectiveProductWithHook, currentBrain);
+      const standardBaseAssets = buildCreativeAssetsFromBrain(activeProduct, currentBrain);
+      const cachedTripwireBrains: Record<string, AutoAdsBrainProfile> = {};
+
       const getSlotTargetMeta = (idx: number, isHook: boolean) => {
         if (!isHook) {
           return {
@@ -1545,84 +1514,118 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           targetLandingUrl: buildPageLandingUrl(tripPage, 'entry_hook')
         };
       };
-      let workingAssets = isResumeIncomplete
-        ? baseAssets.map((asset, idx) => {
-          const isHookSlot =
-            cardInjectModes[idx] === 'entry_hook' ||
-            adStrategyMode === 'entry_hook' ||
-            (adStrategyMode === 'hybrid' && idx >= 4);
-          const slotProduct = resolveProductForSlot(idx);
-          const slotSynced = buildCreativeAssetsFromBrain(slotProduct, currentBrain)[idx] || asset;
-          return {
-            ...slotSynced,
-            type: onlyImagesMode && idx >= 4 ? ('image_story_9x16' as const) : slotSynced.type,
-            isEntryHookAd: isHookSlot,
-            ...getSlotTargetMeta(idx, isHookSlot),
-            headline: existingCreatives[idx]?.headline || slotSynced.headline,
-            primaryText: sanitizeAdCopyForParaguayCod(
-              existingCreatives[idx]?.primaryText || slotSynced.primaryText,
-              slotProduct,
-              idx,
-              { policyGuardOnly }
-            ),
-            descriptionText: existingCreatives[idx]?.descriptionText || slotSynced.descriptionText,
-            ctaLabel: existingCreatives[idx]?.ctaLabel || slotSynced.ctaLabel,
-            aiGeneratedImageUrl:
-              idx < imageSliceEnd ? existingCreatives[idx]?.aiGeneratedImageUrl || '' : '',
-            aiGeneratedImageDataUrl:
-              idx < imageSliceEnd ? existingCreatives[idx]?.aiGeneratedImageDataUrl || '' : '',
-            aiGeneratedVideoUrl:
-              !onlyImagesMode && idx >= 4 ? existingCreatives[idx]?.aiGeneratedVideoUrl || '' : '',
-            aiImagePrompt: existingCreatives[idx]?.aiImagePrompt || slotSynced.aiImagePrompt
-          };
-        })
-        : baseAssets.map((asset, idx) => {
-          const isHookSlot =
-            cardInjectModes[idx] === 'entry_hook' ||
-            adStrategyMode === 'entry_hook' ||
-            (adStrategyMode === 'hybrid' && idx >= 4);
-          const slotProduct = resolveProductForSlot(idx);
-          const slotSynced = buildCreativeAssetsFromBrain(slotProduct, currentBrain)[idx] || asset;
-          return {
-            ...slotSynced,
-            type: onlyImagesMode && idx >= 4 ? ('image_story_9x16' as const) : slotSynced.type,
-            isEntryHookAd: isHookSlot,
-            ...getSlotTargetMeta(idx, isHookSlot),
-            primaryText: sanitizeAdCopyForParaguayCod(slotSynced.primaryText, slotProduct, idx, { policyGuardOnly }),
-            aiGeneratedImageUrl: idx < imageSliceEnd ? slotSynced.aiGeneratedImageUrl || '' : '',
-            aiGeneratedImageDataUrl: idx < imageSliceEnd ? slotSynced.aiGeneratedImageDataUrl || '' : '',
-            aiGeneratedVideoUrl: !onlyImagesMode && idx >= 4 ? slotSynced.aiGeneratedVideoUrl || '' : ''
-          };
-        });
 
-      // Mostrar inmediatamente las 6 tarjetas en pantalla
+      const workingAssets: GeneratedAdCreativeAsset[] = plannedSlots.map(slot => {
+        const idx = slot.adIndex;
+        const isHookSlot = slot.slotMode === 'entry_hook';
+        let builtAsset: GeneratedAdCreativeAsset;
+
+        if (isHookSlot) {
+          const tripPage = resolveTripwirePageForSlot(idx);
+          const slotProduct = resolveProductForSlot(idx, 'entry_hook');
+          const cacheKey = `${tripPage?.id || slotProduct.id}`;
+          if (!cachedTripwireBrains[cacheKey]) {
+            cachedTripwireBrains[cacheKey] = createDefaultBrainProfile(slotProduct);
+          }
+          const tripOrdinal =
+            adStrategyMode === 'hybrid'
+              ? Math.max(0, idx - plannedCounts.standardCount)
+              : idx;
+          const briefIdx = tripOrdinal % 6;
+          const variationSeed = Math.floor(tripOrdinal / 6);
+          builtAsset = regenerateSingleCreativeAssetFromBrain(
+            slotProduct,
+            cachedTripwireBrains[cacheKey],
+            briefIdx,
+            variationSeed
+          );
+          builtAsset = {
+            ...builtAsset,
+            id: `autoads-tw-${idx}-${slotProduct.id}-${Date.now()}-${idx}`,
+            type: 'image_feed_1x1',
+            aspectRatio: '1:1',
+            primaryText: sanitizeAdCopyForParaguayCod(builtAsset.primaryText, slotProduct, briefIdx, { policyGuardOnly })
+          };
+        } else {
+          const briefIdx = idx % 6;
+          const variationSeed = Math.floor(idx / 6);
+          const rawStd =
+            idx < standardBaseAssets.length && variationSeed === 0
+              ? standardBaseAssets[idx]
+              : regenerateSingleCreativeAssetFromBrain(activeProduct, currentBrain, briefIdx, variationSeed);
+          builtAsset = {
+            ...rawStd,
+            id: `autoads-std-${idx}-${activeProduct.id}-${Date.now()}-${idx}`,
+            type: slot.isReel
+              ? ('video_reel_9x16' as const)
+              : idx >= 4
+                ? ('image_feed_1x1' as const)
+                : rawStd.type,
+            aspectRatio: slot.isReel ? '9:16' : idx >= 4 ? '1:1' : rawStd.aspectRatio,
+            primaryText: sanitizeAdCopyForParaguayCod(rawStd.primaryText, activeProduct, briefIdx, { policyGuardOnly })
+          };
+        }
+
+        const existingSlot = isResumeIncomplete ? existingCreatives[idx] : undefined;
+        const resolvedModeChanged = existingSlot && Boolean(existingSlot.isEntryHookAd) !== isHookSlot;
+        return {
+          ...builtAsset,
+          isEntryHookAd: isHookSlot,
+          ...getSlotTargetMeta(idx, isHookSlot),
+          headline: !resolvedModeChanged && existingSlot?.headline ? existingSlot.headline : builtAsset.headline,
+          primaryText:
+            !resolvedModeChanged && existingSlot?.primaryText ? existingSlot.primaryText : builtAsset.primaryText,
+          descriptionText:
+            !resolvedModeChanged && existingSlot?.descriptionText
+              ? existingSlot.descriptionText
+              : builtAsset.descriptionText,
+          ctaLabel: !resolvedModeChanged && existingSlot?.ctaLabel ? existingSlot.ctaLabel : builtAsset.ctaLabel,
+          aiImagePrompt:
+            !resolvedModeChanged && existingSlot?.aiImagePrompt ? existingSlot.aiImagePrompt : builtAsset.aiImagePrompt,
+          aiGeneratedImageUrl: !slot.isReel ? existingSlot?.aiGeneratedImageUrl || '' : '',
+          aiGeneratedImageDataUrl: !slot.isReel ? existingSlot?.aiGeneratedImageDataUrl || '' : '',
+          aiGeneratedVideoUrl: slot.isReel ? existingSlot?.aiGeneratedVideoUrl || '' : ''
+        };
+      });
+
+      setCardInjectModes(slotModesMap);
       setCreatives(workingAssets);
       if (!isResumeIncomplete) {
         setAdVariationCounters({});
         setAdPhotoIndexOverride({});
       }
 
+      const creativeBriefsPayload = workingAssets.map((a, idx) => ({
+        index: idx,
+        headline: a.headline,
+        primaryText: a.primaryText,
+        descriptionText: a.descriptionText,
+        ctaLabel: a.ctaLabel,
+        aiImagePrompt: a.aiImagePrompt,
+        isEntryHookAd: Boolean(a.isEntryHookAd),
+        type: plannedSlots[idx]?.isReel ? 'reel_9x16' : a.aspectRatio === '9:16' ? 'story_9x16' : 'feed_1x1',
+        format: a.aspectRatio === '9:16' ? '9:16' : '1:1'
+      }));
+
       const singleCardIndices: number[] = isResumeIncomplete
-        ? workingAssets
-          .map((a, idx) =>
-            (idx < imageSliceEnd && !a.aiGeneratedImageUrl) ||
-              (!onlyImagesMode && idx >= 4 && !a.aiGeneratedVideoUrl)
-              ? idx
-              : -1
-          )
-          .filter(idx => idx !== -1)
-        : [0, 1, 2, 3, 4, 5];
+        ? plannedSlots
+            .filter(s =>
+              s.isReel
+                ? !workingAssets[s.adIndex]?.aiGeneratedVideoUrl
+                : !workingAssets[s.adIndex]?.aiGeneratedImageUrl
+            )
+            .map(s => s.adIndex)
+        : plannedSlots.map(s => s.adIndex);
       let lastWaveError = '';
-      let completedCardsCount = 6 - singleCardIndices.length;
+      let completedCardsCount = totalTargetCount - singleCardIndices.length;
 
       setGenerationProgressText(
-        `🛡️ Modo Seguro Por Turno (1 por 1): Iniciando generación secuencial de los ${singleCardIndices.length} creativos (${selectedImageModel}${onlyImagesMode ? '' : ` + ${selectedVideoModel}`})...`
+        `🛡️ Modo Seguro Por Turno (1 por 1): Iniciando generación secuencial de ${singleCardIndices.length} creativos (${selectedImageModel}${plannedReelsCount > 0 ? ` + ${selectedVideoModel}` : ''})...`
       );
 
-      // Helper para generar 1 Imagen IA en su propio turno exclusivo (1 a la vez, cero choques en OpenRouter)
       const generateSingleImageCardByTurn = async (cardIdx: number) => {
         setGenerationProgressText(
-          `🛡️ Generación Por Turno (${completedCardsCount}/6 listos) · 🎨 Creando Imagen del Anuncio #${cardIdx + 1} en ${selectedImageModel} (1 a la vez)...`
+          `🛡️ Generación Por Turno (${completedCardsCount}/${totalTargetCount} listos) · 🎨 Creando Imagen del Anuncio #${cardIdx + 1} (${slotModesMap[cardIdx] === 'entry_hook' ? 'Tripwire' : 'Estándar'}) en ${selectedImageModel}...`
         );
         for (let attempt = 1; attempt <= 5; attempt++) {
           try {
@@ -1630,10 +1633,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                product: buildSlotProductPayloadForApi(cardIdx),
-                creativeBriefs: currentBrain.creativeBriefs,
+                product: buildSlotProductPayloadForApi(cardIdx, slotModesMap[cardIdx]),
+                creativeBriefs: creativeBriefsPayload,
                 adMode: adStrategyMode,
-                cardModes: cardInjectModes,
+                cardModes: slotModesMap,
+                slotIsReel: slotIsReelMap,
                 forceNewGeneration: true,
                 imageModel: selectedImageModel,
                 videoModel: selectedVideoModel,
@@ -1720,10 +1724,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 )
               );
               if (isCld) {
-                refreshCloudinaryData(activeProduct?.slug);
+                refreshCloudinaryData(workingAssets[cardIdx]?.targetProductSlug || activeProduct?.slug);
               }
               setGenerationProgressText(
-                `✅ Turno completado (${completedCardsCount}/6 listos): Imagen del Anuncio #${cardIdx + 1} guardada. Pasando al siguiente turno...`
+                `✅ Turno completado (${completedCardsCount}/${totalTargetCount} listos): Imagen del Anuncio #${cardIdx + 1} guardada. Pasando al siguiente turno...`
               );
               return;
             }
@@ -1738,14 +1742,13 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         }
       };
 
-      // Helper para generar 1 Video Reel de 15s en su propio turno exclusivo
       const generateSingleReelCardByTurn = async (cardIdx: number) => {
         const { videoUrl, error } = await requestDirectReelVideoWithPolling(
           cardIdx,
           workingAssets[cardIdx]?.aiImagePrompt || '',
           (round, totalRounds) => {
             setGenerationProgressText(
-              `🛡️ Generación Por Turno (${completedCardsCount}/6 listos) · 🎬 Renderizando Video Reel 15s #${cardIdx + 1} en ${selectedVideoModel} (${round}/${totalRounds})...`
+              `🛡️ Generación Por Turno (${completedCardsCount}/${totalTargetCount} listos) · 🎬 Renderizando Video Reel 15s #${cardIdx + 1} en ${selectedVideoModel} (${round}/${totalRounds})...`
             );
           },
           {
@@ -1769,19 +1772,16 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
             )
           );
           setGenerationProgressText(
-            `✅ Turno completado (${completedCardsCount}/6 listos): Video Reel 15s #${cardIdx + 1} guardado...`
+            `✅ Turno completado (${completedCardsCount}/${totalTargetCount} listos): Video Reel 15s #${cardIdx + 1} guardado...`
           );
         } else if (error && !lastWaveError) {
           lastWaveError = error;
         }
       };
 
-      // Separar las tarjetas pendientes en Imágenes (#1-#4 o #1-#6) y Videos Reels (#5-#6)
-      const pendingImageIndices = singleCardIndices.filter(idx => onlyImagesMode || idx < 4);
-      const pendingReelIndices = singleCardIndices.filter(idx => !onlyImagesMode && idx >= 4);
+      const pendingImageIndices = singleCardIndices.filter(idx => !slotIsReelMap[idx]);
+      const pendingReelIndices = singleCardIndices.filter(idx => Boolean(slotIsReelMap[idx]));
 
-      // 1. FILA SEGURA POR TURNO DE IMÁGENES (1 por 1 en orden estricto):
-      // Espera que cada imagen termine y liquide su reserva en OpenRouter antes de disparar la siguiente
       for (let i = 0; i < pendingImageIndices.length; i++) {
         const imgIdx = pendingImageIndices[i];
         await generateSingleImageCardByTurn(imgIdx);
@@ -1790,7 +1790,6 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         }
       }
 
-      // 2. FILA SEGURA POR TURNO DE VIDEOS REELS DE 15S (Anuncios #5 y #6, 1 por 1):
       for (let i = 0; i < pendingReelIndices.length; i++) {
         const reelIdx = pendingReelIndices[i];
         await generateSingleReelCardByTurn(reelIdx);
@@ -1799,12 +1798,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         }
       }
 
-      const totalGeneratedImagesCount = workingAssets
-        .slice(0, imageSliceEnd)
-        .filter(a => Boolean(a.aiGeneratedImageUrl)).length;
-      const totalReelVideosCount = onlyImagesMode
-        ? 0
-        : workingAssets.slice(4, 6).filter(a => Boolean(a.aiGeneratedVideoUrl)).length;
+      const totalGeneratedImagesCount = plannedSlots.filter(
+        s => !s.isReel && Boolean(workingAssets[s.adIndex]?.aiGeneratedImageUrl)
+      ).length;
+      const totalReelVideosCount = plannedSlots.filter(
+        s => s.isReel && Boolean(workingAssets[s.adIndex]?.aiGeneratedVideoUrl)
+      ).length;
       if (totalGeneratedImagesCount === 0 && totalReelVideosCount === 0 && lastWaveError) {
         clearTimeout(genTimer1);
         setWorkflowStep('researched');
@@ -1828,9 +1827,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       setCreatives([...workingAssets]);
       setWorkflowStep('generated');
       showToast(
-        onlyImagesMode
-          ? `⚡ Ráfaga Turbo: ${totalGeneratedImagesCount}/6 Imágenes IA (${selectedImageModel}) creadas de un tiro.`
-          : `⚡ Ráfaga Turbo: ${totalGeneratedImagesCount}/4 Imágenes IA (${selectedImageModel}) + ${totalReelVideosCount}/2 Videos Reels (${selectedVideoModel}) creados de un tiro.`
+        plannedReelsCount === 0
+          ? `⚡ ${totalGeneratedImagesCount}/${totalTargetCount} Imágenes IA (${selectedImageModel}) creadas en el grupo.`
+          : `⚡ ${totalGeneratedImagesCount}/${plannedImagesCount} Imágenes IA (${selectedImageModel}) + ${totalReelVideosCount}/${plannedReelsCount} Videos Reels (${selectedVideoModel}) creados.`
       );
     } catch (err: any) {
       clearTimeout(genTimer1);
@@ -1901,17 +1900,14 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // ─────────────────────────────────────────────────────────────────────────────
   const handleGenerateImageOnlyForAd = async (adIndex: number, customPromptOverride?: string) => {
     if (!brainProfile || !activeProduct) return;
-    if (adIndex >= 4 && adIndex < 6 && !onlyImagesMode) {
+    const slotMode: AutoAdsSlotMode =
+      cardInjectModes[adIndex] ||
+      (creatives[adIndex]?.isEntryHookAd ? 'entry_hook' : getDefaultSlotModeForIndex(adIndex));
+    const slotIsReel = isReelSlotIndex(adIndex, slotMode);
+    if (slotIsReel) {
       return handleGenerateVideoOnlyForReel(adIndex, customPromptOverride);
     }
     setRegeneratingAdIdx(adIndex);
-    const slotMode: 'standard' | 'entry_hook' =
-      cardInjectModes[adIndex] ||
-      (creatives[adIndex]?.isEntryHookAd
-        ? 'entry_hook'
-        : adStrategyMode === 'entry_hook' || (adStrategyMode === 'hybrid' && adIndex >= 4 && adIndex < 6)
-          ? 'entry_hook'
-          : 'standard');
     try {
       const currentAd = creatives[adIndex];
       let res: Response | null = null;
@@ -1923,6 +1919,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           body: JSON.stringify({
             product: buildSlotProductPayloadForApi(adIndex, slotMode),
             injectMode: slotMode,
+            isReel: false,
             adIndex,
             variationSeed: (adVariationCounters[adIndex] || 0) + 1,
             currentHeadline: currentAd?.headline || '',
@@ -2021,11 +2018,10 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
   // ─────────────────────────────────────────────────────────────────────────────
   const handleRegenerateSingleAd = async (adIndex: number, customPromptOverride?: string) => {
     if (!brainProfile || !activeProduct) return;
-    const slotMode: 'standard' | 'entry_hook' =
+    const slotMode: AutoAdsSlotMode =
       cardInjectModes[adIndex] ||
-      (adStrategyMode === 'entry_hook' || (adStrategyMode === 'hybrid' && adIndex >= 4)
-        ? 'entry_hook'
-        : 'standard');
+      (creatives[adIndex]?.isEntryHookAd ? 'entry_hook' : getDefaultSlotModeForIndex(adIndex));
+    const slotIsReel = isReelSlotIndex(adIndex, slotMode);
     const chosenSlotTripPage = slotMode === 'entry_hook' ? resolveTripwirePageForSlot(adIndex) : null;
     const slotApiProd = buildSlotProductPayloadForApi(adIndex, slotMode);
     if (
@@ -2049,6 +2045,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
         body: JSON.stringify({
           product: slotApiProd,
           injectMode: slotMode,
+          isReel: slotIsReel,
           adIndex,
           variationSeed: nextSeed,
           currentHeadline: currentAd?.headline || '',
@@ -2087,10 +2084,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     }
 
     const slotProduct = resolveProductForSlot(adIndex, slotMode);
+    const brainForSlot =
+      slotMode === 'entry_hook' ? createDefaultBrainProfile(slotProduct) : brainProfile;
     const freshAsset = regenerateSingleCreativeAssetFromBrain(
       slotProduct,
-      brainProfile,
-      adIndex,
+      brainForSlot,
+      adIndex % 6,
       nextSeed,
       customBrief || undefined
     );
@@ -2121,11 +2120,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     } else if (customBrief?.aiGeneratedImageDataUrl) {
       freshAsset.aiGeneratedImageDataUrl = customBrief.aiGeneratedImageDataUrl;
     }
-    if (onlyImagesMode || adIndex >= 6) {
-      freshAsset.type = adIndex >= 6 ? 'image_feed_1x1' : 'image_story_9x16';
+    if (!slotIsReel) {
+      freshAsset.type = 'image_feed_1x1';
+      freshAsset.aspectRatio = '1:1';
     }
 
-    // Limpiar cualquier override manual de índice
     setAdPhotoIndexOverride(prev => {
       const copy = { ...prev };
       delete copy[adIndex];
@@ -2135,11 +2134,11 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
     setCreatives(prev => prev.map((item, idx) => (idx === adIndex ? freshAsset : item)));
     setCreatorPendingReplaceMap(prev => ({ ...prev, [adIndex]: true }));
     if (isCldAsset) {
-      refreshCloudinaryData(activeProduct?.slug);
+      refreshCloudinaryData(freshAsset.targetProductSlug || activeProduct?.slug);
     }
     setRegeneratingAdIdx(null);
     showToast(
-      adIndex >= 4 && adIndex < 6 && !onlyImagesMode
+      slotIsReel
         ? `🎬 Reel #${adIndex + 1} regenerado en Video MP4 (${selectedVideoModel}) con nuevo ángulo de venta.`
         : `🤖 Anuncio #${adIndex + 1} regenerado con nueva Imagen IA (${selectedImageModel}) y nuevo ángulo de venta.`
     );
@@ -2355,13 +2354,9 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
       const selectedPage = metaPages.find(p => p.id === '1050835598123904') || metaPages[0];
       const backupAccessToken = String(metaOAuthBackupState?.accessToken || '').trim();
       const publishCreativesPayload = creatives.map((cr, idx) => {
-        const effectiveMode: 'standard' | 'entry_hook' =
+        const effectiveMode: AutoAdsSlotMode =
           cardInjectModes[idx] ||
-          (cr.isEntryHookAd
-            ? 'entry_hook'
-            : adStrategyMode === 'entry_hook' || (adStrategyMode === 'hybrid' && idx >= 4 && idx < 6)
-              ? 'entry_hook'
-              : 'standard');
+          (cr.isEntryHookAd ? 'entry_hook' : getDefaultSlotModeForIndex(idx));
         if (effectiveMode !== 'entry_hook') {
           return {
             ...cr,
@@ -3607,17 +3602,17 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
           replacedInfoByKey={campaignReplacedInfo}
           defaultHookInfo={{
             entryProductName:
-              entryHookName ||
+              selectedTripwirePage?.tripwireConfig?.entryProductName ||
               resolveProductForPublishedCampaign(selectedCampaignForPanel || ({} as any))?.tripwireConfig
                 ?.entryProductName ||
               '',
             entryProductDescription:
-              entryHookDesc ||
+              selectedTripwirePage?.tripwireConfig?.entryProductDescription ||
               resolveProductForPublishedCampaign(selectedCampaignForPanel || ({} as any))?.tripwireConfig
                 ?.entryProductDescription ||
               '',
             entryPriceGs:
-              entryHookPriceGs ||
+              selectedTripwirePage?.tripwireConfig?.entryPriceGs ||
               resolveProductForPublishedCampaign(selectedCampaignForPanel || ({} as any))?.tripwireConfig
                 ?.entryPriceGs ||
               20000
@@ -3725,12 +3720,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                 className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center gap-2"
                 title={
                   onlyImagesMode
-                    ? 'Los 6 anuncios se generan como imágenes con OpenAI GPT Image 2.6 Sunburst.'
-                    : '4 Imágenes (Sunburst) + 2 Videos Reels de 15s (Gemini Omni 1.2 Flash).'
+                    ? `Todos los ${plannedCounts.totalCount} anuncios se generan como imágenes con OpenAI GPT Image 2.6 Sunburst.`
+                    : 'Incluye Videos Reels de 15s (Gemini Omni 1.2 Flash) cuando hay al menos 6 anuncios estándar.'
                 }
               >
                 <span className="text-[11px] font-semibold text-zinc-200 whitespace-nowrap">
-                  {onlyImagesMode ? 'Solo Imágenes (6×)' : '4 Img + 2 Reels'}
+                  {onlyImagesMode ? `Solo Imágenes (${plannedCounts.totalCount}×)` : 'Img + Reels'}
                 </span>
                 <button
                   type="button"
@@ -3876,15 +3871,15 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               )}
             </div>
 
-            {/* Bloque 1B: Estrategia Mixta del Grupo de Anuncios (Estándar vs Inyección Oferta de Entrada) */}
+            {/* Bloque 1B: Estrategia del Grupo de Anuncios (Estándar vs Mixto Estándar + Tripwire vs 100% Tripwire) */}
             <div className="bg-[#11141a] rounded-xl border border-zinc-800/80 p-4 sm:p-5 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block">
                     Modo de Creativos del Grupo de Anuncios (AdSet)
                   </span>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Mantené anuncios estándar, inyectá anuncios Gancho de alto CTR, o combiná ambos en el mismo conjunto.
+                    Elegí el modo y definí libremente la cantidad de anuncios Estándar y Tripwire antes de crear.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
@@ -3892,7 +3887,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     type="button"
                     data-testid="autoads-mode-standard"
                     onClick={() => setAdStrategyMode('standard')}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${
                       adStrategyMode === 'standard'
                         ? 'bg-zinc-200 text-black font-bold'
                         : 'text-zinc-400 hover:text-zinc-200'
@@ -3904,47 +3899,190 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     type="button"
                     data-testid="autoads-mode-hybrid"
                     onClick={() => setAdStrategyMode('hybrid')}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${
                       adStrategyMode === 'hybrid'
                         ? 'bg-emerald-500 text-black font-bold'
                         : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
-                    Mixto (4 Estándar + 2 Gancho)
+                    Mixto (Estándar + Tripwire)
                   </button>
                   <button
                     type="button"
                     data-testid="autoads-mode-hook"
                     onClick={() => setAdStrategyMode('entry_hook')}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${
                       adStrategyMode === 'entry_hook'
                         ? 'bg-amber-400 text-black font-bold'
                         : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
-                    100% Oferta de Entrada
+                    100% Tripwire
                   </button>
                 </div>
               </div>
 
+              {/* Cantidades Manuales Libres (Estándar y/o Tripwire) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
+                {adStrategyMode !== 'entry_hook' && (
+                  <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-[11px] font-semibold text-zinc-200 block">
+                        Cantidad Anuncios Estándar
+                      </span>
+                      <span className="text-[10px] text-zinc-400 block truncate">
+                        Dirigen a Página Estándar
+                      </span>
+                    </div>
+                    <div className="inline-flex items-center gap-1 bg-[#11141a] p-1 rounded-lg border border-zinc-800 shrink-0">
+                      <button
+                        type="button"
+                        data-testid="autoads-std-count-dec"
+                        onClick={() => setStandardAdsCount(c => clampAdsCount(c - 1, 4))}
+                        disabled={standardAdsCount <= MIN_ADS_PER_TYPE}
+                        className="w-7 h-7 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-200 flex items-center justify-center cursor-pointer disabled:opacity-40"
+                        aria-label="Restar anuncio estándar"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <input
+                        type="number"
+                        data-testid="autoads-std-count-input"
+                        min={MIN_ADS_PER_TYPE}
+                        max={MAX_ADS_PER_TYPE}
+                        value={standardAdsCount}
+                        onChange={e => setStandardAdsCount(clampAdsCount(Number(e.target.value), 1))}
+                        className="w-10 text-center bg-transparent text-xs font-mono font-bold text-white tabular-nums outline-none"
+                      />
+                      <button
+                        type="button"
+                        data-testid="autoads-std-count-inc"
+                        onClick={() => setStandardAdsCount(c => clampAdsCount(c + 1, 4))}
+                        disabled={standardAdsCount >= MAX_ADS_PER_TYPE}
+                        className="w-7 h-7 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-200 flex items-center justify-center cursor-pointer disabled:opacity-40"
+                        aria-label="Sumar anuncio estándar"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {adStrategyMode !== 'standard' && (
+                  <div className="p-3 rounded-xl bg-zinc-950/90 border border-amber-500/35 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-[11px] font-semibold text-amber-300 block">
+                        Cantidad Anuncios Tripwire
+                      </span>
+                      <span className="text-[10px] text-zinc-400 block truncate">
+                        Dirigen a Página Tripwire
+                      </span>
+                    </div>
+                    <div className="inline-flex items-center gap-1 bg-[#11141a] p-1 rounded-lg border border-zinc-800 shrink-0">
+                      <button
+                        type="button"
+                        data-testid="autoads-tw-count-dec"
+                        onClick={() => setTripwireAdsCount(c => clampAdsCount(c - 1, 1))}
+                        disabled={tripwireAdsCount <= MIN_ADS_PER_TYPE}
+                        className="w-7 h-7 rounded-md bg-zinc-900 hover:bg-zinc-800 text-amber-300 flex items-center justify-center cursor-pointer disabled:opacity-40"
+                        aria-label="Restar anuncio tripwire"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <input
+                        type="number"
+                        data-testid="autoads-tw-count-input"
+                        min={MIN_ADS_PER_TYPE}
+                        max={MAX_ADS_PER_TYPE}
+                        value={tripwireAdsCount}
+                        onChange={e => setTripwireAdsCount(clampAdsCount(Number(e.target.value), 1))}
+                        className="w-10 text-center bg-transparent text-xs font-mono font-bold text-amber-300 tabular-nums outline-none"
+                      />
+                      <button
+                        type="button"
+                        data-testid="autoads-tw-count-inc"
+                        onClick={() => setTripwireAdsCount(c => clampAdsCount(c + 1, 1))}
+                        disabled={tripwireAdsCount >= MAX_ADS_PER_TYPE}
+                        className="w-7 h-7 rounded-md bg-zinc-900 hover:bg-zinc-800 text-amber-300 flex items-center justify-center cursor-pointer disabled:opacity-40"
+                        aria-label="Sumar anuncio tripwire"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 flex flex-col justify-center">
+                  <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">
+                    Total en el Grupo (AdSet)
+                  </span>
+                  <div className="text-xs font-mono font-bold text-white tabular-nums mt-0.5">
+                    {adStrategyMode === 'hybrid'
+                      ? `${plannedCounts.standardCount} Estándar + ${plannedCounts.tripwireCount} Tripwire = ${plannedCounts.totalCount} Anuncios`
+                      : adStrategyMode === 'entry_hook'
+                        ? `${plannedCounts.tripwireCount} Anuncios Tripwire`
+                        : `${plannedCounts.standardCount} Anuncios Estándar`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Selectores Puros de Destino (Creación exclusivamente en Creador Rápido, aquí solo se selecciona) */}
               {adStrategyMode !== 'standard' && (
-                <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-amber-500/35 space-y-3">
-                  {/* Selector de Página Tripwire de Destino */}
-                  <div className="p-3 rounded-xl bg-[#0d1016] border border-amber-500/35 space-y-2">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {adStrategyMode === 'hybrid' && (
+                    <div className="p-3.5 rounded-xl bg-[#0d1016] border border-zinc-800 space-y-2">
+                      <label className="text-[11px] font-bold uppercase tracking-wide text-emerald-300 block">
+                        1. Página Estándar (Destino de anuncios Estándar)
+                      </label>
+                      {sourceMode === 'catalog' ? (
+                        <select
+                          data-testid="autoads-mixto-standard-page-select"
+                          value={selectedCatalogProduct?.id || ''}
+                          onChange={e => {
+                            const newId = e.target.value;
+                            setSelectedProductId(newId);
+                            syncWorkspaceOnSelectorChange('catalog', newId, externalUrlInput);
+                          }}
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-700/80 text-xs font-semibold text-white outline-none focus:border-emerald-400 cursor-pointer"
+                        >
+                          {productPages.map(prod => (
+                            <option key={prod.id} value={prod.id} className="bg-zinc-900 text-white">
+                              {prod.nombre} ({formatGs(prod.precios?.[1] || 189000)}) → /?p={prod.slug}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-200 truncate">
+                          {externalUrlInput.trim() || 'URL externa configurada arriba'}
+                        </div>
+                      )}
+                      <div className="text-[11px] font-mono text-emerald-300 break-all">
+                        Destino anuncios Estándar:{' '}
+                        <strong className="text-white">
+                          {buildPageLandingUrl(activeProduct, 'standard')}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={`p-3.5 rounded-xl bg-[#0d1016] border border-amber-500/35 space-y-2 ${adStrategyMode === 'entry_hook' ? 'lg:col-span-2' : ''}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <label className="text-[11px] font-bold uppercase tracking-wide text-amber-300">
-                        Página Tripwire de Destino (para los anuncios Tripwire)
+                        {adStrategyMode === 'hybrid'
+                          ? '2. Página Tripwire (Destino de anuncios Tripwire)'
+                          : 'Página Tripwire (Destino de anuncios Tripwire)'}
                       </label>
                       {onOpenTripwirePageCreator && (
                         <button
                           type="button"
                           onClick={onOpenTripwirePageCreator}
-                          className="px-2.5 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-[11px] font-bold text-amber-300 cursor-pointer"
+                          className="px-2.5 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-[11px] font-bold text-amber-300 cursor-pointer whitespace-nowrap"
                         >
                           + Crear Página Tripwire
                         </button>
                       )}
                     </div>
+
                     {availableTripwirePages.length > 0 ? (
                       <>
                         <select
@@ -3955,104 +4093,36 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                         >
                           {availableTripwirePages.map(tp => (
                             <option key={tp.id} value={tp.id} className="bg-zinc-900 text-white">
-                              {tp.nombre} — Gancho: {tp.tripwireConfig?.entryProductName} ({formatGs(tp.tripwireConfig?.entryPriceGs || 20000)}) → /?p={tp.slug}&modo=entrada
+                              {tp.nombre} — Entrada: {tp.tripwireConfig?.entryProductName} ({formatGs(tp.tripwireConfig?.entryPriceGs || 20000)}) → /?p={tp.slug}&modo=entrada
                             </option>
                           ))}
                         </select>
-                        <div className="text-[11px] font-mono text-emerald-300 break-all">
-                          ✅ Destino Meta Ads de estos anuncios Tripwire:{' '}
+                        <div className="text-[11px] font-mono text-amber-200 break-all">
+                          Destino anuncios Tripwire:{' '}
                           <strong className="text-amber-300">
                             {buildPageLandingUrl(selectedTripwirePage, 'entry_hook')}
                           </strong>
                         </div>
                       </>
                     ) : (
-                      <div className="text-[11px] text-amber-200">
-                        Todavía no creaste una Página Tripwire en Creador Rápido. Creala primero o completá los datos abajo.
+                      <div
+                        data-testid="autoads-no-tripwire-notice"
+                        className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 space-y-2"
+                      >
+                        <p className="leading-relaxed">
+                          Todavía no existe ninguna Página Tripwire creada en Creador Rápido. Las páginas estándar (como Noelux™) no se mezclan aquí como Tripwire.
+                        </p>
+                        {onOpenTripwirePageCreator && (
+                          <button
+                            type="button"
+                            onClick={onOpenTripwirePageCreator}
+                            className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-black text-[11px] font-bold cursor-pointer"
+                          >
+                            Ir a Creador Rápido para crear una Página Tripwire
+                          </button>
+                        )}
                       </div>
                     )}
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="url"
-                      value={entryHookUrlInput}
-                      onChange={e => setEntryHookUrlInput(e.target.value)}
-                      placeholder="URL del producto gancho congruente (opcional para autocompletar)"
-                      className="flex-1 px-3 py-2 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:border-emerald-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAnalyzeHookUrl}
-                      disabled={analyzingHookUrl}
-                      className="px-3.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-semibold text-emerald-300 inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
-                    >
-                      {analyzingHookUrl ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Globe className="w-3.5 h-3.5" />}
-                      <span>{analyzingHookUrl ? 'Analizando...' : 'Analizar URL Gancho'}</span>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
-                    <div className="sm:col-span-2 space-y-1">
-                      <label className="text-[11px] text-zinc-400 font-medium block">
-                        Nombre de la Oferta de Entrada (Congruente)
-                      </label>
-                      <input
-                        type="text"
-                        data-testid="autoads-hook-name-input"
-                        value={entryHookName}
-                        onChange={e => setEntryHookName(e.target.value)}
-                        placeholder="Ej: Mini Proyector USB Navideño / Guía Ilustrada"
-                        className="w-full px-3 py-2 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs text-white placeholder-zinc-500 outline-none focus:border-emerald-500"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-zinc-400 font-medium block">
-                        Precio Gancho (Gs.)
-                      </label>
-                      <input
-                        type="number"
-                        data-testid="autoads-hook-price-input"
-                        min={5000}
-                        step={1000}
-                        value={entryHookPriceGs}
-                        onChange={e => setEntryHookPriceGs(Number(e.target.value || 0))}
-                        className="w-full px-3 py-2 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs font-mono font-bold text-emerald-300 outline-none focus:border-emerald-500"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-zinc-400 font-medium block">
-                        Foto Producto Gancho
-                      </label>
-                      <label className="w-full px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-semibold text-zinc-200 flex items-center justify-center gap-1.5 cursor-pointer">
-                        <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>{entryHookImageUrl ? 'Cambiar Foto' : 'Subir Foto'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleHookImageFileChange}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-3 items-center">
-                    {entryHookImageUrl && (
-                      <img
-                        src={entryHookImageUrl}
-                        alt={entryHookName || 'Gancho'}
-                        referrerPolicy="no-referrer"
-                        className="w-12 h-12 rounded-lg object-cover border border-zinc-800 shrink-0"
-                      />
-                    )}
-                    <input
-                      type="text"
-                      value={entryHookDesc}
-                      onChange={e => setEntryHookDesc(e.target.value)}
-                      placeholder="Beneficio clave del producto gancho (ej: Conexión instantánea en cualquier ventana, ideal para Navidad)"
-                      className="flex-1 w-full px-3 py-2 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:border-emerald-500"
-                    />
                   </div>
                 </div>
               )}
@@ -4159,7 +4229,13 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   </div>
                   <div>
                     <div className="text-sm font-bold text-zinc-100">
-                      {onlyImagesMode ? 'Generar 6 Imágenes IA' : 'Generar 4 Img + 2 Reels'}
+                      {adStrategyMode === 'hybrid'
+                        ? `Generar ${plannedCounts.standardCount} Estándar + ${plannedCounts.tripwireCount} Tripwire`
+                        : adStrategyMode === 'entry_hook'
+                          ? `Generar ${plannedCounts.totalCount} Anuncios Tripwire`
+                          : onlyImagesMode || plannedCounts.standardCount < 6
+                            ? `Generar ${plannedCounts.totalCount} Imágenes IA`
+                            : `Generar ${plannedCounts.totalCount} Anuncios (Img + Reels)`}
                     </div>
                     <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
                       Diseña los creativos finales en Cloudinary listos para Meta Feed.
@@ -4189,23 +4265,22 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                     <>
                       <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                       <span>
-                        {onlyImagesMode ? 'Generando 6 Imágenes...' : 'Generando Anuncios...'}
+                        {`Generando ${plannedCounts.totalCount} Anuncios...`}
                       </span>
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-3.5 h-3.5 shrink-0" />
                       <span>
-                        {creatives.length > 0 &&
-                          creatives.slice(0, onlyImagesMode ? 6 : 4).some(c => !c.aiGeneratedImageUrl)
+                        {creatives.length === plannedCounts.totalCount &&
+                          creatives.some((c, i) => !isReelSlotIndex(i, c.isEntryHookAd ? 'entry_hook' : 'standard') && !c.aiGeneratedImageUrl)
                           ? '⚡ 2. Completar Faltantes'
-                          : !onlyImagesMode && creatives.length > 0 && creatives.slice(4, 6).some(c => !c.aiGeneratedVideoUrl)
-                            ? '🎬 2. Crear Reels #5 y #6'
+                          : creatives.length === plannedCounts.totalCount &&
+                              creatives.some((c, i) => isReelSlotIndex(i, c.isEntryHookAd ? 'entry_hook' : 'standard') && !c.aiGeneratedVideoUrl)
+                            ? '🎬 2. Completar Reels Faltantes'
                             : creatives.length > 0
-                              ? `✓ 2. Regenerar (${creatives.length})`
-                              : onlyImagesMode
-                                ? '2. Crear 6 Imágenes IA'
-                                : '2. Crear 6 Anuncios IA'}
+                              ? `✓ 2. Regenerar (${plannedCounts.totalCount})`
+                              : `2. Crear ${plannedCounts.totalCount} Anuncios IA`}
                       </span>
                     </>
                   )}
@@ -4244,7 +4319,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                   <div>
                     <div className="text-sm font-bold text-zinc-100">Publicar en Meta Ads</div>
                     <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
-                      Lanza Campaña, Grupo de Anuncios y 6 anuncios en Paraguay.
+                      Lanza Campaña, Grupo de Anuncios y {creatives.length || plannedCounts.totalCount} anuncios en Paraguay.
                     </p>
                   </div>
                 </div>
@@ -4415,14 +4490,12 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
               {/* Grid de los Anuncios con Diseño Limpio Tipo Feed Facebook / Instagram */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredCreativeEntries.map(({ ad, idx }) => {
-              const isReel = !onlyImagesMode && (ad.type === 'video_reel_9x16' || (idx >= 4 && idx < 6));
-              const effectiveSlotMode: 'standard' | 'entry_hook' =
+              const effectiveSlotMode: AutoAdsSlotMode =
                 cardInjectModes[idx] ||
-                (ad.isEntryHookAd
-                  ? 'entry_hook'
-                  : adStrategyMode === 'entry_hook' || (adStrategyMode === 'hybrid' && idx >= 4 && idx < 6)
-                    ? 'entry_hook'
-                    : 'standard');
+                (ad.isEntryHookAd ? 'entry_hook' : getDefaultSlotModeForIndex(idx));
+              const isReel =
+                !onlyImagesMode &&
+                (ad.type === 'video_reel_9x16' || isReelSlotIndex(idx, effectiveSlotMode));
               const cardTripPage =
                 effectiveSlotMode === 'entry_hook'
                   ? (ad.targetProductId &&
@@ -4819,10 +4892,7 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                               <span className="px-2 py-0.5 rounded bg-black/85 border border-emerald-500/60 text-emerald-300 text-[10px] font-bold truncate backdrop-blur-sm">
                                 {ad.isEntryHookAd || effectiveSlotMode === 'entry_hook'
                                   ? `1x Gs. ${Number(
-                                      cardTripPage?.tripwireConfig?.entryPriceGs ||
-                                        effectiveProductWithHook.tripwireConfig?.entryPriceGs ||
-                                        entryHookPriceGs ||
-                                        20000
+                                      cardTripPage?.tripwireConfig?.entryPriceGs || 20000
                                     ).toLocaleString('es-PY')} · Oferta de Entrada`
                                   : idx === 3
                                     ? `Pack 2x Gs. ${Number(activeProduct.precios?.[2] || 358000).toLocaleString('es-PY')}`
@@ -4988,35 +5058,8 @@ export const AutoAdsView: React.FC<AutoAdsViewProps> = ({
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-2">
-                          <p className="text-[11px] text-amber-200 leading-snug">
-                            Todavía no hay ninguna Página Tripwire creada. Creala en Creador Rápido o completá manualmente abajo:
-                          </p>
-                          <input
-                            type="text"
-                            value={entryHookName}
-                            onChange={e => setEntryHookName(e.target.value)}
-                            placeholder="Nombre Producto Tripwire (ej: Guirnalda LED 10m)"
-                            className="w-full px-2.5 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-xs text-white"
-                          />
-                          <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="number"
-                              min={5000}
-                              step={1000}
-                              value={entryHookPriceGs}
-                              onChange={e => setEntryHookPriceGs(Number(e.target.value) || 0)}
-                              placeholder="Precio Gs."
-                              className="px-2.5 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-xs font-mono text-amber-300"
-                            />
-                            <input
-                              type="text"
-                              value={entryHookDesc}
-                              onChange={e => setEntryHookDesc(e.target.value)}
-                              placeholder="Beneficio corto"
-                              className="px-2.5 py-1.5 rounded bg-zinc-900 border border-zinc-800 text-xs text-white"
-                            />
-                          </div>
+                        <div className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-amber-200 leading-snug">
+                          Todavía no hay ninguna Página Tripwire creada. Creala primero en Creador Rápido para poder seleccionarla acá.
                         </div>
                       )}
                     </div>

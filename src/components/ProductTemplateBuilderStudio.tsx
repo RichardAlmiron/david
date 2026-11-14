@@ -655,7 +655,8 @@ export const ProductTemplateBuilderStudio: React.FC<ProductTemplateBuilderStudio
 
     try {
       const sealedDraft =
-        liveDraft.tripwireConfig?.enabled || templateCreationMode === 'dual_tripwire_winner'
+        liveDraft.tripwireConfig?.enabled ||
+        (templateCreationMode === 'dual_tripwire_winner' && liveDraft.id !== 'prod-noelux-01')
           ? ensureProductHasMandatoryTripwire(liveDraft)
           : { ...liveDraft, tripwireConfig: undefined };
       await onSaveProductPage(sealedDraft, false);

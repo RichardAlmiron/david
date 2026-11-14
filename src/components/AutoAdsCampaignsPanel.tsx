@@ -24,6 +24,7 @@ import {
 import type { ProductPage } from '../types';
 import { formatGs } from '../config';
 import type { CloudinaryMediaClient } from './AutoAdsCloudinaryPanel';
+import { filterGenuineTripwirePages } from '../utils/autoAdsSlotPlanner';
 
 export interface CampaignAdReplaceResultInfo {
   oldAdId?: string;
@@ -149,7 +150,7 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
   regeneratingAdKey,
   replacingAdKey,
   replacedInfoByKey,
-  defaultHookInfo,
+  defaultHookInfo: _defaultHookInfo,
   onRegenerateCampaignAd,
   onDiscardDraft,
   onLaunchReplaceAd,
@@ -163,75 +164,28 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
   const [showPlusMenuInPanel, setShowPlusMenuInPanel] = useState<boolean>(false);
   const [newAdInjectMode, setNewAdInjectMode] = useState<'standard' | 'entry_hook'>('entry_hook');
 
-  const tripwirePages = (Array.isArray(productPages) ? productPages : []).filter(p =>
-    Boolean(p?.tripwireConfig?.enabled && p?.tripwireConfig?.entryProductName)
-  );
+  const tripwirePages = filterGenuineTripwirePages(productPages);
   const [selectedTripwirePageId, setSelectedTripwirePageId] = useState<string>(
     tripwirePages[0]?.id || ''
   );
   const selectedTripwirePage =
     tripwirePages.find(p => p.id === selectedTripwirePageId) || tripwirePages[0] || null;
 
-  const [inlineHookName, setInlineHookName] = useState<string>(
-    selectedTripwirePage?.tripwireConfig?.entryProductName || defaultHookInfo?.entryProductName || ''
-  );
-  const [inlineHookDesc, setInlineHookDesc] = useState<string>(
-    selectedTripwirePage?.tripwireConfig?.entryProductDescription ||
-      defaultHookInfo?.entryProductDescription ||
-      ''
-  );
-  const [inlineHookPrice, setInlineHookPrice] = useState<string>(
-    selectedTripwirePage?.tripwireConfig?.entryPriceGs
-      ? String(selectedTripwirePage.tripwireConfig.entryPriceGs)
-      : defaultHookInfo?.entryPriceGs
-        ? String(defaultHookInfo.entryPriceGs)
-        : '20000'
-  );
-
-  const buildTripwireDestinationUrl = (page: ProductPage | null, fallbackLandingUrl: string): string => {
-    if (page?.slug && typeof window !== 'undefined') {
+  const buildTripwireDestinationUrl = (page: ProductPage | null): string => {
+    if (!page?.slug) return '';
+    if (typeof window !== 'undefined') {
       return `${window.location.origin}/?p=${page.slug}&modo=entrada`;
     }
-    if (page?.slug) {
-      return `https://autoads360.up.railway.app/?p=${page.slug}&modo=entrada`;
-    }
-    const base = String(fallbackLandingUrl || '').trim();
-    if (!base) return '/?modo=entrada';
-    return `${base}${base.includes('?') ? '&' : '?'}modo=entrada`;
+    return `https://autoads360.up.railway.app/?p=${page.slug}&modo=entrada`;
   };
 
   const applyTripwirePageSelection = (pageId: string) => {
     setSelectedTripwirePageId(pageId);
-    const chosen = tripwirePages.find(p => p.id === pageId);
-    if (chosen?.tripwireConfig) {
-      setInlineHookName(chosen.tripwireConfig.entryProductName || '');
-      setInlineHookDesc(chosen.tripwireConfig.entryProductDescription || '');
-      if (Number(chosen.tripwireConfig.entryPriceGs) > 0) {
-        setInlineHookPrice(String(chosen.tripwireConfig.entryPriceGs));
-      }
-    }
   };
 
   useEffect(() => {
     setCampaignSubTab('anuncios');
-    if (selectedTripwirePage?.tripwireConfig) {
-      setInlineHookName(selectedTripwirePage.tripwireConfig.entryProductName || '');
-      setInlineHookDesc(selectedTripwirePage.tripwireConfig.entryProductDescription || '');
-      if (Number(selectedTripwirePage.tripwireConfig.entryPriceGs) > 0) {
-        setInlineHookPrice(String(selectedTripwirePage.tripwireConfig.entryPriceGs));
-      }
-    } else {
-      if (defaultHookInfo?.entryProductName) setInlineHookName(defaultHookInfo.entryProductName);
-      if (defaultHookInfo?.entryProductDescription) setInlineHookDesc(defaultHookInfo.entryProductDescription);
-      if (defaultHookInfo?.entryPriceGs) setInlineHookPrice(String(defaultHookInfo.entryPriceGs));
-    }
-  }, [
-    selectedCampaign?.campaignId,
-    selectedCampaign?.id,
-    selectedTripwirePage?.id,
-    defaultHookInfo?.entryProductName,
-    defaultHookInfo?.entryPriceGs
-  ]);
+  }, [selectedCampaign?.campaignId, selectedCampaign?.id]);
 
   const pickWorkingUrl = (candidates: string[]): string =>
     candidates.find(u => !failedUrls[u]) || '';
@@ -373,26 +327,23 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
             const appendDraft = pendingDraftsByKey[appendAdKey];
             const isRegeneratingAppend = regeneratingAdKey === appendAdKey;
             const isReplacingAppend = replacingAdKey === appendAdKey;
-            const resolvedAppendTargetUrl = buildTripwireDestinationUrl(
-              selectedTripwirePage,
-              selectedCampaign.landingUrl
-            );
-            const currentHookOverride: CampaignHookOverrideInput = {
-              entryProductName:
-                inlineHookName.trim() || selectedTripwirePage?.tripwireConfig?.entryProductName || '',
-              entryProductDescription:
-                inlineHookDesc.trim() ||
-                selectedTripwirePage?.tripwireConfig?.entryProductDescription ||
-                '',
-              entryPriceGs: Number(
-                inlineHookPrice || selectedTripwirePage?.tripwireConfig?.entryPriceGs || 0
-              ),
-              entryImageUrl: selectedTripwirePage?.tripwireConfig?.entryImageUrl || '',
-              targetProductId: selectedTripwirePage?.id || undefined,
-              targetProductSlug: selectedTripwirePage?.slug || undefined,
-              targetProductName: selectedTripwirePage?.nombre || undefined,
-              targetLandingUrl: resolvedAppendTargetUrl
-            };
+            const resolvedAppendTargetUrl = buildTripwireDestinationUrl(selectedTripwirePage);
+            const currentHookOverride: CampaignHookOverrideInput | undefined = selectedTripwirePage
+              ? {
+                  entryProductName: selectedTripwirePage.tripwireConfig?.entryProductName || '',
+                  entryProductDescription:
+                    selectedTripwirePage.tripwireConfig?.entryProductDescription || '',
+                  entryPriceGs: Number(selectedTripwirePage.tripwireConfig?.entryPriceGs || 0),
+                  entryImageUrl:
+                    selectedTripwirePage.tripwireConfig?.entryImageUrl ||
+                    selectedTripwirePage.tripwireConfig?.entryProductImage ||
+                    '',
+                  targetProductId: selectedTripwirePage.id,
+                  targetProductSlug: selectedTripwirePage.slug,
+                  targetProductName: selectedTripwirePage.nombre,
+                  targetLandingUrl: resolvedAppendTargetUrl
+                }
+              : undefined;
 
             return (
             <div className="space-y-4">
@@ -473,32 +424,6 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <input
-                        type="text"
-                        value={inlineHookName}
-                        onChange={e => setInlineHookName(e.target.value)}
-                        placeholder="Nombre producto entrada (ej: Guirnalda 10m)"
-                        className="px-3 py-1.5 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs text-white placeholder-zinc-500 outline-none focus:border-amber-400"
-                      />
-                      <input
-                        type="text"
-                        value={inlineHookDesc}
-                        onChange={e => setInlineHookDesc(e.target.value)}
-                        placeholder="Beneficio corto del artículo de entrada"
-                        className="px-3 py-1.5 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs text-white placeholder-zinc-500 outline-none focus:border-amber-400"
-                      />
-                      <input
-                        type="number"
-                        min={5000}
-                        step={1000}
-                        value={inlineHookPrice}
-                        onChange={e => setInlineHookPrice(e.target.value)}
-                        placeholder="Precio Gs. (ej: 20000)"
-                        className="px-3 py-1.5 rounded-lg bg-[#0d1016] border border-zinc-800 text-xs text-amber-300 font-mono placeholder-zinc-500 outline-none focus:border-amber-400"
-                      />
-                    </div>
-
                     <div className="flex flex-wrap items-center gap-2.5">
                       <button
                         type="button"
@@ -526,8 +451,9 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                       <button
                         type="button"
                         data-testid="campaign-inject-new-ad-btn"
-                        disabled={isRegeneratingAppend || isReplacingAppend}
+                        disabled={isRegeneratingAppend || isReplacingAppend || !selectedTripwirePage}
                         onClick={() => {
+                          if (!selectedTripwirePage || !currentHookOverride) return;
                           setNewAdInjectMode('entry_hook');
                           onRegenerateCampaignAd(
                             selectedCampaign,
@@ -632,26 +558,25 @@ export const AutoAdsCampaignsPanel: React.FC<AutoAdsCampaignsPanelProps> = ({
                       ) || selectedTripwirePage;
                     const slotTargetUrlPreview =
                       selectedSlotMode === 'entry_hook'
-                        ? buildTripwireDestinationUrl(slotChosenTripwirePage, selectedCampaign.landingUrl)
+                        ? buildTripwireDestinationUrl(slotChosenTripwirePage)
                         : selectedCampaign.landingUrl;
                     const slotHookOverride: CampaignHookOverrideInput | undefined =
-                      selectedSlotMode === 'entry_hook'
+                      selectedSlotMode === 'entry_hook' && slotChosenTripwirePage
                         ? {
                             entryProductName:
-                              slotChosenTripwirePage?.tripwireConfig?.entryProductName ||
-                              inlineHookName.trim(),
+                              slotChosenTripwirePage.tripwireConfig?.entryProductName || '',
                             entryProductDescription:
-                              slotChosenTripwirePage?.tripwireConfig?.entryProductDescription ||
-                              inlineHookDesc.trim(),
+                              slotChosenTripwirePage.tripwireConfig?.entryProductDescription || '',
                             entryPriceGs: Number(
-                              slotChosenTripwirePage?.tripwireConfig?.entryPriceGs ||
-                                inlineHookPrice ||
-                                0
+                              slotChosenTripwirePage.tripwireConfig?.entryPriceGs || 0
                             ),
-                            entryImageUrl: slotChosenTripwirePage?.tripwireConfig?.entryImageUrl || '',
-                            targetProductId: slotChosenTripwirePage?.id || undefined,
-                            targetProductSlug: slotChosenTripwirePage?.slug || undefined,
-                            targetProductName: slotChosenTripwirePage?.nombre || undefined,
+                            entryImageUrl:
+                              slotChosenTripwirePage.tripwireConfig?.entryImageUrl ||
+                              slotChosenTripwirePage.tripwireConfig?.entryProductImage ||
+                              '',
+                            targetProductId: slotChosenTripwirePage.id,
+                            targetProductSlug: slotChosenTripwirePage.slug,
+                            targetProductName: slotChosenTripwirePage.nombre,
                             targetLandingUrl: slotTargetUrlPreview
                           }
                         : undefined;

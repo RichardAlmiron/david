@@ -5066,12 +5066,15 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                 const firstTargetIdx = Array.isArray(parsed.targetIndices) && parsed.targetIndices.length > 0
                   ? Number(parsed.targetIndices[0])
                   : -1;
+                const explicitCardMode = firstTargetIdx >= 0 ? cardModesMap[firstTargetIdx] : undefined;
                 const targetSlotUsesHook =
                   canUseHookImg &&
-                  (imgAdMode === 'entry_hook' ||
-                    (firstTargetIdx >= 0 && cardModesMap[firstTargetIdx] === 'entry_hook') ||
-                    (firstTargetIdx >= 0 && inputBriefs[firstTargetIdx]?.isEntryHookAd === true) ||
-                    (imgAdMode === 'hybrid' && firstTargetIdx >= 4));
+                  (explicitCardMode === 'entry_hook'
+                    ? true
+                    : explicitCardMode === 'standard'
+                      ? false
+                      : imgAdMode === 'entry_hook' ||
+                        (firstTargetIdx >= 0 && inputBriefs[firstTargetIdx]?.isEntryHookAd === true));
                 if (targetSlotUsesHook) {
                   const ePrice = Number(hookCfgImg.entryPriceGs);
                   product = {
@@ -5448,9 +5451,17 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     : {};
 
                 const onlyImagesMode = Boolean(parsed.onlyImagesMode);
+                const slotIsReelMap: Record<number, boolean> =
+                  parsed.slotIsReel && typeof parsed.slotIsReel === 'object' ? parsed.slotIsReel : {};
 
                 const generateOneCreativeViaOpenRouter = async (promptText: string, idx: number) => {
-                  const isReel = idx >= 4 && !onlyImagesMode;
+                  const isReel =
+                    !onlyImagesMode &&
+                    (typeof slotIsReelMap[idx] === 'boolean'
+                      ? slotIsReelMap[idx]
+                      : Array.isArray(parsed.creativeBriefs) && parsed.creativeBriefs[idx]?.type === 'reel_9x16'
+                        ? true
+                        : typeof parsed.slotIsReel !== 'object' && idx >= 4 && idx < 6);
                   const finalPrompt = sanitizePromptForOpenAiImages(promptText);
 
                   // Si el interruptor de Reels está activo y es Anuncio #5 o #6, se crea el Video Reel MP4 de 15s con google/gemini-omni-1.2-flash
@@ -5547,7 +5558,9 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
 
                 // Si onlyImagesMode está activo, los 6 anuncios pueden generarse como imágenes; de lo contrario #1-#4 son imágenes y #5-#6 son Reels
                 const requestedIndices: number[] = Array.isArray(parsed.targetIndices) && parsed.targetIndices.length > 0
-                  ? parsed.targetIndices.map((n: any) => Number(n)).filter((n: number) => n >= 0 && n < 6)
+                  ? parsed.targetIndices
+                      .map((n: any) => Number(n))
+                      .filter((n: number) => Number.isFinite(n) && n >= 0 && n < 30)
                   : onlyImagesMode
                   ? [0, 1, 2, 3, 4, 5]
                   : [0, 1, 2, 3];
@@ -5559,7 +5572,10 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                     Array.isArray(parsed.creativeBriefs) && typeof parsed.creativeBriefs[idx]?.aiImagePrompt === 'string'
                       ? parsed.creativeBriefs[idx].aiImagePrompt.trim()
                       : '';
-                  const chosenPrompt = briefPrompt.length > 20 ? briefPrompt : universalArchetypePrompts[idx];
+                  const chosenPrompt =
+                    briefPrompt.length > 20
+                      ? briefPrompt
+                      : universalArchetypePrompts[idx % universalArchetypePrompts.length];
                   const oneResult = await generateOneCreativeViaOpenRouter(chosenPrompt, idx);
                   if (oneResult.imageUrl || oneResult.videoUrl) {
                     patchAutoAdsWorkspaceMedia(product, idx, {
@@ -6008,7 +6024,9 @@ IMPORTANTE: El array "creativeBriefs" DEBE contener exactamente los 6 anuncios c
                   isImagePrompt: true
                 });
 
-                const isReel = adIndex >= 4 && !onlyImagesMode;
+                const isReel =
+                  !onlyImagesMode &&
+                  (parsed.isReel !== undefined ? Boolean(parsed.isReel) : adIndex >= 4 && adIndex < 6);
                 let newGeneratedImageUrl = '';
                 let newGeneratedVideoUrl = '';
                 let singleImgError = '';
@@ -10346,12 +10364,17 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: serverPort,
+    strictPort: !isRailwayEnv,
     allowedHosts: true,
     watch: {
       ignored: [
         '**/data/**',
         '**/database/**',
         '**/wa_chats.json',
+        '**/wa_sent_protos_cache.json',
+        '**/meta_comments_state.json',
+        '**/entry_events*.json',
+        '**/bun.lock',
         '**/seller_agent_chats.json',
         '**/pedidos.json',
         '**/store_config.json',

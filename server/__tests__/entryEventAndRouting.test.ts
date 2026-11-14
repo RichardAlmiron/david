@@ -24,6 +24,13 @@ import {
   ensureProductHasMandatoryTripwire
 } from '../../src/data/noeluxVisualPreset.ts';
 import { generateUniversalVisualProductPage } from '../visualLandingGenerator.ts';
+import {
+  buildPlannedSlotSpecs,
+  clampAdsCount,
+  computePlannedAdSetCounts,
+  filterGenuineTripwirePages,
+  resolveDefaultSlotMode
+} from '../../src/utils/autoAdsSlotPlanner.ts';
 
 const PRODUCT_WITH_ENTRY = {
   id: 'prod-navidad-01',
@@ -255,7 +262,7 @@ test('mixVoiceWithBackgroundMusic respeta preset none y mezcla pista BGM real co
   assert.ok(path.resolve(process.cwd(), 'server/entryEventEngine.ts'));
 });
 
-test('upgradeDefaultNoeluxWithVisualPreset revierte prod-noelux-01 a su página HTML original eliminando visualLanding', () => {
+test('upgradeDefaultNoeluxWithVisualPreset revierte prod-noelux-01 a página Estándar clásica sin visualLanding ni tripwireConfig', () => {
   const legacyNoeluxWithVisual = {
     id: 'prod-noelux-01',
     nombre: 'Noelux™ Proyector Navideño 12 Diseños',
@@ -265,15 +272,17 @@ test('upgradeDefaultNoeluxWithVisualPreset revierte prod-noelux-01 a su página 
       enabled: true,
       mode: 'sober_graphic_3sheet',
       sheets: [{ id: 'noelux_sheet_1', imageUrl: '/assets/visual-pages/noelux-sheet-1.jpg' }]
+    },
+    tripwireConfig: {
+      enabled: true,
+      entryProductName: 'Guirnalda LED',
+      entryPriceGs: 20000
     }
   };
   const reverted = upgradeDefaultNoeluxWithVisualPreset(legacyNoeluxWithVisual) as any;
   assert.equal(reverted.wa, '595973532550');
   assert.equal(reverted.visualLanding, undefined);
-  assert.equal(reverted.tripwireConfig?.enabled, true);
-  assert.equal(reverted.tripwireConfig?.entryPriceGs, 20000);
-  assert.equal(reverted.tripwireConfig?.deliveryFeeGs, 40000);
-  assert.equal(reverted.tripwireConfig?.backgroundMusicPreset, 'warm_ambient');
+  assert.equal(reverted.tripwireConfig, undefined);
 
   const otherProd = {
     id: 'prod-salud-99',
@@ -531,5 +540,98 @@ test('replacePublishedAdInMeta inyectando Tripwire en campaña estándar publica
     'https://autoads360.up.railway.app/?p=combo-navidad-tripwire&modo=entrada'
   );
 });
+
+test('filterGenuineTripwirePages excluye a Noelux Estándar y páginas principales puras', () => {
+  const cleanedNoelux = upgradeDefaultNoeluxWithVisualPreset({
+    id: 'prod-noelux-01',
+    nombre: 'Noelux™ Proyector Navideño 12 Diseños',
+    slug: 'noelux-proyector-12-disenos',
+    tripwireConfig: { enabled: true, entryProductName: 'Guirnalda LED', entryPriceGs: 20000 }
+  });
+  const principalOnly = {
+    id: 'prod-auriculares',
+    nombre: 'Auriculares Pro',
+    slug: 'auriculares-pro'
+  };
+  const incompleteTripwire = {
+    id: 'prod-incomplete',
+    nombre: 'Incompleto',
+    slug: 'incompleto',
+    tripwireConfig: { enabled: true, entryProductName: '   ', entryPriceGs: 0 }
+  };
+  const genuineTripwire = {
+    id: 'prod-freidora-tw',
+    nombre: 'Freidora 6L',
+    slug: 'freidora-6l',
+    tripwireConfig: {
+      enabled: true,
+      entryProductName: 'Set 100 Papeles Antiadherentes',
+      entryPriceGs: 20000
+    }
+  };
+
+  const result = filterGenuineTripwirePages([
+    cleanedNoelux,
+    principalOnly,
+    incompleteTripwire,
+    genuineTripwire
+  ] as any);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, 'prod-freidora-tw');
+});
+
+test('autoAdsSlotPlanner calcula cantidades libres (sin prefijos 4+2) y enruta cada slot a su URL exacta', () => {
+  assert.equal(clampAdsCount(0, 4), 1);
+  assert.equal(clampAdsCount(99, 4), 12);
+  assert.equal(clampAdsCount('abc', 3), 3);
+
+  // Caso 1: Mixto libre 3 Estándar + 5 Tripwire = 8 anuncios en total
+  const counts35 = computePlannedAdSetCounts('hybrid', 3, 5);
+  assert.deepEqual(counts35, { standardCount: 3, tripwireCount: 5, totalCount: 8 });
+
+  const specs35 = buildPlannedSlotSpecs({
+    strategyMode: 'hybrid',
+    standardAdsCount: 3,
+    tripwireAdsCount: 5,
+    onlyImagesMode: false
+  });
+  assert.equal(specs35.length, 8);
+  assert.equal(specs35.filter(s => s.slotMode === 'standard').length, 3);
+  assert.equal(specs35.filter(s => s.slotMode === 'entry_hook').length, 5);
+  assert.equal(specs35.every(s => s.isReel === false), true, 'En Mixto todos son imágenes directas por defecto');
+
+  // Caso 2: Mixto libre 4 Estándar + 1 Tripwire = 5 anuncios
+  const counts41 = computePlannedAdSetCounts('hybrid', 4, 1);
+  assert.deepEqual(counts41, { standardCount: 4, tripwireCount: 1, totalCount: 5 });
+  assert.equal(resolveDefaultSlotMode(3, 'hybrid', counts41.standardCount), 'standard');
+  assert.equal(resolveDefaultSlotMode(4, 'hybrid', counts41.standardCount), 'entry_hook');
+
+  // Enrutamiento cruzado: cada slot Estándar a ?p=<std>, cada slot Tripwire a ?p=<tw>&modo=entrada
+  const stdLandingUrl = 'https://autoads360.up.railway.app/?p=noelux-proyector-12-disenos';
+  for (const slot of specs35) {
+    const isTw = slot.slotMode === 'entry_hook';
+    const dest = resolveCreativeTargetLandingUrl({
+      campaignLandingUrl: stdLandingUrl,
+      creative: isTw
+        ? {
+            isEntryHookAd: true,
+            targetProductSlug: 'freidora-6l',
+            targetLandingUrl: 'https://autoads360.up.railway.app/?p=freidora-6l&modo=entrada'
+          }
+        : {
+            isEntryHookAd: false,
+            targetProductSlug: 'noelux-proyector-12-disenos',
+            targetLandingUrl: stdLandingUrl
+          }
+    });
+    if (isTw) {
+      assert.equal(dest, 'https://autoads360.up.railway.app/?p=freidora-6l&modo=entrada');
+    } else {
+      assert.equal(dest, stdLandingUrl);
+    }
+  }
+});
+
 
 

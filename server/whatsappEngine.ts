@@ -11433,34 +11433,45 @@ export function autoBootWhatsAppIfSessionExists() {
 
       if (!(globalThis as any).__noeluxShutdownHookRegistered) {
         (globalThis as any).__noeluxShutdownHookRegistered = true;
-        const flushBeforeExit = async (signalName: string) => {
-          console.log(`[NASA Shutdown] ⚠️ Señal ${signalName} recibida — iniciando relevo atómico (máx 8.5s)...`);
-          try {
-            await Promise.race([
-              yieldToNewerDeployLeader(signalName),
-              new Promise(resolve => setTimeout(resolve, 8500))
-            ]);
+        if (isProductionRuntime()) {
+          const flushBeforeExit = async (signalName: string) => {
+            console.log(`[NASA Shutdown] ⚠️ Señal ${signalName} recibida — iniciando relevo atómico (máx 8.5s)...`);
             try {
-              await insertOrUpdateSupabaseCodigo(
-                'WAHEART-beat',
-                JSON.stringify({
-                  alive: false,
-                  instanceId: MY_INSTANCE_ID,
-                  bootEpoch: MY_BOOT_EPOCH,
-                  pid: process.pid,
-                  shutdownAt: new Date().toISOString(),
-                  runtime: isProductionRuntime() ? 'production' : 'dev'
-                })
-              );
+              await Promise.race([
+                yieldToNewerDeployLeader(signalName),
+                new Promise(resolve => setTimeout(resolve, 8500))
+              ]);
+              try {
+                await insertOrUpdateSupabaseCodigo(
+                  'WAHEART-beat',
+                  JSON.stringify({
+                    alive: false,
+                    instanceId: MY_INSTANCE_ID,
+                    bootEpoch: MY_BOOT_EPOCH,
+                    pid: process.pid,
+                    shutdownAt: new Date().toISOString(),
+                    runtime: 'production'
+                  })
+                );
+              } catch {}
             } catch {}
-          } catch {}
-        };
-        process.once('SIGTERM', () => {
-          flushBeforeExit('SIGTERM').finally(() => process.exit(0));
-        });
-        process.once('SIGINT', () => {
-          flushBeforeExit('SIGINT').finally(() => process.exit(0));
-        });
+          };
+          process.once('SIGTERM', () => {
+            flushBeforeExit('SIGTERM').finally(() => process.exit(0));
+          });
+          process.once('SIGINT', () => {
+            flushBeforeExit('SIGINT').finally(() => process.exit(0));
+          });
+        } else {
+          const fastDevExit = () => {
+            try {
+              flushSentProtoCacheNow();
+            } catch {}
+            process.exit(0);
+          };
+          process.once('SIGTERM', fastDevExit);
+          process.once('SIGINT', fastDevExit);
+        }
       }
     }
   } catch {}
