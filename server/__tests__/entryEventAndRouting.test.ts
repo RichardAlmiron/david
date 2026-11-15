@@ -22,6 +22,8 @@ import {
   buildOrderFormPackageCopySpec,
   renderOrderFormPackageBannerPng
 } from '../orderFormBannerRenderer.ts';
+import { validateWhatsAppPhoneFormat } from '../../src/utils/whatsappPhoneValidation.ts';
+import { verifyWhatsAppPhoneLive } from '../whatsappEngine.ts';
 import {
   replacePublishedAdInMeta,
   resolveCreativeTargetLandingUrl
@@ -1505,12 +1507,43 @@ test('Formulario VIP: banner pre-generado por producto sin texto prohibido, guí
   }
 
   const orderFormSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/OrderForm.tsx'), 'utf8');
-  assert.ok(orderFormSrc.includes('data-testid="orderform-vip-steps-card"'));
-  assert.ok(orderFormSrc.includes('/api/order-form/package-banner.png'));
-  assert.ok(orderFormSrc.includes('/assets/form-step1-nombre-guide.png'));
-  assert.ok(orderFormSrc.includes('/assets/form-step2-whatsapp-guide.png'));
-  assert.ok(orderFormSrc.includes('/assets/form-step3-entrega-guide.png'));
-  assert.ok(orderFormSrc.includes('/assets/form-confirm-order-cta.png'));
+  assert.ok(orderFormSrc.includes('data-testid="step-card-nombre"'));
+  assert.ok(orderFormSrc.includes('data-testid="step-card-whatsapp"'));
+  assert.ok(orderFormSrc.includes('data-testid="step-card-ubicacion"'));
+  assert.ok(orderFormSrc.includes('Resumen de tu pedido'));
+  assert.ok(orderFormSrc.includes('data-testid="orderform-visible-total"'));
+  assert.ok(orderFormSrc.includes("isEntryOnly ? 'Precio del producto' : 'Total al recibir'"));
+  assert.equal(orderFormSrc.includes('Precio de este producto'), false, 'En tripwire no debe repetir un segundo precio abajo');
+  assert.ok(orderFormSrc.includes('Precio unitario de este producto'));
+  assert.ok(orderFormSrc.includes('Cantidad que estás pidiendo'));
+  assert.ok(orderFormSrc.includes('Equivale a {selectedQuantity}'));
+  assert.ok(orderFormSrc.includes('{!isEntryOnly && ('), 'En tripwire (entry_only) debe ocultar cantidades, cálculo dinámico y fila de Envío a domicilio');
+  assert.equal(orderFormSrc.includes('Se coordina por WhatsApp'), false, 'En tripwire no debe dar pistas sobre cobro o coordinación de delivery');
+  assert.equal(orderFormSrc.includes('Ver detalle del monto'), false, 'No debe ocultar montos en un botón desplegable');
+  assert.equal(orderFormSrc.includes('deliveryFeeGs || 40000'), false, 'No debe inventar recargo automático de 40.000');
+  assert.ok(orderFormSrc.includes('useState<boolean>(false)'), 'Debe iniciar predeterminadamente en modo claro');
+  assert.ok(orderFormSrc.includes('data-testid="toggle-form-theme"'));
+  assert.ok(orderFormSrc.includes('data-testid="theme-toggle-tooltip"'));
+  assert.ok(orderFormSrc.includes('MAX_EXACT_GPS_ACCURACY_METERS = 10'), 'Auto-verificación GPS debe exigir mínimo 10 metros exactos');
+  assert.ok(orderFormSrc.includes('verifyExactGpsReading'));
+  assert.ok(orderFormSrc.includes('data-testid="gps-activation-popup"'));
+  assert.ok(orderFormSrc.includes('data-testid="gps-live-calibration-bar"'));
+  assert.equal(orderFormSrc.includes('enableHighAccuracy: false'), false, 'GPS no debe usar modo impreciso de antena/IP');
+  assert.ok(orderFormSrc.includes('Tocá el botón azul de abajo para enviar tu información'));
+  assert.ok(orderFormSrc.includes('disabled={!isFormReady || submitting}'));
+  assert.equal(
+    /\btruncate\b|line-clamp-|text-ellipsis/.test(orderFormSrc),
+    false,
+    'Ningún texto en OrderForm debe recortarse con puntos suspensivos (...)'
+  );
+  assert.ok(orderFormSrc.includes('Confirmar pedido ahora'));
+
+  // Todas las imágenes de pasos, banner de paquete y botón gráfico están desconectadas del formulario Shopify
+  assert.equal(orderFormSrc.includes('/api/order-form/package-banner.png'), false);
+  assert.equal(orderFormSrc.includes('/assets/form-step1-nombre-guide.png'), false);
+  assert.equal(orderFormSrc.includes('/assets/form-step2-whatsapp-guide.png'), false);
+  assert.equal(orderFormSrc.includes('/assets/form-step3-entrega-guide.png'), false);
+  assert.equal(orderFormSrc.includes('/assets/form-confirm-order-cta.png'), false);
   assert.ok(orderFormSrc.includes('smoothCenterElement'));
   assert.equal(/solicitud individual/i.test(orderFormSrc), false, 'OrderForm no debe mostrar Solicitud Individual');
   assert.equal(
@@ -1519,22 +1552,44 @@ test('Formulario VIP: banner pre-generado por producto sin texto prohibido, guí
     'El botón de confirmación no debe renderizar precio en HTML'
   );
 
-  // Verificar que los assets gráficos existen en disco
-  for (const rel of [
-    'public/assets/form-confirm-order-cta.png',
-    'public/assets/form-step1-nombre-guide.png',
-    'public/assets/form-step2-whatsapp-guide.png',
-    'public/assets/form-step3-entrega-guide.png'
-  ]) {
-    const abs = path.resolve(process.cwd(), rel);
-    assert.ok(fs.existsSync(abs) && fs.statSync(abs).size > 5000, `Debe existir asset gráfico ${rel}`);
-  }
+  // Sin selector redundante de método de pago (QR, tarjeta, etc.)
+  assert.equal(orderFormSrc.includes('¿Cómo pagás cuando te entregamos?'), false);
+  assert.equal(orderFormSrc.includes('QR o Transferencia en puerta'), false);
+  assert.equal(orderFormSrc.includes('Tarjeta con POS al repartidor'), false);
 
-  // Verificar endpoint y hook de pre-generación en creación de producto
-  const viteSrc = fs.readFileSync(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8');
-  assert.ok(viteSrc.includes('/api/order-form/package-banner.png'));
+  // Verificar que visualLandingGenerator ya no pre-genera imágenes de formulario
   const genSrc = fs.readFileSync(path.resolve(process.cwd(), 'server/visualLandingGenerator.ts'), 'utf8');
-  assert.ok(genSrc.includes('preRenderOrderFormBannersForProduct'));
+  assert.equal(genSrc.includes('preRenderOrderFormBannersForProduct'), false);
+
+  // Verificar integración de autoverificación WhatsApp en OrderForm
+  assert.ok(orderFormSrc.includes('/api/whatsapp/verify-phone'));
+  assert.ok(orderFormSrc.includes('whatsapp-verify-feedback'));
+});
+
+test('WhatsApp phone validation detects landlines, fake sequences, bad prefixes and normalizes valid Paraguay mobiles', async () => {
+  const valid1 = validateWhatsAppPhoneFormat('0981 452 890');
+  assert.equal(valid1.valid, true);
+  assert.equal(valid1.normalizedPhone, '595981452890');
+
+  const validWithZero = validateWhatsAppPhoneFormat('+595 0973 532 550');
+  assert.equal(validWithZero.valid, true);
+  assert.equal(validWithZero.normalizedPhone, '595973532550');
+
+  const landline = validateWhatsAppPhoneFormat('021 555 444');
+  assert.equal(landline.valid, false);
+  assert.equal(landline.reasonCode, 'landline');
+
+  const fakeSeq = validateWhatsAppPhoneFormat('0981 123 456');
+  assert.equal(fakeSeq.valid, false);
+  assert.equal(fakeSeq.reasonCode, 'fake_sequence');
+
+  const badPrefix = validateWhatsAppPhoneFormat('0951 452 890');
+  assert.equal(badPrefix.valid, false);
+  assert.equal(badPrefix.reasonCode, 'invalid_prefix');
+
+  const liveInvalid = await verifyWhatsAppPhoneLive('0981 000 000');
+  assert.equal(liveInvalid.validFormat, false);
+  assert.equal(liveInvalid.status, 'invalid_format');
 });
 
 

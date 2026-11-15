@@ -1,25 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Truck,
   User,
   Phone,
   MapPin,
-  CreditCard,
-  Banknote,
-  QrCode,
   CheckCircle2,
   X,
-  PackageCheck,
-  Sparkles,
   Crosshair,
   Plus,
   Minus,
   Pencil,
   Lock,
-  Unlock,
-  ShieldCheck,
-  ArrowDown,
-  ArrowRight
+  ShoppingBag,
+  Sun,
+  Moon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useStore } from '../context/StoreContext';
@@ -30,6 +23,7 @@ import {
   inferParaguayDepartmentFromCity,
   type OrderGpsFuente
 } from '../utils/paraguayGeo';
+import { validateWhatsAppPhoneFormat } from '../utils/whatsappPhoneValidation';
 
 const DEPARTAMENTOS_PY = [
   'Central',
@@ -156,7 +150,6 @@ export const OrderForm: React.FC<{
   const [pisoDepartamento, setPisoDepartamento] = useState('');
   const [tieneRecepcion, setTieneRecepcion] = useState<'si_recepcionista' | 'no_personalmente'>('si_recepcionista');
 
-  const [pago, setPago] = useState('Efectivo al recibir');
   const [submitting, setSubmitting] = useState(false);
   const [submittingPhase, setSubmittingPhase] = useState<'idle' | 'gps' | 'sending'>('idle');
   const [submitCountdown, setSubmitCountdown] = useState<number>(0);
@@ -164,12 +157,14 @@ export const OrderForm: React.FC<{
   const [orderComplete, setOrderComplete] = useState<any | null>(null);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [validationNotice, setValidationNotice] = useState<string>('');
+  const [validationField, setValidationField] = useState<'nombre' | 'celular' | 'ciudad' | 'barrio' | 'calle' | null>(null);
   const [leadEventFired, setLeadEventFired] = useState(false);
-  const [bannerImgError, setBannerImgError] = useState<boolean>(false);
-  const [step1GuideError, setStep1GuideError] = useState<boolean>(false);
-  const [step2GuideError, setStep2GuideError] = useState<boolean>(false);
-  const [step3GuideError, setStep3GuideError] = useState<boolean>(false);
-  const [confirmBtnImgError, setConfirmBtnImgError] = useState<boolean>(false);
+  const [waVerifyState, setWaVerifyState] = useState<{
+    status: 'idle' | 'checking' | 'verified_whatsapp' | 'not_on_whatsapp' | 'invalid_format' | 'format_only';
+    checkedPhone: string;
+    message?: string;
+  }>({ status: 'idle', checkedPhone: '' });
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
   // Optional 1-Touch GPS Helper State (Never blocks submission!)
   const [gpsLat, setGpsLat] = useState<number | null>(null);
@@ -178,6 +173,12 @@ export const OrderForm: React.FC<{
   const [gpsConfirmado, setGpsConfirmado] = useState<boolean>(false);
   const [gpsFuente, setGpsFuente] = useState<OrderGpsFuente | undefined>(undefined);
   const [gpsLoading, setGpsLoading] = useState<boolean>(false);
+  const [gpsLiveAccuracy, setGpsLiveAccuracy] = useState<number | null>(null);
+  const [gpsBestCoarseAccuracy, setGpsBestCoarseAccuracy] = useState<number | null>(null);
+  const [gpsPopupOpen, setGpsPopupOpen] = useState<boolean>(false);
+  const [gpsPopupStep, setGpsPopupStep] = useState<'activate' | 'return_retry'>('activate');
+  const [gpsPopupReason, setGpsPopupReason] = useState<'gps_off' | 'permission_denied' | 'coarse_only' | 'timeout' | 'unsupported'>('gps_off');
+  const [gpsReturnedFromSettings, setGpsReturnedFromSettings] = useState<boolean>(false);
   const [gpsDetectedAddress, setGpsDetectedAddress] = useState<string>('');
   const [gpsNotice, setGpsNotice] = useState<string>('');
   const [mapZoom, setMapZoom] = useState<number>(18);
@@ -209,6 +210,7 @@ export const OrderForm: React.FC<{
   const watchIdRef = useRef<number | null>(null);
   const watchTimeoutRef = useRef<number | null>(null);
   const bestAccuracyRef = useRef<number>(999999);
+  const gpsAttemptIdRef = useRef<number>(0);
 
   // Intelligent auto-scroll helper: ONLY called on blur (when finished & leaving field) or explicit focus, NEVER mid-typing
   const smoothCenterElement = (el: HTMLElement | null) => {
@@ -234,13 +236,17 @@ export const OrderForm: React.FC<{
   const hasEntryHook = Boolean(currentProductPage?.tripwireConfig?.enabled && currentProductPage?.tripwireConfig?.entryProductName);
   const isEntryOnly = hasEntryHook && purchasePath === 'entry_only';
   const entryOfferCfg = currentProductPage?.tripwireConfig;
+  const resolvedEntryPrice = Number(
+    entryOfferCfg?.entryPriceGs ??
+      entryOfferCfg?.entryProductPriceGs ??
+      currentProductPage?.precios?.[1] ??
+      20000
+  );
   const principalTotal =
     currentProductPage?.precios?.[effectivePack] ||
     config.lote[effectivePack] ||
     189000;
-  const total = isEntryOnly
-    ? Number(entryOfferCfg?.entryPriceGs || 20000)
-    : principalTotal;
+  const total = isEntryOnly ? resolvedEntryPrice : principalTotal;
   const entryProductDisplayName = String(
     entryOfferCfg?.entryProductName || targetProductName
   ).trim();
@@ -262,10 +268,6 @@ export const OrderForm: React.FC<{
     gpsLat !== null && gpsLng !== null
       ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${gpsLat.toFixed(6)},${gpsLng.toFixed(6)}`
       : '';
-
-  useEffect(() => {
-    setBannerImgError(false);
-  }, [targetProductId, isEntryOnly, effectivePack, total]);
 
   // Asegurar limpieza de cualquier borrador antiguo en localStorage (sin persistencia en navegador)
   useEffect(() => {
@@ -291,6 +293,66 @@ export const OrderForm: React.FC<{
     }
   }, [nombre, celular, leadEventFired, currentProductPage, config.pixelId, effectivePack, total, departamento]);
 
+  // Autoverificación en tiempo real del número de WhatsApp (formato Paraguay + consulta en vivo vía Baileys onWhatsApp)
+  useEffect(() => {
+    const rawDigits = celular.replace(/\D/g, '');
+    if (!rawDigits) {
+      setWaVerifyState({ status: 'idle', checkedPhone: '' });
+      return;
+    }
+
+    const fmt = validateWhatsAppPhoneFormat(celular);
+    if (!fmt.valid) {
+      if (rawDigits.length >= 9 || fmt.reasonCode === 'landline' || fmt.reasonCode === 'fake_sequence') {
+        setWaVerifyState({
+          status: 'invalid_format',
+          checkedPhone: celular,
+          message: fmt.message
+        });
+      } else {
+        setWaVerifyState({ status: 'idle', checkedPhone: '' });
+      }
+      return;
+    }
+
+    const controller = new AbortController();
+    setWaVerifyState({
+      status: 'checking',
+      checkedPhone: fmt.normalizedPhone
+    });
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch('/api/whatsapp/verify-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({ phone: celular })
+        });
+        if (!res.ok) {
+          setWaVerifyState({ status: 'format_only', checkedPhone: fmt.normalizedPhone });
+          return;
+        }
+        const data = await res.json();
+        if (controller.signal.aborted) return;
+        setWaVerifyState({
+          status: data?.status || 'format_only',
+          checkedPhone: data?.normalizedPhone || fmt.normalizedPhone,
+          message: data?.message
+        });
+      } catch {
+        if (!controller.signal.aborted) {
+          setWaVerifyState({ status: 'format_only', checkedPhone: fmt.normalizedPhone });
+        }
+      }
+    }, 420);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [celular]);
+
   useEffect(() => {
     return () => {
       if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -305,32 +367,85 @@ export const OrderForm: React.FC<{
     };
   }, []);
 
-  // Pre-calentamiento silencioso de GPS cuando el permiso ya está concedido (cero popups)
+  // Paraguay geo-bounds + max acceptable hardware GPS accuracy:
+  // Strict <= 10m auto-verification so 1000m/2000m cell-tower or IP approximations NEVER pass as exact GPS.
+  const MAX_EXACT_GPS_ACCURACY_METERS = 10;
+  const isWithinParaguayGpsBounds = (lat: number, lng: number): boolean =>
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -28.0 &&
+    lat <= -19.0 &&
+    lng >= -63.0 &&
+    lng <= -54.0 &&
+    !(lat === 0 && lng === 0);
+
+  const verifyExactGpsReading = (
+    lat: number,
+    lng: number,
+    rawAcc: unknown
+  ): { valid: boolean; cleanLat: number; cleanLng: number; roundedAcc: number } => {
+    const cleanLat = Number(Number(lat).toFixed(6));
+    const cleanLng = Number(Number(lng).toFixed(6));
+    const parsedAcc = Number(rawAcc);
+    const roundedAcc =
+      Number.isFinite(parsedAcc) && parsedAcc > 0
+        ? Math.max(1, Math.round(parsedAcc))
+        : 99999;
+    const valid =
+      isWithinParaguayGpsBounds(cleanLat, cleanLng) &&
+      roundedAcc > 0 &&
+      roundedAcc <= MAX_EXACT_GPS_ACCURACY_METERS;
+    return { valid, cleanLat, cleanLng, roundedAcc };
+  };
+
+  // Detect return from device Location/GPS settings while pop-up is waiting in Step 2
+  useEffect(() => {
+    if (!gpsPopupOpen || gpsPopupStep !== 'return_retry') return;
+    const markReturned = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        setGpsReturnedFromSettings(true);
+      }
+    };
+    window.addEventListener('focus', markReturned);
+    document.addEventListener('visibilitychange', markReturned);
+    return () => {
+      window.removeEventListener('focus', markReturned);
+      document.removeEventListener('visibilitychange', markReturned);
+    };
+  }, [gpsPopupOpen, gpsPopupStep]);
+
+  // Pre-calentamiento silencioso de GPS SOLO si ya tiene permiso concedido Y precisión satelital real (<= 10m)
   useEffect(() => {
     if (gpsConfirmado || gpsLat !== null || orderComplete) return;
-    const step2Ready = nombre.trim().length >= 3 && celular.replace(/\D/g, '').length >= 8;
-    if (!step2Ready || typeof navigator === 'undefined' || !navigator.geolocation) return;
+    const step1Ready = nombre.trim().length >= 3;
+    if (!step1Ready || typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     let cancelled = false;
     const warmUpPosition = () => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           if (cancelled) return;
-          const cleanLat = Number(pos.coords.latitude.toFixed(6));
-          const cleanLng = Number(pos.coords.longitude.toFixed(6));
-          const roundedAcc = Math.max(3, Math.round(pos.coords.accuracy || 40));
-          setGpsLat(cleanLat);
-          setGpsLng(cleanLng);
-          setGpsAccuracy(roundedAcc);
+          const verified = verifyExactGpsReading(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            pos.coords.accuracy
+          );
+          if (!verified.valid) {
+            // Rechaza coordenadas IP/antena (>10m) para nunca envenenar el pedido con ubicación imprecisa
+            return;
+          }
+          setGpsLat(verified.cleanLat);
+          setGpsLng(verified.cleanLng);
+          setGpsAccuracy(verified.roundedAcc);
           setGpsConfirmado(true);
           setGpsFuente('gps_dispositivo');
           setMapLocked(true);
-          reverseGeocodeCoords(cleanLat, cleanLng);
+          reverseGeocodeCoords(verified.cleanLat, verified.cleanLng);
         },
         () => {
           // Silent ignore
         },
-        { enableHighAccuracy: false, timeout: 4500, maximumAge: 300000 }
+        { enableHighAccuracy: true, timeout: 6500, maximumAge: 0 }
       );
     };
 
@@ -470,10 +585,10 @@ export const OrderForm: React.FC<{
     }
   };
 
-  // Synchronous user-gesture GPS acquisition for the Dual-Function Submit Button:
-  // Captures the sharpest high-accuracy GPS fix within `timeoutMs` and NEVER throws or blocks lead submission if denied.
+  // Captura síncrona de alta precisión al enviar el pedido:
+  // Jamás acepta coordenadas IP/antena (> 200m) ni fuera de Paraguay como GPS exacto.
   const captureLiveGeolocationForSubmit = (
-    timeoutMs = 4600
+    timeoutMs = 5200
   ): Promise<{ lat: number; lng: number; acc: number } | null> => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       return Promise.resolve(null);
@@ -500,22 +615,31 @@ export const OrderForm: React.FC<{
       };
 
       const onPosition = (pos: GeolocationPosition) => {
-        const cleanLat = Number(pos.coords.latitude.toFixed(6));
-        const cleanLng = Number(pos.coords.longitude.toFixed(6));
-        const roundedAcc = Math.max(3, Math.round(pos.coords.accuracy || 40));
+        const verified = verifyExactGpsReading(
+          pos.coords.latitude,
+          pos.coords.longitude,
+          pos.coords.accuracy
+        );
 
-        if (!bestFix || roundedAcc <= bestFix.acc) {
-          bestFix = { lat: cleanLat, lng: cleanLng, acc: roundedAcc };
+        if (!verified.valid) {
+          // Descartar lecturas de antena/IP imprecisas (>10m) para nunca enviar un enlace equivocado como confirmado
+          return;
         }
 
-        // Resolve immediately as soon as we lock a crisp rooftop/street-level GPS fix (<= 25m)
-        if (roundedAcc <= 25) {
+        if (!bestFix || verified.roundedAcc <= bestFix.acc) {
+          bestFix = {
+            lat: verified.cleanLat,
+            lng: verified.cleanLng,
+            acc: verified.roundedAcc
+          };
+        }
+
+        if (verified.roundedAcc <= MAX_EXACT_GPS_ACCURACY_METERS) {
           finish(bestFix);
         }
       };
 
       const maybeFinishOnError = (err: GeolocationPositionError) => {
-        // Code 1 = PERMISSION_DENIED -> abort immediately without stalling
         if (err && err.code === 1) {
           finish(bestFix);
           return;
@@ -530,7 +654,6 @@ export const OrderForm: React.FC<{
       }, timeoutMs);
 
       try {
-        // Fast cached/Wi-Fi/cell fix resolves in <150ms if browser/device has one
         navigator.geolocation.getCurrentPosition(
           onPosition,
           (err) => {
@@ -538,9 +661,9 @@ export const OrderForm: React.FC<{
             maybeFinishOnError(err);
           },
           {
-            enableHighAccuracy: false,
-            timeout: Math.min(timeoutMs, 3500),
-            maximumAge: 300000
+            enableHighAccuracy: true,
+            timeout: Math.min(timeoutMs, 4200),
+            maximumAge: 0
           }
         );
 
@@ -553,7 +676,7 @@ export const OrderForm: React.FC<{
           {
             enableHighAccuracy: true,
             timeout: timeoutMs,
-            maximumAge: 60000
+            maximumAge: 0
           }
         );
       } catch {
@@ -564,7 +687,9 @@ export const OrderForm: React.FC<{
 
   const stopGpsWatch = () => {
     if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
+      try {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      } catch {}
       watchIdRef.current = null;
     }
     if (watchTimeoutRef.current !== null) {
@@ -574,10 +699,13 @@ export const OrderForm: React.FC<{
     setGpsLoading(false);
   };
 
-  // Optional 1-Touch GPS Shortcut: fills location automatically if granted, NEVER blocks customer if denied!
+  // Botón principal de GPS satelital exacto con autoverificación estricta <= 10m (tipo WhatsApp)
   const handleOneClickGpsLocation = () => {
     stopGpsWatch();
+    const attemptId = ++gpsAttemptIdRef.current;
     setGpsLoading(true);
+    setGpsLiveAccuracy(null);
+    setGpsBestCoarseAccuracy(null);
     setGpsNotice('');
     setValidationNotice('');
     bestAccuracyRef.current = 999999;
@@ -588,20 +716,23 @@ export const OrderForm: React.FC<{
       }
     } catch { }
 
-    const applyCoordinates = (lat: number, lng: number, acc: number) => {
-      const cleanLat = Number(lat.toFixed(6));
-      const cleanLng = Number(lng.toFixed(6));
-      const roundedAcc = Math.max(3, Math.round(acc));
+    const applyVerifiedCoordinates = (lat: number, lng: number, acc: number) => {
+      const verified = verifyExactGpsReading(lat, lng, acc);
+      if (!verified.valid) return false;
 
-      setGpsLat(cleanLat);
-      setGpsLng(cleanLng);
-      setGpsAccuracy(roundedAcc);
+      stopGpsWatch();
+      setGpsLat(verified.cleanLat);
+      setGpsLng(verified.cleanLng);
+      setGpsAccuracy(verified.roundedAcc);
+      setGpsLiveAccuracy(verified.roundedAcc);
       setGpsConfirmado(true);
       setGpsFuente('gps_dispositivo');
       setMapLocked(true);
       setGpsLoading(false);
+      setGpsPopupOpen(false);
+      setGpsNotice('');
       setMapZoom(18);
-      reverseGeocodeCoords(cleanLat, cleanLng);
+      reverseGeocodeCoords(verified.cleanLat, verified.cleanLng);
 
       trackMetaFullFunnelEvent({
         eventName: 'AddPaymentInfo',
@@ -611,67 +742,197 @@ export const OrderForm: React.FC<{
         valueGs: total,
         userData: { nombre, celular, ciudad: ciudadDetectada || ciudadTexto || ubicacionTexto, departamento }
       });
+      return true;
     };
 
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      let receivedAnyFix = false;
+    const openGpsActivationPopup = (
+      reason: 'gps_off' | 'permission_denied' | 'coarse_only' | 'timeout' | 'unsupported',
+      coarseAcc?: number
+    ) => {
+      if (gpsAttemptIdRef.current !== attemptId) return;
+      stopGpsWatch();
+      setGpsConfirmado(false);
+      setGpsAccuracy(null);
+      setGpsLiveAccuracy(null);
+      if (typeof coarseAcc === 'number') {
+        setGpsBestCoarseAccuracy(coarseAcc);
+      }
+      setGpsPopupReason(reason);
+      setGpsPopupStep('activate');
+      setGpsReturnedFromSettings(false);
+      setGpsPopupOpen(true);
+    };
 
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const acc = pos.coords.accuracy || 60;
-          if (!receivedAnyFix || acc < bestAccuracyRef.current) {
-            receivedAnyFix = true;
-            bestAccuracyRef.current = Math.min(bestAccuracyRef.current, acc);
-            applyCoordinates(lat, lng, acc);
-          }
-        },
-        () => {},
-        { enableHighAccuracy: false, timeout: 4500, maximumAge: 180000 }
+    if (
+      typeof window !== 'undefined' &&
+      window.isSecureContext === false
+    ) {
+      openGpsActivationPopup('unsupported');
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      openGpsActivationPopup('unsupported');
+      return;
+    }
+
+    let settled = false;
+    let highestCoarseSeen: number | undefined = undefined;
+    let getCurrentFailed = false;
+    let watchFailed = false;
+
+    const handleIncomingPosition = (pos: GeolocationPosition) => {
+      if (settled || gpsAttemptIdRef.current !== attemptId) return;
+      const verified = verifyExactGpsReading(
+        pos.coords.latitude,
+        pos.coords.longitude,
+        pos.coords.accuracy
       );
 
-      const wId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const acc = pos.coords.accuracy || 50;
+      if (!isWithinParaguayGpsBounds(verified.cleanLat, verified.cleanLng)) {
+        return;
+      }
 
-          if (!receivedAnyFix || acc <= bestAccuracyRef.current || acc <= 25) {
-            receivedAnyFix = true;
-            bestAccuracyRef.current = Math.min(bestAccuracyRef.current, acc);
-            applyCoordinates(lat, lng, acc);
-          }
+      setGpsLiveAccuracy(verified.roundedAcc);
 
-          if (acc <= 14) {
-            stopGpsWatch();
-          }
-        },
-        () => {
-          if (receivedAnyFix) {
-            stopGpsWatch();
-            return;
-          }
-          stopGpsWatch();
-          // Never block or place fake pin on denial — simply invite typing City/Neighborhood
-          setGpsNotice('No hay problema: escribí tu Ciudad, Barrio y Calle arriba y al confirmar buscaremos el mapa automáticamente.');
-          ciudadInputRef.current?.focus();
-        },
+      if (!verified.valid) {
+        // Lectura todavía imprecisa (>10m): seguimos esperando que baje como en WhatsApp
+        highestCoarseSeen = highestCoarseSeen
+          ? Math.min(highestCoarseSeen, verified.roundedAcc)
+          : verified.roundedAcc;
+        setGpsBestCoarseAccuracy(highestCoarseSeen);
+        return;
+      }
+
+      // ¡Autoverificación aprobada (<= 10m exactos)!
+      settled = true;
+      applyVerifiedCoordinates(verified.cleanLat, verified.cleanLng, verified.roundedAcc);
+    };
+
+    const handleGeoError = (err: GeolocationPositionError | null, source: 'current' | 'watch') => {
+      if (settled || gpsAttemptIdRef.current !== attemptId) return;
+      if (source === 'current') getCurrentFailed = true;
+      if (source === 'watch') watchFailed = true;
+
+      // Si el error es permiso denegado (1) o GPS apagado/no disponible (2), abrir pop-up de inmediato si ambos fallaron o si es permiso/hardware
+      if (err?.code === 1) {
+        settled = true;
+        openGpsActivationPopup('permission_denied', highestCoarseSeen);
+        return;
+      }
+      if (err?.code === 2 && (watchFailed || getCurrentFailed)) {
+        // En muchos móviles getCurrentPosition o watchPosition devuelve POSITION_UNAVAILABLE cuando el GPS está apagado
+        if (source === 'watch' || (getCurrentFailed && watchFailed)) {
+          settled = true;
+          openGpsActivationPopup('gps_off', highestCoarseSeen);
+        }
+        return;
+      }
+      if (getCurrentFailed && watchFailed) {
+        settled = true;
+        const reason =
+          typeof highestCoarseSeen === 'number'
+            ? 'coarse_only'
+            : err?.code === 3
+            ? 'timeout'
+            : 'gps_off';
+        openGpsActivationPopup(reason, highestCoarseSeen);
+      }
+    };
+
+    try {
+      // Disparamos getCurrentPosition + watchPosition en paralelo para máxima compatibilidad en Safari iOS y Chrome Android
+      navigator.geolocation.getCurrentPosition(
+        handleIncomingPosition,
+        (err) => handleGeoError(err, 'current'),
         {
           enableHighAccuracy: true,
           timeout: 12000,
-          maximumAge: 30000
+          maximumAge: 0
+        }
+      );
+
+      const wId = navigator.geolocation.watchPosition(
+        handleIncomingPosition,
+        (err) => handleGeoError(err, 'watch'),
+        {
+          enableHighAccuracy: true,
+          timeout: 16000,
+          maximumAge: 0
         }
       );
 
       watchIdRef.current = wId;
       watchTimeoutRef.current = window.setTimeout(() => {
-        stopGpsWatch();
-      }, 6500);
-    } else {
-      setGpsLoading(false);
-      setGpsNotice('Tu navegador bloqueó el GPS automático: completá tu Ciudad, Barrio y Calle y ubicamos tu zona al confirmar.');
-      ciudadInputRef.current?.focus();
+        if (settled || gpsAttemptIdRef.current !== attemptId) return;
+        settled = true;
+        openGpsActivationPopup(
+          typeof highestCoarseSeen === 'number' ? 'coarse_only' : 'gps_off',
+          highestCoarseSeen
+        );
+      }, 14500);
+    } catch {
+      openGpsActivationPopup('gps_off');
+    }
+  };
+
+  // Botón directo Paso 1 dentro del pop-up: intenta activar el diálogo nativo o abrir Ajustes de Ubicación en Android
+  const handlePopupActivateGpsClick = () => {
+    setGpsPopupStep('return_retry');
+    setGpsReturnedFromSettings(false);
+
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const isAndroid = /android/i.test(ua);
+    const isInAppWebView = /FBAN|FBAV|Instagram|WhatsApp|Line|TikTok|wv\)/i.test(ua);
+    const isAndroidChrome = isAndroid && /Chrome\/\d+/i.test(ua) && !isInAppWebView;
+
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const verified = verifyExactGpsReading(
+              pos.coords.latitude,
+              pos.coords.longitude,
+              pos.coords.accuracy
+            );
+            if (verified.valid) {
+              setGpsLat(verified.cleanLat);
+              setGpsLng(verified.cleanLng);
+              setGpsAccuracy(verified.roundedAcc);
+              setGpsLiveAccuracy(verified.roundedAcc);
+              setGpsConfirmado(true);
+              setGpsFuente('gps_dispositivo');
+              setMapLocked(true);
+              setGpsPopupOpen(false);
+              setGpsNotice('');
+              reverseGeocodeCoords(verified.cleanLat, verified.cleanLng);
+              return;
+            }
+            if (isAndroidChrome && isWithinParaguayGpsBounds(verified.cleanLat, verified.cleanLng)) {
+              setGpsLiveAccuracy(verified.roundedAcc);
+              setGpsBestCoarseAccuracy(verified.roundedAcc);
+            }
+          },
+          (err) => {
+            if (isAndroidChrome && err?.code === 2) {
+              try {
+                const fallbackUrl = encodeURIComponent(window.location.href);
+                window.location.href = `intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;S.browser_fallback_url=${fallbackUrl};end`;
+              } catch {}
+            } else if (err?.code === 1) {
+              setGpsPopupReason('permission_denied');
+            }
+          },
+          { enableHighAccuracy: true, timeout: 3500, maximumAge: 0 }
+        );
+      } catch {
+        if (isAndroidChrome) {
+          try {
+            const fallbackUrl = encodeURIComponent(window.location.href);
+            window.location.href = `intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;S.browser_fallback_url=${fallbackUrl};end`;
+          } catch {}
+        }
+      }
     }
   };
 
@@ -756,36 +1017,99 @@ export const OrderForm: React.FC<{
     // ── Anti-duplicate guard: block if a submission is already in flight ──
     if (submitGuardRef.current || submitting) return;
 
-    if (!nombre.trim()) {
-      setValidationNotice('Por favor escribí tu Nombre Completo (Nombre y Apellido).');
+    if (nombre.trim().length < 3) {
+      setValidationField('nombre');
+      setValidationNotice('Escribí primero tu nombre y apellido completo aquí abajo.');
+      smoothCenterElement(step1CardRef.current);
       nameInputRef.current?.focus();
       return;
     }
 
-    const cleanDigits = celular.replace(/\D/g, '');
-    if (!cleanDigits || cleanDigits.length < 8) {
-      setValidationNotice('Por favor ingresá un número de WhatsApp válido (ej: 0981 123 456).');
+    const waFmt = validateWhatsAppPhoneFormat(celular);
+    if (!waFmt.valid) {
+      setValidationField('celular');
+      setValidationNotice(waFmt.message || 'Escribí un número de WhatsApp válido (ej: 0981 452 890).');
+      setWaVerifyState({
+        status: 'invalid_format',
+        checkedPhone: celular,
+        message: waFmt.message
+      });
+      smoothCenterElement(step3CardRef.current);
       phoneInputRef.current?.focus();
       return;
     }
 
-    if (!ciudadTexto.trim()) {
-      setValidationNotice('Por favor escribí el nombre de tu Ciudad.');
+    if (
+      waVerifyState.status === 'not_on_whatsapp' &&
+      waVerifyState.checkedPhone === waFmt.normalizedPhone
+    ) {
+      setValidationField('celular');
+      setValidationNotice(
+        waVerifyState.message ||
+          'Este número NO tiene WhatsApp activo. Revisá los dígitos y escribí tu número real con WhatsApp.'
+      );
+      smoothCenterElement(step3CardRef.current);
+      phoneInputRef.current?.focus();
+      return;
+    }
+
+    if (waVerifyState.checkedPhone !== waFmt.normalizedPhone || waVerifyState.status === 'checking') {
+      try {
+        const controller = new AbortController();
+        const t = window.setTimeout(() => controller.abort(), 2400);
+        const verifyRes = await fetch('/api/whatsapp/verify-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({ phone: celular })
+        });
+        window.clearTimeout(t);
+        if (verifyRes.ok) {
+          const verifyData = await verifyRes.json();
+          setWaVerifyState({
+            status: verifyData?.status || 'format_only',
+            checkedPhone: verifyData?.normalizedPhone || waFmt.normalizedPhone,
+            message: verifyData?.message
+          });
+          if (verifyData?.status === 'not_on_whatsapp' || verifyData?.status === 'invalid_format') {
+            setValidationField('celular');
+            setValidationNotice(
+              verifyData?.message ||
+                'Este número NO es un WhatsApp válido. Revisá los dígitos y escribí un número con WhatsApp.'
+            );
+            smoothCenterElement(step3CardRef.current);
+            phoneInputRef.current?.focus();
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    if (ciudadTexto.trim().length < 2) {
+      setValidationField('ciudad');
+      setValidationNotice('Escribí tu ciudad aquí abajo (ej: San Lorenzo, Asunción).');
+      smoothCenterElement(ciudadBoxRef.current);
       ciudadInputRef.current?.focus();
       return;
     }
 
-    if (!barrioTexto.trim()) {
-      setValidationNotice('Por favor escribí el nombre de tu Barrio.');
+    if (barrioTexto.trim().length < 2) {
+      setValidationField('barrio');
+      setValidationNotice('Escribí tu barrio o zona aquí abajo.');
+      smoothCenterElement(barrioBoxRef.current);
       barrioInputRef.current?.focus();
       return;
     }
 
-    if (!calleTexto.trim()) {
-      setValidationNotice('Por favor escribí el nombre de tu Calle.');
+    if (calleTexto.trim().length < 2) {
+      setValidationField('calle');
+      setValidationNotice('Escribí el nombre de tu calle o una referencia (ej: portón blanco).');
+      smoothCenterElement(calleBoxRef.current);
       calleInputRef.current?.focus();
       return;
     }
+
+    setValidationField(null);
 
     // Lock the guard BEFORE any async work
     submitGuardRef.current = true;
@@ -950,7 +1274,7 @@ export const OrderForm: React.FC<{
         barrio: formattedBarrio,
         calle: finalCalle,
         direccion: finalDireccion,
-        detalle: pago,
+        detalle: 'Pago contra entrega',
         cantidad: effectiveOrderQuantity,
         monto: total,
         ...(hasEntryHook
@@ -1054,249 +1378,313 @@ export const OrderForm: React.FC<{
       : null;
 
   const renderFormCardContent = (isFullscreenMode: boolean) => {
-    // ── Step Progress Tracking & Progressive Unlocking for Low-Vision Guided Flow ──
-    const step1Done = nombre.trim().length >= 3;
-    const step2Done = step1Done && celular.replace(/\D/g, '').length >= 8;
-    const ciudadDone = step2Done && ciudadTexto.trim().length >= 2;
-    const barrioDone = ciudadDone && barrioTexto.trim().length >= 2;
-    const calleDone = barrioDone && calleTexto.trim().length >= 2;
-    const step3Done = ciudadDone && barrioDone && calleDone;
-    const activeStep = !step1Done ? 1 : !step2Done ? 2 : 3;
+    const explicitShippingFee =
+      !isEntryOnly &&
+      currentProductPage?.freeShipping === false &&
+      Number(currentProductPage?.shippingCostGs) > 0
+        ? Number(currentProductPage.shippingCostGs)
+        : 0;
+    const totalPayableOnDelivery = total + explicitShippingFee;
+
+    const waFormatCheck = validateWhatsAppPhoneFormat(celular);
+    const waHasHardError =
+      waVerifyState.status === 'not_on_whatsapp' || waVerifyState.status === 'invalid_format';
+    const nombreOk = nombre.trim().length >= 3;
+    const celularOk = waFormatCheck.valid && !waHasHardError;
+    const ciudadOk = ciudadTexto.trim().length >= 2;
+    const barrioOk = barrioTexto.trim().length >= 2;
+    const calleOk = calleTexto.trim().length >= 2;
+
+    const missingFields: string[] = [];
+    if (!nombreOk) missingFields.push('Nombre');
+    if (!celularOk) missingFields.push('WhatsApp válido');
+    if (!ciudadOk) missingFields.push('Ciudad');
+    if (!barrioOk) missingFields.push('Barrio');
+    if (!calleOk) missingFields.push('Calle');
+    const isFormReady = missingFields.length === 0;
+
+    const dark = isDarkMode;
+
+    const getFieldBoxClass = (fieldKey: 'nombre' | 'celular' | 'ciudad' | 'barrio' | 'calle', isDone: boolean) => {
+      if (validationField === fieldKey || (fieldKey === 'celular' && waHasHardError)) {
+        return dark
+          ? 'bg-[#450A0A]/45 border-[1.5px] border-[#F87171] ring-[3px] ring-[#F87171]/25 rounded-[8px] px-3.5 py-2.5 transition-all cursor-text'
+          : 'bg-[#FEF2F2] border-[1.5px] border-[#DC2626] ring-[3px] ring-[#DC2626]/20 rounded-[8px] px-3.5 py-2.5 transition-all cursor-text';
+      }
+      if (isDone) {
+        return dark
+          ? 'bg-[#1E293B] border-[1.5px] border-[#34D399]/70 focus-within:border-[#38BDF8] focus-within:ring-[3px] focus-within:ring-[#38BDF8]/25 rounded-[8px] px-3.5 py-2.5 transition-all cursor-text'
+          : 'bg-white border-[1.5px] border-[#15803D]/70 shadow-[inset_0_2px_4px_rgba(15,23,42,0.05)] focus-within:border-[#1773B0] focus-within:ring-[3px] focus-within:ring-[#1773B0]/25 rounded-[8px] px-3.5 py-2.5 transition-all cursor-text';
+      }
+      return dark
+        ? 'bg-[#1E293B] border-[1.5px] border-[#475569] shadow-[inset_0_2px_4px_rgba(0,0,0,0.28)] focus-within:border-[#38BDF8] focus-within:ring-[3px] focus-within:ring-[#38BDF8]/25 rounded-[8px] px-3.5 py-2.5 transition-all cursor-text'
+        : 'bg-white border-[1.5px] border-[#64748B] shadow-[inset_0_2px_4px_rgba(15,23,42,0.06)] focus-within:border-[#1773B0] focus-within:ring-[3px] focus-within:ring-[#1773B0]/25 rounded-[8px] px-3.5 py-2.5 transition-all cursor-text';
+    };
+
+    const labelClass = dark
+      ? 'block text-[13px] leading-[16px] font-semibold text-[#E2E8F0] select-none'
+      : 'block text-[13px] leading-[16px] font-semibold text-[#0F172A] select-none';
+    const inputTextClass = dark
+      ? 'w-full bg-transparent text-[16px] leading-[22px] font-semibold text-[#F8FAFC] placeholder:text-[#94A3B8] outline-none'
+      : 'w-full bg-transparent text-[16px] leading-[22px] font-semibold text-[#0F172A] placeholder:text-[#475569] outline-none';
+    const doneBadgeClass = dark
+      ? 'text-[12px] font-semibold text-[#4ADE80] shrink-0'
+      : 'text-[12px] font-semibold text-[#15803D] shrink-0';
+    const sectionTitleClass = dark
+      ? 'text-[16px] font-bold text-[#F8FAFC]'
+      : 'text-[16px] font-bold text-[#0F172A]';
+    const iconTintClass = dark ? 'w-4 h-4 text-[#93C5FD] shrink-0' : 'w-4 h-4 text-[#334155] shrink-0';
 
     return (
       <div
+        data-theme-mode={dark ? 'dark' : 'light'}
         className={
           isFullscreenMode
-            ? 'w-full max-w-xl mx-auto max-h-[96dvh] flex flex-col bg-white sm:rounded-3xl sm:border-4 sm:border-[#e8b23a] shadow-[0_25px_70px_rgba(0,0,0,0.65)] overflow-hidden'
-            : 'bg-white rounded-3xl border-4 border-[#0b3d2e] shadow-2xl overflow-hidden'
+            ? `w-full max-w-[520px] mx-auto max-h-[94dvh] flex flex-col rounded-[10px] border overflow-hidden shadow-[0_22px_55px_rgba(0,0,0,0.34)] ${
+                dark ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#EEF2F6] border-[#CBD5E1]'
+              }`
+            : `w-full max-w-[520px] mx-auto rounded-[10px] border overflow-hidden shadow-[0_4px_20px_rgba(15,23,42,0.08)] ${
+                dark ? 'bg-[#0F172A] border-[#334155]' : 'bg-[#EEF2F6] border-[#CBD5E1]'
+              }`
         }
       >
-        {/* ═══ Enhanced Header Bar (VIP Alta Visibilidad) ═══ */}
-        <div className="bg-gradient-to-r from-[#041a12] via-[#0b3d2e] to-[#041a12] text-white py-3.5 sm:py-4 px-4 sm:px-6 flex items-center justify-between gap-2 border-b-2 border-[#e8b23a] shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <ShieldCheck className="w-6 h-6 text-[#ffd778] shrink-0" />
+        {/* Cabecera Ejecutiva Antirreflejo + Selector Integrado Claro / Oscuro */}
+        <div
+          className={`px-4 sm:px-5 py-3 border-b shrink-0 space-y-2.5 ${
+            dark ? 'bg-[#090D16] border-[#1E293B]' : 'bg-[#111827] border-[#1F2937]'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2.5">
             <div className="min-w-0">
-              <span className="text-sm sm:text-base font-black uppercase tracking-wide text-[#ffd778] block truncate">
-                {expressDirectMode ? '⚡ Pedido Express Directo · Pago al Recibir' : 'Pedido Fácil · Pago al Recibir'}
-              </span>
-              <span className="text-xs sm:text-sm text-emerald-200 font-extrabold block truncate">
-                {expressDirectMode ? 'Captura GPS Automática · Confirmación en 30 seg' : 'Guía VIP Paso a Paso'}
-              </span>
+              <div className="flex items-start gap-2">
+                <Lock className="w-4 h-4 text-[#38BDF8] shrink-0 mt-0.5" />
+                <span className="text-[16px] font-semibold tracking-[-0.01em] text-white leading-snug">
+                  Confirmar pedido · Pagás al recibir
+                </span>
+              </div>
+              <p className="text-[13px] text-[#CBD5E1] mt-0.5 leading-snug">
+                {isEntryOnly
+                  ? 'No pedimos tarjeta · Sin cobro previo online'
+                  : 'No pedimos tarjeta · Pagás recién en la puerta de tu casa'}
+              </p>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {!isFullscreenMode && !isEntryOnly && (
-              <span className="text-xs sm:text-sm bg-[#1ea856] px-3 py-1 rounded-full text-white font-black">
-                Envío Gratis
-              </span>
-            )}
             {isFullscreenMode && (
               <button
                 type="button"
                 onClick={handleExitFullscreen}
-                aria-label="Cerrar formulario"
-                className="inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 active:scale-95 text-white font-black text-sm px-3.5 py-2 rounded-xl border-2 border-white/40 cursor-pointer transition-all"
+                aria-label="Cerrar"
+                className="w-9 h-9 rounded-[6px] text-[#CBD5E1] hover:text-white hover:bg-white/15 flex items-center justify-center transition-colors cursor-pointer shrink-0"
               >
-                <X className="w-5 h-5 stroke-[2.5]" />
-                <span>Cerrar</span>
+                <X className="w-5 h-5" />
               </button>
             )}
           </div>
+
+          <div
+            data-testid="theme-toggle-tooltip"
+            role="region"
+            aria-label="Selector de color de lectura"
+            className={`rounded-[8px] border px-3 py-2 flex flex-wrap items-center justify-between gap-2 ${
+              dark
+                ? 'bg-[#111827] border-[#FDE047]/45'
+                : 'bg-[#1E293B] border-[#38BDF8]/50'
+            }`}
+          >
+            <span className="text-[12px] leading-snug text-[#E2E8F0]">
+              {dark ? (
+                <>
+                  <span className="font-semibold text-white">Modo oscuro activado.</span>{' '}
+                  ¿Preferís el fondo claro?
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-white">¿Te molesta el color claro?</span>{' '}
+                  Tocá el botón para pasar a oscuro
+                </>
+              )}
+            </span>
+
+            <button
+              type="button"
+              data-testid="toggle-form-theme"
+              title={dark ? 'Cambiar a modo claro suave' : 'Cambiar a modo oscuro para descansar la vista'}
+              onClick={() => setIsDarkMode((v) => !v)}
+              aria-label={dark ? 'Cambiar a modo claro suave' : 'Cambiar a modo oscuro'}
+              className={`h-8 px-3 rounded-[6px] border text-white text-[12px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                dark
+                  ? 'border-[#FDE047]/55 bg-[#0F172A] hover:bg-[#1773B0]'
+                  : 'border-[#38BDF8]/65 bg-[#0F172A] hover:bg-[#1773B0]'
+              }`}
+            >
+              {dark ? <Sun className="w-3.5 h-3.5 text-[#FDE047]" /> : <Moon className="w-3.5 h-3.5 text-[#93C5FD]" />}
+              <span>{dark ? 'Modo claro' : 'Modo oscuro'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* ═══ TRUST BAR — Alta legibilidad ═══ */}
-        {!orderComplete && (
-          <div className="bg-[#062319] border-b border-[#1ea856]/40 px-3 py-2.5 flex items-center justify-center gap-3 sm:gap-5 shrink-0 flex-wrap">
-            <span className="flex items-center gap-1.5 text-xs sm:text-sm font-black text-emerald-300">
-              <ShieldCheck className="w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0" />
-              <span>Pago al Recibir</span>
-            </span>
-            <span className="w-px h-4 bg-emerald-700" />
-            <span className="flex items-center gap-1.5 text-xs sm:text-sm font-black text-emerald-300">
-              <Truck className="w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0" />
-              <span>{isEntryOnly ? 'Envío Seguro en Mano' : 'Envío Gratis'}</span>
-            </span>
-            <span className="w-px h-4 bg-emerald-700" />
-            <span className="flex items-center gap-1.5 text-xs sm:text-sm font-black text-emerald-300">
-              <CheckCircle2 className="w-4 h-4 sm:w-4.5 sm:h-4.5 shrink-0" />
-              <span>Garantía 7 Días</span>
-            </span>
-          </div>
-        )}
+        {/* Resumen del Pedido 100% Visible, Descriptivo y Dinámico */}
+        {!orderComplete && (() => {
+          const selectedQuantity = isEntryOnly ? 1 : effectivePack;
+          const baseSingleUnitPrice = isEntryOnly
+            ? resolvedEntryPrice
+            : Number(currentProductPage?.precios?.[1] || config.lote[1] || 189000);
+          const appliedUnitPrice =
+            selectedQuantity > 0 ? Math.round(total / selectedQuantity) : baseSingleUnitPrice;
+          const hasPackDiscount =
+            !isEntryOnly && selectedQuantity > 1 && total < baseSingleUnitPrice * selectedQuantity;
+          const packSavings = hasPackDiscount
+            ? baseSingleUnitPrice * selectedQuantity - total
+            : 0;
 
-        {/* Main Form Body */}
-        <div
-          className={
-            isFullscreenMode
-              ? 'flex-1 overflow-y-auto p-4 sm:p-6 space-y-4'
-              : 'p-4 sm:p-7 space-y-4'
-          }
-        >
-          {/* ═══ TARJETA VIP SUPERIOR — EXPLICACIÓN CLARA + PROGRESO 3 PASOS ═══ */}
-          {!orderComplete && (
+          return (
             <div
-              data-testid="orderform-vip-steps-card"
-              className="rounded-2xl bg-gradient-to-br from-[#041a12] via-[#062319] to-[#0b3d2e] border-2 border-[#e8b23a] p-4 sm:p-5 text-white shadow-xl space-y-3.5"
+              data-testid="orderform-dual-path-clarification"
+              className={`px-4 sm:px-5 py-3.5 border-b shrink-0 space-y-2.5 ${
+                dark ? 'bg-[#1E293B] border-[#334155]' : 'bg-[#E2E8F0] border-[#CBD5E1]'
+              }`}
             >
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 bg-[#e8b23a] text-[#062319] text-[11px] sm:text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full">
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                  <span>Guía VIP · Solo 3 Datos Rápidos</span>
-                </span>
-                <span className="text-xs font-bold text-emerald-200">
-                  {[step1Done, step2Done, step3Done].filter(Boolean).length} de 3 completados
-                </span>
-              </div>
-
-              <p className="text-xs sm:text-sm text-emerald-50 font-semibold leading-relaxed">
-                Completá en orden estos 3 datos para despachar tu pedido hoy mismo:{' '}
-                <b className="text-[#ffd778]">1° tu Nombre y Apellido</b>,{' '}
-                <b className="text-[#ffd778]">2° tu WhatsApp</b> para enviarte el seguimiento, y{' '}
-                <b className="text-[#ffd778]">3° tu Dirección exacta</b> de entrega. Abajo ves cada paso en verde al completarlo:
-              </p>
-
-              <div className="flex items-center justify-center gap-0 pt-1">
-                {[
-                  { num: 1, label: '1. Nombre', done: step1Done },
-                  { num: 2, label: '2. WhatsApp', done: step2Done },
-                  { num: 3, label: '3. Dirección', done: step3Done }
-                ].map((step, idx) => (
-                  <React.Fragment key={step.num}>
-                    {idx > 0 && (
-                      <div
-                        className={`h-1.5 flex-1 rounded-full mx-2 transition-all duration-700 ${
-                          (idx === 1 && step1Done) || (idx === 2 && step2Done)
-                            ? 'bg-[#22c55e]'
-                            : 'bg-white/20'
-                        }`}
-                      />
-                    )}
-                    <div className="flex flex-col items-center gap-1">
-                      <div
-                        className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-base sm:text-lg font-black border-2 transition-all duration-500 ${
-                          step.done
-                            ? 'bg-[#22c55e] border-emerald-200 text-white scale-105 shadow-[0_0_12px_rgba(34,197,94,0.45)]'
-                            : activeStep === step.num
-                              ? 'bg-[#e8b23a] border-[#fff1b8] text-[#062319] shadow-lg scale-110'
-                              : 'bg-white/10 border-white/25 text-emerald-200/70'
-                        }`}
-                      >
-                        {step.done ? <CheckCircle2 className="w-6 h-6" /> : step.num}
-                      </div>
-                      <span
-                        className={`text-xs sm:text-sm font-black transition-colors duration-300 ${
-                          step.done
-                            ? 'text-[#86efac]'
-                            : activeStep === step.num
-                              ? 'text-[#ffd778]'
-                              : 'text-emerald-200/60'
-                        }`}
-                      >
-                        {step.label}
-                      </span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <ShoppingBag className={`w-4 h-4 mt-0.5 shrink-0 ${dark ? 'text-[#38BDF8]' : 'text-[#1773B0]'}`} />
+                  <div className="min-w-0">
+                    <div className={`text-[11px] font-bold uppercase tracking-[0.04em] ${dark ? 'text-[#93C5FD]' : 'text-[#125C8C]'}`}>
+                      Resumen de tu pedido
                     </div>
-                  </React.Fragment>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ═══ IMAGEN VIP PRE-GENERADA DEL PRODUCTO QUE ESTÁ ADQUIRIENDO ═══ */}
-          {!orderComplete && (
-            <div data-testid="orderform-dual-path-clarification" className="space-y-2.5">
-              {!bannerImgError ? (
-                <img
-                  src={`/api/order-form/package-banner.png?productId=${encodeURIComponent(
-                    targetProductId
-                  )}&path=${isEntryOnly ? 'entry_only' : 'principal_bundle'}&pack=${
-                    isEntryOnly ? 1 : effectivePack
-                  }&v=${encodeURIComponent(String(currentProductPage?.creadoEn || total))}`}
-                  alt={`Este es el paquete que estás adquiriendo: ${activeOfferTitle}`}
-                  referrerPolicy="no-referrer"
-                  onError={() => setBannerImgError(true)}
-                  className="w-full h-auto rounded-2xl shadow-xl border-2 border-[#D4AF37]/80 select-none"
-                />
-              ) : (
-                <div
-                  className={`rounded-2xl border-2 p-4 space-y-2 shadow-lg ${
-                    isEntryOnly
-                      ? 'bg-[#0B132B] border-[#D4AF37] text-white'
-                      : 'bg-gradient-to-br from-[#041C14] to-[#0A3526] border-[#D4AF37] text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    {(isEntryOnly
-                      ? entryOfferCfg?.entryProductImage || currentProductPage?.imagen
-                      : currentProductPage?.imagen) && (
-                      <img
-                        src={
-                          isEntryOnly
-                            ? entryOfferCfg?.entryProductImage || currentProductPage?.imagen
-                            : currentProductPage?.imagen
-                        }
-                        alt={activeOfferTitle}
-                        className="w-20 h-20 rounded-xl object-cover border-2 border-[#D4AF37] shrink-0 bg-white"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <span className="inline-block bg-[#D4AF37] text-[#062319] text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full">
-                        Este es el paquete que estás adquiriendo
-                      </span>
-                      <div className="font-black text-base sm:text-lg leading-snug text-white">
-                        {isEntryOnly && entryOfferCfg
-                          ? `${entryOfferCfg.entryProductName} · ${formatGs(entryOfferCfg.entryPriceGs)}`
-                          : hasEntryHook && entryOfferCfg
-                          ? `${targetProductName} + ${entryOfferCfg.entryProductName} DE REGALO · ${formatGs(total)}`
-                          : `${targetProductName} · ${formatGs(total)}`}
-                      </div>
-                      <p className="text-xs sm:text-sm text-emerald-100 leading-snug">
-                        {isEntryOnly && entryOfferCfg
-                          ? `Estás a punto de adquirir 1 unidad de tu ${entryOfferCfg.entryProductName}. Delivery al recibir: ${formatGs(entryOfferCfg.deliveryFeeGs || 40000)}.`
-                          : hasEntryHook && entryOfferCfg
-                          ? `Incluye ${targetProductName} completo + ${entryOfferCfg.entryProductName} DE REGALO + ENVÍO 100% GRATUITO en todo Paraguay.`
-                          : `Estás adquiriendo tu ${targetProductName} completo con ENVÍO 100% GRATUITO a tu puerta.`}
-                      </p>
+                    <div className={`text-[15px] font-bold leading-snug break-words ${dark ? 'text-white' : 'text-[#0F172A]'}`}>
+                      {activeOfferTitle}
                     </div>
                   </div>
                 </div>
-              )}
 
-              {hasEntryHook && entryOfferCfg && isEntryOnly && !hidePrincipalUpgradeHint && (
-                <div className="px-1 flex items-center justify-center">
-                  <button
-                    type="button"
-                    onClick={() => setPurchasePath('principal_bundle')}
-                    className="text-xs sm:text-sm font-black text-[#065f46] hover:text-[#047857] underline cursor-pointer text-center"
+                <div className="text-right shrink-0">
+                  <div className={`text-[11px] font-bold ${dark ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
+                    {isEntryOnly ? 'Precio del producto' : 'Total al recibir'}
+                  </div>
+                  <div
+                    data-testid="orderform-visible-total"
+                    className={`text-[20px] font-extrabold tabular-nums whitespace-nowrap leading-tight ${
+                      dark ? 'text-white' : 'text-[#0F172A]'
+                    }`}
                   >
-                    ¿Preferís el Paquete Completo con ENVÍO GRATUITO + {entryOfferCfg.entryProductName} DE REGALO? Tocá acá
-                  </button>
+                    {formatGs(totalPayableOnDelivery)}
+                  </div>
                 </div>
-              )}
+              </div>
 
-              {hasEntryHook && entryOfferCfg && !isEntryOnly && !hidePrincipalUpgradeHint && (
-                <div className="px-1 flex items-center justify-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPurchasePath('entry_only');
-                      setSelectedPack(1);
-                    }}
-                    className="text-xs font-semibold text-stone-600 underline cursor-pointer text-center"
-                  >
-                    Preferir llevar solo {entryOfferCfg.entryProductName} ({formatGs(entryOfferCfg.entryPriceGs)} + delivery {formatGs(entryOfferCfg.deliveryFeeGs || 40000)})
-                  </button>
+              {(!isEntryOnly || (hasEntryHook && entryOfferCfg && !hidePrincipalUpgradeHint)) && (
+                <div
+                  data-testid="orderform-quantity-breakdown"
+                  className={`pt-2.5 border-t space-y-1.5 text-[13px] ${
+                    dark ? 'border-[#334155]' : 'border-[#CBD5E1]'
+                  }`}
+                >
+                  {!isEntryOnly && (
+                    <>
+                      <div className={`flex items-start justify-between gap-2 ${dark ? 'text-[#E2E8F0]' : 'text-[#1E293B]'}`}>
+                        <span className="font-medium leading-snug">
+                          Precio unitario de este producto
+                        </span>
+                        <span className={`font-bold tabular-nums shrink-0 ${dark ? 'text-white' : 'text-[#0F172A]'}`}>
+                          {formatGs(baseSingleUnitPrice)}
+                        </span>
+                      </div>
+
+                      <div className={`flex items-start justify-between gap-2 ${dark ? 'text-[#E2E8F0]' : 'text-[#1E293B]'}`}>
+                        <span className="font-medium leading-snug">
+                          Cantidad que estás pidiendo
+                        </span>
+                        <span className={`font-bold tabular-nums shrink-0 ${dark ? 'text-white' : 'text-[#0F172A]'}`}>
+                          {selectedQuantity === 1 ? '1 unidad' : `${selectedQuantity} unidades`}
+                        </span>
+                      </div>
+
+                      <div
+                        className={`flex items-start justify-between gap-2 rounded-[6px] px-2.5 py-1.5 ${
+                          dark ? 'bg-[#0F172A]/70 text-[#F8FAFC]' : 'bg-white/75 text-[#0F172A]'
+                        }`}
+                      >
+                        <span className="font-semibold leading-snug">
+                          Equivale a {selectedQuantity} {selectedQuantity === 1 ? 'unidad' : 'unidades'} × {formatGs(appliedUnitPrice)}
+                          {hasPackDiscount && (
+                            <span className={`block text-[11px] font-medium ${dark ? 'text-[#4ADE80]' : 'text-[#15803D]'}`}>
+                              Precio pack aplicado · ahorrás {formatGs(packSavings)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-extrabold tabular-nums shrink-0">
+                          = {formatGs(total)}
+                        </span>
+                      </div>
+
+                      <div className={`flex items-center justify-between gap-2 pt-0.5 ${dark ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
+                        <span className="font-medium">Envío a domicilio</span>
+                        <span
+                          className={`font-bold tabular-nums shrink-0 ${
+                            explicitShippingFee > 0
+                              ? dark
+                                ? 'text-white'
+                                : 'text-[#0F172A]'
+                              : dark
+                              ? 'text-[#4ADE80]'
+                              : 'text-[#15803D]'
+                          }`}
+                        >
+                          {explicitShippingFee > 0 ? formatGs(explicitShippingFee) : 'Gratis'}
+                        </span>
+                      </div>
+                    </>
+                  )}
+
+                  {hasEntryHook && entryOfferCfg && isEntryOnly && !hidePrincipalUpgradeHint && (
+                    <div className="pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setPurchasePath('principal_bundle')}
+                        className={`text-[12px] font-bold hover:underline cursor-pointer text-left ${
+                          dark ? 'text-[#38BDF8]' : 'text-[#125C8C]'
+                        }`}
+                      >
+                        Cambiar al paquete completo ({targetProductName} + {entryOfferCfg.entryProductName} de regalo)
+                      </button>
+                    </div>
+                  )}
+
+                  {hasEntryHook && entryOfferCfg && !isEntryOnly && !hidePrincipalUpgradeHint && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPurchasePath('entry_only');
+                          setSelectedPack(1);
+                        }}
+                        className={`text-[12px] font-semibold underline cursor-pointer text-left ${
+                          dark ? 'text-[#CBD5E1] hover:text-white' : 'text-[#334155] hover:text-[#0F172A]'
+                        }`}
+                      >
+                        Llevar solo {entryOfferCfg.entryProductName} ({formatGs(resolvedEntryPrice)})
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
+          );
+        })()}
 
-          {/* ═══ PACK SELECTOR — Con números y precios grandes ═══ */}
+        {/* Cuerpo Principal Mate Antirreflejo con Contraste Real */}
+        <div
+          className={
+            isFullscreenMode
+              ? `flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4 ${dark ? 'bg-[#0F172A]' : 'bg-[#EEF2F6]'}`
+              : `px-4 sm:px-5 py-4 space-y-4 ${dark ? 'bg-[#0F172A]' : 'bg-[#EEF2F6]'}`
+          }
+        >
+          {/* Selector Descriptivo de Cantidad (Solo si aplica paquete principal) */}
           {!orderComplete && !isEntryOnly && (
-            <div className="bg-gradient-to-br from-[#f8f6f0] to-[#f0ede4] border-2 border-[#dfdad0] rounded-2xl p-3">
-              <div className="flex items-center justify-between text-sm sm:text-base font-black uppercase text-stone-800 mb-2.5 px-1">
-                <span>Elegí tu cantidad:</span>
-                <span className="text-[#0a7a4a]">🚚 Envío Gratis</span>
+            <div className="space-y-1.5">
+              <div className={`text-[13px] font-bold ${dark ? 'text-[#E2E8F0]' : 'text-[#0F172A]'}`}>
+                Elegí la cantidad que querés pedir:
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {[1, 2, 3].map((packNum) => {
@@ -1304,42 +1692,26 @@ export const OrderForm: React.FC<{
                     currentProductPage?.precios?.[packNum] ||
                     config.lote[packNum] ||
                     189000;
-                  const normalPrice = config.normal || 249000;
                   const isSelected = effectivePack === packNum;
-                  const packBadge = packNum === 2 ? '🔥 Más Pedido' : packNum === 3 ? '💰 Mejor Precio' : null;
                   return (
                     <button
                       key={packNum}
                       type="button"
                       onClick={() => setSelectedPack(packNum)}
-                      className={`relative p-2.5 sm:p-3 rounded-xl border-3 text-center transition-all cursor-pointer ${isSelected
-                        ? 'bg-[#062319] border-[#e8b23a] text-white shadow-lg scale-[1.03]'
-                        : 'bg-white border-stone-300 text-stone-900 hover:border-[#0b3d2e]'
-                        }`}
+                      className={`px-2.5 py-2 rounded-[8px] border-[1.5px] text-left transition-colors cursor-pointer ${
+                        isSelected
+                          ? dark
+                            ? 'bg-[#172554]/60 border-[#38BDF8] ring-1 ring-[#38BDF8] text-white'
+                            : 'bg-white border-[#1773B0] ring-1 ring-[#1773B0] text-[#0F172A]'
+                          : dark
+                          ? 'bg-[#1E293B] border-[#475569] text-[#E2E8F0] hover:border-[#64748B]'
+                          : 'bg-white/80 border-[#94A3B8] text-[#1E293B] hover:border-[#64748B]'
+                      }`}
                     >
-                      {packBadge && (
-                        <span className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] sm:text-xs font-black px-2.5 py-0.5 rounded-full whitespace-nowrap z-10 ${isSelected
-                          ? 'bg-[#e8b23a] text-[#062319]'
-                          : packNum === 2 ? 'bg-red-600 text-white' : 'bg-[#16a34a] text-white'
-                          }`}>
-                          {packBadge}
-                        </span>
-                      )}
-                      <div
-                        className={`text-sm sm:text-base font-black leading-tight mt-0.5 ${isSelected ? 'text-[#ffd778]' : 'text-[#062319]'
-                          }`}
-                      >
-                        {packNum === 1 ? '1 Unidad' : `Pack ${packNum}X`}
+                      <div className={`text-[13px] font-bold leading-tight ${dark ? 'text-white' : 'text-[#0F172A]'}`}>
+                        {packNum === 1 ? '1 unidad' : `${packNum} unidades`}
                       </div>
-                      {packNum > 1 && (
-                        <div className="text-xs line-through text-stone-400 font-bold">
-                          {formatGs(normalPrice * packNum)}
-                        </div>
-                      )}
-                      <div
-                        className={`text-sm sm:text-base font-black ${packNum > 1 ? '' : 'mt-1'} ${isSelected ? 'text-white' : 'text-stone-800'
-                          }`}
-                      >
+                      <div className={`text-[12px] font-semibold tabular-nums mt-0.5 ${dark ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
                         {formatGs(packPrice)}
                       </div>
                     </button>
@@ -1349,577 +1721,421 @@ export const OrderForm: React.FC<{
             </div>
           )}
 
-          {/* Validation Notice */}
+          {/* Aviso de Validación Claro */}
           {validationNotice && (
-            <div className="bg-red-50 border-3 border-red-600 text-red-950 rounded-2xl px-4 py-3 text-base sm:text-lg font-black flex items-center justify-between gap-2 shadow-md">
-              <span>⚠️ {validationNotice}</span>
+            <div
+              className={`border-[1.5px] rounded-[8px] px-3.5 py-2.5 text-[14px] font-semibold flex items-center justify-between gap-2 ${
+                dark
+                  ? 'bg-[#450A0A] border-[#F87171] text-[#FECACA]'
+                  : 'bg-[#FEF2F2] border-[#DC2626] text-[#991B1B]'
+              }`}
+            >
+              <span>{validationNotice}</span>
               <button
                 type="button"
-                onClick={() => setValidationNotice('')}
-                className="text-red-700 font-black px-2.5 py-1 rounded-lg hover:bg-red-100 cursor-pointer text-lg"
+                onClick={() => {
+                  setValidationNotice('');
+                  setValidationField(null);
+                }}
+                className="p-1 cursor-pointer shrink-0"
+                aria-label="Cerrar aviso"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
           )}
 
           {orderComplete ? (
-            /* Order Success State */
-            <div className="text-center py-4 space-y-4">
-              <div className="w-20 h-20 rounded-full bg-[#e5f6ec] text-[#0a7a4a] flex items-center justify-center mx-auto shadow-inner">
-                <CheckCircle2 className="w-12 h-12" />
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-black text-[#062319]">
-                ¡Tu pedido #{orderComplete.reservaid} está registrado!
-              </h3>
-
-              <div className="max-w-md mx-auto bg-[#f6f4ee] border-2 border-[#cde6d7] rounded-2xl p-4 text-left space-y-3">
-                <div className="text-base sm:text-lg text-stone-900">
-                  <span className="font-black text-stone-600 block text-sm uppercase">
-                    Producto reservado:
-                  </span>
-                  <b className="text-[#062319] font-black text-lg sm:text-xl">{confirmedProductTitle}</b>
+            /* Confirmación Estilo Shopify Order Status */
+            <div className="py-3 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-full border-2 border-[#1773B0] text-[#1773B0] flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-6 h-6" />
                 </div>
-                <div className="text-base sm:text-lg text-stone-900 border-t border-stone-300 pt-3 flex justify-between">
-                  <span className="font-black text-stone-700">Total al recibir:</span>
-                  <b className="text-[#062319] font-black text-lg sm:text-xl">
-                    {confirmedPackCount} un. ({formatGs(confirmedTotalAmount)})
-                  </b>
+                <div>
+                  <p className={`text-[13px] font-medium ${dark ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
+                    Pedido #{orderComplete.reservaid}
+                  </p>
+                  <h3 className={`text-[18px] font-bold ${dark ? 'text-white' : 'text-[#0F172A]'}`}>
+                    ¡Gracias{firstName ? `, ${firstName}` : ''}! Tu pedido está confirmado
+                  </h3>
+                </div>
+              </div>
+
+              <div
+                className={`rounded-[8px] border-[1.5px] p-4 space-y-2 text-[14px] ${
+                  dark ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#94A3B8]'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span className={`font-semibold ${dark ? 'text-white' : 'text-[#0F172A]'}`}>
+                    {confirmedProductTitle}
+                  </span>
+                  <span className={`font-bold tabular-nums shrink-0 ${dark ? 'text-white' : 'text-[#0F172A]'}`}>
+                    {formatGs(confirmedTotalAmount)}
+                  </span>
+                </div>
+                <div className={`text-[13px] font-medium ${dark ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
+                  {isEntryOnly
+                    ? 'Pagás al recibir'
+                    : `Cantidad: ${confirmedPackCount} ${confirmedPackCount > 1 ? 'unidades' : 'unidad'} · Pagás al recibir`}
                 </div>
                 {confirmedGpsLink && (
-                  <div className="text-sm sm:text-base text-white bg-[#16a34a] border-2 border-[#15803d] rounded-xl p-3 flex items-center justify-between gap-2">
-                    <span className="font-black">📍 Ubicación GPS Adjuntada</span>
-                    <span className="bg-white text-[#065f46] text-xs font-black px-2.5 py-1 rounded-full">
-                      ✓ GUARDADA
-                    </span>
+                  <div className={`text-[13px] font-semibold ${dark ? 'text-[#38BDF8]' : 'text-[#1773B0]'}`}>
+                    ✓ Ubicación GPS adjuntada
                   </div>
                 )}
               </div>
 
-              <p className="text-stone-900 text-base sm:text-lg font-bold max-w-md mx-auto leading-relaxed bg-[#eefaf3] border-2 border-[#86efac] rounded-2xl p-4">
-                Ahora mismo te estamos enviando un mensaje a tu WhatsApp (<b>{confirmedClientPhone}</b>) para coordinar tu entrega rápida en puerta.
+              <p className={`text-[14px] leading-relaxed ${dark ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
+                En instantes te escribimos por WhatsApp al{' '}
+                <span className={`font-bold ${dark ? 'text-white' : 'text-[#0F172A]'}`}>{confirmedClientPhone}</span> para avisarte cuándo sale tu repartidor.
               </p>
 
               {isFullscreenMode && (
                 <button
                   type="button"
                   onClick={handleExitFullscreen}
-                  className="w-full max-w-md mx-auto bg-[#062319] hover:bg-[#0b3d2e] text-[#ffd778] font-black text-lg py-4 rounded-2xl border-2 border-[#e8b23a] cursor-pointer block"
+                  className="w-full h-[50px] bg-[#1773B0] hover:bg-[#125C8C] text-white font-semibold text-[15px] rounded-[8px] transition-colors cursor-pointer"
                 >
-                  Volver a la Tienda
+                  Seguir viendo la tienda
                 </button>
               )}
             </div>
           ) : (
-            /* ═══ FORMULARIO GUIADO CON LETRAS GRANDES Y FLECHAS ROJAS EN MOVIMIENTO PASO A PASO ═══ */
+            /* Formulario Shopify Accesible con Cajas Táctiles Inconfundibles */
             <form onSubmit={handleSubmit} noValidate className="space-y-4" data-testid="express-order-form">
 
-              {/* ═══ ETAPA 1: Nombre Completo (Imagen guía + campo abajo + auto-scroll solo al salir/blur) ═══ */}
-              <div
-                ref={step1CardRef}
-                data-testid="step-card-nombre"
-                className={`rounded-2xl p-4 sm:p-5 transition-all duration-300 ${step1Done
-                  ? 'bg-[#f0fdf4] border-3 border-[#16a34a]'
-                  : 'bg-[#fffdf5] border-3 border-[#D4AF37] shadow-[0_8px_24px_rgba(212,175,55,0.18)]'
-                  }`}
-              >
-                {!step1Done && !step1GuideError ? (
-                  <div data-testid="red-arrow-step-1" className="mb-3">
-                    <img
-                      src="/assets/form-step1-nombre-guide.png"
-                      alt="Paso 1: Escribí tu Nombre y Apellido acá abajo"
-                      onError={() => setStep1GuideError(true)}
-                      className="w-full max-w-[440px] mx-auto h-auto rounded-xl select-none drop-shadow-md"
-                    />
-                  </div>
-                ) : !step1Done ? (
-                  <div
-                    data-testid="red-arrow-step-1"
-                    className="mb-3 bg-[#062319] border-2 border-[#D4AF37] text-white rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 shadow-md"
-                  >
-                    <ArrowDown className="w-7 h-7 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
-                    <span className="text-base sm:text-lg font-black uppercase tracking-wide leading-tight">
-                      PASO 1: Escribí aquí abajo tu Nombre y Apellido
-                    </span>
-                  </div>
-                ) : null}
+              {/* 1. Tus datos */}
+              <section className="space-y-2.5">
+                <h3 className={sectionTitleClass}>
+                  1. Tus datos
+                </h3>
 
-                <label className="block text-lg sm:text-xl font-black text-stone-950 mb-2 flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-base font-black shrink-0 ${step1Done ? 'bg-[#16a34a] text-white' : 'bg-[#062319] text-[#ffd778]'
-                      }`}>
-                      {step1Done ? '✓' : '1'}
-                    </span>
-                    <span>Tu Nombre y Apellido</span>
-                  </span>
-                  {step1Done && (
-                    <span className="text-sm font-black text-[#16a34a] bg-[#dcfce7] px-3 py-1 rounded-full shrink-0">
-                      ✓ Completado
-                    </span>
-                  )}
-                </label>
-
-                <div className="relative flex items-center">
-                  {!step1Done && (
-                    <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
-                      <ArrowRight className="w-8 h-8 stroke-[3.5]" />
-                    </div>
-                  )}
-                  <div className="relative flex-1">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-[#0b3d2e] pointer-events-none" />
+                <div
+                  ref={step1CardRef}
+                  data-testid="step-card-nombre"
+                  onClick={() => nameInputRef.current?.focus()}
+                  className={getFieldBoxClass('nombre', nombreOk)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <label
+                      htmlFor="checkout-nombre"
+                      className={labelClass}
+                    >
+                      Tu nombre y apellido
+                    </label>
+                    {nombreOk && (
+                      <span className={doneBadgeClass}>✓ Listo</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2.5 pt-1.5">
+                    <User className={iconTintClass} />
                     <input
+                      id="checkout-nombre"
                       ref={nameInputRef}
                       type="text"
                       autoComplete="name"
                       value={nombre}
-                      onChange={(e) => setNombre(e.target.value)}
+                      onChange={(e) => {
+                        setNombre(e.target.value);
+                        if (validationField === 'nombre') {
+                          setValidationField(null);
+                          setValidationNotice('');
+                        }
+                      }}
                       onBlur={(e) => {
-                        if (e.currentTarget.value.trim().length >= 3 && celular.replace(/\D/g, '').length < 8) {
-                          smoothCenterElement(step2CardRef.current);
+                        if (e.currentTarget.value.trim().length >= 3 && !celularOk) {
+                          smoothCenterElement(step3CardRef.current);
                         }
                       }}
                       placeholder="Ej: Juan Carlos López"
-                      className={`w-full pl-12 pr-4 py-4 sm:py-4.5 border-3 bg-white rounded-2xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!step1Done
-                        ? 'border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
-                        : 'border-[#16a34a] focus:border-[#0b3d2e]'
-                        }`}
+                      className={inputTextClass}
                     />
                   </div>
                 </div>
-              </div>
 
-              {/* ═══ ETAPA 2: Tu WhatsApp (Imagen guía explicando cómo escribir sin +595 + auto-scroll al salir) ═══ */}
-              <div
-                ref={step2CardRef}
-                data-testid="step-card-whatsapp"
-                className={`rounded-2xl p-4 sm:p-5 transition-all duration-300 ${!step1Done
-                  ? 'bg-stone-100 border-3 border-stone-300 opacity-75'
-                  : step2Done
-                    ? 'bg-[#f0fdf4] border-3 border-[#16a34a]'
-                    : 'bg-[#fffdf5] border-3 border-[#D4AF37] shadow-[0_8px_24px_rgba(212,175,55,0.18)]'
-                  }`}
-              >
-                {step1Done && !step2Done && !step2GuideError ? (
-                  <div data-testid="red-arrow-step-2" className="mb-3">
-                    <img
-                      src="/assets/form-step2-whatsapp-guide.png"
-                      alt="Paso 2: Escribí tu número de WhatsApp empezando con 09 sin +595"
-                      onError={() => setStep2GuideError(true)}
-                      className="w-full max-w-[440px] mx-auto h-auto rounded-xl select-none shadow-md border border-[#D4AF37]/60"
-                    />
+                <div
+                  ref={step3CardRef}
+                  data-testid="step-card-whatsapp"
+                  onClick={() => phoneInputRef.current?.focus()}
+                  className={getFieldBoxClass('celular', celularOk)}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label
+                      htmlFor="checkout-whatsapp"
+                      className={labelClass}
+                    >
+                      Tu número de WhatsApp (sin +595)
+                    </label>
+                    {waVerifyState.status === 'checking' ? (
+                      <span className={`text-[12px] font-semibold ${dark ? 'text-[#93C5FD]' : 'text-[#125C8C]'}`}>
+                        Verificando WhatsApp...
+                      </span>
+                    ) : waVerifyState.status === 'verified_whatsapp' && celularOk ? (
+                      <span className={doneBadgeClass}>✓ WhatsApp verificado</span>
+                    ) : celularOk ? (
+                      <span className={doneBadgeClass}>✓ Formato válido</span>
+                    ) : null}
                   </div>
-                ) : step1Done && !step2Done ? (
-                  <div
-                    data-testid="red-arrow-step-2"
-                    className="mb-3 bg-[#062319] border-2 border-[#D4AF37] text-white rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 shadow-md"
-                  >
-                    <ArrowDown className="w-7 h-7 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
-                    <span className="text-base sm:text-lg font-black uppercase tracking-wide leading-tight">
-                      PASO 2: Empezá con 09 sin +595 (Ej: 0981 123 456)
-                    </span>
-                  </div>
-                ) : null}
-
-                <label className="block text-lg sm:text-xl font-black text-stone-950 mb-2 flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-base font-black shrink-0 ${step2Done ? 'bg-[#16a34a] text-white' : step1Done ? 'bg-[#062319] text-[#ffd778]' : 'bg-stone-400 text-white'
-                      }`}>
-                      {step2Done ? '✓' : '2'}
-                    </span>
-                    <span>Tu Número de WhatsApp</span>
-                  </span>
-                  {!step1Done ? (
-                    <span className="text-xs sm:text-sm font-black text-stone-600 bg-stone-200 px-2.5 py-1 rounded-full shrink-0">
-                      🔒 Primero tu Nombre
-                    </span>
-                  ) : step2Done ? (
-                    <span className="text-sm font-black text-[#16a34a] bg-[#dcfce7] px-3 py-1 rounded-full shrink-0">
-                      ✓ Completado
-                    </span>
-                  ) : null}
-                </label>
-
-                <div className="relative flex items-center">
-                  {step1Done && !step2Done && (
-                    <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
-                      <ArrowRight className="w-8 h-8 stroke-[3.5]" />
-                    </div>
-                  )}
-                  <div className="relative flex-1">
-                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-[#0b3d2e] pointer-events-none" />
+                  <div className="flex items-center gap-2.5 pt-1.5">
+                    <Phone className={iconTintClass} />
                     <input
+                      id="checkout-whatsapp"
                       ref={phoneInputRef}
                       type="tel"
                       inputMode="tel"
                       autoComplete="tel"
-                      disabled={!step1Done}
                       value={celular}
-                      onChange={(e) => setCelular(e.target.value)}
-                      onFocus={() => {
-                        if (step1Done) smoothCenterElement(step2CardRef.current);
-                      }}
-                      onBlur={(e) => {
-                        if (e.currentTarget.value.replace(/\D/g, '').length >= 8 && !step3Done) {
-                          smoothCenterElement(step3CardRef.current);
+                      onChange={(e) => {
+                        setCelular(e.target.value);
+                        if (validationField === 'celular') {
+                          setValidationField(null);
+                          setValidationNotice('');
                         }
                       }}
-                      placeholder={step1Done ? 'Ej: 0981 123 456 (sin +595)' : '🔒 Completá primero tu Nombre arriba'}
-                      className={`w-full pl-12 pr-4 py-4 sm:py-4.5 border-3 rounded-2xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!step1Done
-                        ? 'bg-stone-200 border-stone-300 text-stone-500 cursor-not-allowed'
-                        : !step2Done
-                          ? 'bg-white border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
-                          : 'bg-white border-[#16a34a] focus:border-[#0b3d2e]'
+                      onFocus={() => smoothCenterElement(step3CardRef.current)}
+                      onBlur={(e) => {
+                        const val = e.currentTarget.value;
+                        const fmt = validateWhatsAppPhoneFormat(val);
+                        if (!fmt.valid && val.replace(/\D/g, '').length > 0) {
+                          setWaVerifyState({
+                            status: 'invalid_format',
+                            checkedPhone: val,
+                            message: fmt.message
+                          });
+                        } else if (fmt.valid && !ciudadOk) {
+                          smoothCenterElement(step2CardRef.current);
+                        }
+                      }}
+                      placeholder="Ej: 0981 452 890"
+                      className={inputTextClass}
+                    />
+                  </div>
+                  {(waVerifyState.status === 'not_on_whatsapp' || waVerifyState.status === 'invalid_format') &&
+                    waVerifyState.message && (
+                      <p
+                        data-testid="whatsapp-verify-feedback"
+                        className={`mt-2 text-[12.5px] font-semibold leading-snug ${
+                          dark ? 'text-[#FCA5A5]' : 'text-[#B91C1C]'
                         }`}
-                    />
-                  </div>
+                      >
+                        {waVerifyState.message}
+                      </p>
+                    )}
                 </div>
-              </div>
+              </section>
 
-              {/* ═══ ETAPA 3: ¿Dónde te entregamos? (Imagen descriptiva Casa vs Edificio + Ciudad -> Barrio -> Calle) ═══ */}
-              <div
-                ref={step3CardRef}
+              {/* 2. Dirección de entrega */}
+              <section
+                ref={step2CardRef}
                 data-testid="step-card-ubicacion"
-                className={`rounded-2xl p-4 sm:p-5 space-y-4 transition-all duration-300 ${!step2Done
-                  ? 'bg-stone-100 border-3 border-stone-300 opacity-75'
-                  : step3Done
-                    ? 'bg-[#f0fdf4] border-3 border-[#16a34a]'
-                    : 'bg-[#fffdf5] border-3 border-[#D4AF37] shadow-[0_8px_24px_rgba(212,175,55,0.18)]'
-                  }`}
+                className="space-y-2.5 pt-1"
               >
-                {step2Done && !step3Done && !step3GuideError && (
-                  <div className="mb-1">
-                    <img
-                      src="/assets/form-step3-entrega-guide.png"
-                      alt="Paso 3: Elegí Casa o Edificio y escribí Ciudad, Barrio y Calle"
-                      onError={() => setStep3GuideError(true)}
-                      className="w-full max-w-[440px] mx-auto h-auto rounded-xl select-none shadow-md border border-[#D4AF37]/60"
-                    />
-                  </div>
-                )}
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className={sectionTitleClass}>
+                    2. Dónde te enviamos
+                  </h3>
 
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <label className="text-lg sm:text-xl font-black text-stone-950 flex items-center gap-2">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-base font-black shrink-0 ${step3Done ? 'bg-[#16a34a] text-white' : step2Done ? 'bg-[#062319] text-[#ffd778]' : 'bg-stone-400 text-white'
-                      }`}>
-                      {step3Done ? '✓' : '3'}
-                    </span>
-                    <span>¿Dónde te entregamos?</span>
-                  </label>
-
-                  {!step2Done ? (
-                    <span className="text-xs sm:text-sm font-black text-stone-600 bg-stone-200 px-2.5 py-1 rounded-full">
-                      🔒 Primero tu WhatsApp
-                    </span>
-                  ) : step3Done ? (
-                    <span className="text-sm font-black text-[#16a34a] bg-[#dcfce7] px-3 py-1 rounded-full">
-                      ✓ Dirección Lista
-                    </span>
-                  ) : null}
-
-                  {/* Selector Casa / Edificio en letra grande */}
-                  <div className="inline-flex rounded-xl bg-stone-200 p-1 border-2 border-stone-300 text-sm sm:text-base font-black w-full sm:w-auto justify-center">
+                  <div
+                    className={`inline-flex rounded-[6px] p-0.5 border text-[13px] font-semibold ${
+                      dark ? 'bg-[#1E293B] border-[#475569]' : 'bg-[#CBD5E1] border-[#94A3B8]'
+                    }`}
+                  >
                     <button
                       type="button"
                       data-testid="btn-vivienda-casa"
-                      disabled={!step2Done}
                       onClick={() => setTipoVivienda('casa')}
-                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${!isBuilding
-                        ? 'bg-[#062319] text-[#ffd778] shadow-xs'
-                        : 'text-stone-700 hover:text-stone-950'
-                        }`}
+                      className={`px-3 py-1 rounded-[4px] transition-all cursor-pointer whitespace-nowrap ${
+                        !isBuilding
+                          ? dark
+                            ? 'bg-[#1773B0] text-white shadow-xs'
+                            : 'bg-white text-[#0F172A] shadow-xs'
+                          : dark
+                          ? 'text-[#CBD5E1] hover:text-white'
+                          : 'text-[#334155] hover:text-[#0F172A]'
+                      }`}
                     >
-                      🏠 Casa
+                      Casa
                     </button>
                     <button
                       type="button"
                       data-testid="btn-vivienda-edificio"
-                      disabled={!step2Done}
                       onClick={() => setTipoVivienda('edificio')}
-                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${isBuilding
-                        ? 'bg-[#062319] text-[#ffd778] shadow-xs'
-                        : 'text-stone-700 hover:text-stone-950'
-                        }`}
+                      className={`px-3 py-1 rounded-[4px] transition-all cursor-pointer whitespace-nowrap ${
+                        isBuilding
+                          ? dark
+                            ? 'bg-[#1773B0] text-white shadow-xs'
+                            : 'bg-white text-[#0F172A] shadow-xs'
+                          : dark
+                          ? 'text-[#CBD5E1] hover:text-white'
+                          : 'text-[#334155] hover:text-[#0F172A]'
+                      }`}
                     >
-                      🏢 Edificio
+                      Edificio
                     </button>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  {/* ── SUB-ETAPA 3.1: CIUDAD ── */}
-                  <div
-                    ref={ciudadBoxRef}
-                    className={`rounded-2xl p-3.5 transition-all ${!step2Done
-                      ? 'bg-stone-200/70 border-2 border-stone-300'
-                      : !ciudadDone
-                        ? 'bg-amber-50/70 border-3 border-[#D4AF37]'
-                        : 'bg-white border-2 border-[#16a34a]'
-                      }`}
-                  >
-                    {step2Done && !ciudadDone && (
-                      <div
-                        data-testid="red-arrow-ciudad"
-                        className="mb-2.5 bg-[#062319] border border-[#D4AF37] text-[#ffd778] rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm"
-                      >
-                        <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
-                        <span className="text-sm sm:text-base font-black uppercase">
-                          PASO 3.1: Escribí aquí el nombre de tu Ciudad
-                        </span>
-                      </div>
-                    )}
-                    <label className="block text-base sm:text-lg font-black text-stone-950 mb-1.5 flex items-center justify-between">
-                      <span>🏙️ 1. Tu Ciudad</span>
-                      {ciudadDone && (
-                        <span className="text-xs sm:text-sm font-black text-[#16a34a] bg-[#dcfce7] px-2.5 py-0.5 rounded-full">
-                          ✓ Listo
-                        </span>
-                      )}
-                    </label>
-                    <div className="relative flex items-center">
-                      {step2Done && !ciudadDone && (
-                        <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
-                          <ArrowRight className="w-7 h-7 stroke-[3.5]" />
-                        </div>
-                      )}
-                      <div className="relative flex-1">
-                        <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-6 h-6 text-[#0b3d2e] pointer-events-none" />
-                        <input
-                          ref={ciudadInputRef}
-                          type="text"
-                          data-testid="input-ciudad"
-                          autoComplete="address-level2"
-                          disabled={!step2Done}
-                          value={ciudadTexto}
-                          onChange={(e) => setCiudadTexto(e.target.value)}
-                          onFocus={() => {
-                            if (step2Done) smoothCenterElement(ciudadBoxRef.current);
-                          }}
-                          onBlur={(e) => {
-                            if (e.currentTarget.value.trim().length >= 2 && barrioTexto.trim().length < 2) {
-                              smoothCenterElement(barrioBoxRef.current);
-                            }
-                          }}
-                          placeholder={step2Done ? 'Ej: San Lorenzo, Luque, Asunción...' : '🔒 Completá primero tu WhatsApp'}
-                          className={`w-full pl-11 pr-4 py-3.5 sm:py-4 border-3 rounded-xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!step2Done
-                            ? 'bg-stone-200 border-stone-300 text-stone-500 cursor-not-allowed'
-                            : !ciudadDone
-                              ? 'bg-white border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
-                              : 'bg-white border-[#16a34a]'
-                            }`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ── SUB-ETAPA 3.2: BARRIO (Se activa cuando llena Ciudad) ── */}
-                  <div
-                    ref={barrioBoxRef}
-                    className={`rounded-2xl p-3.5 transition-all ${!ciudadDone
-                      ? 'bg-stone-200/70 border-2 border-stone-300 opacity-70'
-                      : !barrioDone
-                        ? 'bg-amber-50/70 border-3 border-[#D4AF37]'
-                        : 'bg-white border-2 border-[#16a34a]'
-                      }`}
-                  >
-                    {ciudadDone && !barrioDone && (
-                      <div
-                        data-testid="red-arrow-barrio"
-                        className="mb-2.5 bg-[#062319] border border-[#D4AF37] text-[#ffd778] rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm"
-                      >
-                        <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
-                        <span className="text-sm sm:text-base font-black uppercase">
-                          PASO 3.2: Ahora escribí aquí el nombre de tu Barrio
-                        </span>
-                      </div>
-                    )}
-                    <label className="block text-base sm:text-lg font-black text-stone-950 mb-1.5 flex items-center justify-between">
-                      <span>🏘️ 2. Tu Barrio</span>
-                      {!ciudadDone ? (
-                        <span className="text-xs font-black text-stone-600 bg-stone-300 px-2.5 py-0.5 rounded-full">
-                          🔒 Primero tu Ciudad
-                        </span>
-                      ) : barrioDone ? (
-                        <span className="text-xs sm:text-sm font-black text-[#16a34a] bg-[#dcfce7] px-2.5 py-0.5 rounded-full">
-                          ✓ Listo
-                        </span>
-                      ) : null}
-                    </label>
-                    <div className="relative flex items-center">
-                      {ciudadDone && !barrioDone && (
-                        <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
-                          <ArrowRight className="w-7 h-7 stroke-[3.5]" />
-                        </div>
-                      )}
-                      <div className="relative flex-1">
-                        <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-6 h-6 text-[#0b3d2e] pointer-events-none" />
-                        <input
-                          ref={barrioInputRef}
-                          type="text"
-                          data-testid="input-barrio"
-                          disabled={!ciudadDone}
-                          value={barrioTexto}
-                          onChange={(e) => setBarrioTexto(e.target.value)}
-                          onFocus={() => {
-                            if (ciudadDone) smoothCenterElement(barrioBoxRef.current);
-                          }}
-                          onBlur={(e) => {
-                            if (e.currentTarget.value.trim().length >= 2 && calleTexto.trim().length < 2) {
-                              smoothCenterElement(calleBoxRef.current);
-                            }
-                          }}
-                          placeholder={ciudadDone ? 'Ej: Barrio Centro, San Miguel...' : '🔒 Escribí primero tu Ciudad arriba'}
-                          className={`w-full pl-11 pr-4 py-3.5 sm:py-4 border-3 rounded-xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!ciudadDone
-                            ? 'bg-stone-200 border-stone-300 text-stone-500 cursor-not-allowed'
-                            : !barrioDone
-                              ? 'bg-white border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
-                              : 'bg-white border-[#16a34a]'
-                            }`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ── SUB-ETAPA 3.3: NOMBRE DE CALLE (Se activa cuando llena Barrio) ── */}
-                  <div
-                    ref={calleBoxRef}
-                    className={`rounded-2xl p-3.5 transition-all ${!barrioDone
-                      ? 'bg-stone-200/70 border-2 border-stone-300 opacity-70'
-                      : !calleDone
-                        ? 'bg-amber-50/70 border-3 border-[#D4AF37]'
-                        : 'bg-white border-2 border-[#16a34a]'
-                      }`}
-                  >
-                    {barrioDone && !calleDone && (
-                      <div
-                        data-testid="red-arrow-calle"
-                        className="mb-2.5 bg-[#062319] border border-[#D4AF37] text-[#ffd778] rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm"
-                      >
-                        <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0 animate-pointer-bounce" />
-                        <span className="text-sm sm:text-base font-black uppercase">
-                          PASO 3.3: Por último escribí el Nombre de tu Calle
-                        </span>
-                      </div>
-                    )}
-                    <label className="block text-base sm:text-lg font-black text-stone-950 mb-1.5 flex items-center justify-between">
-                      <span>🛣️ 3. Nombre de tu Calle</span>
-                      {!barrioDone ? (
-                        <span className="text-xs font-black text-stone-600 bg-stone-300 px-2.5 py-0.5 rounded-full">
-                          🔒 Primero tu Barrio
-                        </span>
-                      ) : calleDone ? (
-                        <span className="text-xs sm:text-sm font-black text-[#16a34a] bg-[#dcfce7] px-2.5 py-0.5 rounded-full">
-                          ✓ Listo
-                        </span>
-                      ) : null}
-                    </label>
-                    <div className="relative flex items-center">
-                      {barrioDone && !calleDone && (
-                        <div className="mr-2 text-[#D4AF37] animate-pointer-bounce shrink-0">
-                          <ArrowRight className="w-7 h-7 stroke-[3.5]" />
-                        </div>
-                      )}
-                      <div className="relative flex-1">
-                        <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-6 h-6 text-[#0b3d2e] pointer-events-none" />
-                        <input
-                          ref={calleInputRef}
-                          type="text"
-                          data-testid="input-calle"
-                          autoComplete="street-address"
-                          disabled={!barrioDone}
-                          value={calleTexto}
-                          onChange={(e) => setCalleTexto(e.target.value)}
-                          onFocus={() => {
-                            if (barrioDone) smoothCenterElement(calleBoxRef.current);
-                          }}
-                          onBlur={(e) => {
-                            if (e.currentTarget.value.trim().length >= 2) {
-                              smoothCenterElement(submitAreaRef.current);
-                            }
-                          }}
-                          placeholder={
-                            !barrioDone
-                              ? '🔒 Escribí primero tu Barrio arriba'
-                              : isBuilding
-                                ? 'Ej: Av. Mcal. López casi San Martín'
-                                : 'Ej: Calle España casi Ruta 2'
-                          }
-                          className={`w-full pl-11 pr-4 py-3.5 sm:py-4 border-3 rounded-xl text-lg sm:text-xl font-black text-stone-950 placeholder:text-stone-400 placeholder:font-bold outline-none transition-all ${!barrioDone
-                            ? 'bg-stone-200 border-stone-300 text-stone-500 cursor-not-allowed'
-                            : !calleDone
-                              ? 'bg-white border-[#D4AF37] focus:border-[#062319] focus:ring-4 focus:ring-[#D4AF37]/30'
-                              : 'bg-white border-[#16a34a]'
-                            }`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {step2Done && !gpsConfirmado && (
-                  <div className="rounded-2xl bg-[#ecfdf5] border-2 border-[#6ee7b7] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <p className="text-sm sm:text-base font-black text-[#064e3b] flex items-center gap-1.5">
-                        <Crosshair className="w-4 h-4 text-[#059669] shrink-0" />
-                        <span>¿Querés enviar tu GPS exacto? (Opcional · 1 toque)</span>
-                      </p>
-                      <p className="text-xs font-bold text-[#065f46]/90">
-                        Ayuda al repartidor a ubicar tu casa al instante sin tener que llamarte.
-                      </p>
-                    </div>
+                {/* Botón GPS Prominente y Principal (Primero en Sección de Entrega) */}
+                {!gpsConfirmado && (
+                  <div className="space-y-2">
                     <button
                       type="button"
                       data-testid="btn-capture-gps"
                       disabled={gpsLoading}
                       onClick={handleOneClickGpsLocation}
-                      className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#059669] hover:bg-[#047857] text-white text-sm font-black shadow-sm cursor-pointer disabled:opacity-65 transition-all"
+                      className={`w-full rounded-[8px] border-[1.5px] px-3.5 py-3 flex items-center justify-between gap-3 text-left transition-all cursor-pointer disabled:opacity-85 ${
+                        dark
+                          ? 'bg-[#172554]/55 border-[#38BDF8] hover:bg-[#172554]/80 text-white'
+                          : 'bg-[#F0F7FC] border-[#1773B0] hover:bg-[#E0F0FA] text-[#0F172A]'
+                      }`}
                     >
-                      <Crosshair className={`w-4 h-4 ${gpsLoading ? 'animate-spin' : ''}`} />
-                      <span>{gpsLoading ? 'Buscando GPS...' : 'Usar mi GPS actual'}</span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={`w-10 h-10 rounded-[8px] flex items-center justify-center shrink-0 ${
+                            dark ? 'bg-[#38BDF8] text-[#0F172A]' : 'bg-[#1773B0] text-white'
+                          }`}
+                        >
+                          <Crosshair className={`w-5 h-5 ${gpsLoading ? 'animate-spin' : ''}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[15px] font-bold leading-snug">
+                            {gpsLoading
+                              ? gpsLiveAccuracy !== null
+                                ? `Calibrando GPS: ±${gpsLiveAccuracy}m (meta ≤ 10m)`
+                                : 'Buscando señal GPS satelital...'
+                              : 'Enviar mi ubicación GPS exacta'}
+                          </div>
+                          <div className={`text-[12px] font-medium mt-0.5 leading-snug ${dark ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
+                            {gpsLoading
+                              ? 'Igual que en WhatsApp: esperando que baje a 5m–10m sin moverte...'
+                              : 'Principal: tocá aquí para marcar tu casa en 1 toque (precisión ≤ 10m)'}
+                          </div>
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2.5 py-1.5 rounded-[6px] text-[12px] font-bold shrink-0 ${
+                          dark ? 'bg-[#38BDF8] text-[#0F172A]' : 'bg-[#1773B0] text-white'
+                        }`}
+                      >
+                        {gpsLoading ? 'Midiendo' : 'Activar GPS'}
+                      </span>
                     </button>
+
+                    {/* Barra visual estilo WhatsApp mientras converge la precisión hasta ≤ 10m */}
+                    {gpsLoading && (
+                      <div
+                        data-testid="gps-live-calibration-bar"
+                        className={`rounded-[8px] border px-3.5 py-2.5 space-y-1.5 ${
+                          dark
+                            ? 'bg-[#0F172A] border-[#38BDF8]/40 text-[#E2E8F0]'
+                            : 'bg-[#F8FAFC] border-[#93C5FD] text-[#0F172A]'
+                        }`}
+                      >
+                        {(() => {
+                          const acc = gpsLiveAccuracy ?? 1500;
+                          const pct =
+                            acc <= 10
+                              ? 100
+                              : acc <= 25
+                              ? 84
+                              : acc <= 60
+                              ? 66
+                              : acc <= 150
+                              ? 46
+                              : acc <= 500
+                              ? 28
+                              : 14;
+                          return (
+                            <>
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] font-semibold">
+                                <span>
+                                  {gpsLiveAccuracy !== null
+                                    ? `Precisión actual: ±${gpsLiveAccuracy} metros`
+                                    : 'Conectando con satélites GPS...'}
+                                </span>
+                                <span className={dark ? 'text-[#38BDF8]' : 'text-[#125C8C]'}>
+                                  Meta: bajar a ≤ 10m (5m–10m)
+                                </span>
+                              </div>
+                              <div className={`w-full h-2 rounded-full overflow-hidden ${dark ? 'bg-[#1E293B]' : 'bg-[#E2E8F0]'}`}>
+                                <div
+                                  className="h-full bg-[#1773B0] transition-all duration-500 rounded-full"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <p className={`text-[11px] leading-snug ${dark ? 'text-[#CBD5E1]' : 'text-[#475569]'}`}>
+                                Igual que cuando enviás ubicación por WhatsApp: no aceptamos señales de antena a 1000m o 2000m, esperamos hasta que baje a 10 metros o menos.
+                              </p>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {gpsNotice && (
-                  <p className="text-sm sm:text-base font-bold text-amber-900 bg-amber-50 border-2 border-amber-300 rounded-xl px-3.5 py-2.5">
-                    💡 {gpsNotice}
+                  <p
+                    className={`text-[13px] font-semibold border-[1.5px] rounded-[8px] px-3.5 py-2.5 ${
+                      dark
+                        ? 'bg-[#1E293B] border-[#FBBF24]/60 text-[#FEF08A]'
+                        : 'bg-[#FFFBEB] border-[#D97706] text-[#92400E]'
+                    }`}
+                  >
+                    {gpsNotice}
                   </p>
                 )}
 
-                {/* Compact Satellite Map Preview ONLY when GPS confirmed */}
-                {gpsConfirmado && gpsLat !== null && gpsLng !== null && tileData && (
-                  <div className="rounded-2xl overflow-hidden border-3 border-[#16a34a] bg-[#064e3b] select-none">
-                    <div className="bg-[#15803d] text-white px-3.5 py-2.5 flex items-center justify-between gap-2 text-sm font-black">
-                      <span className="flex items-center gap-1.5">
-                        <ShieldCheck className="w-5 h-5 text-[#86efac]" />
-                        <span>Pin GPS listo para el repartidor</span>
+                {gpsLat !== null && gpsLng !== null && tileData && (
+                  <div className="rounded-[8px] overflow-hidden border-[1.5px] border-[#1773B0] bg-[#111827] select-none">
+                    <div className="bg-[#111827] text-white px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[12px] font-semibold">
+                      <span className="flex items-start gap-1.5 min-w-0">
+                        <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${gpsConfirmado ? 'text-emerald-400' : 'text-amber-400'}`} />
+                        <span className="leading-snug">
+                          {gpsConfirmado
+                            ? `GPS exacto adjuntado${gpsAccuracy ? ` (±${gpsAccuracy}m)` : ''}`
+                            : 'Arrastrá el pin hasta tu casa y tocá Fijar'}
+                        </span>
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setMapLocked(!mapLocked)}
-                        className="px-3 py-1 rounded-lg bg-white text-[#065f46] text-xs sm:text-sm font-black flex items-center gap-1 cursor-pointer"
-                      >
-                        {mapLocked ? (
-                          <>
-                            <Pencil className="w-3.5 h-3.5" />
-                            <span>Ajustar pin</span>
-                          </>
-                        ) : (
-                          <>
-                            <Lock className="w-3.5 h-3.5" />
-                            <span>Fijar pin</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleOneClickGpsLocation}
+                          className="px-2 py-1 rounded bg-white/15 hover:bg-white/25 text-white text-[11px] font-semibold cursor-pointer"
+                        >
+                          Actualizar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMapLocked(!mapLocked)}
+                          className="px-2.5 py-1 rounded bg-white text-[#111827] text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          {mapLocked ? (
+                            <>
+                              <Pencil className="w-3 h-3" />
+                              <span>Ajustar</span>
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="w-3 h-3" />
+                              <span>Fijar</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="relative w-full h-44 overflow-hidden">
+                    <div className="relative w-full h-36 overflow-hidden">
                       <div
                         ref={mapContainerRef}
                         onPointerDown={!mapLocked ? handleMapPointerDown : undefined}
                         onPointerMove={!mapLocked ? handleMapPointerMove : undefined}
                         onPointerUp={!mapLocked ? handleMapPointerUp : undefined}
-                        className={`relative w-full h-full overflow-hidden ${mapLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing touch-none'
-                          }`}
+                        className={`relative w-full h-full overflow-hidden ${
+                          mapLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing touch-none'
+                        }`}
                       >
                         <div
                           className="absolute"
@@ -1963,22 +2179,21 @@ export const OrderForm: React.FC<{
                         </div>
 
                         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center">
-                          <div className="w-9 h-9 rounded-full bg-[#16a34a] border-3 border-white shadow-xl flex items-center justify-center text-white">
-                            <MapPin className="w-4 h-4 fill-white text-[#16a34a]" />
+                          <div className="w-7 h-7 rounded-full bg-[#1773B0] border-2 border-white shadow-md flex items-center justify-center text-white">
+                            <MapPin className="w-3.5 h-3.5" />
                           </div>
-                          <div className="w-3 h-1.5 rounded-full bg-black/60 mt-0.5" />
                         </div>
                       </div>
 
                       {!mapLocked && (
-                        <div className="absolute bottom-2 left-2 right-2 bg-[#062319]/90 text-white text-xs sm:text-sm font-bold px-3 py-1.5 rounded-xl flex items-center justify-between z-20">
-                          <span>👆 Arrastrá el mapa hasta tu techo</span>
+                        <div className="absolute bottom-2 left-2 right-2 bg-[#111827]/90 text-white text-[11px] font-medium px-2.5 py-1 rounded flex items-center justify-between z-20">
+                          <span>Arrastrá el mapa hasta tu casa</span>
                           <button
                             type="button"
                             onClick={() => setMapLocked(true)}
-                            className="bg-[#16a34a] text-white font-black px-3 py-1 rounded-lg cursor-pointer"
+                            className="bg-white text-[#111827] font-semibold px-2 py-0.5 rounded cursor-pointer"
                           >
-                            Listo ✓
+                            Listo
                           </button>
                         </div>
                       )}
@@ -1990,9 +2205,9 @@ export const OrderForm: React.FC<{
                             e.stopPropagation();
                             setMapZoom((z) => Math.min(19, z + 1));
                           }}
-                          className="w-8 h-8 rounded-lg bg-[#064e3b]/90 text-white border border-white/30 flex items-center justify-center cursor-pointer"
+                          className="w-7 h-7 rounded bg-[#111827]/85 text-white border border-white/25 flex items-center justify-center cursor-pointer"
                         >
-                          <Plus className="w-4 h-4" />
+                          <Plus className="w-3.5 h-3.5" />
                         </button>
                         <button
                           type="button"
@@ -2000,118 +2215,265 @@ export const OrderForm: React.FC<{
                             e.stopPropagation();
                             setMapZoom((z) => Math.max(14, z - 1));
                           }}
-                          className="w-8 h-8 rounded-lg bg-[#064e3b]/90 text-white border border-white/30 flex items-center justify-center cursor-pointer"
+                          className="w-7 h-7 rounded bg-[#111827]/85 text-white border border-white/25 flex items-center justify-center cursor-pointer"
                         >
-                          <Minus className="w-4 h-4" />
+                          <Minus className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Building fields (only if Edificio selected) */}
-                {isBuilding && step2Done && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-[#f8fafc] border-2 border-stone-300 rounded-2xl p-3.5">
+                {/* En celular va en 1 columna ancha para evitar errores de dedo o vista */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div
+                    ref={ciudadBoxRef}
+                    onClick={() => ciudadInputRef.current?.focus()}
+                    className={getFieldBoxClass('ciudad', ciudadOk)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <label
+                        htmlFor="checkout-ciudad"
+                        className={labelClass}
+                      >
+                        Tu ciudad
+                      </label>
+                      {ciudadOk && (
+                        <span className={doneBadgeClass}>✓</span>
+                      )}
+                    </div>
                     <input
+                      id="checkout-ciudad"
+                      ref={ciudadInputRef}
                       type="text"
-                      value={nombreEdificio}
-                      onChange={(e) => setNombreEdificio(e.target.value)}
-                      placeholder="Nombre del Edificio (opcional)"
-                      className="w-full px-3.5 py-3 border-2 border-stone-300 focus:border-[#16a34a] bg-white rounded-xl text-base font-black text-stone-900 outline-none"
+                      data-testid="input-ciudad"
+                      autoComplete="address-level2"
+                      value={ciudadTexto}
+                      onChange={(e) => {
+                        setCiudadTexto(e.target.value);
+                        if (validationField === 'ciudad') {
+                          setValidationField(null);
+                          setValidationNotice('');
+                        }
+                      }}
+                      onFocus={() => smoothCenterElement(ciudadBoxRef.current)}
+                      onBlur={(e) => {
+                        if (e.currentTarget.value.trim().length >= 2 && !barrioOk) {
+                          smoothCenterElement(barrioBoxRef.current);
+                        }
+                      }}
+                      placeholder="Ej: San Lorenzo, Asunción"
+                      className={`${inputTextClass} pt-1.5`}
                     />
+                  </div>
+
+                  <div
+                    ref={barrioBoxRef}
+                    onClick={() => barrioInputRef.current?.focus()}
+                    className={getFieldBoxClass('barrio', barrioOk)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <label
+                        htmlFor="checkout-barrio"
+                        className={labelClass}
+                      >
+                        Tu barrio o zona
+                      </label>
+                      {barrioOk && (
+                        <span className={doneBadgeClass}>✓</span>
+                      )}
+                    </div>
                     <input
+                      id="checkout-barrio"
+                      ref={barrioInputRef}
                       type="text"
-                      value={pisoDepartamento}
-                      onChange={(e) => setPisoDepartamento(e.target.value)}
-                      placeholder="Piso y N° Dpto. (ej: Piso 4, 4B)"
-                      className="w-full px-3.5 py-3 border-2 border-stone-300 focus:border-[#16a34a] bg-white rounded-xl text-base font-black text-stone-900 outline-none"
+                      data-testid="input-barrio"
+                      value={barrioTexto}
+                      onChange={(e) => {
+                        setBarrioTexto(e.target.value);
+                        if (validationField === 'barrio') {
+                          setValidationField(null);
+                          setValidationNotice('');
+                        }
+                      }}
+                      onFocus={() => smoothCenterElement(barrioBoxRef.current)}
+                      onBlur={(e) => {
+                        if (e.currentTarget.value.trim().length >= 2 && !calleOk) {
+                          smoothCenterElement(calleBoxRef.current);
+                        }
+                      }}
+                      placeholder="Ej: Barrio Centro, San Miguel"
+                      className={`${inputTextClass} pt-1.5`}
                     />
-                    <div className="sm:col-span-2 grid grid-cols-2 gap-2">
+                  </div>
+                </div>
+
+                <div
+                  ref={calleBoxRef}
+                  onClick={() => calleInputRef.current?.focus()}
+                  className={getFieldBoxClass('calle', calleOk)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <label
+                      htmlFor="checkout-calle"
+                      className={labelClass}
+                    >
+                      Tu calle y referencia
+                    </label>
+                    {calleOk && (
+                      <span className={doneBadgeClass}>✓ Listo</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2.5 pt-1.5">
+                    <MapPin className={iconTintClass} />
+                    <input
+                      id="checkout-calle"
+                      ref={calleInputRef}
+                      type="text"
+                      data-testid="input-calle"
+                      autoComplete="street-address"
+                      value={calleTexto}
+                      onChange={(e) => {
+                        setCalleTexto(e.target.value);
+                        if (validationField === 'calle') {
+                          setValidationField(null);
+                          setValidationNotice('');
+                        }
+                      }}
+                      onFocus={() => smoothCenterElement(calleBoxRef.current)}
+                      onBlur={(e) => {
+                        if (e.currentTarget.value.trim().length >= 2) {
+                          smoothCenterElement(submitAreaRef.current);
+                        }
+                      }}
+                      placeholder={
+                        isBuilding
+                          ? 'Ej: Av. Mcal. López casi San Martín'
+                          : 'Ej: Calle España casi Ruta 2, portón blanco'
+                      }
+                      className={inputTextClass}
+                    />
+                  </div>
+                </div>
+
+                {/* Campos de Edificio (solo cuando se selecciona Edificio) */}
+                {isBuilding && (
+                  <div className="space-y-2 pt-0.5">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div
+                        className={`border-[1.5px] rounded-[8px] px-3 py-2 ${
+                          dark
+                            ? 'bg-[#1E293B] border-[#475569] focus-within:border-[#38BDF8]'
+                            : 'bg-white border-[#64748B] focus-within:border-[#1773B0]'
+                        }`}
+                      >
+                        <label className={`block text-[12px] font-semibold ${dark ? 'text-[#E2E8F0]' : 'text-[#0F172A]'}`}>
+                          Edificio (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={nombreEdificio}
+                          onChange={(e) => setNombreEdificio(e.target.value)}
+                          placeholder="Nombre"
+                          className={`w-full bg-transparent text-[15px] font-semibold outline-none pt-1 ${
+                            dark ? 'text-white placeholder:text-[#94A3B8]' : 'text-[#0F172A] placeholder:text-[#475569]'
+                          }`}
+                        />
+                      </div>
+                      <div
+                        className={`border-[1.5px] rounded-[8px] px-3 py-2 ${
+                          dark
+                            ? 'bg-[#1E293B] border-[#475569] focus-within:border-[#38BDF8]'
+                            : 'bg-white border-[#64748B] focus-within:border-[#1773B0]'
+                        }`}
+                      >
+                        <label className={`block text-[12px] font-semibold ${dark ? 'text-[#E2E8F0]' : 'text-[#0F172A]'}`}>
+                          Piso / Dpto.
+                        </label>
+                        <input
+                          type="text"
+                          value={pisoDepartamento}
+                          onChange={(e) => setPisoDepartamento(e.target.value)}
+                          placeholder="Ej: 4B"
+                          className={`w-full bg-transparent text-[15px] font-semibold outline-none pt-1 ${
+                            dark ? 'text-white placeholder:text-[#94A3B8]' : 'text-[#0F172A] placeholder:text-[#475569]'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[13px]">
                       <button
                         type="button"
                         onClick={() => setTieneRecepcion('si_recepcionista')}
-                        className={`py-2.5 px-3 rounded-xl border-2 text-sm font-black cursor-pointer ${tieneRecepcion === 'si_recepcionista'
-                          ? 'bg-[#16a34a] text-white border-[#065f46]'
-                          : 'bg-white text-stone-800 border-stone-300'
-                          }`}
+                        className={`py-2 px-3 rounded-[6px] border-[1.5px] font-semibold cursor-pointer ${
+                          tieneRecepcion === 'si_recepcionista'
+                            ? dark
+                              ? 'bg-[#172554]/60 border-[#38BDF8] text-white'
+                              : 'bg-white border-[#1773B0] text-[#0F172A]'
+                            : dark
+                            ? 'bg-[#1E293B] border-[#475569] text-[#CBD5E1]'
+                            : 'bg-white/80 border-[#94A3B8] text-[#334155]'
+                        }`}
                       >
-                        🛎️ Recibe Portería
+                        Recibe portería
                       </button>
                       <button
                         type="button"
                         onClick={() => setTieneRecepcion('no_personalmente')}
-                        className={`py-2.5 px-3 rounded-xl border-2 text-sm font-black cursor-pointer ${tieneRecepcion === 'no_personalmente'
-                          ? 'bg-[#16a34a] text-white border-[#065f46]'
-                          : 'bg-white text-stone-800 border-stone-300'
-                          }`}
+                        className={`py-2 px-3 rounded-[6px] border-[1.5px] font-semibold cursor-pointer ${
+                          tieneRecepcion === 'no_personalmente'
+                            ? dark
+                              ? 'bg-[#172554]/60 border-[#38BDF8] text-white'
+                              : 'bg-white border-[#1773B0] text-[#0F172A]'
+                            : dark
+                            ? 'bg-[#1E293B] border-[#475569] text-[#CBD5E1]'
+                            : 'bg-white/80 border-[#94A3B8] text-[#334155]'
+                        }`}
                       >
-                        🙋 Recibo Yo Abajo
+                        Recibo personalmente
                       </button>
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* ═══ Payment Selector (Letra grande) ═══ */}
-              <div className="pt-1">
-                <div className="flex items-center justify-between text-base sm:text-lg font-black text-stone-900 mb-2">
-                  <span>💰 ¿Cómo preferís pagar al recibir?:</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: 'Efectivo al recibir', label: 'Efectivo', Icon: Banknote },
-                    { value: 'QR / Transferencia en puerta', label: 'QR / Transf.', Icon: QrCode },
-                    { value: 'Tarjeta Débito/Crédito al repartidor', label: 'Tarjeta POS', Icon: CreditCard }
-                  ].map(({ value, label, Icon }) => {
-                    const active = pago === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setPago(value)}
-                        className={`flex items-center justify-center gap-1.5 py-3 px-2 rounded-xl border-3 text-sm sm:text-base font-black cursor-pointer transition-all ${active
-                          ? 'bg-[#eefaf3] border-[#0b3d2e] text-[#062319] shadow-sm'
-                          : 'bg-[#faf9f5] border-stone-300 text-stone-700 hover:border-stone-400'
-                          }`}
-                      >
-                        <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-[#1ea856]' : 'text-stone-500'}`} />
-                        <span className="truncate">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              </section>
 
-              {/* ═══ BOTÓN GRÁFICO ANIMADO CONFIRMAR MI PEDIDO (Transparente sin caja ni monto) ═══ */}
-              <div ref={submitAreaRef} className="pt-2">
-                {step3Done && !submitting && (
-                  <div
-                    data-testid="red-arrow-submit"
-                    className="mb-3 bg-[#062319] border-2 border-[#D4AF37] text-[#ffd778] rounded-xl px-4 py-2.5 flex items-center justify-center gap-2.5 shadow-lg animate-pointer-bounce"
+              {/* 3. Botón Oficial Shopify Checkout CTA con Guía Explícita y Bloqueo si Faltan Datos */}
+              <div ref={submitAreaRef} className="pt-1.5 space-y-2">
+                {!submitting && (
+                  <p
+                    data-testid="submit-readiness-hint"
+                    className={`text-center text-[13px] font-semibold ${
+                      isFormReady
+                        ? dark
+                          ? 'text-[#93C5FD]'
+                          : 'text-[#125C8C]'
+                        : dark
+                        ? 'text-[#FBBF24]'
+                        : 'text-[#B45309]'
+                    }`}
                   >
-                    <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0" />
-                    <span className="text-sm sm:text-base font-black uppercase tracking-wide text-center">
-                      ¡TODO LISTO! TOCÁ EL BOTÓN DE ABAJO PARA CONFIRMAR
-                    </span>
-                    <ArrowDown className="w-6 h-6 stroke-[3] text-[#ffd778] shrink-0" />
-                  </div>
+                    {isFormReady
+                      ? 'Tocá el botón azul de abajo para enviar tu información 👇'
+                      : `Completá todos los datos para activar el botón (falta: ${missingFields.join(', ')})`}
+                  </p>
                 )}
 
                 {submitting ? (
                   <div
                     data-testid="btn-dual-submit-order"
-                    className="w-full rounded-2xl bg-gradient-to-r from-[#041a12] via-[#062319] to-[#0b3d2e] border-2 border-[#D4AF37] text-white py-5 px-4 shadow-xl flex flex-col items-center justify-center gap-2"
+                    className="w-full rounded-[8px] bg-[#1773B0] text-white py-3.5 px-4 flex flex-col items-center justify-center gap-1.5"
                   >
-                    <div className="flex items-center justify-center gap-3 text-center font-black text-lg sm:text-xl text-[#ffd778]">
-                      <Crosshair className="w-7 h-7 text-[#ffd778] animate-spin shrink-0" />
+                    <div className="flex items-center justify-center gap-2 text-[15px] font-semibold">
+                      <Crosshair className="w-4 h-4 animate-spin shrink-0" />
                       <span>
-                        Preparando tus datos{firstName ? `, ${firstName}` : ''}...{' '}
-                        {submitCountdown > 0 ? `${submitCountdown}s` : '¡Enviando!'}
+                        Confirmando tu pedido{firstName ? `, ${firstName}` : ''}...{' '}
+                        {submitCountdown > 0 ? `${submitCountdown}s` : 'Listo'}
                       </span>
                     </div>
-                    <div className="w-4/5 max-w-xs h-3 bg-white/15 rounded-full overflow-hidden">
+                    <div className="w-3/4 max-w-xs h-1 bg-white/25 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-[#e8b23a] rounded-full transition-all duration-1000 ease-linear"
+                        className="h-full bg-white rounded-full transition-all duration-1000 ease-linear"
                         style={{
                           width: `${Math.min(100, Math.max(10, ((5 - submitCountdown) / 5) * 100))}%`
                         }}
@@ -2122,28 +2484,24 @@ export const OrderForm: React.FC<{
                   <button
                     type="submit"
                     data-testid="btn-dual-submit-order"
-                    disabled={submitting}
-                    className="w-full bg-transparent border-0 p-0 focus:outline-none cursor-pointer flex items-center justify-center"
+                    disabled={!isFormReady || submitting}
+                    aria-disabled={!isFormReady || submitting}
+                    className={`w-full h-[54px] font-semibold text-[16px] tracking-[-0.01em] px-5 rounded-[8px] shadow-xs transition-all flex items-center justify-center gap-2 ${
+                      isFormReady
+                        ? 'bg-[#1773B0] hover:bg-[#125C8C] active:scale-[0.99] text-white cursor-pointer'
+                        : dark
+                        ? 'bg-[#334155] text-[#94A3B8] border border-[#475569] cursor-not-allowed'
+                        : 'bg-[#94A3B8] text-white/95 cursor-not-allowed'
+                    }`}
                   >
-                    {!confirmBtnImgError ? (
-                      <img
-                        src="/assets/form-confirm-order-cta.png"
-                        alt="¡Confirmar mi pedido! Al tocar adjuntamos tu ubicación GPS y enviamos tus datos"
-                        onError={() => setConfirmBtnImgError(true)}
-                        className={`w-full max-w-[440px] mx-auto h-auto select-none drop-shadow-[0_12px_22px_rgba(0,0,0,0.28)] transition-transform active:scale-95 ${
-                          step3Done ? 'animate-cta-earthquake' : 'animate-cta-float'
-                        }`}
-                      />
-                    ) : (
-                      <span className="w-full bg-gradient-to-r from-[#065f46] via-[#047857] to-[#065f46] text-[#ffd778] font-black text-xl py-4 px-5 rounded-full border-3 border-[#D4AF37] shadow-xl flex flex-col items-center gap-1">
-                        <span>¡CONFIRMAR MI PEDIDO!</span>
-                        <span className="text-xs font-bold text-emerald-100">
-                          Al tocar adjuntamos tu ubicación GPS y enviamos tus datos · Pago al recibir
-                        </span>
-                      </span>
-                    )}
+                    <Lock className="w-4 h-4 opacity-90 shrink-0" />
+                    <span>Confirmar pedido ahora</span>
                   </button>
                 )}
+
+                <p className={`text-center text-[13px] font-medium ${dark ? 'text-[#CBD5E1]' : 'text-[#334155]'}`}>
+                  Revisás tu paquete antes de abonar · Garantía directa 7 días
+                </p>
               </div>
             </form>
           )}
@@ -2158,79 +2516,253 @@ export const OrderForm: React.FC<{
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Formulario rápido de pedido"
-          className="fixed inset-0 z-[95] w-screen h-[100dvh] bg-[#041a12]/90 backdrop-blur-sm flex flex-col justify-center items-center p-2 sm:p-4 overflow-hidden animate-fadeIn"
+          aria-label="Finalizar compra"
+          className="fixed inset-0 z-[95] w-screen h-[100dvh] bg-black/55 backdrop-blur-[2px] flex flex-col justify-center items-center p-2 sm:p-4 overflow-hidden animate-fadeIn"
         >
           {renderFormCardContent(true)}
         </div>
       )}
 
       {showConfirmPopup && orderComplete && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-white rounded-3xl border-3 border-[#1ea856] shadow-2xl overflow-hidden p-6 sm:p-7 text-center">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/55 backdrop-blur-[2px] animate-in fade-in duration-200">
+          <div className="relative w-full max-w-[440px] bg-white rounded-[10px] border border-[#E5E5E5] shadow-2xl overflow-hidden p-5 sm:p-6">
             <button
               type="button"
               onClick={() => {
                 setShowConfirmPopup(false);
                 setOrderFormFullscreen(false);
               }}
-              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-700 cursor-pointer"
+              className="absolute top-3.5 right-3.5 w-8 h-8 rounded-[6px] hover:bg-[#F5F5F5] flex items-center justify-center text-[#707070] cursor-pointer"
               aria-label="Cerrar"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
-            <div className="w-16 h-16 rounded-full bg-[#e5f6ec] text-[#0a7a4a] flex items-center justify-center mx-auto mb-3 shadow-inner">
-              <CheckCircle2 className="w-10 h-10" />
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full border-2 border-[#1773B0] text-[#1773B0] flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[12px] text-[#707070]">
+                  Pedido #{orderComplete.reservaid}
+                </p>
+                <h3 className="text-[17px] font-semibold text-[#111827]">
+                  ¡Pedido confirmado!
+                </h3>
+              </div>
             </div>
 
-            <span className="inline-block bg-[#e5f6ec] text-[#0a7a4a] text-xs sm:text-sm font-black uppercase tracking-wider px-3.5 py-1 rounded-full mb-2">
-              Pedido #{orderComplete.reservaid}
-            </span>
-
-            <h3 className="text-2xl sm:text-3xl font-black text-[#062319] tracking-tight">
-              ¡Pedido Confirmado!
-            </h3>
-
-            <div className="mt-4 bg-[#f6f4ee] border-2 border-[#cde6d7] rounded-2xl p-4 text-left space-y-3">
-              <div className="flex items-start gap-3">
-                <PackageCheck className="w-6 h-6 text-[#1ea856] shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-xs font-black uppercase tracking-wider text-stone-500 block">
-                    Producto reservado
-                  </span>
-                  <span className="text-base font-black text-[#062319] leading-snug block">
-                    {confirmedProductTitle}
-                  </span>
-                </div>
-              </div>
-
-              <div className="border-t border-stone-200 pt-2.5 flex items-center justify-between text-sm sm:text-base">
-                <span className="font-bold text-stone-700">Total al recibir:</span>
-                <span className="font-black text-[#062319]">
-                  {confirmedPackCount} {confirmedPackCount > 1 ? 'unidades' : 'unidad'} (
-                  {formatGs(confirmedTotalAmount)})
+            <div className="bg-[#F5F5F5] border border-[#E6E6E6] rounded-[6px] p-3.5 space-y-2 text-[13px]">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-medium text-[#111827] leading-snug">
+                  {confirmedProductTitle}
+                </span>
+                <span className="font-semibold text-[#111827] tabular-nums shrink-0">
+                  {formatGs(confirmedTotalAmount)}
                 </span>
               </div>
+
+              <div className="border-t border-[#E6E6E6] pt-2 text-[12px] text-[#555555]">
+                {isEntryOnly
+                  ? 'Pago contra entrega'
+                  : `${confirmedPackCount} ${confirmedPackCount > 1 ? 'unidades' : 'unidad'} · Pago contra entrega`}
+              </div>
             </div>
 
-            <div className="mt-4 bg-[#062319] text-white rounded-2xl p-4 text-left">
-              <p className="text-sm sm:text-base leading-relaxed text-[#e9f7ef] font-medium">
-                En este instante nuestro{' '}
-                <b className="text-[#ffd778]">equipo de envíos</b> te está escribiendo a tu WhatsApp{' '}
-                <b className="text-white underline">{confirmedClientPhone}</b> para coordinar la entrega rápida en tu puerta.
+            <p className="mt-3.5 text-[13px] text-[#555555] leading-relaxed">
+              Nuestro equipo ya te está escribiendo a tu WhatsApp{' '}
+              <span className="font-semibold text-[#111827]">{confirmedClientPhone}</span> para coordinar la entrega.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowConfirmPopup(false);
+                setOrderFormFullscreen(false);
+              }}
+              className="mt-4 w-full h-[44px] bg-[#1773B0] hover:bg-[#125C8C] text-white font-semibold text-[14px] rounded-[6px] transition-colors cursor-pointer"
+            >
+              Listo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {gpsPopupOpen && !gpsConfirmado && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Activá tu GPS urgente para encontrar tu casa"
+          data-testid="gps-activation-popup"
+          className="fixed inset-0 z-[115] flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-[2px] animate-in fade-in duration-200"
+        >
+          <div className="relative w-full max-w-[460px] max-h-[92dvh] overflow-y-auto bg-white rounded-[12px] border border-[#CBD5E1] shadow-2xl p-5 sm:p-6 text-[#0F172A]">
+            <button
+              type="button"
+              onClick={() => setGpsPopupOpen(false)}
+              className="absolute top-3.5 right-3.5 w-8 h-8 rounded-[6px] hover:bg-[#F1F5F9] flex items-center justify-center text-[#475569] cursor-pointer"
+              aria-label="Cerrar aviso de GPS"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-start gap-3 pr-7">
+              <div className="w-11 h-11 rounded-[10px] bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] flex items-center justify-center shrink-0">
+                <Crosshair className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="inline-block text-[11px] font-bold uppercase tracking-wider text-[#DC2626] bg-[#FEE2E2] px-2 py-0.5 rounded mb-1">
+                  Urgente para tu envío
+                </span>
+                <h3 className="text-[17px] sm:text-[18px] font-bold text-[#0F172A] leading-snug">
+                  {gpsPopupReason === 'permission_denied'
+                    ? 'Tu navegador bloqueó el acceso a tu GPS'
+                    : gpsPopupReason === 'coarse_only'
+                    ? 'Tu GPS está apagado (solo dio señal aproximada)'
+                    : '¡Tu GPS está apagado! Necesitamos activarlo'}
+                </h3>
+              </div>
+            </div>
+
+            <div className="mt-3.5 rounded-[8px] bg-[#FFFBEB] border border-[#F59E0B] p-3.5 text-[13px] leading-relaxed text-[#78350F]">
+              <p className="font-bold text-[#92400E]">
+                ¿Por qué es urgente encender tu GPS?
+              </p>
+              <p className="mt-1">
+                Sin tu ubicación GPS exacta, <strong>no vamos a poder encontrar tu casa para el courier</strong> y tu pedido se puede atrasar o perder.
+                {gpsBestCoarseAccuracy !== null && gpsBestCoarseAccuracy > MAX_EXACT_GPS_ACCURACY_METERS && (
+                  <>
+                    {' '}Ahora mismo tu celular solo detectó antena a <strong>±{gpsBestCoarseAccuracy} metros</strong> (como 1000m o 2000m a la redonda, y eso no nos sirve).
+                  </>
+                )}
               </p>
             </div>
 
+            {/* Explicación visual estilo WhatsApp: bajar hasta 5m–10m */}
+            <div className="mt-3 rounded-[8px] bg-[#F0F9FF] border border-[#BAE6FD] p-3.5 text-[12.5px] leading-relaxed text-[#0C4A6E]">
+              <p className="font-bold text-[#075985]">
+                Igual que cuando ubicás por WhatsApp (hasta 5m – 10m):
+              </p>
+              <p className="mt-1">
+                Cuando prendés tu GPS y tocás el botón, el mapa va afinando los metros automáticamente hasta bajar a un <strong>mínimo de 10 metros</strong> (ideal <strong>5 a 10 metros</strong>). Recién ahí se autoverifica y marca el frente exacto de tu casa.
+              </p>
+              <div className="mt-2 grid grid-cols-3 gap-1.5 text-center text-[11px] font-bold">
+                <div className="rounded bg-[#FEE2E2] text-[#991B1B] py-1 px-1.5">1000m–2000m ❌</div>
+                <div className="rounded bg-[#FEF3C7] text-[#92400E] py-1 px-1.5">50m–100m ⏳</div>
+                <div className="rounded bg-[#DCFCE7] text-[#166534] py-1 px-1.5">5m–10m ✅</div>
+              </div>
+            </div>
+
+            {gpsPopupStep === 'activate' ? (
+              <div className="mt-4 space-y-3">
+                <div className="rounded-[8px] bg-[#F8FAFC] border border-[#CBD5E1] p-3.5 text-[13px] space-y-2 text-[#1E293B]">
+                  <p className="font-bold text-[#0F172A]">
+                    Seguí estos 2 pasos rápidos:
+                  </p>
+                  <p>
+                    <strong>1.</strong> Tocá el botón azul de abajo para <strong>activar tu GPS / Ubicación</strong> (en celular podés deslizar arriba y encender <em>Ubicación</em>, o darle <em>Permitir</em>).
+                  </p>
+                  <p>
+                    <strong>2.</strong> Al volver aquí, tocá una vez más para <strong>juntar tu GPS exacto</strong> (≤ 10 metros).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  data-testid="btn-popup-activate-gps"
+                  onClick={handlePopupActivateGpsClick}
+                  className="w-full min-h-[50px] py-3 px-4 rounded-[8px] bg-[#1773B0] hover:bg-[#125C8C] text-white font-bold text-[15px] shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Crosshair className="w-5 h-5 shrink-0" />
+                  <span>1. Activar mi GPS ahora</span>
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <div
+                  className={`rounded-[8px] border p-3.5 text-[13px] leading-relaxed ${
+                    gpsReturnedFromSettings
+                      ? 'bg-[#ECFDF5] border-[#10B981] text-[#065F46]'
+                      : 'bg-[#EFF6FF] border-[#3B82F6] text-[#1E3A8A]'
+                  }`}
+                >
+                  <p className="font-bold">
+                    {gpsReturnedFromSettings
+                      ? '¡Perfecto, ya volviste! Ahora tocá el botón de abajo otra vez'
+                      : '¿Ya encendiste tu GPS o permitiste la ubicación?'}
+                  </p>
+                  <p className="mt-1">
+                    Tocá ahora <strong>"2. Juntar mi GPS ahora"</strong> para que empiece a bajar los metros como en WhatsApp hasta <strong>5m–10m</strong> y quede adjuntado al pedido.
+                  </p>
+                </div>
+
+                {gpsLoading && (
+                  <div className="rounded-[8px] border border-[#93C5FD] bg-[#F8FAFC] px-3.5 py-2.5 text-[12px] font-semibold text-[#0F172A] space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span>
+                        {gpsLiveAccuracy !== null
+                          ? `Bajando precisión: ±${gpsLiveAccuracy}m`
+                          : 'Buscando satélite GPS...'}
+                      </span>
+                      <span className="text-[#125C8C]">Meta: ≤ 10m</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-[#E2E8F0] overflow-hidden">
+                      <div
+                        className="h-full bg-[#1773B0] transition-all duration-500 rounded-full"
+                        style={{
+                          width: `${
+                            gpsLiveAccuracy === null
+                              ? 15
+                              : gpsLiveAccuracy <= 10
+                              ? 100
+                              : gpsLiveAccuracy <= 30
+                              ? 82
+                              : gpsLiveAccuracy <= 100
+                              ? 58
+                              : 28
+                          }%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  data-testid="btn-popup-retry-gps"
+                  disabled={gpsLoading}
+                  onClick={handleOneClickGpsLocation}
+                  className="w-full min-h-[50px] py-3 px-4 rounded-[8px] bg-[#15803D] hover:bg-[#166534] disabled:opacity-75 text-white font-bold text-[15px] shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Crosshair className={`w-5 h-5 shrink-0 ${gpsLoading ? 'animate-spin' : ''}`} />
+                  <span>
+                    {gpsLoading
+                      ? 'Juntando tu GPS exacto...'
+                      : '2. Tocá otra vez para juntar mi GPS'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePopupActivateGpsClick}
+                  className="w-full py-2 text-[12px] font-semibold text-[#1773B0] hover:underline cursor-pointer"
+                >
+                  Volver a intentar abrir ajustes de GPS
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => {
-                setShowConfirmPopup(false);
-                setOrderFormFullscreen(false);
+                setGpsPopupOpen(false);
+                setGpsNotice(
+                  'Recordá activar tu GPS antes de enviar para que el courier encuentre tu casa sin demoras (precisión ≤ 10m).'
+                );
               }}
-              className="mt-5 w-full bg-gradient-to-r from-[#1ea856] to-[#158a44] hover:from-[#22b85e] hover:to-[#17964b] text-white font-black text-base sm:text-lg py-4 rounded-2xl shadow-[0_4px_0_#0d612e] active:translate-y-0.5 transition-all cursor-pointer"
+              className="mt-3 w-full py-2 text-center text-[12px] font-medium text-[#64748B] hover:text-[#0F172A] cursor-pointer"
             >
-              Entendido, muchas gracias
+              Cerrar y completar dirección manualmente por ahora
             </button>
           </div>
         </div>
@@ -2241,8 +2773,8 @@ export const OrderForm: React.FC<{
           id="pedido"
           className={
             expressDirectMode
-              ? 'py-3 sm:py-5 max-w-xl mx-auto px-3 sm:px-4'
-              : 'py-8 sm:py-12 max-w-2xl mx-auto app-container'
+              ? 'py-3 sm:py-5 max-w-[500px] mx-auto px-3 sm:px-4'
+              : 'py-8 sm:py-12 max-w-[540px] mx-auto app-container'
           }
         >
           {renderFormCardContent(false)}

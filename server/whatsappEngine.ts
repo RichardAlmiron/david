@@ -44,6 +44,7 @@ import {
   normalizeOrderGpsFields,
   parseFiniteCoord
 } from '../src/utils/paraguayGeo';
+import { validateWhatsAppPhoneFormat } from '../src/utils/whatsappPhoneValidation';
 import {
   sanitizeConfigPayloadForSupabase
 } from './cloudinaryStore';
@@ -2570,6 +2571,116 @@ export function getWhatsAppEngineState(): WaEngineState {
     selectedVoiceId: storage.selectedVoiceId,
     voices: DEEPGRAM_VOICE_CATALOG,
     sessions: summaries
+  };
+}
+
+export interface WaPhoneVerifyResult {
+  validFormat: boolean;
+  hasWhatsApp: boolean | null;
+  whatsappConnected: boolean;
+  status: 'verified_whatsapp' | 'not_on_whatsapp' | 'invalid_format' | 'format_only';
+  normalizedPhone: string;
+  jid?: string;
+  message?: string;
+}
+
+const waVerifyCache = new Map<string, { expiresAt: number; result: WaPhoneVerifyResult }>();
+
+export async function verifyWhatsAppPhoneLive(rawPhone: string): Promise<WaPhoneVerifyResult> {
+  const formatCheck = validateWhatsAppPhoneFormat(rawPhone);
+  if (!formatCheck.valid || !formatCheck.normalizedPhone) {
+    return {
+      validFormat: false,
+      hasWhatsApp: false,
+      whatsappConnected: false,
+      status: 'invalid_format',
+      normalizedPhone: formatCheck.normalizedPhone || '',
+      message: formatCheck.message || 'Número de WhatsApp inválido.'
+    };
+  }
+
+  const normalizedPhone = formatCheck.normalizedPhone;
+  const cached = waVerifyCache.get(normalizedPhone);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.result;
+  }
+
+  ensureInitialSessionsLoaded();
+  const connectedSession = Array.from(sessionsMap.values()).find(
+    (s) => s.status === 'connected' && s.sock && typeof (s.sock as any).onWhatsApp === 'function'
+  );
+
+  if (!connectedSession?.sock) {
+    return {
+      validFormat: true,
+      hasWhatsApp: null,
+      whatsappConnected: false,
+      status: 'format_only',
+      normalizedPhone,
+      message: 'Formato móvil válido (verificación en vivo en espera de sesión WhatsApp).'
+    };
+  }
+
+  try {
+    const queryJid = `${normalizedPhone}@s.whatsapp.net`;
+    const lookupPromise = (connectedSession.sock as any).onWhatsApp(queryJid);
+    const results = await Promise.race([
+      lookupPromise,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 4500))
+    ]);
+
+    if (!Array.isArray(results)) {
+      return {
+        validFormat: true,
+        hasWhatsApp: null,
+        whatsappConnected: true,
+        status: 'format_only',
+        normalizedPhone
+      };
+    }
+
+    const match = results.find((r: any) => r && (r.exists === true || r.exists === false)) || results[0];
+    if (match?.exists === true) {
+      const verifiedRes: WaPhoneVerifyResult = {
+        validFormat: true,
+        hasWhatsApp: true,
+        whatsappConnected: true,
+        status: 'verified_whatsapp',
+        normalizedPhone,
+        ...(match.jid ? { jid: String(match.jid) } : {})
+      };
+      waVerifyCache.set(normalizedPhone, {
+        expiresAt: Date.now() + 5 * 60 * 1000,
+        result: verifiedRes
+      });
+      return verifiedRes;
+    }
+
+    if (results.length === 0 || match?.exists === false) {
+      const notOnWaRes: WaPhoneVerifyResult = {
+        validFormat: true,
+        hasWhatsApp: false,
+        whatsappConnected: true,
+        status: 'not_on_whatsapp',
+        normalizedPhone,
+        message: 'Este número NO tiene WhatsApp activo. Revisá los dígitos y escribí un número con WhatsApp.'
+      };
+      waVerifyCache.set(normalizedPhone, {
+        expiresAt: Date.now() + 2 * 60 * 1000,
+        result: notOnWaRes
+      });
+      return notOnWaRes;
+    }
+  } catch {
+    // Si hay un corte momentáneo de red, no bloqueamos al cliente por error transitorio
+  }
+
+  return {
+    validFormat: true,
+    hasWhatsApp: null,
+    whatsappConnected: true,
+    status: 'format_only',
+    normalizedPhone
   };
 }
 

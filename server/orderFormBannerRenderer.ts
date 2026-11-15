@@ -65,6 +65,7 @@ export interface OrderFormPackageCopySpec {
   priceLabel: string;
   priceText: string;
   deliveryBannerText: string;
+  deliveryBannerLine2?: string;
   subFooterText: string;
   primaryImageSrc: string;
   giftImageSrc?: string;
@@ -96,13 +97,14 @@ export function buildOrderFormPackageCopySpec(params: {
 
     return {
       eyebrow: 'ESTE ES EL PAQUETE QUE ESTÁS ADQUIRIENDO',
-      headlineLines: wrapLines(entryName, 26, 2),
-      ownershipLines: wrapLines(`Estás a punto de adquirir 1 unidad de tu ${entryName}.`, 42, 2),
-      descriptionLines: wrapLines(entryDesc, 44, 2),
-      priceLabel: 'PRECIO QUE VAS A PAGAR POR EL PRODUCTO',
+      headlineLines: wrapLines(entryName, 25, 2),
+      ownershipLines: wrapLines(`Estás a punto de adquirir 1 unidad de tu ${entryName}.`, 38, 3),
+      descriptionLines: wrapLines(entryDesc, 42, 2),
+      priceLabel: 'PRECIO DEL PRODUCTO',
       priceText: formatGsText(entryPrice),
-      deliveryBannerText: `DELIVERY AL RECIBIR: ${formatGsText(deliveryFee)}  ·  TOTAL EN PUERTA: ${formatGsText(totalDoor)}`,
-      subFooterText: 'Pagás recién al recibir en mano · Garantía 7 días en todo Paraguay',
+      deliveryBannerText: `COSTO DE DELIVERY: ${formatGsText(deliveryFee)}`,
+      deliveryBannerLine2: `TOTAL AL RECIBIR EN PUERTA: ${formatGsText(totalDoor)}`,
+      subFooterText: 'Pagás recién al recibir en mano · Garantía 7 días',
       primaryImageSrc: entryImg,
       isEntryOnly: true
     };
@@ -136,14 +138,15 @@ export function buildOrderFormPackageCopySpec(params: {
 
   return {
     eyebrow: 'ESTE ES EL PAQUETE QUE ESTÁS ADQUIRIENDO',
-    headlineLines: wrapLines(headlineFull, 29, 2),
-    ownershipLines: wrapLines(ownershipStr, 44, 2),
-    descriptionLines: wrapLines(descRaw, 44, 2),
+    headlineLines: wrapLines(headlineFull, 25, 2),
+    ownershipLines: wrapLines(ownershipStr, 38, 3),
+    descriptionLines: wrapLines(descRaw, 42, 2),
     priceLabel: pack === 1 ? 'PRECIO TOTAL DEL PAQUETE' : `PRECIO ESPECIAL (${pack} UNIDADES)`,
     priceText: formatGsText(unitPrice),
-    deliveryBannerText: hasEntry
-      ? 'ENVÍO 100% GRATUITO A TU PUERTA  ·  REGALO INCLUIDO'
-      : 'ENVÍO 100% GRATUITO A TODO PARAGUAY  ·  SIN COSTO ADICIONAL',
+    deliveryBannerText: 'ENVÍO 100% GRATUITO A TU PUERTA',
+    deliveryBannerLine2: hasEntry
+      ? 'INCLUYE ARTÍCULO DE REGALO · SIN COSTO DE DELIVERY'
+      : 'SIN COSTO ADICIONAL EN TODO PARAGUAY',
     subFooterText: 'Revisás tu paquete en mano antes de pagar · Garantía 7 días',
     primaryImageSrc: principalImg,
     ...(entryGiftImg && entryGiftImg !== principalImg ? { giftImageSrc: entryGiftImg } : {}),
@@ -181,7 +184,7 @@ async function loadImageBufferForBanner(rawSource?: string | null): Promise<Buff
   return null;
 }
 
-async function buildRoundedSquarePhoto(imgBuf: Buffer, size: number, radius: number, borderHex: string): Promise<Buffer> {
+async function buildCleanRoundedPhoto(imgBuf: Buffer, size: number, radius: number): Promise<Buffer> {
   const resized = await sharp(imgBuf)
     .resize(size, size, { fit: 'cover', position: 'centre' })
     .png()
@@ -192,17 +195,9 @@ async function buildRoundedSquarePhoto(imgBuf: Buffer, size: number, radius: num
       <rect x="0" y="0" width="${size}" height="${size}" rx="${radius}" ry="${radius}" fill="#ffffff"/>
     </svg>`
   );
-  const borderSvg = Buffer.from(
-    `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="3" y="3" width="${size - 6}" height="${size - 6}" rx="${radius}" ry="${radius}" fill="none" stroke="${borderHex}" stroke-width="5"/>
-    </svg>`
-  );
 
   return sharp(resized)
-    .composite([
-      { input: maskSvg, blend: 'dest-in' },
-      { input: borderSvg, blend: 'over' }
-    ])
+    .composite([{ input: maskSvg, blend: 'dest-in' }])
     .png()
     .toBuffer();
 }
@@ -210,7 +205,7 @@ async function buildRoundedSquarePhoto(imgBuf: Buffer, size: number, radius: num
 export function getOrderFormBannerCacheKey(spec: OrderFormPackageCopySpec, productId: string): string {
   return crypto
     .createHash('sha1')
-    .update(JSON.stringify({ productId, spec }))
+    .update(JSON.stringify({ v: 'v3_neutral_large', productId, spec }))
     .digest('hex')
     .slice(0, 16);
 }
@@ -235,112 +230,104 @@ export async function renderOrderFormPackageBannerPng(params: {
     return { buffer: fs.readFileSync(absPath), publicUrl, spec };
   }
 
-  const W = 1080;
-  const H = 560;
-  const accentHex = spec.isEntryOnly ? '#F5C451' : '#34D399';
-  const bgStart = spec.isEntryOnly ? '#071426' : '#041C14';
-  const bgEnd = spec.isEntryOnly ? '#0E2442' : '#0A3526';
-  const deliveryBg = spec.isEntryOnly ? '#7C2D12' : '#065F46';
-  const deliveryStroke = spec.isEntryOnly ? '#F59E0B' : '#34D399';
+  // Tall mobile-first borderless neutral-white canvas so fonts scale large & crystal-clear for glasses readers
+  const W = 900;
+  const H = 1040;
+  const photoSize = 330;
+  const photoLeft = Math.round((W - photoSize) / 2);
+  const photoTop = 94;
 
   const primaryRaw = await loadImageBufferForBanner(spec.primaryImageSrc);
   const giftRaw = spec.giftImageSrc ? await loadImageBufferForBanner(spec.giftImageSrc) : null;
 
-  const photoSize = 336;
   const primaryRounded = primaryRaw
-    ? await buildRoundedSquarePhoto(primaryRaw, photoSize, 28, '#D4AF37')
+    ? await buildCleanRoundedPhoto(primaryRaw, photoSize, 28)
     : null;
   const giftRounded = giftRaw
-    ? await buildRoundedSquarePhoto(giftRaw, 128, 22, '#34D399')
+    ? await buildCleanRoundedPhoto(giftRaw, 124, 22)
     : null;
 
-  const headlineStartY = 122;
+  let cursorY = 478;
   const headlineSvg = spec.headlineLines
-    .map((line, i) => {
-      const y = headlineStartY + i * 42;
-      return `<text x="424" y="${y}" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="34" font-weight="900" fill="#FFFFFF">${escapeXml(line)}</text>`;
+    .map((line) => {
+      const el = `<text x="${W / 2}" y="${cursorY}" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="46" font-weight="900" fill="#0F172A">${escapeXml(line)}</text>`;
+      cursorY += 54;
+      return el;
     })
     .join('\n');
 
-  const ownershipBaseY = headlineStartY + spec.headlineLines.length * 42 + 12;
+  cursorY += 8;
   const ownershipSvg = spec.ownershipLines
-    .map((line, i) => {
-      const y = ownershipBaseY + i * 28;
-      return `<text x="424" y="${y}" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="21" font-weight="700" fill="#FDE68A">${escapeXml(line)}</text>`;
+    .map((line) => {
+      const el = `<text x="${W / 2}" y="${cursorY}" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="33" font-weight="800" fill="#1E293B">${escapeXml(line)}</text>`;
+      cursorY += 42;
+      return el;
     })
     .join('\n');
 
-  const descBaseY = ownershipBaseY + spec.ownershipLines.length * 28 + 10;
+  cursorY += 6;
   const descSvg = spec.descriptionLines
-    .map((line, i) => {
-      const y = descBaseY + i * 25;
-      return `<text x="424" y="${y}" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="18.5" font-weight="600" fill="#D1FAE5" opacity="0.92">${escapeXml(line)}</text>`;
+    .map((line) => {
+      const el = `<text x="${W / 2}" y="${cursorY}" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="28" font-weight="600" fill="#475569">${escapeXml(line)}</text>`;
+      cursorY += 36;
+      return el;
     })
     .join('\n');
+
+  const priceBoxY = Math.max(722, cursorY + 14);
+  const deliveryBoxY = priceBoxY + 132;
+  const finalH = Math.max(H, deliveryBoxY + 122);
 
   const svgOverlay = `
-    <svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="cardBg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="${bgStart}"/>
-          <stop offset="100%" stop-color="${bgEnd}"/>
-        </linearGradient>
-        <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="#D4AF37"/>
-          <stop offset="50%" stop-color="#FFE08A"/>
-          <stop offset="100%" stop-color="#C89624"/>
-        </linearGradient>
-        <radialGradient id="photoGlow" cx="22%" cy="52%" r="36%">
-          <stop offset="0%" stop-color="#D4AF37" stop-opacity="0.28"/>
-          <stop offset="100%" stop-color="#D4AF37" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
+    <svg width="${W}" height="${finalH}" xmlns="http://www.w3.org/2000/svg">
+      <!-- Seamless pure neutral white canvas (zero borders anywhere) -->
+      <rect x="0" y="0" width="${W}" height="${finalH}" fill="#FFFFFF"/>
 
-      <!-- Card Base -->
-      <rect x="6" y="6" width="${W - 12}" height="${H - 12}" rx="34" fill="url(#cardBg)" stroke="url(#goldGrad)" stroke-width="6"/>
-      <rect x="16" y="16" width="${W - 32}" height="${H - 32}" rx="26" fill="none" stroke="rgba(255,215,120,0.22)" stroke-width="1.5"/>
-      <rect x="6" y="6" width="${W - 12}" height="${H - 12}" rx="34" fill="url(#photoGlow)"/>
+      <!-- Subtle soft neutral eyebrow pill -->
+      <rect x="70" y="22" width="${W - 140}" height="50" rx="25" fill="#F1F5F9"/>
+      <text x="${W / 2}" y="55" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="25" font-weight="900" letter-spacing="0.8" fill="#0F172A">${escapeXml(spec.eyebrow)}</text>
 
-      <!-- Top VIP Eyebrow Ribbon -->
-      <rect x="44" y="34" width="600" height="42" rx="14" fill="url(#goldGrad)"/>
-      <text x="344" y="61" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="18.5" font-weight="900" letter-spacing="0.8" fill="#062319">${escapeXml(spec.eyebrow)}</text>
+      <!-- Borderless clean soft backing for product photo -->
+      <rect x="${photoLeft}" y="${photoTop}" width="${photoSize}" height="${photoSize}" rx="28" fill="#F8FAFC"/>
 
-      <!-- VIP Guarantee Mini Tag Top-Right -->
-      <rect x="668" y="34" width="368" height="42" rx="14" fill="rgba(255,255,255,0.08)" stroke="${accentHex}" stroke-width="2"/>
-      <text x="852" y="61" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="17" font-weight="800" fill="${accentHex}">VERIFICADO · PAGO CONTRA ENTREGA</text>
-
-      <!-- Fallback placeholder frame behind photo -->
-      <rect x="48" y="112" width="${photoSize}" height="${photoSize}" rx="28" fill="#03130D" stroke="#D4AF37" stroke-width="3"/>
-
-      <!-- Main Typography Right Column -->
+      <!-- Large crystal-clear centered typography -->
       ${headlineSvg}
       ${ownershipSvg}
       ${descSvg}
 
-      <!-- Price Plaque -->
-      <rect x="424" y="348" width="612" height="94" rx="20" fill="rgba(0,0,0,0.38)" stroke="url(#goldGrad)" stroke-width="2.5"/>
-      <text x="448" y="378" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="16" font-weight="800" letter-spacing="0.8" fill="#FDE68A">${escapeXml(spec.priceLabel)}</text>
-      <text x="448" y="424" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="42" font-weight="900" fill="#FFD778">${escapeXml(spec.priceText)}</text>
+      <!-- Clean neutral price strip (zero borders) -->
+      <rect x="40" y="${priceBoxY}" width="${W - 80}" height="114" rx="24" fill="#F8FAFC"/>
+      <text x="${W / 2}" y="${priceBoxY + 38}" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="24" font-weight="800" letter-spacing="0.8" fill="#475569">${escapeXml(spec.priceLabel)}</text>
+      <text x="${W / 2}" y="${priceBoxY + 96}" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="60" font-weight="900" fill="#0F172A">${escapeXml(spec.priceText)}</text>
 
-      <!-- Delivery Highlight Pill Bar -->
-      <rect x="48" y="472" width="988" height="48" rx="16" fill="${deliveryBg}" stroke="${deliveryStroke}" stroke-width="2.5"/>
-      <text x="542" y="503" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="20.5" font-weight="900" letter-spacing="0.4" fill="#FFFFFF">${escapeXml(spec.deliveryBannerText)}</text>
+      <!-- Clean high-contrast dark slate delivery bar (zero borders) -->
+      <rect x="40" y="${deliveryBoxY}" width="${W - 80}" height="104" rx="24" fill="#0F172A"/>
+      <text x="${W / 2}" y="${deliveryBoxY + 45}" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="30" font-weight="900" fill="#FFFFFF">${escapeXml(spec.deliveryBannerText)}</text>
+      <text x="${W / 2}" y="${deliveryBoxY + 84}" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="25" font-weight="700" fill="#E2E8F0">${escapeXml(spec.deliveryBannerLine2 || spec.subFooterText)}</text>
     </svg>
   `;
 
   const composites: sharp.OverlayOptions[] = [];
   if (primaryRounded) {
-    composites.push({ input: primaryRounded, left: 48, top: 112 });
+    composites.push({ input: primaryRounded, left: photoLeft, top: photoTop });
   }
   if (giftRounded) {
-    composites.push({ input: giftRounded, left: 268, top: 326 });
-    const giftTagSvg = Buffer.from(
-      `<svg width="136" height="32" xmlns="http://www.w3.org/2000/svg">
-        <rect x="0" y="0" width="136" height="32" rx="12" fill="#D4AF37" stroke="#062319" stroke-width="2.5"/>
-        <text x="68" y="21" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="14" font-weight="900" fill="#062319">+ DE REGALO</text>
+    const giftLeft = photoLeft + photoSize - 68;
+    const giftTop = photoTop + photoSize - 118;
+    const whiteHalo = Buffer.from(
+      `<svg width="136" height="136" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="136" height="136" rx="26" fill="#FFFFFF"/>
       </svg>`
     );
-    composites.push({ input: giftTagSvg, left: 264, top: 432 });
+    composites.push({ input: whiteHalo, left: giftLeft - 6, top: giftTop - 6 });
+    composites.push({ input: giftRounded, left: giftLeft, top: giftTop });
+    const giftTagSvg = Buffer.from(
+      `<svg width="144" height="36" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="144" height="36" rx="18" fill="#0F172A"/>
+        <text x="72" y="24" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="16" font-weight="900" fill="#FFFFFF">+ DE REGALO</text>
+      </svg>`
+    );
+    composites.push({ input: giftTagSvg, left: giftLeft - 10, top: giftTop + 104 });
   }
 
   const buffer = await sharp(Buffer.from(svgOverlay))
@@ -353,6 +340,41 @@ export async function renderOrderFormPackageBannerPng(params: {
   } catch {}
 
   return { buffer, publicUrl, spec };
+}
+
+export async function renderOrderFormStepGuidePng(params: {
+  stepNumber: 1 | 2 | 3;
+  eyebrow: string;
+  headline: string;
+  subline: string;
+  outputAbsPath: string;
+}): Promise<Buffer> {
+  const W = 900;
+  const H = 205;
+  const svg = `
+    <svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <!-- Pure seamless white canvas with ZERO rectangle border -->
+      <rect x="0" y="0" width="${W}" height="${H}" fill="#FFFFFF"/>
+
+      <!-- Left soft slate circle number badge -->
+      <circle cx="56" cy="74" r="36" fill="#0F172A"/>
+      <text x="56" y="88" text-anchor="middle" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="40" font-weight="900" fill="#FFFFFF">${params.stepNumber}</text>
+
+      <!-- Eyebrow + Big Readable Headline & Description -->
+      <text x="114" y="42" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="22" font-weight="900" letter-spacing="0.8" fill="#475569">${escapeXml(params.eyebrow)}</text>
+      <text x="114" y="90" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="42" font-weight="900" fill="#0F172A">${escapeXml(params.headline)}</text>
+      <text x="114" y="130" font-family="Noto Sans, Liberation Sans, DejaVu Sans, sans-serif" font-size="27" font-weight="700" fill="#334155">${escapeXml(params.subline)}</text>
+
+      <!-- Crisp downward pointer arrow directing cleanly to input below -->
+      <line x1="${W / 2}" y1="146" x2="${W / 2}" y2="184" stroke="#0F172A" stroke-width="6" stroke-linecap="round"/>
+      <polygon points="${W / 2 - 14},174 ${W / 2 + 14},174 ${W / 2},198" fill="#0F172A"/>
+    </svg>
+  `;
+
+  const buf = await sharp(Buffer.from(svg)).png({ compressionLevel: 7 }).toBuffer();
+  fs.mkdirSync(path.dirname(params.outputAbsPath), { recursive: true });
+  fs.writeFileSync(params.outputAbsPath, buf);
+  return buf;
 }
 
 export async function preRenderOrderFormBannersForProduct(product: any): Promise<void> {

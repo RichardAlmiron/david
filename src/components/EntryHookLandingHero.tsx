@@ -22,7 +22,6 @@ export const EntryHookLandingHero: React.FC = () => {
     `Artículo de entrada disponible con entrega puerta a puerta en Paraguay.`;
   const entryPrice = Number(trip.entryPriceGs ?? trip.entryProductPriceGs ?? 20000);
   const entryNormal = Number(trip.entryNormalPriceGs || 0);
-  const deliveryFee = Number(trip.deliveryFeeGs ?? trip.entryDeliveryFeeGs ?? 40000);
   const heroImg = trip.entryProductImage || currentProductPage.imagen;
   const principalPrice = Number(
     currentProductPage.precios?.[1] || currentProductPage.precioNormal || 189000
@@ -69,9 +68,6 @@ export const EntryHookLandingHero: React.FC = () => {
                   {formatGs(entryNormal)}
                 </span>
               )}
-              <span className="text-xs text-stone-600 font-mono tabular-nums">
-                · Delivery de zona {formatGs(deliveryFee)}
-              </span>
             </div>
 
             <div className="rounded-lg bg-stone-50 border border-stone-200 px-3.5 py-2.5 text-xs text-stone-700 flex items-start gap-2">

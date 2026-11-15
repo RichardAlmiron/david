@@ -59,7 +59,8 @@ import {
   loadPedidos,
   savePedidos,
   loadStoreConfig,
-  queueOrderCloudSync
+  queueOrderCloudSync,
+  verifyWhatsAppPhoneLive
 } from './server/whatsappEngine';
 import { renderOrderFormPackageBannerPng } from './server/orderFormBannerRenderer';
 import {
@@ -1525,6 +1526,30 @@ function registerApiServerMiddlewares(server: any) {
               chatsSummary: getAllChatsSummary(),
               incomingDiagnostics: getRecentIncomingDiagnostics()
             }));
+            return;
+          }
+
+          // POST /api/whatsapp/verify-phone
+          if (req.method === 'POST' && url === '/api/whatsapp/verify-phone') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', async () => {
+              try {
+                const { phone } = JSON.parse(body || '{}');
+                const result = await verifyWhatsAppPhoneLive(String(phone || ''));
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({
+                  validFormat: false,
+                  hasWhatsApp: null,
+                  whatsappConnected: false,
+                  status: 'invalid_format',
+                  normalizedPhone: '',
+                  message: err?.message || 'Error verificando número de WhatsApp.'
+                }));
+              }
+            });
             return;
           }
 

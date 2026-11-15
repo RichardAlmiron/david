@@ -24,11 +24,14 @@ store_config.json
 pedidos.json
 deleted_orders.json
 seller_agent_chats.json
+wa_sent_protos_cache.json
+data/
 screenshot_*.png
 **/promo_prepayment.jpg
 
-# Adjuntos temporales de chat de AI Studio y salidas dinámicas de anuncios
+# Adjuntos temporales de chat de AI Studio y salidas dinámicas de anuncios/formularios
 public/assets/aistudio/
 public/assets/ai-ads/*.mp4
 public/assets/ai-ads/*.png
 !public/assets/ai-ads/.gitkeep
+public/assets/form-banners/*.png
